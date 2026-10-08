@@ -15,6 +15,9 @@ type AppliedCallback = (trackId: string) => void;
 const state = {
     callbacks: [] as AppliedCallback[],
     advances: [] as string[],
+    advanceQueue: (reason: string) => {
+        state.advances.push(reason);
+    },
 };
 
 mock.module("@/components/player/TrackPreferenceButtons", {
@@ -35,7 +38,7 @@ mock.module("@/components/player/TrackPreferenceButtons", {
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
         useAudioControls: () => ({
-            advanceQueue: (reason: string) => state.advances.push(reason),
+            advanceQueue: state.advanceQueue,
         }),
     },
 });
@@ -43,6 +46,9 @@ mock.module("@/lib/audio-controls-context", {
 beforeEach(() => {
     state.callbacks.length = 0;
     state.advances.length = 0;
+    state.advanceQueue = (reason: string) => {
+        state.advances.push(reason);
+    };
 });
 
 afterEach(() => {
@@ -105,3 +111,126 @@ test("late dislike confirmation cannot skip a newly selected track", async () =>
     assert.deepEqual(state.advances, ["feedback"]);
     await act(async () => root.unmount());
 });
+
+for (const trackId of ["vk:-1_2", "yandex:0007", "yt:abcdefghijk"]) {
+    test(`late ${trackId} feedback cannot race a replacement before React commits`, async () => {
+        const { CurrentTrackPreferenceButtons } =
+            await import("../../components/player/CurrentTrackPreferenceButtons");
+        const { writePlaybackReplacementIntent } =
+            await import("../../lib/audio-engine/playbackAdvanceOrigin");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const root = createRoot(container);
+        try {
+            await act(async () =>
+                root.render(
+                    React.createElement(CurrentTrackPreferenceButtons, {
+                        trackId,
+                    }),
+                ),
+            );
+            const oldConfirmation = state.callbacks.at(-1);
+            assert.ok(oldConfirmation);
+            await act(async () => {
+                writePlaybackReplacementIntent(trackId);
+                oldConfirmation(trackId);
+            });
+            assert.deepEqual(state.advances, []);
+            await act(async () =>
+                root.render(
+                    React.createElement(CurrentTrackPreferenceButtons, {
+                        trackId,
+                    }),
+                ),
+            );
+            const currentConfirmation = state.callbacks.at(-1);
+            assert.ok(currentConfirmation);
+            await act(async () => currentConfirmation(trackId));
+            assert.deepEqual(state.advances, ["feedback"]);
+        } finally {
+            await act(async () => root.unmount());
+            container.remove();
+        }
+    });
+    test(`late ${trackId} feedback cannot use a replaced same-song queue`, async () => {
+        const { CurrentTrackPreferenceButtons } =
+            await import("../../components/player/CurrentTrackPreferenceButtons");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const root = createRoot(container);
+        try {
+            await act(async () =>
+                root.render(
+                    React.createElement(CurrentTrackPreferenceButtons, {
+                        trackId,
+                    }),
+                ),
+            );
+            const oldConfirmation = state.callbacks.at(-1);
+            assert.ok(oldConfirmation);
+            state.advanceQueue = (reason: string) => {
+                state.advances.push(`new:${reason}`);
+            };
+            await act(async () =>
+                root.render(
+                    React.createElement(CurrentTrackPreferenceButtons, {
+                        trackId,
+                    }),
+                ),
+            );
+            const currentConfirmation = state.callbacks.at(-1);
+            assert.ok(currentConfirmation);
+            await act(async () => oldConfirmation(trackId));
+            assert.deepEqual(state.advances, []);
+            await act(async () => currentConfirmation(trackId));
+            assert.deepEqual(state.advances, ["new:feedback"]);
+        } finally {
+            await act(async () => root.unmount());
+            container.remove();
+        }
+    });
+    test(`late ${trackId} feedback cannot advance after controls leave the player`, async () => {
+        const { CurrentTrackPreferenceButtons } =
+            await import("../../components/player/CurrentTrackPreferenceButtons");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const root = createRoot(container);
+        try {
+            await act(async () =>
+                root.render(
+                    React.createElement(CurrentTrackPreferenceButtons, {
+                        trackId,
+                    }),
+                ),
+            );
+            const oldConfirmation = state.callbacks.at(-1);
+            assert.ok(oldConfirmation);
+            await act(async () =>
+                root.render(React.createElement("div", null, "Подкаст")),
+            );
+            await act(async () => oldConfirmation(trackId));
+            assert.deepEqual(state.advances, []);
+
+            await act(async () =>
+                root.render(
+                    React.createElement(
+                        React.StrictMode,
+                        null,
+                        React.createElement(CurrentTrackPreferenceButtons, {
+                            trackId,
+                        }),
+                    ),
+                ),
+            );
+            const currentConfirmation = state.callbacks.at(-1);
+            assert.ok(currentConfirmation);
+            await act(async () => oldConfirmation(trackId));
+            assert.deepEqual(state.advances, []);
+            await act(async () => currentConfirmation(trackId));
+            assert.deepEqual(state.advances, ["feedback"]);
+        } finally {
+            await act(async () => root.unmount());
+            container.remove();
+        }
+    });
+}

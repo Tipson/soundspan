@@ -1067,17 +1067,21 @@ model TrackRating {
 }
 
 model LikedRemoteTrack {
-  id             String        @id @default(cuid())
-  userId         String
-  trackTidalId   String?
-  trackYtMusicId String?
-  likedAt        DateTime      @default(now())
-  trackTidal     TrackTidal?   @relation(fields: [trackTidalId], references: [id], onDelete: Cascade)
-  trackYtMusic   TrackYtMusic? @relation(fields: [trackYtMusicId], references: [id], onDelete: Cascade)
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String            @id @default(cuid())
+  userId             String
+  trackTidalId       String?
+  trackYtMusicId     String?
+  trackMusicSourceId String?
+  likedAt            DateTime          @default(now())
+  trackTidal         TrackTidal?       @relation(fields: [trackTidalId], references: [id], onDelete: Cascade)
+  trackYtMusic       TrackYtMusic?     @relation(fields: [trackYtMusicId], references: [id], onDelete: Cascade)
+  trackMusicSource   TrackMusicSource? @relation(fields: [trackMusicSourceId], references: [id], onDelete: Cascade)
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, trackTidalId])
   @@unique([userId, trackYtMusicId])
+  @@unique([userId, trackMusicSourceId])
+  @@index([trackMusicSourceId])
   @@index([userId])
   @@index([likedAt])
 }
@@ -1619,16 +1623,17 @@ model TrackYtMusic {
 
 /// Exact provider identity; server-confirmed metadata is separate from each owner's private Play claims.
 model TrackMusicSource {
-  id                        String         @id @default(cuid())
+  id                        String             @id @default(cuid())
   provider                  String
   providerTrackId           String
-  createdAt                 DateTime       @default(now())
+  createdAt                 DateTime           @default(now())
   /// Exact server adapter lookup after a successful bounded audio probe; never client metadata.
   verifiedMetadata          Json?
   metadataObservedAt        DateTime?
   metadataConnectionVersion Int?
   plays                     Play[]
   mappings                  TrackMapping[]
+  likedTracks               LikedRemoteTrack[]
 
   @@unique([provider, providerTrackId])
 }

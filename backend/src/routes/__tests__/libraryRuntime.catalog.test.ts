@@ -2072,14 +2072,28 @@ describe("library catalog list runtime coverage", () => {
         expect(mockRemoteLikedTrackCount).toHaveBeenCalledWith({
             where: {
                 userId: "user-1",
-                trackYtMusicId: { not: null },
+                AND: [
+                    {
+                        OR: [
+                            { trackYtMusicId: { not: null } },
+                            { trackMusicSourceId: { not: null } },
+                        ],
+                    },
+                ],
             },
         });
         expect(mockRemoteLikedTrackFindMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: {
                     userId: "user-1",
-                    trackYtMusicId: { not: null },
+                    AND: [
+                        {
+                            OR: [
+                                { trackYtMusicId: { not: null } },
+                                { trackMusicSourceId: { not: null } },
+                            ],
+                        },
+                    ],
                 },
             }),
         );

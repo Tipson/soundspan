@@ -22,7 +22,7 @@ import { clampTime } from "@/utils/formatTime";
 import { CurrentTrackPreferenceButtons } from "@/components/player/CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { ru } from "@/lib/i18n/ru";
-import { isPlaybackOnlyTrack } from "@/lib/trackRef";
+import { supportsTrackPreferences } from "@/lib/trackRef";
 
 /**
  * Renders the MiniPlayer component.
@@ -163,7 +163,7 @@ export function MiniPlayer() {
 
                     {playbackType === "track" &&
                         currentTrack?.id &&
-                        !isPlaybackOnlyTrack(currentTrack) && (
+                        supportsTrackPreferences(currentTrack) && (
                             <div
                                 className="flex flex-shrink-0 items-center"
                                 onClick={(e) => e.stopPropagation()}

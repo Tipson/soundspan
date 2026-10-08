@@ -41,6 +41,7 @@ import { useToast } from "@/lib/toast-context";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import {
     hasLocalTrackBacking,
+    isPlaybackOnlyTrack,
     isTrackActionable,
     toAddToPlaylistRef,
 } from "@/lib/trackRef";
@@ -220,6 +221,13 @@ export default function MyLikedPlaylistPage() {
         () => selectActionableLikedTracks(likedTracks),
         [likedTracks],
     );
+    const playlistSupportedLikedTracks = useMemo(
+        () =>
+            actionableLikedTracks.filter(
+                (track) => !isPlaybackOnlyTrack(track),
+            ),
+        [actionableLikedTracks],
+    );
     const audioTracks = useMemo(
         () =>
             actionableLikedTracks
@@ -317,17 +325,17 @@ export default function MyLikedPlaylistPage() {
     };
 
     const handlePlaylistSelected = async (playlistId: string) => {
-        if (actionableLikedTracks.length === 0) return;
+        if (playlistSupportedLikedTracks.length === 0) return;
         setIsAddingToPlaylist(true);
         try {
-            for (const track of actionableLikedTracks) {
+            for (const track of playlistSupportedLikedTracks) {
                 await api.addTrackToPlaylist(
                     playlistId,
                     toAddToPlaylistRef(track),
                 );
             }
             toast.success(
-                `Добавлено в плейлист: ${actionableLikedTracks.length} ${pluralRu(actionableLikedTracks.length, ["трек", "трека", "треков"])}`,
+                `Добавлено в плейлист: ${playlistSupportedLikedTracks.length} ${pluralRu(playlistSupportedLikedTracks.length, ["трек", "трека", "треков"])}`,
             );
         } catch (error) {
             sharedFrontendLogger.error(
@@ -540,7 +548,7 @@ export default function MyLikedPlaylistPage() {
                                                 setShowPlaylistSelector(true);
                                             }}
                                             disabled={
-                                                actionableLikedTracks.length ===
+                                                playlistSupportedLikedTracks.length ===
                                                 0
                                             }
                                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"

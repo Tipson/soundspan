@@ -53,7 +53,7 @@ import { OverlayQueueTab } from "./overlay-tabs/OverlayQueueTab";
 import { OverlayLyricsTab } from "./overlay-tabs/OverlayLyricsTab";
 import { OverlayRelatedTab } from "./overlay-tabs/OverlayRelatedTab";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { isPlaybackOnlyTrack } from "@/lib/trackRef";
+import { supportsTrackPreferences } from "@/lib/trackRef";
 
 import { pluralRu, ru } from "@/lib/i18n/ru";
 
@@ -154,8 +154,8 @@ export function OverlayPlayer() {
     const isLongForm =
         playbackType === "podcast" || playbackType === "audiobook";
     const preferenceTrackId = isTrackMode ? currentTrack?.id : undefined;
-    const isPlaybackOnlyCurrentTrack =
-        currentTrack && isPlaybackOnlyTrack(currentTrack);
+    const hasUnsupportedTrackPreferences =
+        currentTrack && !supportsTrackPreferences(currentTrack);
     const isDesktopOverlayLayout = canSkip && !isMobileOrTablet;
     // The lyrics tab mounts only while shown, so it owns its own fetch.
     const lyricsLookupTrack = useMemo(
@@ -790,7 +790,7 @@ export function OverlayPlayer() {
                                                             currentTrack,
                                                         )}
                                                     />
-                                                    {isPlaybackOnlyCurrentTrack &&
+                                                    {hasUnsupportedTrackPreferences &&
                                                         trackRadioAction}
                                                 </div>
                                             )}

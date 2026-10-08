@@ -3,10 +3,15 @@
 import {
     useCallback,
     useLayoutEffect,
+    useMemo,
     useRef,
     type ComponentProps,
 } from "react";
 import { useAudioControls } from "@/lib/audio-controls-context";
+import {
+    getPlaybackReplacementGeneration,
+    getQueueReplacementGeneration,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
 import { TrackPreferenceButtons } from "./TrackPreferenceButtons";
 
 type CurrentTrackPreferenceButtonsProps = Omit<
@@ -17,24 +22,49 @@ type CurrentTrackPreferenceButtonsProps = Omit<
 /**
  * Preference controls for the active player surface. A confirmed dislike
  * advances with the feedback policy (which bypasses repeat-one), but a late
- * response cannot skip whichever track the user selected in the meantime.
+ * response cannot skip whichever track the user selected in the meantime or
+ * take over playback after these controls leave the player or the queue changes.
  */
 export function CurrentTrackPreferenceButtons(
     props: CurrentTrackPreferenceButtonsProps,
 ) {
     const { advanceQueue } = useAudioControls();
-    const activeTrackIdRef = useRef(props.trackId);
+    const replacementGeneration = getPlaybackReplacementGeneration();
+    const queueGeneration = getQueueReplacementGeneration();
+    const callbackIdentity = useMemo(
+        () => ({
+            trackId: props.trackId,
+            advanceQueue,
+            replacementGeneration,
+            queueGeneration,
+        }),
+        [props.trackId, advanceQueue, replacementGeneration, queueGeneration],
+    );
+    const activeCallbackRef = useRef<typeof callbackIdentity | null>(
+        callbackIdentity,
+    );
 
     useLayoutEffect(() => {
-        activeTrackIdRef.current = props.trackId;
-    }, [props.trackId]);
+        activeCallbackRef.current = callbackIdentity;
+        return () => {
+            activeCallbackRef.current = null;
+        };
+    }, [callbackIdentity]);
 
     const handleThumbsDownApplied = useCallback(
         (appliedTrackId: string) => {
-            if (activeTrackIdRef.current !== appliedTrackId) return;
-            advanceQueue("feedback");
+            if (
+                activeCallbackRef.current !== callbackIdentity ||
+                callbackIdentity.trackId !== appliedTrackId ||
+                callbackIdentity.replacementGeneration !==
+                    getPlaybackReplacementGeneration() ||
+                callbackIdentity.queueGeneration !==
+                    getQueueReplacementGeneration()
+            )
+                return;
+            callbackIdentity.advanceQueue("feedback");
         },
-        [advanceQueue],
+        [callbackIdentity],
     );
 
     return (

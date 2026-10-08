@@ -478,10 +478,14 @@ export interface LikedPlaylistTrack {
     likedAt: string;
     source?: ResolvedMediaSource;
     provider?: {
+        source?: ResolvedMediaSource;
+        providerTrackId?: string;
         tidalTrackId: number | null;
         youtubeVideoId: string | null;
     };
-    /** Present on remote (YouTube/Tidal) liked tracks */
+    /** Bounded recording needed to replay a confirmed direct-source liked track. */
+    musicSourceRecording?: import("./api/musicSources").MusicSourceCandidate;
+    /** Present on remote liked tracks. */
     streamSource?: Exclude<ResolvedMediaSource, "local">;
     /** YouTube video ID — present when streamSource is "youtube" */
     youtubeVideoId?: string;

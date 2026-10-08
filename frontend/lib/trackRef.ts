@@ -112,7 +112,7 @@ function normalizeDuration(
 
 function hasRemotePrefix(trackId: string | null | undefined): boolean {
     if (!trackId) return false;
-    return trackId.startsWith("yt:") || trackId.startsWith("tidal:");
+    return /^(yt|tidal|vk|yandex):/.test(trackId);
 }
 
 function prefixedTrackIdRef(
@@ -212,6 +212,7 @@ export function isRetiredRemoteOnlyTrack(input: TrackRefInput): boolean {
     if (hasLocalTrackBacking(input)) return false;
 
     const streamSource = resolveTrackProviderSource(input);
+    if (streamSource === "vk" || streamSource === "yandex") return false;
     const hasActiveYouTubeIdentity =
         (streamSource === "youtube" || streamSource === "youtube-direct") &&
         resolveYouTubeVideoId(input) !== null;
@@ -239,6 +240,22 @@ export function isPlaybackOnlyTrack(input: TrackRefInput): boolean {
             resolveTrackProviderSource(input) === "vk" ||
             resolveTrackProviderSource(input) === "yandex" ||
             /^(audius|vk|yandex):/.test(input.id ?? ""))
+    );
+}
+
+/** Exact direct preferences are supported independently of playlist and download persistence. */
+export function supportsTrackPreferences(input: TrackRefInput): boolean {
+    if (hasPersistedPreferenceIdentity(input) || !isPlaybackOnlyTrack(input))
+        return true;
+    const directSource = /^vk:-?\d{1,20}_\d{1,20}$/.test(input.id ?? "")
+        ? "vk"
+        : /^yandex:\d{1,20}$/.test(input.id ?? "")
+          ? "yandex"
+          : null;
+    const authority = resolveTrackProviderSource(input);
+    return (
+        directSource !== null &&
+        (authority === null || authority === directSource)
     );
 }
 
@@ -356,6 +373,12 @@ export function resolvePreferenceTrackId(
     }
 
     const providerSource = resolveTrackProviderSource(input);
+    if (
+        providerSource === "vk" ||
+        providerSource === "yandex" ||
+        /^(vk|yandex):/.test(input.id)
+    )
+        return input.id;
     const tidalTrackId = resolveTidalTrackId(input);
     const youtubeVideoId = resolveYouTubeVideoId(input);
 
