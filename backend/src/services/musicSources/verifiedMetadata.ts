@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/db";
 import {
     MusicSourceError,
@@ -56,11 +57,18 @@ export function readVerifiedMusicSourceRecording(
 /**
  * Write only an exact server lookup result, never client display metadata or a Play snapshot.
  * Lock its credential generation and atomically fence older observations; no account behavior is written.
+ * The optional internal identity hook reuses this transaction and deadline only after an accepted observation.
  */
 export async function recordVerifiedMusicSourceMetadata(
     input: VerifiedMusicSourceRecording,
     signal: AbortSignal,
     budgetMs: number,
+    attachIdentity?: (
+        transaction: Prisma.TransactionClient,
+        provider: VerifiedMusicSourceRecording["provider"],
+        providerTrackId: string,
+        check: () => void,
+    ) => Promise<unknown>,
 ): Promise<void> {
     signal.throwIfAborted();
     const parsed = recordingSchema.safeParse(input.recording);
@@ -134,7 +142,7 @@ export async function recordVerifiedMusicSourceMetadata(
                 select: { id: true },
             });
             check();
-            await tx.trackMusicSource.updateMany({
+            const updated = await tx.trackMusicSource.updateMany({
                 where: {
                     id: namespace.id,
                     OR: [
@@ -157,6 +165,11 @@ export async function recordVerifiedMusicSourceMetadata(
                 },
             });
             check();
+            // Only this accepted observation may extend shared identity, in the same budget.
+            if (updated.count === 1 && attachIdentity) {
+                await attachIdentity(tx, provider, providerTrackId, check);
+                check();
+            }
         },
         { maxWait: Math.floor(totalMs / 2), timeout: Math.ceil(totalMs / 2) },
     );

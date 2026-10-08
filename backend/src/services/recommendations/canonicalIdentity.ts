@@ -174,14 +174,16 @@ export async function runCanonicalIdentityTransaction<T>(
     throw new Error("Canonical identity transaction retry bound was exceeded");
 }
 
-/** Follow a preserved merge alias to its one live canonical survivor. */
+/** Follow a preserved merge alias, optionally checking the caller's fence between hops. */
 export async function resolveCanonicalSurvivor(
     database: Pick<Prisma.TransactionClient, "canonicalRecording">,
     initial: CanonicalAliasRow,
+    check?: () => void,
 ): Promise<ResolvedCanonicalRecording> {
     const visited = new Set<string>();
     let current = initial;
     for (let depth = 0; depth < CANONICAL_MERGE_MAX_DEPTH; depth += 1) {
+        check?.();
         if (visited.has(current.id)) {
             throw new Error("Canonical merge alias cycle detected");
         }
@@ -198,6 +200,7 @@ export async function resolveCanonicalSurvivor(
             where: { id: current.mergedIntoId },
             select: canonicalAliasSelect,
         });
+        check?.();
         if (!target) {
             throw new Error("Canonical merge alias target is missing");
         }
