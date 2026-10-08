@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Bound original-station radio to one thirteen-second server request budget. Stop following owner phases on timeout or browser cancellation, retain shared provider pools for other callers, and check generation/exposure transactions before completion. Preserve the current queue and return a static timeout response when a connected request exceeds its budget.
+
 - Record private listening history and engagement for direct VK and Yandex recordings. Keep shared identities free of client-supplied display metadata, preserve exact recordings for history replay, and retain playlist-write restrictions.
 
 - Restore direct VK and Yandex queue recordings from their validated public metadata, retaining the selected occurrence and paused position. Keep credentials and signed URLs out of snapshots, reject conflicting identities, and avoid clearing incomplete provider snapshots through a library lookup. Reject held startup snapshots after newer local selections or group membership changes, including before local storage finishes writing.

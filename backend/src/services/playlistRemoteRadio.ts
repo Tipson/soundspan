@@ -5,6 +5,7 @@ import {
     normalizeYtMusicTrack,
 } from "./unifiedTrackResponse";
 import { ytMusicService, type YtMusicRadioTrack } from "./youtubeMusic";
+import type { RadioRequestExecution } from "./recommendations/radioRequestExecution";
 
 const PLAYLIST_REMOTE_RADIO_SEED_LIMIT = 3;
 
@@ -119,10 +120,11 @@ export async function buildRemoteArtistRadio(
     artistName: string,
     limit: number,
     onPartialFailure?: () => void,
-    options?: { refresh?: boolean },
+    options?: { refresh?: boolean; execution?: RadioRequestExecution },
 ) {
     const name = artistName.trim();
     if (!name) return [];
+    options?.execution?.check();
     const normalizeName = (value: string) =>
         value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
     const search = await ytMusicService.searchCanonical(
@@ -132,6 +134,7 @@ export async function buildRemoteArtistRadio(
         20,
         { timeoutMs: 8_000, maxRetries: 0 },
     );
+    options?.execution?.check();
     const seeds = [
         ...new Set(
             search.results
@@ -148,11 +151,14 @@ export async function buildRemoteArtistRadio(
     if (seeds.length === 0) return [];
     const results = await Promise.allSettled(
         seeds.map((seed) =>
-            options
-                ? buildRemoteTrackRadio(seed, limit, options)
+            options?.refresh !== undefined
+                ? buildRemoteTrackRadio(seed, limit, {
+                      refresh: options.refresh,
+                  })
                 : buildRemoteTrackRadio(seed, limit),
         ),
     );
+    options?.execution?.check();
     const successful = results.filter(
         (result) => result.status === "fulfilled",
     );

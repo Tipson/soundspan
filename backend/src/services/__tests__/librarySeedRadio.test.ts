@@ -57,6 +57,7 @@ jest.mock("../libraryRadioStationSelection", () => ({
 }));
 
 import { prisma } from "../../utils/db";
+import { createRadioRequestExecution } from "../recommendations/radioRequestExecution";
 import { handleGetRadio } from "../../routes/library/radio";
 import {
     selectLibrarySeedRadio as select,
@@ -446,6 +447,73 @@ test("catalog-only legacy artist retains the two-argument remote call", async ()
     expect(mockBuildRemoteArtistRadio).toHaveBeenCalledWith("Seed Artist", 10);
     expect(res.body).toEqual({ tracks });
 });
+
+test.each(["before-selection", "local-tracks", "artist-name"])(
+    "cancelled catalog artist at %s cannot start another lookup or remote search",
+    async (phase) => {
+        const controller = new AbortController();
+        const execution = createRadioRequestExecution(controller.signal);
+        if (phase === "before-selection") controller.abort();
+        if (phase === "local-tracks")
+            db.track.findMany.mockImplementation(async () => {
+                controller.abort();
+                return [];
+            });
+        if (phase === "artist-name")
+            db.artist.findUnique.mockImplementation(async () => {
+                controller.abort();
+                return { name: "Seed Artist" };
+            });
+        const request = {
+            type: "artist" as const,
+            value: "seed-artist",
+            limit: 10,
+            execution,
+        };
+        try {
+            await expect(select(request)).rejects.toMatchObject({
+                code: "RADIO_REQUEST_CANCELLED",
+            });
+            expect(mockBuildRemoteArtistRadio).not.toHaveBeenCalled();
+            if (phase !== "artist-name")
+                expect(db.artist.findUnique).not.toHaveBeenCalled();
+            if (phase === "before-selection")
+                expect(db.track.findMany).not.toHaveBeenCalled();
+        } finally {
+            execution.dispose();
+        }
+    },
+);
+
+test.each([false, true])(
+    "catalog artist keeps its request deadline through remote refresh=%s",
+    async (refreshRemotePool) => {
+        const execution = createRadioRequestExecution();
+        const request = {
+            type: "artist" as const,
+            value: "seed-artist",
+            limit: 10,
+            execution,
+            refreshRemotePool,
+        };
+        try {
+            await select(request);
+            expect(mockBuildRemoteArtistRadio.mock.calls).toEqual([
+                [
+                    "Seed Artist",
+                    10,
+                    undefined,
+                    {
+                        execution,
+                        ...(refreshRemotePool ? { refresh: true } : {}),
+                    },
+                ],
+            ]);
+        } finally {
+            execution.dispose();
+        }
+    },
+);
 
 test("catalog-only artist forwards explicit refresh and its partial observer", async () => {
     const tracks = [{ id: "radio:abcdefghijk" }];

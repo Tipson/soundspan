@@ -4,6 +4,7 @@ import { recordRecommendationGenerationMetrics } from "../../metrics";
 import type { RecommendationGenerationMetricInput } from "../../metrics/recommendationMetrics";
 import { moodRankingScore, rankRecommendationCandidates } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
+import type { RadioRequestExecution } from "./radioRequestExecution";
 import {
     isWaveMusicCandidate,
     matchesWaveMood,
@@ -47,6 +48,8 @@ export interface RecommendationTasteContext {
 }
 
 export interface RecordEngineGenerationInput {
+    /** Optional server-owned radio deadline for atomic exposure persistence. */
+    execution?: RadioRequestExecution;
     userId: string;
     sessionId: string;
     surface: RecommendRequest["intent"]["surface"];

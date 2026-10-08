@@ -18,6 +18,7 @@ import { loadVibeRadioCandidateIds } from "./libraryRadioCache";
 import { LibrarySeedRadioError } from "./librarySeedRadioError";
 export { LibrarySeedRadioError } from "./librarySeedRadioError";
 import { hasReliableEnhancedAnalysis } from "../utils/libraryRadioPredicates";
+import type { RadioRequestExecution } from "./recommendations/radioRequestExecution";
 
 const VIBE_FALLBACK_QUERY_LIMIT = 400;
 
@@ -67,6 +68,8 @@ export interface LibrarySeedRadioInput {
     refreshRemotePool?: boolean;
     /** Defaults to the legacy random refill; automatic continuation can opt out. */
     allowRandomFallback?: boolean;
+    /** Optional server-owned deadline; shared provider work never receives its abort signal. */
+    execution?: RadioRequestExecution;
 }
 
 /** Local selection keeps IDs for shared hydration; catalog-only artists retain remote radio. */
@@ -78,6 +81,7 @@ export type LibrarySeedRadioSelection =
 export async function selectLibrarySeedRadio(
     input: LibrarySeedRadioInput,
 ): Promise<LibrarySeedRadioSelection> {
+    input.execution?.check();
     const { type: radioType, value: radioValue, limit: limitNum } = input;
     let trackIds: string[] = [];
     let vibeSourceFeatures: unknown = null;
@@ -126,6 +130,7 @@ export async function selectLibrarySeedRadio(
                     danceability: true,
                 },
             });
+            input.execution?.check();
             logger.debug(
                 `[Radio:artist] Found ${artistTracks.length} tracks from artist`,
             );
@@ -135,6 +140,22 @@ export async function selectLibrarySeedRadio(
                     where: { id: artistId },
                     select: { name: true },
                 });
+                input.execution?.check();
+                if (input.execution && artist?.name) {
+                    return {
+                        tracks: await buildRemoteArtistRadio(
+                            artist.name,
+                            limitNum,
+                            input.onRemotePartialFailure,
+                            {
+                                execution: input.execution,
+                                ...(input.refreshRemotePool
+                                    ? { refresh: true }
+                                    : {}),
+                            },
+                        ),
+                    };
+                }
                 return {
                     tracks: artist?.name
                         ? input.refreshRemotePool

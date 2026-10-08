@@ -10,6 +10,8 @@ import { recommendationExposureStore } from "../services/recommendations/exposur
 import { logger } from "../utils/logger";
 import { sendRouteError } from "../utils/routeErrorResponse";
 import { LibrarySeedRadioError } from "../services/librarySeedRadioError";
+import { RadioRequestError } from "../services/recommendations/radioRequestExecution";
+import { createStreamProxyRequestAbort } from "./streamProxyRequestAbort";
 
 const router = Router();
 const log = logger.child("PersonalizedHome");
@@ -196,6 +198,8 @@ router.use(requireAuthOrToken);
  *         description: Authentication required
  *       404:
  *         description: Original local track or artist was not found
+ *       504:
+ *         description: Whole original-radio request exceeded its thirteen-second server budget (RADIO_REQUEST_TIMEOUT); retry does not replace the current queue
  */
 router.get(
     "/radio",
@@ -243,9 +247,11 @@ router.get(
                 { code: "INVALID_QUERY" },
             );
         }
+        const requestAbort = createStreamProxyRequestAbort(req, res);
         try {
-            return res.json(
-                await unifiedRecommendationService.recommendRadio({
+            if (requestAbort.wasClientAborted()) return;
+            const result = await unifiedRecommendationService.recommendRadio(
+                {
                     userId,
                     radioOrigin,
                     sessionId: parsed.data.sessionId ?? randomUUID(),
@@ -255,9 +261,21 @@ router.get(
                     ...(req.headers["x-soundspan-diagnostic"] === "playback"
                         ? { diagnostic: true }
                         : {}),
-                }),
+                },
+                { signal: requestAbort.signal },
             );
+            if (requestAbort.wasClientAborted()) return;
+            return res.json(result);
         } catch (error) {
+            if (requestAbort.wasClientAborted()) return;
+            if (
+                error instanceof RadioRequestError &&
+                error.code === "RADIO_REQUEST_TIMEOUT"
+            ) {
+                return sendRouteError(res, 504, "Radio request timed out", {
+                    code: error.code,
+                });
+            }
             if (error instanceof LibrarySeedRadioError) {
                 return sendRouteError(res, error.status, error.message, {
                     code:
@@ -267,6 +285,8 @@ router.get(
                 });
             }
             throw error;
+        } finally {
+            requestAbort.dispose();
         }
     }),
 );

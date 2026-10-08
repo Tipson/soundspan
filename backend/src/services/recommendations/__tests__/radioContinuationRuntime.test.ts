@@ -66,6 +66,7 @@ jest.mock("../canonicalIdentity", () => {
 
 import { loadRadioContinuationCandidates } from "../radioContinuationRuntime";
 import type { RadioContinuationInput } from "../radioContinuation";
+import { createRadioRequestExecution } from "../radioRequestExecution";
 
 const now = new Date("2026-10-08T00:20:00Z");
 const track = (id: string) => ({
@@ -132,6 +133,66 @@ beforeEach(() => {
 });
 
 describe("actual original-radio runtime adapters", () => {
+    it.each([null, { id: "matched-artist" }])(
+        "does not start the next artist source after lookup cancellation: %j",
+        async (matched) => {
+            const controller = new AbortController();
+            const execution = createRadioRequestExecution(controller.signal);
+            let release!: (value: typeof matched) => void;
+            mockArtistLookup.mockImplementation(
+                () =>
+                    new Promise((resolve) => {
+                        release = resolve;
+                    }),
+            );
+            const work = loadRadioContinuationCandidates(
+                {
+                    ...input,
+                    execution,
+                    radioOrigin: {
+                        kind: "artist",
+                        source: "discovery",
+                        name: "Original",
+                    },
+                },
+                now,
+            ).catch((error: unknown) => error);
+            for (let i = 0; i < 20; i++) await Promise.resolve();
+            controller.abort();
+            release(matched);
+            expect(await work).toMatchObject({
+                code: "RADIO_REQUEST_CANCELLED",
+            });
+            expect(mockArtistRadio).not.toHaveBeenCalled();
+            expect(mockSelectSeed).not.toHaveBeenCalled();
+            execution.dispose();
+        },
+    );
+    it("does not hydrate library rows after a cancelled selector completes", async () => {
+        const controller = new AbortController();
+        const execution = createRadioRequestExecution(controller.signal);
+        let release!: (value: { trackIds: string[] }) => void;
+        mockSelectSeed.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    release = resolve;
+                }),
+        );
+        const work = loadRadioContinuationCandidates(
+            {
+                ...input,
+                execution,
+                radioOrigin: { kind: "track", source: "library", id: "seed" },
+            },
+            now,
+        ).catch((error: unknown) => error);
+        for (let i = 0; i < 20; i++) await Promise.resolve();
+        controller.abort();
+        release({ trackIds: ["fresh"] });
+        expect(await work).toMatchObject({ code: "RADIO_REQUEST_CANCELLED" });
+        expect(mockLibraryRows).not.toHaveBeenCalled();
+        execution.dispose();
+    });
     it.each([0, 1, 1_000_000])(
         "refreshes YouTube pools only for a positive continuation cursor %s",
         async (cursor) => {

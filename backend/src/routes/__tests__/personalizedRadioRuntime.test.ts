@@ -92,18 +92,21 @@ describe("original-seed radio continuation boundary", () => {
             });
             expect(result.status).toBe(200);
             expect(result.body).toEqual(responseBody);
-            expect(mockRecommendRadio).toHaveBeenCalledWith({
-                userId: "alice",
-                radioOrigin,
-                cursor: 3,
-                limit: 17,
-                sessionId: "station-tab",
-                exclude: [
-                    "yt:queuedVid01",
-                    "library:local-queued",
-                    "local-queued",
-                ],
-            });
+            expect(mockRecommendRadio).toHaveBeenCalledWith(
+                {
+                    userId: "alice",
+                    radioOrigin,
+                    cursor: 3,
+                    limit: 17,
+                    sessionId: "station-tab",
+                    exclude: [
+                        "yt:queuedVid01",
+                        "library:local-queued",
+                        "local-queued",
+                    ],
+                },
+                { signal: expect.any(AbortSignal) },
+            );
         },
     );
     it("uses bounded defaults and a server-generated session without inferring the current track", async () => {
@@ -117,6 +120,7 @@ describe("original-seed radio continuation boundary", () => {
                 exclude: [],
                 sessionId: expect.any(String),
             }),
+            { signal: expect.any(AbortSignal) },
         );
     });
     it("passes only the explicit no-write diagnostic flag", async () => {
@@ -126,6 +130,7 @@ describe("original-seed radio continuation boundary", () => {
         );
         expect(mockRecommendRadio).toHaveBeenCalledWith(
             expect.objectContaining({ diagnostic: true }),
+            { signal: expect.any(AbortSignal) },
         );
     });
     it.each([

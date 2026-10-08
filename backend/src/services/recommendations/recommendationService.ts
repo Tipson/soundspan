@@ -12,6 +12,10 @@ import {
 import type { PreparedRecordingLanguages } from "./recordingLanguageStore";
 import type { SavedMoodCandidateOptions } from "./featureStore";
 import {
+    createRadioRequestExecution,
+    type RadioRequestExecution,
+} from "./radioRequestExecution";
+import {
     toRadioContinuationTrack,
     type RadioContinuationInput,
     type RadioContinuationResponse,
@@ -185,11 +189,65 @@ export class UnifiedRecommendationService {
     private engine(
         loadCandidates: RecommendationEngineDependencies["loadCandidates"],
         diagnostic = false,
+        execution?: RadioRequestExecution,
     ): RecommendationEngine {
-        const dependencies = {
+        const sourceDependencies = {
             ...this.dependencies,
             loadCandidates,
         };
+        const guard =
+            <Args extends unknown[], Result>(
+                operation: (...args: Args) => Promise<Result>,
+            ) =>
+            (...args: Args) =>
+                execution!.run(() => operation(...args));
+        const dependencies = execution
+            ? {
+                  ...sourceDependencies,
+                  loadCandidates: guard(sourceDependencies.loadCandidates),
+                  resolveCanonical: guard(sourceDependencies.resolveCanonical),
+                  ...(sourceDependencies.loadCanonicalMappings
+                      ? {
+                            loadCanonicalMappings: guard(
+                                sourceDependencies.loadCanonicalMappings,
+                            ),
+                        }
+                      : {}),
+                  ...(sourceDependencies.enrichCandidates
+                      ? {
+                            enrichCandidates: guard(
+                                sourceDependencies.enrichCandidates,
+                            ),
+                        }
+                      : {}),
+                  loadRecentExposures: guard(
+                      sourceDependencies.loadRecentExposures,
+                  ),
+                  loadDislikedCanonicalKeys: guard(
+                      sourceDependencies.loadDislikedCanonicalKeys,
+                  ),
+                  ...(sourceDependencies.loadSavedCanonicalKeys
+                      ? {
+                            loadSavedCanonicalKeys: guard(
+                                sourceDependencies.loadSavedCanonicalKeys,
+                            ),
+                        }
+                      : {}),
+                  loadTasteContext: guard(sourceDependencies.loadTasteContext),
+                  recordGeneration: (
+                      input: Parameters<
+                          CommonEngineDependencies["recordGeneration"]
+                      >[0],
+                  ) =>
+                      execution.run(() =>
+                          sourceDependencies.recordGeneration({
+                              ...input,
+                              execution,
+                          }),
+                      ),
+                  scheduleHotSet: guard(sourceDependencies.scheduleHotSet),
+              }
+            : sourceDependencies;
         if (!diagnostic) return new RecommendationEngine(dependencies);
         return new RecommendationEngine(
             {
@@ -359,33 +417,43 @@ export class UnifiedRecommendationService {
     /** Continue the original station through the same ranking and served-membership boundary. */
     async recommendRadio(
         input: RadioContinuationInput,
+        options?: { signal?: AbortSignal },
     ): Promise<RadioContinuationResponse> {
         const loader = this.dependencies.loadRadioCandidates;
         if (!loader)
             throw new Error("Radio continuation loader is unavailable");
-        const result = await this.engine(
-            (_request, policyTime) => loader(input, policyTime),
-            input.diagnostic,
-        ).recommend({
-            userId: input.userId,
-            sessionId: input.sessionId,
-            intent: {
-                surface: "wave",
-                direction: "for-you",
-                mood: null,
-                language: "any",
-            },
-            cursor: input.cursor,
-            limit: input.limit,
-            exclude: input.exclude,
-        });
-        return {
-            tracks: result.tracks.map(toRadioContinuationTrack),
-            radioOrigin: input.radioOrigin,
-            generationId: result.generationId,
-            nextCursor: result.nextCursor,
-            degraded: result.degradedSources.length > 0,
-            degradedSources: result.degradedSources,
-        };
+        const execution = createRadioRequestExecution(options?.signal);
+        try {
+            const result = await execution.run(() =>
+                this.engine(
+                    (_request, policyTime) =>
+                        loader({ ...input, execution }, policyTime),
+                    input.diagnostic,
+                    execution,
+                ).recommend({
+                    userId: input.userId,
+                    sessionId: input.sessionId,
+                    intent: {
+                        surface: "wave",
+                        direction: "for-you",
+                        mood: null,
+                        language: "any",
+                    },
+                    cursor: input.cursor,
+                    limit: input.limit,
+                    exclude: input.exclude,
+                }),
+            );
+            return {
+                tracks: result.tracks.map(toRadioContinuationTrack),
+                radioOrigin: input.radioOrigin,
+                generationId: result.generationId,
+                nextCursor: result.nextCursor,
+                degraded: result.degradedSources.length > 0,
+                degradedSources: result.degradedSources,
+            };
+        } finally {
+            execution.dispose();
+        }
     }
 }

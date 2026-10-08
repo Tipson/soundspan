@@ -3,6 +3,7 @@ import { buildCanonicalRecordingKey } from "./canonicalIdentity";
 import type { RecommendationCandidateBatch } from "./engine";
 import { songRepeatKey } from "../personalizedRepeatPolicy";
 import type { RecommendationCandidate } from "./types";
+import type { RadioRequestExecution } from "./radioRequestExecution";
 
 /** Account-owned continuation of the original station, independently of its current song. */
 export interface RadioContinuationInput {
@@ -13,6 +14,8 @@ export interface RadioContinuationInput {
     limit: number;
     exclude: string[];
     diagnostic?: boolean;
+    /** Server-owned execution scope; never accepted from continuation query parameters. */
+    execution?: RadioRequestExecution;
 }
 
 /** Existing actual-listening rules captured once at the engine policy clock. */
@@ -171,10 +174,12 @@ export function createRadioContinuationLoader(
         input: RadioContinuationInput,
         policyTime: Date,
     ): Promise<RecommendationCandidateBatch> => {
+        input.execution?.check();
         const preferences = await dependencies.loadPreferences(
             input.userId,
             policyTime,
         );
+        input.execution?.check();
         const degradedSources = new Set(preferences.degradedSources);
         const exclusions = new Set(input.exclude);
         if (input.radioOrigin.kind === "track") {
@@ -205,6 +210,7 @@ export function createRadioContinuationLoader(
             );
         };
         const admit = async (rows: unknown[]) => {
+            input.execution?.check();
             const seen = new Set<string>();
             const candidates = rows.flatMap((row) => {
                 const candidate = normalizeCandidate(row);
@@ -223,6 +229,7 @@ export function createRadioContinuationLoader(
                 policyTime,
                 [...exclusions],
             );
+            input.execution?.check();
             admitted.degradedSources.forEach((source) =>
                 degradedSources.add(source),
             );
@@ -231,11 +238,13 @@ export function createRadioContinuationLoader(
         const seed = await dependencies.loadSeedTracks(
             { ...input, limit: 100 },
             async (ids) => {
+                input.execution?.check();
                 const rows = await dependencies.loadLibraryTracks(ids);
                 const candidates = await admit(rows);
                 return new Set(candidates.map((candidate) => candidate.id));
             },
         );
+        input.execution?.check();
         seed.degradedSources.forEach((source) => degradedSources.add(source));
         const candidates = await admit(seed.tracks);
         return {

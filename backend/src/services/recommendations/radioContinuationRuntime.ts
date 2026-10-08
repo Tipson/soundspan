@@ -29,6 +29,7 @@ import {
     type RadioContinuationLoaderDependencies,
 } from "./radioContinuation";
 import type { RecommendationCandidate } from "./types";
+import { RadioRequestError } from "./radioRequestExecution";
 
 const log = logger.child("RadioContinuation");
 
@@ -266,6 +267,7 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
         };
     },
     loadSeedTracks: async (input, admitTrackIds) => {
+        input.execution?.check();
         const origin = input.radioOrigin;
         const refreshRemotePool = input.cursor > 0;
         const degraded = new Set<string>();
@@ -295,22 +297,35 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
                     },
                     select: { id: true },
                 });
+                input.execution?.check();
                 if (!matched) {
                     const onPartialFailure = () => {
                         degraded.add("artist-radio");
                     };
-                    const tracks = refreshRemotePool
+                    const tracks = input.execution
                         ? await buildRemoteArtistRadio(
                               origin.name,
                               input.limit,
                               onPartialFailure,
-                              { refresh: true },
+                              {
+                                  execution: input.execution,
+                                  ...(refreshRemotePool
+                                      ? { refresh: true }
+                                      : {}),
+                              },
                           )
-                        : await buildRemoteArtistRadio(
-                              origin.name,
-                              input.limit,
-                              onPartialFailure,
-                          );
+                        : refreshRemotePool
+                          ? await buildRemoteArtistRadio(
+                                origin.name,
+                                input.limit,
+                                onPartialFailure,
+                                { refresh: true },
+                            )
+                          : await buildRemoteArtistRadio(
+                                origin.name,
+                                input.limit,
+                                onPartialFailure,
+                            );
                     return { tracks, degradedSources: [...degraded] };
                 }
                 artistId = matched.id;
@@ -320,10 +335,12 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
                     where: { id: origin.id },
                     select: { id: true },
                 });
+                input.execution?.check();
                 if (!artist)
                     throw new LibrarySeedRadioError(404, "Artist not found");
             }
             if (artistId) source = "artist-radio";
+            input.execution?.check();
             const selection = await selectLibrarySeedRadio({
                 type: artistId ? "artist" : "vibe",
                 value: artistId ?? (origin.kind === "track" ? origin.id : ""),
@@ -332,10 +349,12 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
                 admitTrackIds,
                 allowRandomFallback: false,
                 onRemotePartialFailure: () => degraded.add("artist-radio"),
+                ...(input.execution ? { execution: input.execution } : {}),
                 ...(refreshRemotePool && artistId
                     ? { refreshRemotePool: true }
                     : {}),
             });
+            input.execution?.check();
             return {
                 tracks:
                     "tracks" in selection
@@ -344,7 +363,11 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
                 degradedSources: [...degraded],
             };
         } catch (error) {
-            if (error instanceof LibrarySeedRadioError) throw error;
+            if (
+                error instanceof LibrarySeedRadioError ||
+                error instanceof RadioRequestError
+            )
+                throw error;
             log.warn("Radio seed source unavailable", { source });
             return { tracks: [], degradedSources: [source] };
         }
