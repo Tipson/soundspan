@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Preserve bounded server-confirmed metadata for exact playable VK and Yandex recordings. Keep it separate from private listening snapshots, fence outdated credential generations and observations, and retain playback when the optional metadata write fails.
+
 - Bound original-station radio to one thirteen-second server request budget. Stop following owner phases on timeout or browser cancellation, retain shared provider pools for other callers, and check generation/exposure transactions before completion. Preserve the current queue and return a static timeout response when a connected request exceeds its budget.
 
 - Record private listening history and engagement for direct VK and Yandex recordings. Keep shared identities free of client-supplied display metadata, preserve exact recordings for history replay, and retain playlist-write restrictions.

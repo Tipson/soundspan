@@ -1617,13 +1617,17 @@ model TrackYtMusic {
   @@index([albumId])
 }
 
-/// Public provider namespace only; client-claimed display metadata lives in each owner's Play.
+/// Exact provider identity; server-confirmed metadata is separate from each owner's private Play claims.
 model TrackMusicSource {
-  id              String   @id @default(cuid())
-  provider        String
-  providerTrackId String
-  createdAt       DateTime @default(now())
-  plays           Play[]
+  id                        String    @id @default(cuid())
+  provider                  String
+  providerTrackId           String
+  createdAt                 DateTime  @default(now())
+  /// Exact server adapter lookup after a successful bounded audio probe; never client metadata.
+  verifiedMetadata          Json?
+  metadataObservedAt        DateTime?
+  metadataConnectionVersion Int?
+  plays                     Play[]
 
   @@unique([provider, providerTrackId])
 }

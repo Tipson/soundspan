@@ -13,6 +13,14 @@ export interface MusicSourceTrack {
     contentVersion: "explicit" | "clean" | "unknown";
     preview: boolean;
 }
+/** Server-only result of an exact lookup; private Play snapshots are not attestations. */
+export interface VerifiedMusicSourceRecording {
+    provider: MusicSource;
+    providerTrackId: string;
+    connectionVersion: number;
+    recording: MusicSourceTrack;
+    observedAt: Date;
+}
 /** Recording request independent of any particular transport. */
 export type RecordingRequest = Omit<
     MusicSourceTrack,
