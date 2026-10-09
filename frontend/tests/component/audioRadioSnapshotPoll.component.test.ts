@@ -61,11 +61,14 @@ async function withPoll(
         setSocketActive(): void;
         startVibeMode(): Promise<VibeModeStartResult>;
     }) => Promise<void>,
+    options: { empty?: boolean } = {},
 ) {
     localStorage.clear();
-    localStorage.setItem("soundspan_current_track", JSON.stringify(song));
-    localStorage.setItem("soundspan_queue", JSON.stringify(initialQueue));
-    localStorage.setItem("soundspan_playback_type", "track");
+    if (!options.empty) {
+        localStorage.setItem("soundspan_current_track", JSON.stringify(song));
+        localStorage.setItem("soundspan_queue", JSON.stringify(initialQueue));
+        localStorage.setItem("soundspan_playback_type", "track");
+    }
     localStorage.setItem("soundspan_current_index", "2");
     localStorage.setItem("soundspan_current_time", "73");
     localStorage.setItem("soundspan_current_time_track_id", song.id);
@@ -197,6 +200,209 @@ async function withPoll(
         mock.timers.reset();
         localStorage.clear();
     }
+}
+
+for (const provider of ["vk", "yandex"] as const) {
+    for (const change of [
+        "selection",
+        "group",
+        "session",
+        "pause",
+        "local write",
+        "socket",
+        "group join and leave",
+    ] as const) {
+        test(`held ${provider} different-media poll cannot overwrite newer ${change}`, async () => {
+            await withPoll(
+                async (h) => {
+                    const { toMusicSourcePlaybackTrack } =
+                        await import("../../lib/audio/musicSourcePlayback");
+                    const remote = toMusicSourcePlaybackTrack({
+                        provider,
+                        id: provider === "vk" ? "-12_34" : "123",
+                        title: "Remote song",
+                        artists: ["Remote Artist"],
+                        duration: 180,
+                        contentVersion: "unknown",
+                        preview: false,
+                    });
+                    const release = await h.held();
+                    await React.act(async () => {
+                        if (change === "selection") {
+                            h.state().setCurrentTrack(song);
+                            h.state().setQueue([song]);
+                            h.state().setPlaybackType("track");
+                            h.state().setCurrentIndex(0);
+                        }
+                        if (change === "session") h.changeSession();
+                        if (change === "pause") recordExplicitPlaybackPause();
+                        if (change === "socket") h.setSocketActive();
+                        if (change === "local write")
+                            localStorage.setItem(
+                                "soundspan_last_playback_state_save_at",
+                                String(Date.now()),
+                            );
+                        if (change.startsWith("group")) {
+                            const membership =
+                                await import("../../lib/listen-together-session");
+                            membership.setListenTogetherMembershipPending(true);
+                            if (change === "group join and leave")
+                                membership.setListenTogetherMembershipPending(
+                                    false,
+                                );
+                        }
+                    });
+                    const latest = h.state();
+                    await release({
+                        ...h.reply,
+                        trackId: remote.id,
+                        queue: [remote],
+                        currentIndex: 0,
+                    });
+                    assert.equal(h.state().currentTrack, latest.currentTrack);
+                    assert.equal(h.state().queue, latest.queue);
+                    assert.equal(h.state().playbackType, latest.playbackType);
+                    assert.equal(h.state().currentIndex, latest.currentIndex);
+                    assert.equal(
+                        h.state().lastServerSync,
+                        latest.lastServerSync,
+                    );
+                },
+                { empty: true },
+            );
+        });
+    }
+    for (const queueMode of ["finite", "wave"] as const) {
+        test(`fresh ${provider} poll restores the selected duplicate occurrence and ${queueMode} mode`, async () => {
+            await withPoll(
+                async (h) => {
+                    const { toMusicSourcePlaybackTrack } =
+                        await import("../../lib/audio/musicSourcePlayback");
+                    const remote = toMusicSourcePlaybackTrack({
+                        provider,
+                        id: provider === "vk" ? "-12_34" : "123",
+                        title: "Remote song",
+                        artists: ["Remote Artist"],
+                        duration: 180,
+                        contentVersion: "unknown",
+                        preview: false,
+                    });
+                    const selected = {
+                        ...remote,
+                        radioOrigin: originB,
+                        recommendationGenerationId: "native-generation",
+                        recommendationSessionId: "native-session",
+                        ...(queueMode === "finite"
+                            ? { recommendationQueueMode: "finite" as const }
+                            : {}),
+                    };
+                    const queue = [
+                        { ...selected, radioOrigin: originA },
+                        {
+                            ...toMusicSourcePlaybackTrack({
+                                ...remote.musicSourceRecording!,
+                                id: provider === "vk" ? "-12_35" : "124",
+                            }),
+                        },
+                        selected,
+                    ];
+                    await h.poll({
+                        ...h.reply,
+                        trackId: remote.id,
+                        queue,
+                        currentIndex: 2,
+                        isShuffle: false,
+                    });
+                    assert.equal(h.state().currentTrack?.id, remote.id);
+                    assert.deepEqual(
+                        h.state().currentTrack?.musicSourceRecording,
+                        remote.musicSourceRecording,
+                    );
+                    assert.deepEqual(
+                        h.state().currentTrack?.radioOrigin,
+                        originB,
+                    );
+                    assert.deepEqual(
+                        h.state().queue.map((row) => row.id),
+                        queue.map((row) => row.id),
+                    );
+                    assert.equal(h.state().currentIndex, 2);
+                    assert.equal(h.state().vibeMode, queueMode === "wave");
+                    assert.deepEqual(
+                        h.state().vibeQueueIds,
+                        queueMode === "wave" ? queue.map((row) => row.id) : [],
+                    );
+                    assert.equal(
+                        h.state().lastServerSync?.toISOString(),
+                        h.reply.updatedAt,
+                    );
+                },
+                { empty: true },
+            );
+        });
+    }
+}
+
+for (const result of ["success", "failure"] as const) {
+    test(`held library hydration ${result} cannot replace or clear a newer selection`, async () => {
+        await withPoll(
+            async (h) => {
+                const { api } = await import("../../lib/api");
+                let resolveTrack!: (track: unknown) => void;
+                let rejectTrack!: (error: Error) => void;
+                const getTrack = mock.method(
+                    api,
+                    "getTrack",
+                    () =>
+                        new Promise((resolve, reject) => {
+                            resolveTrack = resolve;
+                            rejectTrack = reject;
+                        }),
+                );
+                const clear = mock.method(
+                    api,
+                    "clearPlaybackState",
+                    async () => undefined,
+                );
+                try {
+                    await h.poll({
+                        ...h.reply,
+                        trackId: "remote-library-song",
+                        queue: [],
+                        currentIndex: 0,
+                    });
+                    assert.equal(getTrack.mock.callCount(), 1);
+                    await React.act(async () => {
+                        h.state().setCurrentTrack(song);
+                        h.state().setQueue([song]);
+                        h.state().setPlaybackType("track");
+                        h.state().setCurrentIndex(0);
+                    });
+                    const latest = h.state();
+                    await React.act(async () => {
+                        if (result === "success")
+                            resolveTrack({
+                                ...song,
+                                id: "remote-library-song",
+                            });
+                        else rejectTrack(new Error("Track no longer exists"));
+                    });
+                    assert.equal(h.state().currentTrack, latest.currentTrack);
+                    assert.equal(h.state().queue, latest.queue);
+                    assert.equal(h.state().currentIndex, latest.currentIndex);
+                    assert.equal(
+                        h.state().lastServerSync,
+                        latest.lastServerSync,
+                    );
+                    assert.equal(clear.mock.callCount(), 0);
+                } finally {
+                    getTrack.mock.restore();
+                    clear.mock.restore();
+                }
+            },
+            { empty: true },
+        );
+    });
 }
 
 test("newer same-ID poll merges only the selected occurrence's station metadata", async () => {

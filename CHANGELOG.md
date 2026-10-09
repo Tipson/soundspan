@@ -6,6 +6,9 @@
 
 ## Unreleased
 
+- Discard delayed playback snapshots when a newer selection, session, local save or shared-listening membership has taken authority. Recheck after media hydration so an obsolete response cannot replace or clear the current queue.
+- Keep explicitly named remix, live and remaster versions distinct during automatic source resolution even when their ISRCs match. Preserve ordinary punctuation matching and continue to an eligible backup instead of opening a different version.
+
 - Build personal Home, Wave and listening-time recommendations from confirmed account-owned VK and Yandex listening and likes alongside YouTube. Share the three-seed request budget, admit current feedback and repeat exclusions before quotas, and preserve exact source identities through ordered recommendation attribution.
 - Include exact native recordings in daily style mixes and account-scoped Discover Weekly. Retain long distinct compositions, current dislikes, compatible weekly snapshots and atomic ordered exposure records.
 - Keep native personal recommendations attached to personal Wave continuation and finite Discover queues. Show their actual sources, preserve download identities and avoid reclassifying direct recordings as local or YouTube tracks.

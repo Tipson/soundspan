@@ -1149,8 +1149,27 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                 const radioPollGroupActive =
                     isListenTogetherActiveOrPending() ||
                     listenTogetherSocket.hasActiveGroup;
+                // Recheck authority after every awaited read, before adopting
+                // either another medium or metadata for the current track.
+                const canApplyPollSnapshot = () =>
+                    canApplyPollState() &&
+                    isVisible &&
+                    radioPollContextRef.current === radioPollContext &&
+                    radioContextRevisionRef.current ===
+                        radioPollContext.revision &&
+                    getPlaybackIntentGeneration() === radioPollIntent &&
+                    getQueueReplacementGeneration() === radioPollReplacement &&
+                    api.getSessionGeneration() === radioPollAuth &&
+                    radioPollMembershipGenerationRef.current ===
+                        radioPollMembership &&
+                    !radioPollGroupActive &&
+                    !isListenTogetherActiveOrPending() &&
+                    !listenTogetherSocket.hasActiveGroup &&
+                    parsePlaybackStateSaveTimestamp(
+                        readStorage(STORAGE_KEYS.LAST_PLAYBACK_STATE_SAVE_AT),
+                    ) === lastLocalSave;
                 const serverState = await api.getPlaybackState();
-                if (!serverState || !canApplyPollState()) {
+                if (!serverState || !canApplyPollSnapshot()) {
                     return;
                 }
 
@@ -1209,23 +1228,6 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 STORAGE_KEYS.LAST_PLAYBACK_STATE_SAVE_AT,
                             ),
                         );
-                        if (
-                            !isVisible ||
-                            radioPollContextRef.current !== radioPollContext ||
-                            radioContextRevisionRef.current !==
-                                radioPollContext.revision ||
-                            getPlaybackIntentGeneration() !== radioPollIntent ||
-                            getQueueReplacementGeneration() !==
-                                radioPollReplacement ||
-                            api.getSessionGeneration() !== radioPollAuth ||
-                            radioPollMembershipGenerationRef.current !==
-                                radioPollMembership ||
-                            radioPollGroupActive ||
-                            isListenTogetherActiveOrPending() ||
-                            listenTogetherSocket.hasActiveGroup ||
-                            latestLocalSave !== lastLocalSave
-                        )
-                            return;
                         const metadata = reconcileRadioSnapshotMetadata({
                             localCurrentTrack: radioPollContext.currentTrack,
                             localQueue: radioPollContext.queue,
@@ -1325,7 +1327,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 const track = await api.getTrack(
                                     serverState.trackId,
                                 );
-                                if (!canApplyPollState()) return;
+                                if (!canApplyPollSnapshot()) return;
                                 markRemoteTrackChange(
                                     localCurrentTrackId ?? null,
                                     track.id,
@@ -1376,9 +1378,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                     );
                                 }
                             } catch {
-                                if (!canApplyPollState()) return;
+                                if (!canApplyPollSnapshot()) return;
                                 await api.clearPlaybackState().catch(() => {});
-                                if (!canApplyPollState()) return;
+                                if (!canApplyPollSnapshot()) return;
                                 setCurrentTrack(null);
                                 setCurrentAudiobook(null);
                                 setCurrentPodcast(null);
@@ -1397,7 +1399,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                         const audiobook = await api.getAudiobook(
                             serverState.audiobookId,
                         );
-                        if (!canApplyPollState()) return;
+                        if (!canApplyPollSnapshot()) return;
                         setCurrentAudiobook(audiobook);
                         setPlaybackType("audiobook");
                         setCurrentTrack(null);
@@ -1413,7 +1415,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                             coverUrl: string;
                             episodes?: Episode[];
                         } = await api.getPodcast(podcastId);
-                        if (!canApplyPollState()) return;
+                        if (!canApplyPollSnapshot()) return;
                         const episode = podcast.episodes?.find(
                             (ep: Episode) => ep.id === episodeId,
                         );

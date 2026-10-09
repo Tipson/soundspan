@@ -32,7 +32,14 @@ export function matchesRecording(
         Math.min(5, Math.max(2, wanted.duration * 0.015))
     )
         return false;
-    if (markers(wanted.title) !== markers(candidate.title)) return false;
+    const wantedVersions = markers(wanted.title);
+    if (wantedVersions !== markers(candidate.title)) return false;
+    // ISRC cannot erase an explicitly named remix, concert or remaster year.
+    if (
+        wantedVersions &&
+        normalize(wanted.title) !== normalize(candidate.title)
+    )
+        return false;
     const sameIsrc = Boolean(
         wanted.isrc &&
         candidate.isrc &&
