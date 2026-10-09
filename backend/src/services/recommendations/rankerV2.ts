@@ -9,6 +9,10 @@ import {
     buildRecommendationAlbumKey,
     normalizeRecommendationArtistKey,
 } from "./identityKeys";
+import {
+    hasNativeRecommendationIdentity,
+    readNativeRecommendationRecording,
+} from "./nativeCandidates";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
@@ -444,6 +448,11 @@ export function rankRecommendationCandidates(
     candidates: readonly RecommendationCandidate[],
     options: RankRecommendationOptions,
 ): ScoredRecommendation[] {
+    candidates = candidates.filter(
+        (candidate) =>
+            !hasNativeRecommendationIdentity(candidate) ||
+            readNativeRecommendationRecording(candidate) !== null,
+    );
     // These vectors are common to every candidate, including fallback and
     // exploration. Normalize once without mutating the caller's options.
     const preparedOptions: RankRecommendationOptions = {
@@ -658,10 +667,11 @@ function rankRecommendationCandidatePool(
     for (const candidate of candidates) {
         if (selectedCanonicalKeys.has(candidate.canonicalKey)) continue;
         if (options.dislikedCanonicalKeys.has(candidate.canonicalKey)) continue;
-        const providerTrackId =
-            candidate.provider.youtubeVideoId ??
-            candidate.provider.tidalTrackId?.toString() ??
-            (candidate.source === "library" ? candidate.id : null);
+        const providerTrackId = hasNativeRecommendationIdentity(candidate)
+            ? readNativeRecommendationRecording(candidate)?.id
+            : (candidate.provider.youtubeVideoId ??
+              candidate.provider.tidalTrackId?.toString() ??
+              (candidate.source === "library" ? candidate.id : null));
         if (!providerTrackId) continue;
         const age = latestExposureAge(
             candidate.canonicalKey,

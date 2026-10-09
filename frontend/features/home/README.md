@@ -22,6 +22,7 @@ Start-here guide for `frontend/features/home`.
 | `components/HomeQuickActions.tsx` | legacy utility links; intentionally not rendered on Home |
 | `components/HomeWaveHero.tsx` | personalized My Wave launch surface |
 | `components/HomeMadeForYou.tsx` | bounded set of distinct account-backed and generated mixes |
+| `timeOfDayMix.ts` | local-hour listening contexts for the current personal mix |
 | `components/LibraryRadioStations.tsx` | components |
 | `components/libraryRadioStationsGenreSelection.ts` | components |
 | `components/PopularArtistsGrid.tsx` | components |
@@ -39,19 +40,33 @@ Start-here guide for `frontend/features/home`.
 
 ## Playback Behavior
 
-- Home opens with a compact balanced My Wave action built from Quick picks, discovery,
-  and Listen again, resets its direction to For you, then marks the queue for
+- Home opens with a compact discovery-led My Wave action that adds a saved track
+  after four discoveries and a recent track after fifteen queued tracks,
+  resets its direction to For you, then marks the queue for
   automatic provider continuation. The launch surface describes the continuous
   flow without exposing the finite seed-window size as a track limit. Its
   artwork fan comes from that account's current feed rather than decorative or
   placeholder recommendations.
 - Continue listening is one resumable track row and disappears when the account
   has no recent provider history.
-- Made For You exposes five playable collections initially and expands all
-  remaining collections in place. It derives distinct
-  Daily blend, Fresh finds, Back in rotation, and Quick picks recipes from
-  independent account signals, deduplicates identical recipes, then fills any
-  remaining initial slots with non-empty Discover Weekly and generated mixes.
+- Made For You exposes all playable collections in a swipeable mobile row;
+  desktop shows five initially and expands the rest in place. A non-empty
+  Discover Weekly leads the row. Up to six daily style mixes follow the
+  account's selected genres and artists, supplemented by familiar artists
+  when fewer directions are available.
+  Their server-built queues include familiar songs and related discoveries,
+  omit disliked tracks, and do not repeat songs across the visible directions.
+  The server favors songs not played in the last seven days and uses older
+  recent plays only when needed to keep a direction's queue long enough.
+  When the account lacks enough distinct style music, one balanced mix remains
+  instead of reordered copies. One additional mix changes at the listener's local morning,
+  daytime, evening, and night boundaries. Its server-ranked feed favors positive
+  listening from the matching local period across recommendation surfaces and
+  falls back to general account taste when period history is sparse. It does
+  not assume that a particular hour implies a fixed mood. The time mix uses
+  separate 25-song shelves so the Home Wave seed remains unchanged. Each mix
+  forms its own queue of up to 40 songs. Empty
+  mixes are omitted. Generated mixes fill any remaining desktop initial slots.
   The shelf owns one opaque surface so the artwork atmosphere never creates a
   horizontal color seam through cards or metadata.
 - Home folds online discovery into at most one station row and one discovery

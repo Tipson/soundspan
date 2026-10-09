@@ -347,13 +347,105 @@ for (const name of [
         );
         for (const ordinary of [local, youtube]) {
             track = ordinary;
-            assert.match(
-                renderToStaticMarkup(React.createElement(Component)),
-                /Нравится/,
+            const ordinaryHtml = renderToStaticMarkup(
+                React.createElement(Component),
             );
+            assert.match(ordinaryHtml, /Нравится/);
+            if (name === "MiniPlayer") {
+                assert.match(ordinaryHtml, /aria-label="Не нравится"/);
+            }
         }
     });
 }
+
+test("mobile overlay keeps radio beside ratings and secondary actions in the menu", async () => {
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    track = { ...local, artist: { id: "artist-1", name: "Artist" } };
+    const html = renderToStaticMarkup(React.createElement(OverlayPlayer));
+    assert.match(html, /aria-label="Нравится"/);
+    assert.match(html, /aria-label="Не нравится"/);
+    assert.doesNotMatch(html, /aria-label="Добавить в плейлист"/);
+    assert.match(html, /aria-label="Включить радио исполнителя"/);
+    assert.doesNotMatch(html, /aria-label="Подобрать похожую музыку"/);
+    assert.match(html, /aria-haspopup="menu"/);
+});
+
+test("playback-only tracks can show radio without unsupported rating controls", async () => {
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    track = { ...audius, artist: { ...audius.artist, id: "artist-1" } };
+    const html = renderToStaticMarkup(React.createElement(OverlayPlayer));
+    assert.match(html, /aria-label="Включить радио исполнителя"/);
+    assert.doesNotMatch(html, /aria-label="Нравится"/);
+    assert.doesNotMatch(html, /aria-label="Не нравится"/);
+});
+
+test("current-track menu runs Wave without restarting playback or duplicating radio", async () => {
+    const { createRoot } = await import("react-dom/client");
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    let vibeStarts = 0;
+    let restarts = 0;
+    const previousPlayTrack = controls.playTrack;
+    controls.playTrack = () => {
+        restarts++;
+    };
+    try {
+        await act(async () =>
+            root.render(
+                React.createElement(TrackOverflowMenu, {
+                    track: {
+                        ...local,
+                        artist: { id: "artist-1", name: "Artist" },
+                    },
+                    showStartRadio: false,
+                    onMatchVibe: () => {
+                        vibeStarts++;
+                    },
+                }),
+            ),
+        );
+        const open = async () => {
+            await act(async () =>
+                container
+                    .querySelector<HTMLButtonElement>(
+                        'button[aria-haspopup="menu"]',
+                    )!
+                    .click(),
+            );
+        };
+        const clickItem = async (label: string) => {
+            const item = [
+                ...container.querySelectorAll<HTMLButtonElement>(
+                    '[role="menuitem"]',
+                ),
+            ].find((button) => button.textContent === label);
+            assert.ok(item, `${label} remains available in the menu`);
+            await act(async () => item.click());
+        };
+
+        await open();
+        assert.equal(
+            [
+                ...container.querySelectorAll<HTMLButtonElement>(
+                    '[role="menuitem"]',
+                ),
+            ].some((button) => button.textContent === ru.trackMenu.startRadio),
+            false,
+        );
+        await clickItem(ru.trackMenu.matchVibe);
+        assert.equal(vibeStarts, 1);
+        assert.equal(restarts, 0);
+    } finally {
+        controls.playTrack = previousPlayTrack;
+        await act(async () => root.unmount());
+        container.remove();
+    }
+});
 
 test("opened Audius overflow keeps queue actions and removal but hides playlist/download; other sources unchanged", async () => {
     const { createRoot } = await import("react-dom/client");

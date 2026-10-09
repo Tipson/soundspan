@@ -1,19 +1,10 @@
 import type { TasteProfileSelection } from "./types";
 
-export const MIN_TASTE_SIGNALS = 3;
-export const MAX_TASTE_SIGNALS = 16;
-export const MAX_TASTE_LABELS_PER_KIND = 10;
 export const MAX_TASTE_LABEL_LENGTH = 80;
 
 type TasteKind = "genres" | "artists";
 
-export type TasteSelectionValidationCode =
-    | "valid"
-    | "too-few"
-    | "too-many-total"
-    | "too-many-genres"
-    | "too-many-artists"
-    | "invalid-label";
+export type TasteSelectionValidationCode = "valid" | "invalid-label";
 
 export interface TasteSelectionValidation {
     code: TasteSelectionValidationCode;
@@ -66,7 +57,7 @@ function invalidTasteLabel(value: string): boolean {
     );
 }
 
-/** Mirror the backend's bounded selection contract with actionable Russian copy. */
+/** Mirror the backend's label validation with actionable Russian copy. */
 export function validateTasteProfileSelection(
     value: TasteProfileSelection,
 ): TasteSelectionValidation {
@@ -77,36 +68,6 @@ export function validateTasteProfileSelection(
             code: "invalid-label",
             message:
                 "Одно из названий слишком длинное или содержит недопустимые символы.",
-            count,
-        };
-    }
-    if (selection.genres.length > MAX_TASTE_LABELS_PER_KIND) {
-        return {
-            code: "too-many-genres",
-            message: "Можно выбрать не больше 10 жанров.",
-            count,
-        };
-    }
-    if (selection.artists.length > MAX_TASTE_LABELS_PER_KIND) {
-        return {
-            code: "too-many-artists",
-            message: "Можно выбрать не больше 10 артистов.",
-            count,
-        };
-    }
-    if (count > MAX_TASTE_SIGNALS) {
-        return {
-            code: "too-many-total",
-            message:
-                "Оставьте не больше 16 вариантов — так стартовая подборка будет точнее.",
-            count,
-        };
-    }
-    if (count < MIN_TASTE_SIGNALS) {
-        const missing = MIN_TASTE_SIGNALS - count;
-        return {
-            code: "too-few",
-            message: `Выберите ещё ${missing}, чтобы настроить рекомендации.`,
             count,
         };
     }
@@ -139,28 +100,13 @@ export function addTasteLabel(
     if (isTasteLabelSelected(selection[kind], label)) {
         return { selection, error: null };
     }
-    if (selection[kind].length >= MAX_TASTE_LABELS_PER_KIND) {
-        return {
-            selection,
-            error: "В каждой группе можно выбрать не больше 10 вариантов.",
-        };
-    }
-    if (
-        selection.genres.length + selection.artists.length >=
-        MAX_TASTE_SIGNALS
-    ) {
-        return {
-            selection,
-            error: "Всего можно выбрать не больше 16 вариантов.",
-        };
-    }
     return {
         selection: { ...selection, [kind]: [...selection[kind], label] },
         error: null,
     };
 }
 
-/** Toggle a suggestion while keeping both selection groups bounded. */
+/** Toggle a suggestion without imposing a selection count limit. */
 export function toggleTasteLabel(
     value: TasteProfileSelection,
     kind: TasteKind,

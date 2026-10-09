@@ -16,6 +16,11 @@ export interface TasteProfile {
     genres: string[];
     artists: string[];
     seedTracks: TasteSeedTrack[];
+    resolution?: {
+        pendingQueries: string[];
+        attempts: number;
+        retryAfter: string;
+    };
 }
 
 /** Account-scoped state returned by `/api/taste-profile`. */

@@ -49,9 +49,6 @@ export function useServerMusicSourceRecovery(options: Options) {
     const coordinator = useRef<ReturnType<
         typeof createServerMusicSourceRecovery
     > | null>(null);
-    const recoveryPosition = useRef<{ key: string; value: number } | null>(
-        null,
-    );
     const { currentTrack, playbackType, isPlaying } = options;
 
     useEffect(() => {
@@ -67,8 +64,10 @@ export function useServerMusicSourceRecovery(options: Options) {
     useEffect(
         () =>
             audioSeekEmitter.subscribe((time) => {
-                if (recoveryPosition.current && Number.isFinite(time))
-                    recoveryPosition.current.value = time;
+                const recoveryPositionRef =
+                    latest.current.refs.serverSourceRecoveryPositionRef;
+                if (recoveryPositionRef.current && Number.isFinite(time))
+                    recoveryPositionRef.current.value = time;
             }),
         [],
     );
@@ -79,6 +78,7 @@ export function useServerMusicSourceRecovery(options: Options) {
         ): Promise<ServerSourceRecoveryOutcome> => {
             const initial = latest.current;
             const { refs } = initial;
+            const recoveryPositionRef = refs.serverSourceRecoveryPositionRef;
             const track = refs.currentTrackRef.current;
             const stability = refs.startupStabilityRef.current;
             const sourceUrl = initial.getPlaybackSourceUrl();
@@ -173,8 +173,8 @@ export function useServerMusicSourceRecovery(options: Options) {
                             signal,
                             isCurrent: () => isCurrent(input),
                             getPositionSec: () =>
-                                recoveryPosition.current?.key === input.key
-                                    ? recoveryPosition.current.value
+                                recoveryPositionRef.current?.key === input.key
+                                    ? recoveryPositionRef.current.value
                                     : input.positionSec,
                             onReady: (restoredPosition) => {
                                 const active = latest.current;
@@ -204,8 +204,8 @@ export function useServerMusicSourceRecovery(options: Options) {
                     contentVersion: "unknown" as const,
                 },
             };
-            if (recoveryPosition.current?.key !== input.key)
-                recoveryPosition.current = {
+            if (recoveryPositionRef.current?.key !== input.key)
+                recoveryPositionRef.current = {
                     key: input.key,
                     value: positionSec,
                 };
@@ -226,11 +226,18 @@ export function useServerMusicSourceRecovery(options: Options) {
                     await audioEngine.stop();
                     if (currentKey() !== input.key) result = "stale";
                 }
+                // stop() resets the native clock; retain the trusted target
+                // (including an intervening user seek) before clearing recovery.
+                const resumeAtSec =
+                    recoveryPositionRef.current?.key === input.key
+                        ? recoveryPositionRef.current.value
+                        : positionSec;
                 if (
                     result !== "in_progress" &&
-                    recoveryPosition.current?.key === input.key
+                    recoveryPositionRef.current?.key === input.key
                 ) {
-                    recoveryPosition.current = null;
+                    if (result === "recovered" || currentKey() !== input.key)
+                        recoveryPositionRef.current = null;
                     if (
                         refs.serverSourceRecoveryLoadIdRef.current ===
                         capturedLoadId
@@ -260,6 +267,7 @@ export function useServerMusicSourceRecovery(options: Options) {
                         {
                             reason: "server_source_recovery",
                             outcome: result,
+                            resumeAtSec,
                             trackId: track.id,
                         },
                     );

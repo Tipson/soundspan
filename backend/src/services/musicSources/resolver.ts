@@ -8,12 +8,19 @@ import {
     type MusicSourceStream,
     type MusicStreamRequest,
     type RecordingRequest,
+    type VerifiedMusicSourceRecording,
 } from "./types";
 
 interface Options {
     connections(): Promise<MusicSourceAdapter[]>;
     now?: () => number;
     maxStreams?: number;
+    /** Optional shared metadata writer, fed only by exact lookup and a successful audio probe. */
+    recordVerified?(
+        input: VerifiedMusicSourceRecording,
+        signal: AbortSignal,
+        budgetMs: number,
+    ): Promise<void>;
 }
 interface Lease {
     userId: string;
@@ -135,6 +142,39 @@ export function createMusicSourceResolver(options: Options) {
         for (const [key, value] of circuits)
             if (value.until <= now()) circuits.delete(key);
     }
+    async function recordVerified(
+        input: VerifiedMusicSourceRecording,
+        parent: AbortSignal,
+        remainingMs: number,
+    ) {
+        const budgetMs = Math.min(500, Math.floor(remainingMs - 50));
+        if (!options.recordVerified || budgetMs < 50) return;
+        parent.throwIfAborted();
+        const timeout = new AbortController();
+        const signal = AbortSignal.any([parent, timeout.signal]);
+        const timer = setTimeout(() => timeout.abort(), budgetMs).unref();
+        let aborted = () => {};
+        const cancelled = new Promise<never>((_, reject) => {
+            aborted = () => reject(signal.reason);
+            if (signal.aborted) aborted();
+            else signal.addEventListener("abort", aborted, { once: true });
+        });
+        try {
+            await Promise.race([
+                Promise.resolve().then(() => {
+                    signal.throwIfAborted();
+                    return options.recordVerified!(input, signal, budgetMs);
+                }),
+                cancelled,
+            ]);
+        } catch {
+            // Optional shared metadata cannot turn a probed recording into a provider failure.
+        } finally {
+            clearTimeout(timer);
+            signal.removeEventListener("abort", aborted);
+        }
+        parent.throwIfAborted();
+    }
     return {
         async resolve(
             userId: string,
@@ -176,6 +216,7 @@ export function createMusicSourceResolver(options: Options) {
                     // Reserve a share of the remaining deadline for each backup.
                     // One selected source still receives the entire remaining budget.
                     const attempt = new AbortController();
+                    const attemptStartedAt = performance.now();
                     const budget = Math.max(
                         1,
                         Math.floor(
@@ -194,6 +235,7 @@ export function createMusicSourceResolver(options: Options) {
                     );
                     usage.resolutionStarted(source.provider);
                     try {
+                        const observedAt = new Date(now());
                         const selected = selectedTrackId
                             ? await source.lookup(
                                   selectedTrackId,
@@ -244,6 +286,25 @@ export function createMusicSourceResolver(options: Options) {
                         } finally {
                             probe.data.destroy();
                         }
+                        operation.signal.throwIfAborted();
+                        if (selectedTrackId && selected) {
+                            await recordVerified(
+                                {
+                                    provider: source.provider,
+                                    providerTrackId: selectedTrackId,
+                                    connectionVersion: source.version,
+                                    recording: candidate,
+                                    observedAt,
+                                },
+                                operation.signal,
+                                Math.min(
+                                    budget -
+                                        (performance.now() - attemptStartedAt),
+                                    16_000 - (performance.now() - startedAt),
+                                ),
+                            );
+                        }
+                        // Awaiting even a skipped optional writer yields to owner cancellation.
                         operation.signal.throwIfAborted();
                         if (leases.size >= 1000)
                             throw new MusicSourceError("busy", 5);

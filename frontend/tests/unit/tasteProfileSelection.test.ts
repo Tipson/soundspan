@@ -21,27 +21,27 @@ test("taste labels are trimmed and de-duplicated without losing their display sp
     assert.equal(isTasteLabelSelected(["linkin park"], "Linkin Park"), true);
 });
 
-test("taste selection enforces the shared 3-16 total and 10-per-kind limits", () => {
+test("taste selection accepts any number of valid choices", () => {
     assert.equal(
         validateTasteProfileSelection({
             genres: ["Рок", "Метал"],
             artists: [],
         }).code,
-        "too-few",
+        "valid",
     );
     assert.equal(
         validateTasteProfileSelection({
             genres: Array.from({ length: 10 }, (_, index) => `Genre ${index}`),
             artists: Array.from({ length: 7 }, (_, index) => `Artist ${index}`),
         }).code,
-        "too-many-total",
+        "valid",
     );
     assert.equal(
         validateTasteProfileSelection({
             genres: Array.from({ length: 11 }, (_, index) => `Genre ${index}`),
             artists: [],
         }).code,
-        "too-many-genres",
+        "valid",
     );
     assert.equal(
         validateTasteProfileSelection({
@@ -52,7 +52,7 @@ test("taste selection enforces the shared 3-16 total and 10-per-kind limits", ()
     );
 });
 
-test("manual labels reject control characters and stop at the per-kind limit", () => {
+test("manual labels validate names without limiting the number of artists", () => {
     const fullSelection = {
         genres: [],
         artists: Array.from({ length: 10 }, (_, index) => `Artist ${index}`),
@@ -60,7 +60,7 @@ test("manual labels reject control characters and stop at the per-kind limit", (
 
     assert.equal(
         addTasteLabel(fullSelection, "artists", "Another artist").error,
-        "В каждой группе можно выбрать не больше 10 вариантов.",
+        null,
     );
     assert.equal(
         addTasteLabel({ genres: [], artists: [] }, "artists", "Bad\u0000Name")

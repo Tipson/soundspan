@@ -138,6 +138,7 @@ test("personalized shelf plays the complete provider queue from the selected tra
             title: "Quick picks",
             subtitle: "Based on your likes",
             tracks,
+            generationId: "shelf-generation",
         }),
     );
 
@@ -174,8 +175,14 @@ test("personalized shelf plays the complete provider queue from the selected tra
         streamSource: string;
         youtubeVideoId: string;
         album: { coverArt?: string | null };
+        recommendationQueueMode?: string;
+        recommendationGenerationId?: string;
     }>;
     assert.equal(queue.length, 2);
+    assert.ok(queue.every((t) => t.recommendationQueueMode === "finite"));
+    assert.ok(
+        queue.every((t) => t.recommendationGenerationId === "shelf-generation"),
+    );
     assert.equal(queue[0].id, "yt:video-a");
     assert.equal(queue[0].streamSource, "youtube");
     assert.equal(queue[0].youtubeVideoId, "video-a");

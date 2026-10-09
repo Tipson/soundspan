@@ -4,6 +4,7 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as realTrackRef from "../../lib/trackRef";
+import * as realTrackRadio from "../../lib/radio/loadTrackRadio";
 
 /**
  * Component tests for issue #20: wire the existing 15-second skip
@@ -359,7 +360,26 @@ const overlayCalls = {
     skipForward: [] as number[],
     previous: 0,
     next: 0,
+    returnToPreviousMode: 0,
+    radioRequests: 0,
+    radioQueue: [] as unknown[],
 };
+
+mock.module("@/lib/radio/loadTrackRadio", {
+    namedExports: {
+        canLoadTrackRadio: realTrackRadio.canLoadTrackRadio,
+        loadTrackRadio: async () => {
+            overlayCalls.radioRequests++;
+            return [{ id: "radio-next", title: "Radio next", duration: 200 }];
+        },
+        UnsupportedTrackRadioError: class extends Error {},
+    },
+});
+mock.module("@/lib/radio/radioRequestIntent", {
+    namedExports: {
+        requestRadioQueue: (load: () => Promise<unknown>) => load(),
+    },
+});
 
 mock.module("@/lib/audio-context", {
     namedExports: {
@@ -392,7 +412,9 @@ mock.module("@/lib/audio-context", {
             previous: () => {
                 overlayCalls.previous += 1;
             },
-            returnToPreviousMode: () => undefined,
+            returnToPreviousMode: () => {
+                overlayCalls.returnToPreviousMode += 1;
+            },
             seek: () => undefined,
             toggleShuffle: () => undefined,
             toggleRepeat: () => undefined,
@@ -400,7 +422,9 @@ mock.module("@/lib/audio-context", {
             stopVibeMode: () => undefined,
             playTrack: () => undefined,
             playQueueIndex: () => undefined,
-            setUpcoming: () => undefined,
+            setUpcoming: (tracks: unknown[]) => {
+                overlayCalls.radioQueue = tracks;
+            },
             removeFromQueue: () => undefined,
             clearQueue: () => undefined,
             skipForward: (seconds: number = 30) => {
@@ -436,11 +460,22 @@ mock.module("framer-motion", {
             get: (elements, tagName: string) => {
                 if (!elements.has(tagName)) {
                     const MotionTag = React.forwardRef(
-                        (props: { children?: React.ReactNode }, ref) =>
+                        (
+                            {
+                                children,
+                                initial: _initial,
+                                animate: _animate,
+                                exit: _exit,
+                                transition: _transition,
+                                layoutId: _layoutId,
+                                ...domProps
+                            }: Record<string, unknown>,
+                            ref,
+                        ) =>
                             React.createElement(
                                 String(tagName),
-                                { ref },
-                                props.children,
+                                { ...domProps, ref },
+                                children as React.ReactNode,
                             ),
                     );
                     MotionTag.displayName = `motion.${String(tagName)}`;
@@ -553,6 +588,9 @@ beforeEach(() => {
     overlayCalls.skipForward.length = 0;
     overlayCalls.previous = 0;
     overlayCalls.next = 0;
+    overlayCalls.returnToPreviousMode = 0;
+    overlayCalls.radioRequests = 0;
+    overlayCalls.radioQueue = [];
     overlayState.playbackType = "podcast";
     overlayState.currentTrack = null;
     overlayState.currentPodcast = {
@@ -821,6 +859,24 @@ test("FullPlayer: skip buttons are disabled and inert while canSeek is false; Pr
 // OverlayPlayer
 // ---------------------------------------------------------------------------
 
+test("OverlayPlayer exposes a mobile return control that closes the overlay", async () => {
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    const mounted = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+    try {
+        const close = mounted.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Свернуть плеер"]',
+        );
+        assert.ok(close, "mobile users need a visible way back");
+        await React.act(async () => close.click());
+        assert.equal(overlayCalls.returnToPreviousMode, 1);
+    } finally {
+        await unmount(mounted);
+    }
+});
+
 test("OverlayPlayer reserves only its mobile drag header from browser scrolling", async () => {
     const { OverlayPlayer } =
         await import("../../components/player/OverlayPlayer");
@@ -1015,7 +1071,7 @@ test("OverlayPlayer exposes symmetric shuffle and repeat toggle state", async ()
     await unmount(inactive);
 });
 
-test("OverlayPlayer exposes both like and dislike controls for music", async () => {
+test("OverlayPlayer places track radio between like and dislike", async () => {
     overlayState.playbackType = "track";
     overlayState.currentTrack = {
         id: "yt:overlay-track",
@@ -1033,8 +1089,33 @@ test("OverlayPlayer exposes both like and dislike controls for music", async () 
         withQueryClient(React.createElement(OverlayPlayer)),
     );
 
-    assert.ok(mounted.container.querySelector('[aria-label="Нравится"]'));
-    assert.ok(mounted.container.querySelector('[aria-label="Не нравится"]'));
+    const actionLabels = [
+        ...mounted.container.querySelectorAll<HTMLButtonElement>(
+            '[data-player-surface="overlay"] [role="group"][aria-label="Действия с треком"] button',
+        ),
+    ].map((button) => button.getAttribute("aria-label"));
+    assert.deepEqual(actionLabels, [
+        "Нравится",
+        "Включить радио исполнителя",
+        "Не нравится",
+    ]);
+    const radioButton = mounted.container.querySelector<HTMLButtonElement>(
+        '[data-player-surface="overlay"] [aria-label="Включить радио исполнителя"]',
+    );
+    assert.ok(radioButton);
+    await React.act(async () => radioButton.click());
+    assert.equal(overlayCalls.radioRequests, 1);
+    assert.equal(overlayCalls.radioQueue.length, 1);
+    assert.equal(
+        mounted.container.querySelector('[aria-label="Добавить в плейлист"]'),
+        null,
+    );
+    assert.equal(
+        mounted.container.querySelector(
+            '[aria-label="Подобрать похожую музыку"]',
+        ),
+        null,
+    );
 
     await unmount(mounted);
 });

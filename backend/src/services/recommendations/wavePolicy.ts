@@ -1,5 +1,26 @@
 import type { RecommendationCandidate, RecommendationMood } from "./types";
 
+function measuredIntensity(candidate: RecommendationCandidate): number | null {
+    const intensity = candidate.audioFeatures?.arousal;
+    return intensity != null &&
+        Number.isFinite(intensity) &&
+        intensity >= 0 &&
+        intensity <= 1
+        ? intensity
+        : null;
+}
+
+/** Unknown intensity may be prepared in the background, never assumed to match. */
+export function needsWaveMoodAnalysis(
+    candidate: RecommendationCandidate,
+    mood: RecommendationMood | null | undefined,
+): boolean {
+    return (
+        ["calm", "focus", "energetic", "workout"].includes(mood ?? "") &&
+        measuredIntensity(candidate) === null
+    );
+}
+
 /** Explicit moods require measured perceptual intensity in every returned lane.
  * RMS energy and missing analysis cannot establish a mood match. Legacy clients
  * retain focus/workout as the calm/energetic eligibility families.
@@ -10,14 +31,8 @@ export function matchesWaveMood(
 ): boolean {
     if (!["calm", "focus", "energetic", "workout"].includes(mood ?? ""))
         return true;
-    const intensity = candidate.audioFeatures?.arousal;
-    if (
-        intensity == null ||
-        !Number.isFinite(intensity) ||
-        intensity < 0 ||
-        intensity > 1
-    )
-        return false;
+    const intensity = measuredIntensity(candidate);
+    if (intensity === null) return false;
     return mood === "calm" || mood === "focus"
         ? intensity <= 0.45
         : intensity >= 0.55;

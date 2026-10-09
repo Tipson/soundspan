@@ -1,3 +1,4 @@
+import { requestRadioQueue } from "./radioRequestIntent";
 import { Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import { api, type RadioPlaylistFilter } from "@/lib/api";
@@ -72,9 +73,10 @@ async function startShuffleAll(
         type: "all",
         limit: String(SHUFFLE_ALL_TRACK_LIMIT),
     });
-    const response = await api.get<{ tracks: Track[] }>(
-        `/library/radio?${params.toString()}`,
+    const response = await requestRadioQueue(() =>
+        api.get<{ tracks: Track[] }>(`/library/radio?${params.toString()}`),
     );
+    if (!response) return;
 
     if (!response.tracks || response.tracks.length === 0) {
         notifier.error(formatRadioNoTracks(station.name));
@@ -114,6 +116,10 @@ export async function openRadioStation(
         const response = await api.createRadioPlaylist({
             filter: station.filter,
         });
+        if (response.entries.length === 0) {
+            notifier.error(formatRadioNoTracks(station.name));
+            return;
+        }
         push(`/playlist/${response.playlistId}`);
     } catch (error) {
         sharedFrontendLogger.error("Failed to open radio station:", error);

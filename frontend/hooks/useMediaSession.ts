@@ -37,6 +37,7 @@ export function useMediaSession() {
     // Prevents cross-device media session interference from state sync
     const hasPlayedLocallyRef = useRef(false);
     const actionCleanupRef = useRef<(() => void) | null>(null);
+    const seekCleanupRef = useRef<(() => void) | null>(null);
     const actionControlsRef = useRef({
         pause,
         resume,
@@ -313,26 +314,9 @@ export function useMediaSession() {
             }
         });
 
-        // Seek controls (may not be supported on all platforms)
+        // The position slider remains available for music without advertising
+        // short-skip actions that can replace track controls on iOS.
         try {
-            navigator.mediaSession.setActionHandler(
-                "seekbackward",
-                (details) => {
-                    actionControlsRef.current.skipBackward(
-                        details.seekOffset || 10,
-                    );
-                },
-            );
-
-            navigator.mediaSession.setActionHandler(
-                "seekforward",
-                (details) => {
-                    actionControlsRef.current.skipForward(
-                        details.seekOffset || 10,
-                    );
-                },
-            );
-
             navigator.mediaSession.setActionHandler("seekto", (details) => {
                 if (details.seekTime !== undefined) {
                     actionControlsRef.current.seek(details.seekTime);
@@ -350,14 +334,6 @@ export function useMediaSession() {
                 navigator.mediaSession.setActionHandler("previoustrack", null);
                 navigator.mediaSession.setActionHandler("nexttrack", null);
                 try {
-                    navigator.mediaSession.setActionHandler(
-                        "seekbackward",
-                        null,
-                    );
-                    navigator.mediaSession.setActionHandler(
-                        "seekforward",
-                        null,
-                    );
                     navigator.mediaSession.setActionHandler("seekto", null);
                 } catch {
                     // Ignore cleanup errors
@@ -367,9 +343,56 @@ export function useMediaSession() {
     }, [hasActiveMedia, isPlaying]);
 
     useEffect(() => {
+        if (!("mediaSession" in navigator)) return;
+
+        if (
+            !hasActiveMedia ||
+            !hasPlayedLocallyRef.current ||
+            (playbackType !== "podcast" && playbackType !== "audiobook")
+        ) {
+            seekCleanupRef.current?.();
+            seekCleanupRef.current = null;
+            return;
+        }
+        if (seekCleanupRef.current) return;
+
+        try {
+            navigator.mediaSession.setActionHandler(
+                "seekbackward",
+                (details) => {
+                    actionControlsRef.current.skipBackward(
+                        details.seekOffset || 10,
+                    );
+                },
+            );
+            navigator.mediaSession.setActionHandler(
+                "seekforward",
+                (details) => {
+                    actionControlsRef.current.skipForward(
+                        details.seekOffset || 10,
+                    );
+                },
+            );
+            seekCleanupRef.current = () => {
+                navigator.mediaSession.setActionHandler("seekbackward", null);
+                navigator.mediaSession.setActionHandler("seekforward", null);
+            };
+        } catch {
+            // Short seeking is not supported on every platform.
+            try {
+                navigator.mediaSession.setActionHandler("seekbackward", null);
+            } catch {
+                // Ignore unsupported action cleanup.
+            }
+        }
+    }, [hasActiveMedia, isPlaying, playbackType]);
+
+    useEffect(() => {
         return () => {
             actionCleanupRef.current?.();
             actionCleanupRef.current = null;
+            seekCleanupRef.current?.();
+            seekCleanupRef.current = null;
         };
     }, []);
 

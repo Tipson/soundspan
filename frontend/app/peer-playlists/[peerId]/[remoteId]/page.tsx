@@ -3,10 +3,20 @@
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, Heart, ListMusic, Network, Play } from "lucide-react";
+import { Copy, Heart, ListMusic, Network } from "lucide-react";
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
+import {
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import { api } from "@/lib/api";
 import type { PeerPlaylistTrack } from "@/lib/api/peerPlaylists";
-import { useAudioControls } from "@/lib/audio-context";
+import {
+    useAudioControls,
+    useAudioState,
+    usePlaybackStatus,
+} from "@/lib/audio-context";
 import type { Track as AudioTrack } from "@/lib/audio-state-context";
 import { useToast } from "@/lib/toast-context";
 import {
@@ -120,7 +130,13 @@ export default function PeerPlaylistDetailPage() {
     const remoteId = params.remoteId;
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const { playNow, playTracks } = useAudioControls();
+    const { playNow, playTracks, pause, resume } = useAudioControls();
+    const { currentTrack } = useAudioState();
+    const { isPlaying } = usePlaybackStatus();
+    const collectionId = `peer:${peerId}:${remoteId}`;
+    const isActiveCollection = Boolean(
+        currentTrack && isCollectionPlayback(collectionId),
+    );
     const [busy, setBusy] = useState(false);
 
     const detailQuery = usePeerPlaylist(peerId, remoteId);
@@ -226,20 +242,30 @@ export default function PeerPlaylistDetailPage() {
                             data-detail-action-tier="primary"
                             className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
                         >
-                            <button
-                                type="button"
+                            <CollectionPlaybackButton
                                 disabled={busy || playable.length === 0}
+                                isPlaying={isActiveCollection && isPlaying}
                                 onClick={() => {
-                                    playTracks(playable, 0);
+                                    if (isActiveCollection) {
+                                        if (isPlaying) pause();
+                                        else resume();
+                                        return;
+                                    }
+                                    const generation =
+                                        getCollectionPlaybackGeneration();
+                                    playTracks(playable, 0, false, {
+                                        replaceQueue: true,
+                                        preserveOrder: true,
+                                    });
+                                    markCollectionPlayback(
+                                        collectionId,
+                                        generation,
+                                    );
                                     toast.success(
                                         "Воспроизводится удалённый плейлист",
                                     );
                                 }}
-                                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none sm:flex-none"
-                            >
-                                <Play className="h-5 w-5 fill-current" />
-                                <span>Слушать</span>
-                            </button>
+                            />
                         </div>
 
                         <div

@@ -11,6 +11,7 @@ const state = {
     successToasts: [] as string[],
     trackCount: 12,
     failCreate: false,
+    getGate: null as Promise<void> | null,
 };
 
 mock.module("lucide-react", {
@@ -36,10 +37,17 @@ mock.module("@/lib/api", {
                     throw new Error("generation failed");
                 }
                 state.createCalls.push(input);
-                return { playlistId: "generated-42", entries: [] };
+                return {
+                    playlistId: "generated-42",
+                    entries: Array.from(
+                        { length: state.trackCount },
+                        (_, i) => ({ id: String(i) }),
+                    ),
+                };
             },
             get: async (path: string) => {
                 state.getCalls.push(path);
+                if (state.getGate) await state.getGate;
                 return {
                     tracks: Array.from(
                         { length: state.trackCount },
@@ -77,6 +85,7 @@ beforeEach(() => {
     state.successToasts.length = 0;
     state.trackCount = 12;
     state.failCreate = false;
+    state.getGate = null;
 });
 
 async function loadHelper() {
@@ -194,4 +203,34 @@ test("generation failures surface a toast and resolve", async () => {
     assert.equal(state.pushCalls.length, 0);
     assert.equal(state.playCalls.length, 0);
     assert.deepEqual(state.errorToasts, ["Не удалось открыть радиостанцию"]);
+});
+
+test("empty generated stations show feedback instead of opening a dead playlist", async () => {
+    const openRadioStation = await loadHelper();
+    state.trackCount = 0;
+    await openRadioStation(
+        { id: "empty", name: "Empty", filter: { type: "discovery" } },
+        handlers,
+    );
+    assert.deepEqual(state.pushCalls, []);
+    assert.equal(state.errorToasts.length, 1);
+});
+
+test("Shuffle All discards its deferred response after a newer playback action", async () => {
+    const openRadioStation = await loadHelper();
+    const { recordExplicitPlaybackPause } =
+        await import("../../lib/audio-engine/playbackAdvanceOrigin");
+    let release!: () => void;
+    state.getGate = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const pending = openRadioStation(
+        { id: "all", name: "All", filter: { type: "all" } },
+        handlers,
+    );
+    recordExplicitPlaybackPause();
+    release();
+    await pending;
+    assert.deepEqual(state.playCalls, []);
+    assert.deepEqual(state.successToasts, []);
 });

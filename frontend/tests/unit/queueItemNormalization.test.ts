@@ -15,6 +15,40 @@ test("normalizeQueueItems returns empty array for non-array input", () => {
     assert.deepEqual(normalizeQueueItems({ id: "t1" }), []);
 });
 
+test("persisted radio context keeps only its identity and never attaches to episodes", () => {
+    const radioOrigin = {
+        kind: "artist",
+        source: "discovery",
+        name: " Original ",
+        secret: "discard",
+    };
+    const queue = normalizeQueueItems([
+        { id: "next", radioOrigin },
+        {
+            id: "bad",
+            radioOrigin: {
+                kind: "track",
+                source: "youtube",
+                id: "https://invalid",
+            },
+        },
+        { itemType: "episode", id: "pod:ep", radioOrigin },
+    ]);
+    assert.deepEqual((queue[0] as { radioOrigin?: unknown }).radioOrigin, {
+        kind: "artist",
+        source: "discovery",
+        name: "Original",
+    });
+    assert.equal(
+        (queue[1] as { radioOrigin?: unknown }).radioOrigin,
+        undefined,
+    );
+    assert.equal(
+        (queue[2] as { radioOrigin?: unknown }).radioOrigin,
+        undefined,
+    );
+});
+
 test("device-only policy survives queue serialization and shuffled preload selection", () => {
     const input = ["a", "b"].map((id) => ({
         id,

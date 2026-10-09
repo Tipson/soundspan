@@ -1,16 +1,7 @@
 "use client";
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
 
-import {
-    Play,
-    Pause,
-    RefreshCw,
-    Settings,
-    Loader2,
-    Plus,
-    Shuffle,
-    ListMusic,
-} from "lucide-react";
-import { cn } from "@/utils/cn";
+import { RefreshCw, Settings, Plus, Shuffle, ListMusic } from "lucide-react";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { Button } from "@/components/ui/Button";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
@@ -59,6 +50,7 @@ export function DiscoverActionBar({
     batchStatus,
 }: DiscoverActionBarProps) {
     const { showSpinner, triggerPlayFeedback } = usePlayButtonFeedback();
+    const onlineWeekly = playlist?.kind === "online-weekly";
 
     const getStatusText = () => {
         if (!isGenerating) return null;
@@ -88,30 +80,12 @@ export function DiscoverActionBar({
             <div className="flex flex-wrap items-center gap-2">
                 {/* Play Button */}
                 {playlist && playlist.tracks.length > 0 && (
-                    <Button
-                        variant="ai"
+                    <CollectionPlaybackButton
                         onClick={handlePlayToggle}
                         disabled={isGenerating}
-                        className={cn(
-                            "rounded-full px-5 text-sm",
-                            isGenerating
-                                ? "cursor-not-allowed"
-                                : "shadow-lg shadow-ai/5",
-                        )}
-                    >
-                        {showSpinner ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : isPlaylistPlaying && isPlaying ? (
-                            <Pause className="w-5 h-5 fill-current" />
-                        ) : (
-                            <Play className="w-5 h-5 fill-current ml-0.5" />
-                        )}
-                        <span>
-                            {isPlaylistPlaying && isPlaying
-                                ? discoverRu.action.pause
-                                : discoverRu.action.playAll}
-                        </span>
-                    </Button>
+                        isLoading={showSpinner}
+                        isPlaying={isPlaylistPlaying && isPlaying}
+                    />
                 )}
 
                 {/* Shuffle Button */}
@@ -153,33 +127,37 @@ export function DiscoverActionBar({
                 )}
 
                 {/* Regenerate Button (icon only) */}
-                <Button
-                    variant="icon"
-                    onClick={onGenerate}
-                    disabled={isGenerating || !config?.enabled}
-                    title={
-                        isGenerating
-                            ? getStatusText() || discoverRu.action.generating
-                            : playlist
-                              ? discoverRu.action.regenerate
-                              : discoverRu.action.generate
-                    }
-                    aria-label={
-                        isGenerating
-                            ? getStatusText() || discoverRu.action.generating
-                            : playlist
-                              ? discoverRu.action.regenerate
-                              : discoverRu.action.generate
-                    }
-                >
-                    {isGenerating ? (
-                        <GradientSpinner size="sm" />
-                    ) : (
-                        <RefreshCw className="size-5" />
-                    )}
-                </Button>
+                {!onlineWeekly && (
+                    <Button
+                        variant="icon"
+                        onClick={onGenerate}
+                        disabled={isGenerating || !config?.enabled}
+                        title={
+                            isGenerating
+                                ? getStatusText() ||
+                                  discoverRu.action.generating
+                                : playlist
+                                  ? discoverRu.action.regenerate
+                                  : discoverRu.action.generate
+                        }
+                        aria-label={
+                            isGenerating
+                                ? getStatusText() ||
+                                  discoverRu.action.generating
+                                : playlist
+                                  ? discoverRu.action.regenerate
+                                  : discoverRu.action.generate
+                        }
+                    >
+                        {isGenerating ? (
+                            <GradientSpinner size="sm" />
+                        ) : (
+                            <RefreshCw className="size-5" />
+                        )}
+                    </Button>
+                )}
 
-                {isGenerating && (
+                {isGenerating && !onlineWeekly && (
                     <span
                         aria-live="polite"
                         className="min-w-0 flex-1 truncate px-1 text-xs font-medium text-content-muted"
@@ -189,16 +167,18 @@ export function DiscoverActionBar({
                 )}
 
                 {/* Settings Button (far right) */}
-                <Button
-                    variant="icon"
-                    onClick={onToggleSettings}
-                    disabled={isGenerating}
-                    className="ml-auto"
-                    title={discoverRu.action.settings}
-                    aria-label={discoverRu.action.settings}
-                >
-                    <Settings className="size-5" />
-                </Button>
+                {!onlineWeekly && (
+                    <Button
+                        variant="icon"
+                        onClick={onToggleSettings}
+                        disabled={isGenerating}
+                        className="ml-auto"
+                        title={discoverRu.action.settings}
+                        aria-label={discoverRu.action.settings}
+                    >
+                        <Settings className="size-5" />
+                    </Button>
+                )}
             </div>
         </div>
     );

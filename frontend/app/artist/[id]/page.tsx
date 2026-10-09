@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     useAudioState,
@@ -31,6 +31,15 @@ import { useArtistAlbumRequests } from "@/features/artist/hooks/useArtistAlbumRe
 import { useArtistActions } from "@/features/artist/hooks/useArtistActions";
 import { useDownloadActions } from "@/features/artist/hooks/useDownloadActions";
 import { useYtMusicTopTracks } from "@/features/artist/hooks/useYtMusicTopTracks";
+import { getPlaybackIntentGeneration } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { loadArtistRadio } from "@/lib/radio/loadArtistRadio";
+import {
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
+import { extendArtistPlayback } from "@/features/artist/artistPlaybackContinuation";
+import { mergeProviderAlbumTracks } from "@/features/artist/providerArtistTracks";
 import { useArtistTracks } from "@/features/artist/hooks/useArtistTracks";
 import { useProviderArtistTracks } from "@/features/artist/hooks/useProviderArtistTracks";
 import { useProviderArtistFallback } from "@/features/artist/hooks/useProviderArtistFallback";
@@ -139,9 +148,20 @@ export default function ArtistPage() {
     const activeView = resolveArtistView(searchParams.get("view"));
     const serializedSearchParams = searchParams.toString();
     // Use split hooks to avoid re-renders from currentTime updates
-    const { currentTrack } = useAudioState();
+    const { currentTrack, queue } = useAudioState();
+    const orderedIntentRef = useRef<object | null>(null);
+    const queueRef = useRef(queue);
+    useEffect(() => {
+        queueRef.current = queue;
+    }, [queue]);
+    useEffect(() => {
+        orderedIntentRef.current = null;
+        return () => {
+            orderedIntentRef.current = null;
+        };
+    }, [pathname, activeView]);
     const { isPlaying } = usePlaybackStatus();
-    const { playTracks, pause, addTracksToQueue } = useAudioControls();
+    const { playTracks, pause, resume, addTracksToQueue } = useAudioControls();
     const { isPendingByMbid, downloadsEnabled } = useDownloadContext();
     const { isInGroup } = useListenTogether();
 
@@ -213,10 +233,23 @@ export default function ArtistPage() {
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState(false);
     const [isLikingAll, setIsLikingAll] = useState(false);
     const [radioConfirm, setRadioConfirm] = useState<{
-        tracks: Track[];
+        tracks: AudioTrack[];
         count: number;
+        generation: number;
+        artistName: string;
     } | null>(null);
     const radioConfirmedRef = useRef(false);
+    const radioRequestEpoch = useRef(0);
+    const groupStateRef = useRef(isInGroup);
+    useLayoutEffect(() => {
+        groupStateRef.current = isInGroup;
+    }, [isInGroup]);
+    useEffect(() => {
+        setRadioConfirm(null);
+        return () => {
+            radioRequestEpoch.current += 1;
+        };
+    }, [pathname]);
 
     // Enrich unowned top tracks with YouTube Music streaming.
     const artistWithTopTracks = artist?.topTracks?.length ? artist : null;
@@ -342,7 +375,12 @@ export default function ArtistPage() {
                         artist: albumData.artist,
                     }),
                 );
-                playTracks(tracksWithAlbum, 0);
+                const generation = getCollectionPlaybackGeneration();
+                playTracks(tracksWithAlbum, 0, false, {
+                    replaceQueue: true,
+                    preserveOrder: true,
+                });
+                markCollectionPlayback(`album:${albumId}`, generation);
                 toast.success(formatArtistAlbumPlaying(albumTitle));
             }
         } catch {
@@ -418,7 +456,12 @@ export default function ArtistPage() {
                     track !== null,
             );
         if (formattedTracks.length === 0) return;
-        playTracks(formattedTracks, 0);
+        const generation = getCollectionPlaybackGeneration();
+        playTracks(formattedTracks, 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(`artist:${artist.id}`, generation);
     }
 
     // A row click starts the artist's ordered popular-track context. This
@@ -452,10 +495,86 @@ export default function ArtistPage() {
             (entry) => entry.source === track,
         );
         if (selectedIndex < 0) return;
-        playTracks(
-            formattedTracks.map((entry) => entry.track),
-            selectedIndex,
-        );
+        const initialQueue = formattedTracks.map((entry) => entry.track);
+        const collectionGeneration = getCollectionPlaybackGeneration();
+        playTracks(initialQueue, selectedIndex, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(`artist:${artist.id}`, collectionGeneration);
+        queueRef.current = initialQueue;
+        const intent = {};
+        orderedIntentRef.current = intent;
+        if (activeView !== "tracks") return;
+        const generation = getPlaybackIntentGeneration();
+        const isCurrent = () =>
+            orderedIntentRef.current === intent &&
+            getPlaybackIntentGeneration() === generation;
+        // Preserve the visible prefix, then append unseen library pages and
+        // release tracks in the same provider release order as this view.
+        async function* remainingPages() {
+            let offset = artistTracksQuery.tracks.length;
+            if (libraryArtistTracksEnabled && artist) {
+                while (offset < artistTracksQuery.total && isCurrent()) {
+                    const page = await api.getArtistTracks(artist.id, {
+                        limit: 100,
+                        offset,
+                    });
+                    if (!page.tracks.length || page.offset !== offset)
+                        throw new Error("Invalid artist pagination");
+                    offset += page.tracks.length;
+                    yield page.tracks as Track[];
+                }
+            }
+            if (
+                providerCatalogEnabled &&
+                (providerArtistTracksQuery.hasNextPage ||
+                    providerArtistTracksQuery.isLoading)
+            ) {
+                const releases = [
+                    ...new Set(
+                        providerReleases
+                            .map((release) => release.browseId?.trim())
+                            .filter((id): id is string => Boolean(id)),
+                    ),
+                ];
+                for (const browseId of releases) {
+                    if (!isCurrent()) return;
+                    const album = await api.getYtMusicAlbum(browseId);
+                    yield mergeProviderAlbumTracks([album]);
+                }
+            }
+        }
+        void extendArtistPlayback({
+            initialTracks: visibleTracks,
+            initialQueue,
+            pages: remainingPages(),
+            isCurrent,
+            getQueueIds: () => queueRef.current.map((entry) => entry.id),
+            formatTrack: (candidate) => {
+                if (
+                    isRetiredRemoteOnlyTrack(candidate) ||
+                    !(
+                        (candidate.source === "federated" &&
+                            candidate.peer?.online === true) ||
+                        candidate.filePath ||
+                        (candidate.streamSource === "youtube" &&
+                            candidate.youtubeVideoId)
+                    )
+                )
+                    return null;
+                return formatTrackForPlayback(candidate);
+            },
+            append: (tracks) => {
+                addTracksToQueue(tracks, { silent: true });
+                queueRef.current = [...queueRef.current, ...tracks];
+            },
+        }).then((status) => {
+            if (isCurrent() && status === "fetch-failed")
+                toast.error(
+                    "Не все треки исполнителя удалось добавить в очередь",
+                );
+        });
     }
 
     function handleAddAllPopularToQueue(visibleTracks: Track[]) {
@@ -510,43 +629,62 @@ export default function ArtistPage() {
     // Start artist radio handler
     async function handleStartRadio() {
         if (!artist) return;
+        const epoch = ++radioRequestEpoch.current;
+        setRadioConfirm(null);
+        radioConfirmedRef.current = false;
 
         try {
             toast.success(artistRu.radioStarting);
-            const response = await api.getRadioTracks("artist", artist.id);
+            const tracks = await loadArtistRadio(
+                artist.id,
+                artist.name,
+                source ?? "discovery",
+            );
+            if (!tracks || epoch !== radioRequestEpoch.current) return;
 
-            if (response.tracks && response.tracks.length > 0) {
-                if (isInGroup) {
+            if (tracks.length > 0) {
+                if (groupStateRef.current) {
                     setRadioConfirm({
-                        tracks: response.tracks,
-                        count: response.tracks.length,
+                        tracks,
+                        count: tracks.length,
+                        generation: getPlaybackIntentGeneration(),
+                        artistName: artist.name,
                     });
                     return;
                 }
 
-                // Backend already returns properly formatted tracks - just pass them through
-                playTracks(response.tracks, 0);
+                playTracks(tracks, 0, false, {
+                    replaceQueue: true,
+                    preserveOrder: true,
+                    radioOrigin: tracks[0]?.radioOrigin,
+                });
                 toast.success(
-                    formatArtistRadioPlaying(
-                        artist.name,
-                        response.tracks.length,
-                    ),
+                    formatArtistRadioPlaying(artist.name, tracks.length),
                 );
             } else {
                 toast.error(artistRu.radioNotEnough);
             }
         } catch {
+            if (epoch !== radioRequestEpoch.current) return;
             toast.error(artistRu.radioStartFailed);
         }
     }
 
     const handleConfirmRadio = () => {
-        if (!radioConfirm) return;
+        if (
+            !radioConfirm ||
+            radioConfirm.generation !== getPlaybackIntentGeneration()
+        )
+            return;
         radioConfirmedRef.current = true;
-        playTracks(radioConfirm.tracks as Parameters<typeof playTracks>[0], 0);
+        playTracks(radioConfirm.tracks, 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+            radioOrigin: radioConfirm.tracks[0]?.radioOrigin,
+        });
         toast.success(
             formatArtistRadioPlaying(
-                artist?.name ?? artistRu.fallbackName,
+                radioConfirm.artistName,
                 radioConfirm.count,
             ),
         );
@@ -611,11 +749,18 @@ export default function ArtistPage() {
                     albums={albums}
                     source={source || "discovery"}
                     colors={colors}
-                    onPlayAll={() =>
-                        hasProviderTrackContext
+                    onPlayAll={() => {
+                        if (
+                            currentTrack &&
+                            isCollectionPlayback(`artist:${artist.id}`)
+                        ) {
+                            resume();
+                            return;
+                        }
+                        return hasProviderTrackContext
                             ? handlePlayProviderArtist(false)
-                            : playAll(artist, albums)
-                    }
+                            : playAll(artist, albums);
+                    }}
                     onAddAllToQueue={() =>
                         hasProviderTrackContext
                             ? handleAddAllPopularToQueue(visibleArtistTracks)
@@ -637,10 +782,9 @@ export default function ArtistPage() {
                     isLikingAll={isLikingAll}
                     isPendingDownload={isPendingByMbid(artist.mbid || "")}
                     isPlaying={isPlaying}
-                    isPlayingThisArtist={
-                        currentTrack?.artist?.id === artist.id ||
-                        currentTrack?.artist?.name === artist.name
-                    }
+                    isPlayingThisArtist={isCollectionPlayback(
+                        `artist:${artist.id}`,
+                    )}
                     onPause={pause}
                     downloadsEnabled={
                         downloadsEnabled && !isDirectYtMusicArtist

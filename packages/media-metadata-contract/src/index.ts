@@ -1,6 +1,12 @@
 /** Version identifier for the central media metadata contract. */
 export const CENTRAL_MEDIA_METADATA_CONTRACT_VERSION = "1.0.0";
 
+export {
+    normalizePlaybackRadioOrigin,
+    playbackRadioOriginsMatch,
+    type PlaybackRadioOrigin,
+} from "./playbackRadioOrigin";
+
 /** Complete runtime list of canonical media source identifiers. */
 export const CANONICAL_MEDIA_SOURCE_VALUES = [
     "local",

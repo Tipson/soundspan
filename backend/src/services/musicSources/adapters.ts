@@ -14,7 +14,10 @@ import {
 
 const text = z.string().min(1).max(500);
 const id = z
-    .union([z.string().regex(/^\d+$/), z.number().int().nonnegative()])
+    .union([
+        z.string().regex(/^\d{1,20}$/),
+        z.number().int().nonnegative().refine(Number.isSafeInteger),
+    ])
     .transform(String);
 const yandexTrack = z.object({
     id,
@@ -30,8 +33,8 @@ const yandexTrack = z.object({
     isrc: z.string().optional(),
 });
 const vkTrack = z.object({
-    id: z.number().int().positive(),
-    owner_id: z.number().int(),
+    id: z.number().int().positive().refine(Number.isSafeInteger),
+    owner_id: z.number().int().refine(Number.isSafeInteger),
     title: text,
     subtitle: z.string().max(200).optional(),
     artist: text,
@@ -98,6 +101,7 @@ function normalize(
 }
 function assertId(provider: MusicSource, value: string) {
     if (
+        typeof value !== "string" ||
         !(provider === "yandex" ? /^\d{1,20}$/ : /^-?\d{1,20}_\d{1,20}$/).test(
             value,
         )
@@ -161,6 +165,33 @@ export function createMusicSourceAdapter(
             return rows
                 .map((r) => normalize(provider, r))
                 .filter((t): t is MusicSourceTrack => t !== null);
+        },
+        async recommendations(trackId, limit, signal) {
+            assertId(provider, trackId);
+            if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+                throw new MusicSourceError("invalid_request");
+            signal.throwIfAborted();
+            const data = await call(
+                provider === "yandex"
+                    ? `/tracks/${trackId}/similar`
+                    : `audio.getRecommendations?target_audio=${trackId}&count=${limit}`,
+                signal,
+            );
+            signal.throwIfAborted();
+            const parsed = (
+                provider === "yandex"
+                    ? z.object({ similarTracks: z.array(z.unknown()).max(100) })
+                    : z.object({ items: z.array(z.unknown()).max(100) })
+            ).safeParse(provider === "yandex" ? data.result : data.response);
+            if (!parsed.success) throw new MusicSourceError("unavailable");
+            const rows =
+                "similarTracks" in parsed.data
+                    ? parsed.data.similarTracks
+                    : parsed.data.items;
+            return rows
+                .map((row) => normalize(provider, row))
+                .filter((track): track is MusicSourceTrack => track !== null)
+                .slice(0, limit);
         },
         async lookup(trackId, signal) {
             assertId(provider, trackId);

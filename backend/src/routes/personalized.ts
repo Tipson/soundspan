@@ -1,18 +1,52 @@
 import { randomUUID } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import { normalizePlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
 import { requireAuthOrToken } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { unifiedRecommendationService } from "../services/recommendations/recommendationRuntime";
+import { personalDailyMixService } from "../services/personalDailyMixes";
 import { recommendationExposureStore } from "../services/recommendations/exposureStore";
 import { logger } from "../utils/logger";
 import { sendRouteError } from "../utils/routeErrorResponse";
+import { LibrarySeedRadioError } from "../services/librarySeedRadioError";
+import { RadioRequestError } from "../services/recommendations/radioRequestExecution";
+import { createStreamProxyRequestAbort } from "./streamProxyRequestAbort";
 
 const router = Router();
 const log = logger.child("PersonalizedHome");
 const DEFAULT_SHELF_LIMIT = 12;
 const MAX_CONTINUATION_EXCLUSIONS = 80;
-const PROVIDER_VIDEO_ID_PATTERN = /^(?:yt:)?[A-Za-z0-9_-]{1,64}$/;
+const personalizedRadioQuerySchema = z
+    .object({
+        type: z.enum([
+            "youtube",
+            "vibe",
+            "artist",
+            "artist-name",
+            "vk",
+            "yandex",
+        ]),
+        value: z.string().trim().min(1).max(200),
+        limit: z
+            .string()
+            .regex(/^[1-9]\d*$/)
+            .transform(Number)
+            .pipe(z.number().int().min(1).max(25))
+            .optional(),
+        cursor: z
+            .string()
+            .regex(/^(?:0|[1-9]\d*)$/)
+            .transform(Number)
+            .pipe(z.number().int().min(0).max(1_000_000))
+            .optional(),
+        exclude: z.string().max(11_000).optional(),
+        sessionId: z.string().trim().min(1).max(128).optional(),
+        token: z.string().optional(),
+    })
+    .strict();
+const PERSONAL_QUEUE_ID_PATTERN =
+    /^(?:[A-Za-z0-9_-]{1,64}|vk:-?\d{1,20}_\d{1,20}|yandex:\d{1,20})$/;
 const personalizedHomeQuerySchema = z
     .object({
         limit: z
@@ -42,6 +76,7 @@ const personalizedHomeQuerySchema = z
             ])
             .optional(),
         surface: z.enum(["home", "wave", "made-for-you"]).optional(),
+        timeOfDay: z.literal("1").optional(),
         sessionId: z.string().trim().min(1).max(128).optional(),
         localHour: z.coerce.number().int().min(0).max(23).optional(),
         timezoneOffsetMinutes: z.coerce
@@ -56,7 +91,18 @@ const personalizedHomeQuerySchema = z
     .refine((value) => !value.language || value.surface === "wave", {
         message: "Language selection requires Wave",
         path: ["language"],
-    });
+    })
+    .refine(
+        (value) =>
+            !value.timeOfDay ||
+            (value.surface === "made-for-you" &&
+                value.localHour !== undefined &&
+                value.timezoneOffsetMinutes !== undefined),
+        {
+            message: "Time-of-day mix requires local listening context",
+            path: ["timeOfDay"],
+        },
+    );
 const recommendationImpressionsSchema = z
     .object({
         generationId: z.string().trim().min(1).max(128),
@@ -64,10 +110,29 @@ const recommendationImpressionsSchema = z
             .array(
                 z
                     .object({
-                        provider: z.enum(["youtube", "tidal", "library"]),
+                        provider: z.enum([
+                            "youtube",
+                            "tidal",
+                            "library",
+                            "vk",
+                            "yandex",
+                        ]),
                         providerTrackId: z.string().trim().min(1).max(128),
                     })
-                    .strict(),
+                    .strict()
+                    .refine(
+                        (value) =>
+                            (value.provider !== "vk" &&
+                                value.provider !== "yandex") ||
+                            (value.provider === "vk"
+                                ? /^-?\d{1,20}_\d{1,20}$/
+                                : /^\d{1,20}$/
+                            ).test(value.providerTrackId),
+                        {
+                            message: "Invalid native recording identity",
+                            path: ["providerTrackId"],
+                        },
+                    ),
             )
             .min(1)
             .max(100),
@@ -89,7 +154,10 @@ function parseContinuationExclusions(value: string | undefined): string[] {
     );
     if (
         videoIds.length > MAX_CONTINUATION_EXCLUSIONS ||
-        videoIds.some((videoId) => !PROVIDER_VIDEO_ID_PATTERN.test(videoId))
+        videoIds.some((videoId) => !PERSONAL_QUEUE_ID_PATTERN.test(videoId)) ||
+        value
+            .split(",")
+            .some((entry) => /^yt:(?:vk|yandex):/.test(entry.trim()))
     ) {
         throw new TypeError("Invalid personalized continuation exclusions");
     }
@@ -100,11 +168,171 @@ router.use(requireAuthOrToken);
 
 /**
  * @openapi
+ * /api/personalized/radio:
+ *   get:
+ *     summary: Continue the original station with account exclusions and ordered served membership
+ *     tags: [Personalized]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [youtube, vibe, artist, artist-name, vk, yandex]
+ *       - in: query
+ *         name: value
+ *         required: true
+ *         description: Original video ID, exact VK/Yandex recording ID, local track/artist ID, or discovery artist name
+ *         schema:
+ *           type: string
+ *           maxLength: 200
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 25
+ *           default: 25
+ *       - in: query
+ *         name: cursor
+ *         description: Bounded request counter; not a provider pagination token
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 1000000
+ *       - in: query
+ *         name: exclude
+ *         description: Up to 80 comma-separated queue IDs (local or library/yt/vk/yandex-prefixed)
+ *         schema:
+ *           type: string
+ *           maxLength: 11000
+ *       - in: query
+ *         name: sessionId
+ *         schema:
+ *           type: string
+ *           maxLength: 128
+ *       - in: header
+ *         name: X-Soundspan-Diagnostic
+ *         schema:
+ *           type: string
+ *           enum: [playback]
+ *         description: Compute without persisting recommendation signals or generations
+ *     responses:
+ *       200:
+ *         description: Ordered exact VK/Yandex or mixed YouTube/library tracks, original radioOrigin, generationId, nextCursor and degradation labels; exhaustion can return an empty list
+ *       400:
+ *         description: Invalid original station or continuation query
+ *       401:
+ *         description: Authentication required
+ *       404:
+ *         description: Original local track or artist was not found
+ *       504:
+ *         description: Whole original-radio request exceeded its thirteen-second server budget (RADIO_REQUEST_TIMEOUT); retry does not replace the current queue
+ */
+router.get(
+    "/radio",
+    asyncHandler(async (req, res) => {
+        const parsed = personalizedRadioQuerySchema.safeParse(req.query);
+        if (!parsed.success)
+            return sendRouteError(
+                res,
+                400,
+                "Invalid radio continuation query",
+                { code: "INVALID_QUERY" },
+            );
+        const userId = req.user?.id;
+        if (!userId)
+            return sendRouteError(res, 401, "Authentication required", {
+                code: "AUTH_REQUIRED",
+            });
+        const { type, value } = parsed.data;
+        const radioOrigin = normalizePlaybackRadioOrigin(
+            type === "artist-name"
+                ? { kind: "artist", source: "discovery", name: value }
+                : {
+                      kind: type === "artist" ? "artist" : "track",
+                      source:
+                          type === "youtube" ||
+                          type === "vk" ||
+                          type === "yandex"
+                              ? type
+                              : "library",
+                      id: value,
+                  },
+        );
+        const exclude = parsed.data.exclude
+            ? parsed.data.exclude.split(",").map((id) => id.trim())
+            : [];
+        if (
+            !radioOrigin ||
+            exclude.length > MAX_CONTINUATION_EXCLUSIONS ||
+            exclude.some(
+                (id) =>
+                    !/^(?:[A-Za-z0-9_-]{1,128}|library:[A-Za-z0-9_-]{1,128}|yt:[A-Za-z0-9_-]{11}|vk:-?\d{1,20}_\d{1,20}|yandex:\d{1,20})$/.test(
+                        id,
+                    ),
+            )
+        ) {
+            return sendRouteError(
+                res,
+                400,
+                "Invalid radio continuation query",
+                { code: "INVALID_QUERY" },
+            );
+        }
+        const requestAbort = createStreamProxyRequestAbort(req, res);
+        try {
+            if (requestAbort.wasClientAborted()) return;
+            const result = await unifiedRecommendationService.recommendRadio(
+                {
+                    userId,
+                    radioOrigin,
+                    sessionId: parsed.data.sessionId ?? randomUUID(),
+                    limit: parsed.data.limit ?? 25,
+                    cursor: parsed.data.cursor ?? 0,
+                    exclude: [...new Set(exclude)],
+                    ...(req.headers["x-soundspan-diagnostic"] === "playback"
+                        ? { diagnostic: true }
+                        : {}),
+                },
+                { signal: requestAbort.signal },
+            );
+            if (requestAbort.wasClientAborted()) return;
+            return res.json(result);
+        } catch (error) {
+            if (requestAbort.wasClientAborted()) return;
+            if (
+                error instanceof RadioRequestError &&
+                error.code === "RADIO_REQUEST_TIMEOUT"
+            ) {
+                return sendRouteError(res, 504, "Radio request timed out", {
+                    code: error.code,
+                });
+            }
+            if (error instanceof LibrarySeedRadioError) {
+                return sendRouteError(res, error.status, error.message, {
+                    code:
+                        error.status === 404
+                            ? "RADIO_SEED_NOT_FOUND"
+                            : "INVALID_QUERY",
+                });
+            }
+            throw error;
+        } finally {
+            requestAbort.dispose();
+        }
+    }),
+);
+
+/**
+ * @openapi
  * components:
  *   schemas:
  *     PersonalizedTrack:
  *       type: object
- *       required: [id, title, duration, trackNo, artist, album, source, streamSource, youtubeVideoId, provider]
+ *       required: [id, title, duration, trackNo, artist, album, source, streamSource, provider]
  *       properties:
  *         id:
  *           type: string
@@ -148,12 +376,16 @@ router.use(requireAuthOrToken);
  *                   type: string
  *         source:
  *           type: string
- *           enum: [youtube]
+ *           enum: [youtube, vk, yandex]
  *         streamSource:
  *           type: string
- *           enum: [youtube]
+ *           enum: [youtube, vk, yandex]
  *         youtubeVideoId:
  *           type: string
+ *           description: Present only for YouTube; native tracks retain their exact provider recording.
+ *         musicSourceRecording:
+ *           type: object
+ *           description: Sanitized exact VK/Yandex recording with provider, id, title, ordered artists, duration, contentVersion and preview=false. No credentials or media URLs.
  *         provider:
  *           type: object
  *           required: [tidalTrackId, youtubeVideoId]
@@ -162,6 +394,12 @@ router.use(requireAuthOrToken);
  *               type: integer
  *               nullable: true
  *             youtubeVideoId:
+ *               type: string
+ *               nullable: true
+ *             source:
+ *               type: string
+ *               enum: [vk, yandex]
+ *             providerTrackId:
  *               type: string
  *     PersonalizedHomeFeed:
  *       type: object
@@ -213,13 +451,38 @@ router.use(requireAuthOrToken);
  *           type: integer
  *           minimum: 0
  *           description: Cursor for a fresh provider-radio seed page
+ *     PersonalDailyMixes:
+ *       type: object
+ *       required: [mixes]
+ *       properties:
+ *         mixes:
+ *           type: array
+ *           maxItems: 6
+ *           items:
+ *             type: object
+ *             required: [key, title, description, tracks]
+ *             properties:
+ *               generationId:
+ *                 type: string
+ *                 description: Account-owned composition for playback attribution; absent when recording is unavailable.
+ *               key:
+ *                 type: string
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               tracks:
+ *                 type: array
+ *                 maxItems: 40
+ *                 items:
+ *                   $ref: '#/components/schemas/PersonalizedTrack'
  */
 
 /**
  * @openapi
  * /api/personalized/home:
  *   get:
- *     summary: Get personalized, directly playable YouTube Music shelves
+ *     summary: Get personalized, directly playable source-coherent shelves
  *     tags: [Personalized]
  *     security:
  *       - apiKeyAuth: []
@@ -267,7 +530,13 @@ router.use(requireAuthOrToken);
  *         name: exclude
  *         schema:
  *           type: string
- *         description: Up to 80 comma-separated YouTube video IDs already present in the queue
+ *         description: Up to 80 comma-separated YouTube video IDs or exact vk/yandex-prefixed IDs already present in the queue
+ *       - in: query
+ *         name: timeOfDay
+ *         schema:
+ *           type: string
+ *           enum: ['1']
+ *         description: Rank a made-for-you mix using listening at the same local time of day; requires localHour and timezoneOffsetMinutes.
  *       - in: query
  *         name: localHour
  *         schema:
@@ -299,6 +568,8 @@ router.use(requireAuthOrToken);
  *         description: Invalid query
  *       401:
  *         description: Not authenticated
+ *       504:
+ *         description: Personal request exceeded its thirteen-second server budget (RADIO_REQUEST_TIMEOUT).
  */
 async function handlePersonalizedHome(req: Request, res: Response) {
     const parsedQuery = personalizedHomeQuerySchema.safeParse(req.query);
@@ -330,43 +601,98 @@ async function handlePersonalizedHome(req: Request, res: Response) {
         );
     }
     const limit = parsedQuery.data.limit ?? DEFAULT_SHELF_LIMIT;
-    const feed = await unifiedRecommendationService.getPersonalizedFeed({
-        userId,
-        ...(req.headers["x-soundspan-diagnostic"] === "playback"
-            ? { diagnostic: true }
-            : {}),
-        sessionId: parsedQuery.data.sessionId ?? randomUUID(),
-        surface: parsedQuery.data.surface ?? "home",
-        limit,
-        cursor: parsedQuery.data.cursor ?? 0,
-        direction: parsedQuery.data.mode ?? "for-you",
-        mood: parsedQuery.data.mood ?? null,
-        ...(parsedQuery.data.language
-            ? { language: parsedQuery.data.language }
-            : {}),
-        excludeVideoIds,
-        context:
-            parsedQuery.data.localHour === undefined &&
-            parsedQuery.data.timezoneOffsetMinutes === undefined &&
-            parsedQuery.data.deviceClass === undefined
-                ? undefined
-                : {
-                      localHour: parsedQuery.data.localHour,
-                      timezoneOffsetMinutes:
-                          parsedQuery.data.timezoneOffsetMinutes,
-                      deviceClass: parsedQuery.data.deviceClass,
-                  },
-    });
-    if (feed.degraded) {
-        log.warn("Personalized home feed returned degraded provider results", {
-            reason: feed.reason,
-            seedCount: feed.seedCount,
-        });
+    const requestAbort = createStreamProxyRequestAbort(req, res);
+    try {
+        if (requestAbort.wasClientAborted()) return;
+        const feed = await unifiedRecommendationService.getPersonalizedFeed(
+            {
+                userId,
+                ...(req.headers["x-soundspan-diagnostic"] === "playback"
+                    ? { diagnostic: true }
+                    : {}),
+                sessionId: parsedQuery.data.sessionId ?? randomUUID(),
+                surface: parsedQuery.data.surface ?? "home",
+                limit,
+                cursor: parsedQuery.data.cursor ?? 0,
+                direction: parsedQuery.data.mode ?? "for-you",
+                mood: parsedQuery.data.mood ?? null,
+                ...(parsedQuery.data.timeOfDay ? { timeOfDay: true } : {}),
+                ...(parsedQuery.data.language
+                    ? { language: parsedQuery.data.language }
+                    : {}),
+                excludeVideoIds,
+                context:
+                    parsedQuery.data.localHour === undefined &&
+                    parsedQuery.data.timezoneOffsetMinutes === undefined &&
+                    parsedQuery.data.deviceClass === undefined
+                        ? undefined
+                        : {
+                              localHour: parsedQuery.data.localHour,
+                              timezoneOffsetMinutes:
+                                  parsedQuery.data.timezoneOffsetMinutes,
+                              deviceClass: parsedQuery.data.deviceClass,
+                          },
+            },
+            { signal: requestAbort.signal },
+        );
+        if (requestAbort.wasClientAborted()) return;
+        if (feed.degraded) {
+            log.warn(
+                "Personalized home feed returned degraded provider results",
+                {
+                    reason: feed.reason,
+                    seedCount: feed.seedCount,
+                },
+            );
+        }
+        return res.json(feed);
+    } catch (error) {
+        if (requestAbort.wasClientAborted()) return;
+        if (
+            error instanceof RadioRequestError &&
+            error.code === "RADIO_REQUEST_TIMEOUT"
+        )
+            return sendRouteError(res, 504, "Personalized request timed out", {
+                code: error.code,
+            });
+        throw error;
+    } finally {
+        requestAbort.dispose();
     }
-    return res.json(feed);
 }
 
 router.get("/home", asyncHandler(handlePersonalizedHome));
+
+/**
+ * @openapi
+ * /api/personalized/daily-mixes:
+ *   get:
+ *     summary: Playable daily mixes for the account's selected styles
+ *     tags: [Personalized]
+ *     security:
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Up to six distinct personal mixes with playable tracks
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PersonalDailyMixes'
+ *       401:
+ *         description: Authentication required
+ */
+router.get(
+    "/daily-mixes",
+    asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) {
+            return sendRouteError(res, 401, "Authentication required", {
+                code: "AUTH_REQUIRED",
+            });
+        }
+        return res.json(await personalDailyMixService.getMixes(userId));
+    }),
+);
 
 /**
  * @openapi
@@ -403,7 +729,7 @@ router.get("/home", asyncHandler(handlePersonalizedHome));
  *                   properties:
  *                     provider:
  *                       type: string
- *                       enum: [youtube, tidal, library]
+ *                       enum: [youtube, tidal, library, vk, yandex]
  *                     providerTrackId:
  *                       type: string
  *     responses:

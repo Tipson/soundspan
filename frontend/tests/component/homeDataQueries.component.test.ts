@@ -135,7 +135,10 @@ mock.module("@/hooks/useQueries", {
             mutateAsync: async () => undefined,
             isPending: false,
         }),
-        queryKeys: { mixes: () => ["mixes"] },
+        queryKeys: {
+            mixes: () => ["mixes"],
+            personalDailyMixes: () => ["home", "personalized", "daily-mixes"],
+        },
     },
 });
 
@@ -199,5 +202,9 @@ test("Home loads the personal online feed without legacy local-media queries", a
     });
     assert.equal("recentPodcasts" in result, false);
     assert.equal("recentAudiobooks" in result, false);
-    assert.deepEqual(personalizedFeedCalls, [[12, true, "new", "focus"]]);
+    assert.deepEqual(personalizedFeedCalls, [
+        [12, true, "new", "focus"],
+        [25, true, "for-you", null, "made-for-you"],
+        [25, false, "for-you", null, "made-for-you", "any", null],
+    ]);
 });

@@ -27,7 +27,7 @@ async function runTrackMappingStalenessCheck(): Promise<void> {
 
     try {
         const candidates = await prisma.trackMapping.findMany({
-            where: { stale: false },
+            where: { stale: false, trackMusicSourceId: null },
             select: {
                 id: true,
                 trackTidalId: true,

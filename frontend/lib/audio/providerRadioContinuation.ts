@@ -7,6 +7,10 @@ import type {
 import type { Track, WaveMode } from "@/lib/audio-state-context";
 import { selectWaveTracks } from "@/features/home/selectWaveTracks";
 import {
+    hasNativeMusicSourceIdentity,
+    readMusicSourcePlaybackTrack,
+} from "./musicSourcePlayback";
+import {
     appendRecommendationClientContext,
     getRecommendationClientContext,
     getRecommendationSessionId,
@@ -17,6 +21,7 @@ interface ProviderQueueEntry {
     id: string;
     provider?: {
         source?: string;
+        providerTrackId?: string;
         tidalTrackId?: number | null;
         youtubeVideoId?: string | null;
     };
@@ -35,6 +40,21 @@ function providerVideoId(track: ProviderQueueEntry): string | null {
 }
 
 function providerQueueIdentity(track: ProviderQueueEntry): string {
+    if (hasNativeMusicSourceIdentity(track)) {
+        const source = track.provider?.source,
+            id = track.provider?.providerTrackId;
+        return (source === "vk" || source === "yandex") &&
+            typeof id === "string" &&
+            (source === "vk" ? /^-?\d{1,20}_\d{1,20}$/ : /^\d{1,20}$/).test(
+                id,
+            ) &&
+            track.id === `${source}:${id}` &&
+            track.youtubeVideoId == null &&
+            track.provider?.youtubeVideoId == null &&
+            track.provider?.tidalTrackId == null
+            ? track.id
+            : "";
+    }
     const videoId = providerVideoId(track);
     if (videoId) return videoId;
     return track.id;
@@ -42,6 +62,8 @@ function providerQueueIdentity(track: ProviderQueueEntry): string {
 
 /** Identifies a directly playable remote track that can seed provider radio. */
 export function isProviderRadioTrack(track: Track): boolean {
+    if (hasNativeMusicSourceIdentity(track))
+        return readMusicSourcePlaybackTrack(track) !== null;
     const youtubeTrack =
         (track.streamSource === "youtube" ||
             track.streamSource === "youtube-direct" ||
@@ -82,10 +104,32 @@ export function buildProviderRadioContinuationPath(
 /** Converts one personalized provider row to the canonical playback shape. */
 export function toProviderPlaybackTrack(
     track: PersonalizedTrack,
-    lineageOrIndex?: { generationId?: string; sessionId?: string } | number,
+    lineageOrIndex?:
+        | {
+              generationId?: string;
+              sessionId?: string;
+              queueMode?: "finite";
+          }
+        | number,
 ): Track {
     const lineage =
         typeof lineageOrIndex === "object" ? lineageOrIndex : undefined;
+    if (hasNativeMusicSourceIdentity(track)) {
+        const native = readMusicSourcePlaybackTrack(track);
+        if (!native) throw new Error("Invalid native recommendation recording");
+        return {
+            ...native,
+            ...(lineage?.generationId
+                ? { recommendationGenerationId: lineage.generationId }
+                : {}),
+            ...(lineage?.sessionId
+                ? { recommendationSessionId: lineage.sessionId }
+                : {}),
+            ...(lineage?.queueMode
+                ? { recommendationQueueMode: lineage.queueMode }
+                : {}),
+        };
+    }
     const baseTrack: Track = {
         id: track.id,
         title: track.title,
@@ -104,6 +148,9 @@ export function toProviderPlaybackTrack(
             : {}),
         ...(lineage?.sessionId
             ? { recommendationSessionId: lineage.sessionId }
+            : {}),
+        ...(lineage?.queueMode
+            ? { recommendationQueueMode: lineage.queueMode }
             : {}),
     };
 
@@ -142,7 +189,9 @@ export function collectProviderRadioContinuation(
     const candidates = selectWaveTracks(feed.shelves, mode);
 
     for (const candidate of candidates) {
-        if (
+        if (hasNativeMusicSourceIdentity(candidate)) {
+            if (!readMusicSourcePlaybackTrack(candidate)) continue;
+        } else if (
             candidate.source !== "library" &&
             providerVideoId(candidate) === null
         ) {

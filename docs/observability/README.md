@@ -9,6 +9,10 @@ collection-error, and federation alerts.
 Use the dedicated [federation alert pack](federation-alerts.md) for per-peer
 sync freshness, proxy failures, and authentication bursts.
 
+Use the [public music route monitor](music-route-monitor.md) for bounded radio
+and audio-continuation checks through the public proxy, with persistent
+administrator incidents. It runs independently of Prometheus.
+
 Prometheus must scrape every backend and worker replica because each process
 owns its registry. The queue-capacity series is published by workers, and the
 alert expressions aggregate process-local series before evaluating thresholds.

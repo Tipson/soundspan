@@ -30,7 +30,20 @@ import type {
     VibeModeStartResult,
     VibeQueueMutationKind,
 } from "../audio-controls-types";
-import { getPlaybackIntentGeneration } from "../audio-engine/playbackAdvanceOrigin";
+import {
+    getPlaybackIntentGeneration,
+    getQueueReplacementGeneration,
+} from "../audio-engine/playbackAdvanceOrigin";
+import {
+    normalizePlaybackRadioOrigin,
+    playbackRadioOriginsMatch,
+    type PlaybackRadioOrigin,
+} from "@soundspan/media-metadata-contract";
+import {
+    collectOriginalRadioContinuation,
+    type OriginalRadioContinuationResponse,
+} from "../radio/originalRadioContinuation";
+import { getRecommendationSessionId } from "../recommendationSession";
 
 type AudioState = ReturnType<typeof useAudioState>;
 const MAX_PROVIDER_CONTINUATION_PAGES = 2;
@@ -63,6 +76,11 @@ export function useVibeModeControls({
 }: UseVibeModeControlsOptions) {
     const requestGenerationRef = useRef(0);
     const providerRadioCursorRef = useRef(0);
+    const originalRadioCursorRef = useRef<{
+        origin: PlaybackRadioOrigin | null;
+        replacementGeneration: number;
+        cursor: number;
+    }>({ origin: null, replacementGeneration: -1, cursor: 0 });
     const playbackContextRef = useRef({
         track: state.currentTrack,
         trackId: state.currentTrack?.id ?? null,
@@ -72,6 +90,7 @@ export function useVibeModeControls({
         waveMode: state.waveMode,
         waveMood: state.waveMood,
         waveLanguage: state.waveLanguage,
+        isShuffle: state.isShuffle,
     });
 
     useLayoutEffect(() => {
@@ -84,6 +103,7 @@ export function useVibeModeControls({
             waveMode: state.waveMode,
             waveMood: state.waveMood,
             waveLanguage: state.waveLanguage,
+            isShuffle: state.isShuffle,
         };
     }, [
         state.currentIndex,
@@ -93,6 +113,7 @@ export function useVibeModeControls({
         state.waveMode,
         state.waveMood,
         state.waveLanguage,
+        state.isShuffle,
     ]);
 
     const startVibeMode = useCallback(
@@ -104,7 +125,17 @@ export function useVibeModeControls({
                 return { success: false, trackCount: 0 };
             }
             const requestGeneration = ++requestGenerationRef.current;
+            const radioOrigin = normalizePlaybackRadioOrigin(
+                currentTrack.radioOrigin,
+            );
+            const authGeneration = radioOrigin
+                ? api.getSessionGeneration()
+                : null;
+            const initialListenTogetherGroup = radioOrigin
+                ? (getActiveListenTogetherSession()?.groupId ?? null)
+                : null;
             const playbackIntentGeneration = getPlaybackIntentGeneration();
+            const queueReplacementGeneration = getQueueReplacementGeneration();
             const replaceUpcoming =
                 options?.queueStrategy === "replace-upcoming";
             const requestContext = {
@@ -115,12 +146,32 @@ export function useVibeModeControls({
                 waveMood: state.waveMood,
                 waveLanguage: state.waveLanguage,
                 vibeMode: state.vibeMode,
+                isShuffle: state.isShuffle,
             };
             const requestIsCurrent = () => {
                 const currentContext = playbackContextRef.current;
-                if (requestGenerationRef.current !== requestGeneration) {
+                if (
+                    requestGenerationRef.current !== requestGeneration ||
+                    getQueueReplacementGeneration() !==
+                        queueReplacementGeneration
+                ) {
                     return false;
                 }
+                if (
+                    !playbackRadioOriginsMatch(
+                        radioOrigin,
+                        currentContext.track?.radioOrigin,
+                    )
+                )
+                    return false;
+                if (
+                    radioOrigin &&
+                    (api.getSessionGeneration() !== authGeneration ||
+                        currentContext.isShuffle !== requestContext.isShuffle ||
+                        (getActiveListenTogetherSession()?.groupId ?? null) !==
+                            initialListenTogetherGroup)
+                )
+                    return false;
                 // Tail-only adaptation preserves the current selection. Other
                 // continuations belong to the playback command that requested
                 // them and must not rewrite a later pause, replay or seek.
@@ -138,6 +189,7 @@ export function useVibeModeControls({
                 )
                     return false;
                 if (replaceUpcoming) {
+                    if (radioOrigin) return true;
                     return (
                         currentContext.vibeMode &&
                         currentContext.waveMode === requestContext.waveMode &&
@@ -166,6 +218,142 @@ export function useVibeModeControls({
             };
 
             try {
+                if (radioOrigin) {
+                    const previous = originalRadioCursorRef.current;
+                    if (
+                        !playbackRadioOriginsMatch(
+                            previous.origin,
+                            radioOrigin,
+                        ) ||
+                        previous.replacementGeneration !==
+                            queueReplacementGeneration
+                    ) {
+                        originalRadioCursorRef.current = {
+                            origin: radioOrigin,
+                            replacementGeneration: queueReplacementGeneration,
+                            cursor: 0,
+                        };
+                    }
+                    const sessionId = getRecommendationSessionId();
+                    let cursor = originalRadioCursorRef.current.cursor;
+                    let response: OriginalRadioContinuationResponse | null =
+                        null;
+                    let continuation: Track[] = [];
+                    for (
+                        let attempt = 0;
+                        attempt < MAX_PROVIDER_CONTINUATION_PAGES;
+                        attempt++
+                    ) {
+                        response = await api.getRadioContinuation({
+                            origin: radioOrigin,
+                            queue: playbackContextRef.current.queue,
+                            cursor,
+                            limit: 25,
+                            sessionId,
+                        });
+                        if (!requestIsCurrent())
+                            return { success: false, trackCount: 0 };
+                        continuation = collectOriginalRadioContinuation(
+                            response,
+                            playbackContextRef.current.queue,
+                            radioOrigin,
+                            25,
+                            sessionId,
+                        );
+                        cursor =
+                            typeof response?.nextCursor === "number" &&
+                            Number.isInteger(response.nextCursor) &&
+                            response.nextCursor >= 0 &&
+                            response.nextCursor <= 1_000_000
+                                ? response.nextCursor
+                                : cursor < 1_000_000
+                                  ? cursor + 1
+                                  : 0;
+                        originalRadioCursorRef.current.cursor = cursor;
+                        if (continuation.length > 0) break;
+                    }
+                    if (!response || !continuation.length)
+                        return { success: false, trackCount: 0 };
+                    const listenTogetherSession =
+                        getActiveListenTogetherSession();
+                    if (listenTogetherSession) {
+                        if (replaceUpcoming)
+                            return { success: false, trackCount: 0 };
+                        if (
+                            typeof window !== "undefined" &&
+                            !window.confirm(
+                                formatMatchVibeConfirmation(
+                                    continuation.length,
+                                ),
+                            )
+                        ) {
+                            toast.info(
+                                listenTogetherFeedbackRu.matchVibeCancelled,
+                            );
+                            return { success: false, trackCount: 0 };
+                        }
+                        if (!requestIsCurrent())
+                            return { success: false, trackCount: 0 };
+                        const queueResult =
+                            await listenTogetherSocket.addToQueue(
+                                continuation.map(toAddToPlaylistRef),
+                            );
+                        showQueueMutationToasts(queueResult, {
+                            singleAccepted:
+                                formatListenTogetherQueueAccepted(1),
+                            multiAccepted: (count) =>
+                                formatListenTogetherQueueAccepted(count),
+                        });
+                        return {
+                            success: queueResult.acceptedCount > 0,
+                            trackCount: queueResult.acceptedCount,
+                        };
+                    }
+                    if (!requestIsCurrent())
+                        return { success: false, trackCount: 0 };
+                    const latest = playbackContextRef.current;
+                    const fresh = collectOriginalRadioContinuation(
+                        response,
+                        latest.queue,
+                        radioOrigin,
+                        25,
+                        sessionId,
+                    );
+                    if (!fresh.length) return { success: false, trackCount: 0 };
+                    const history = replaceUpcoming
+                        ? latest.queue.slice(
+                              0,
+                              Math.max(
+                                  0,
+                                  Math.min(
+                                      latest.currentIndex,
+                                      latest.queue.length - 1,
+                                  ),
+                              ) + 1,
+                          )
+                        : latest.queue;
+                    const nextQueue = [...history, ...fresh];
+                    if (replaceUpcoming) {
+                        state.setIsShuffle(false);
+                        state.setShuffleIndices([]);
+                    } else if (state.isShuffle) {
+                        state.setShuffleIndices((indices) => [
+                            ...indices,
+                            ...fresh.map(
+                                (_, offset) => history.length + offset,
+                            ),
+                        ]);
+                    }
+                    if (latest.vibeMode)
+                        state.setVibeQueueIds(
+                            nextQueue.map((track) => track.id),
+                        );
+                    state.setQueue(nextQueue);
+                    reportLocalQueueCommit(
+                        replaceUpcoming ? "replace-upcoming" : "append",
+                    );
+                    return { success: true, trackCount: fresh.length };
+                }
                 if (isProviderRadioTrack(currentTrack)) {
                     if (!state.vibeMode) {
                         providerRadioCursorRef.current = 0;
@@ -424,6 +612,8 @@ export function useVibeModeControls({
 
                 return { success: true, trackCount: response.tracks.length };
             } catch (error) {
+                if (radioOrigin && !requestIsCurrent())
+                    return { success: false, trackCount: 0 };
                 frontendLogger.error(
                     "[Vibe] Failed to get similar tracks:",
                     error,
@@ -443,6 +633,11 @@ export function useVibeModeControls({
     const stopVibeMode = useCallback(() => {
         requestGenerationRef.current++;
         providerRadioCursorRef.current = 0;
+        originalRadioCursorRef.current = {
+            origin: null,
+            replacementGeneration: -1,
+            cursor: 0,
+        };
         state.setVibeMode(false);
         state.setWaveMood(null);
         state.setVibeSourceFeatures(null);

@@ -1,4 +1,5 @@
 import express from "express";
+import { z } from "zod";
 import { logger } from "../utils/logger";
 import { prisma, Prisma } from "../utils/db";
 import { requireAuth } from "../middleware/auth";
@@ -6,12 +7,36 @@ import { playbackStateLimiter } from "../middleware/rateLimiter";
 import { publishSocialPresenceUpdate } from "../services/socialPresenceEvents";
 import {
     normalizeCanonicalMediaProviderIdentity,
+    normalizePlaybackRadioOrigin,
     toLegacyStreamFields,
 } from "@soundspan/media-metadata-contract";
 import { isForeignKeyViolationOn } from "../utils/prismaErrors";
 
 const router = express.Router();
 const PLAYBACK_STATE_AUDIOBOOK_FK = "PlaybackState_audiobookId_fkey";
+
+// Public recording metadata required by the existing exact-source resolver.
+// Unknown fields (including credentials and stream URLs) are stripped by Zod.
+const musicSourceRecordingSchema = z
+    .object({
+        provider: z.enum(["vk", "yandex"]),
+        id: z.string().min(1).max(42),
+        title: z.string().trim().min(1).max(200),
+        artists: z.array(z.string().trim().min(1).max(100)).min(1).max(10),
+        duration: z.number().positive().max(3600),
+        contentVersion: z.enum(["explicit", "clean", "unknown"]),
+        preview: z.literal(false),
+        isrc: z
+            .string()
+            .regex(/^[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}$/)
+            .optional(),
+    })
+    .refine((recording) =>
+        (recording.provider === "vk"
+            ? /^-?\d{1,20}_\d{1,20}$/
+            : /^\d{1,20}$/
+        ).test(recording.id),
+    );
 
 type PlaybackStateUpsertArgs = {
     where: Prisma.PlaybackStateWhereUniqueInput;
@@ -93,6 +118,15 @@ function sanitizeEpisodeQueueItem(item: any): Record<string, unknown> | null {
  * (legacy clients) and tagged with `itemType: "track"`.
  */
 function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
+    const radioOrigin = normalizePlaybackRadioOrigin(item.radioOrigin);
+    const recommendationGenerationId = sanitizeOptionalString(
+        item.recommendationGenerationId,
+        128,
+    );
+    const recommendationSessionId = sanitizeOptionalString(
+        item.recommendationSessionId,
+        128,
+    );
     const provider = normalizeCanonicalMediaProviderIdentity({
         mediaSource: item.mediaSource,
         streamSource: item.streamSource,
@@ -129,9 +163,30 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
             ? { youtubeAudioFormat: provider.youtubeAudioFormat }
             : {}),
     };
+    const recordingResult = musicSourceRecordingSchema.safeParse(
+        item.musicSourceRecording,
+    );
+    const recording = recordingResult.success ? recordingResult.data : null;
+    const musicSourceRecording =
+        recording &&
+        provider.source === recording.provider &&
+        provider.providerTrackId === recording.id &&
+        item.id === `${recording.provider}:${recording.id}` &&
+        [item.mediaSource, item.streamSource, item.provider?.source].every(
+            (source) => source === undefined || source === recording.provider,
+        )
+            ? recording
+            : null;
 
     return {
         itemType: "track",
+        ...(musicSourceRecording ? { musicSourceRecording } : {}),
+        ...(radioOrigin ? { radioOrigin } : {}),
+        ...(recommendationGenerationId ? { recommendationGenerationId } : {}),
+        ...(recommendationSessionId ? { recommendationSessionId } : {}),
+        ...(item.recommendationQueueMode === "finite"
+            ? { recommendationQueueMode: "finite" }
+            : {}),
         ...(item.playbackSourcePolicy === "device-only"
             ? { playbackSourcePolicy: "device-only" }
             : {}),
@@ -290,6 +345,72 @@ router.get("/", playbackStateLimiter, requireAuth, async (req, res) => {
  *                     itemType:
  *                       type: string
  *                       enum: [track, episode]
+ *                     recommendationGenerationId:
+ *                       type: string
+ *                       maxLength: 128
+ *                       description: Track attribution; ownership is checked when recording engagement.
+ *                     recommendationSessionId:
+ *                       type: string
+ *                       maxLength: 128
+ *                     recommendationQueueMode:
+ *                       type: string
+ *                       enum: [finite]
+ *                       description: Track belongs to a finite recommendation playlist rather than Wave.
+ *                     musicSourceRecording:
+ *                       type: object
+ *                       description: Public exact VK/Yandex recording metadata for restoration. Retained only when queue id and provider identity agree; invalid records and unknown fields are discarded. Stream URLs and credentials are not persisted.
+ *                       required: [provider, id, title, artists, duration, contentVersion, preview]
+ *                       additionalProperties: false
+ *                       properties:
+ *                         provider:
+ *                           type: string
+ *                           enum: [vk, yandex]
+ *                         id:
+ *                           type: string
+ *                           maxLength: 42
+ *                           description: VK signed owner_track id or Yandex numeric track id, with each numeric component bounded to 20 digits.
+ *                         title:
+ *                           type: string
+ *                           minLength: 1
+ *                           maxLength: 200
+ *                         artists:
+ *                           type: array
+ *                           minItems: 1
+ *                           maxItems: 10
+ *                           items:
+ *                             type: string
+ *                             minLength: 1
+ *                             maxLength: 100
+ *                         duration:
+ *                           type: number
+ *                           minimum: 0
+ *                           exclusiveMinimum: true
+ *                           maximum: 3600
+ *                         contentVersion:
+ *                           type: string
+ *                           enum: [explicit, clean, unknown]
+ *                         preview:
+ *                           type: boolean
+ *                           enum: [false]
+ *                         isrc:
+ *                           type: string
+ *                           pattern: '^[A-Za-z]{2}[A-Za-z0-9]{3}[0-9]{7}$'
+ *                     radioOrigin:
+ *                       type: object
+ *                       description: Original radio station identity, sanitized independently of the playing song. IDs are bounded to 128 characters and discovery artist names to 200. Unsupported origins and extra fields are discarded.
+ *                       properties:
+ *                         kind:
+ *                           type: string
+ *                           enum: [track, artist]
+ *                         source:
+ *                           type: string
+ *                           enum: [youtube, library, discovery]
+ *                         id:
+ *                           type: string
+ *                           maxLength: 128
+ *                         name:
+ *                           type: string
+ *                           maxLength: 200
  *               currentIndex:
  *                 type: integer
  *               isShuffle:

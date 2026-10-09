@@ -117,6 +117,46 @@ function createService(
 }
 
 describe("PersonalizedCatalogService", () => {
+    it("favors actual listening in the matching local part of the day", async () => {
+        const evening = storedTrack("evening-song");
+        const morning = storedTrack("morning-song");
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                likedTracks: [evening, morning],
+                playbackSignals: [
+                    playbackSignal("evening-song", "completed", {
+                        track: evening,
+                        playedAt: new Date("2026-09-01T17:00:00Z"),
+                    }),
+                    playbackSignal("morning-song", "completed", {
+                        track: morning,
+                        playedAt: new Date("2026-09-02T05:00:00Z"),
+                    }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [],
+            }),
+        });
+
+        const morningMix = await service.getHomeFeed("user-1", 2, {
+            surface: "made-for-you",
+            listeningContext: { localHour: 8, timezoneOffsetMinutes: 180 },
+        });
+        const eveningMix = await service.getHomeFeed("user-1", 2, {
+            surface: "made-for-you",
+            listeningContext: { localHour: 20, timezoneOffsetMinutes: 180 },
+        });
+        expect(morningMix.shelves.quickPicks[0].youtubeVideoId).toBe(
+            "morning-song",
+        );
+        expect(eveningMix.shelves.quickPicks[0].youtubeVideoId).toBe(
+            "evening-song",
+        );
+    });
     it("does not amplify taste when the same song is copied into multiple playlists", async () => {
         const playlistTrack = storedTrack("playlist-song");
         const build = (copies: number) =>
@@ -195,7 +235,7 @@ describe("PersonalizedCatalogService", () => {
         ).toContain("heard");
     });
 
-    it("allows yesterday's liked song and a failed start, but excludes today's skip across Wave lanes", async () => {
+    it("allows an older liked song and a failed start, but excludes a recent skip across Wave lanes", async () => {
         const now = new Date("2026-09-07T22:00:00Z");
         const service = createService({
             now: () => now,
@@ -213,7 +253,7 @@ describe("PersonalizedCatalogService", () => {
                 ],
                 playbackSignals: [
                     playbackSignal("yesterday", "completed", {
-                        playedAt: new Date("2026-09-06T21:00:00Z"),
+                        playedAt: new Date("2026-08-30T21:00:00Z"),
                     }),
                     playbackSignal("failed", "failed", { playedAt: now }),
                     playbackSignal("skipped", "skipped", { playedAt: now }),
@@ -235,6 +275,98 @@ describe("PersonalizedCatalogService", () => {
         expect(ids).toContain("failed");
         expect(ids).not.toContain("skipped");
         expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it("keeps recently heard songs out of automatic feeds across video versions", async () => {
+        const now = new Date("2026-09-27T12:00:00Z");
+        const heard = storedTrack("heard-video", {
+            title: "Sleepwalking",
+            artist: "Bring Me The Horizon",
+            duration: 237,
+        });
+        const alternate = storedTrack("alternate-video", {
+            title: "Sleepwalking",
+            artist: "Bring Me The Horizon",
+            duration: 231,
+        });
+        const service = createService({
+            now: () => now,
+            loadSignals: async () => ({
+                ...emptySignals(),
+                recentPlays: [heard],
+                likedTracks: [alternate, storedTrack("fresh-like")],
+                playbackSignals: [
+                    playbackSignal("heard-video", "completed", {
+                        track: heard,
+                        playedAt: new Date("2026-09-26T01:26:14Z"),
+                    }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [
+                    radioTrack("third-video", {
+                        title: "Sleepwalking",
+                        artist: "Bring Me The Horizon",
+                    }),
+                    radioTrack("fresh-radio"),
+                ],
+            }),
+        });
+        for (const surface of ["wave", "made-for-you"] as const) {
+            const feed = await service.getHomeFeed("user-1", 12, { surface });
+            const tracks = Object.values(feed.shelves).flat();
+            expect(
+                tracks.some(
+                    (track) =>
+                        track.artist.name === "Bring Me The Horizon" &&
+                        track.title === "Sleepwalking",
+                ),
+            ).toBe(false);
+            expect(
+                tracks.some((track) => track.youtubeVideoId === "fresh-radio"),
+            ).toBe(true);
+        }
+        const home = await service.getHomeFeed("user-1", 12);
+        expect(
+            home.shelves.listenAgain.map((track) => track.youtubeVideoId),
+        ).toContain("heard-video");
+    });
+
+    it("uses an older familiar song only when a Wave has no fresh alternatives", async () => {
+        const now = new Date("2026-09-27T12:00:00Z");
+        const recentlyHeard = storedTrack("recently-heard");
+        const justHeard = storedTrack("just-heard");
+        const service = createService({
+            now: () => now,
+            loadSignals: async () => ({
+                ...emptySignals(),
+                recentPlays: [justHeard, recentlyHeard],
+                likedTracks: [justHeard, recentlyHeard],
+                playbackSignals: [
+                    playbackSignal("just-heard", "completed", {
+                        playedAt: new Date("2026-09-27T11:00:00Z"),
+                    }),
+                    playbackSignal("recently-heard", "completed", {
+                        playedAt: new Date("2026-09-24T11:00:00Z"),
+                    }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [],
+            }),
+        });
+        const feed = await service.getHomeFeed("user-1", 12, {
+            surface: "wave",
+        });
+        expect(
+            Object.values(feed.shelves)
+                .flat()
+                .map((track) => track.youtubeVideoId),
+        ).toEqual(["recently-heard"]);
     });
 
     it("uses at most three different seed artists even when all four signal sources exist", async () => {
@@ -416,6 +548,84 @@ describe("PersonalizedCatalogService", () => {
             .map((track) => track.id);
         expect(new Set(allIds).size).toBe(allIds.length);
         expect(allIds).not.toContain("yt:disliked");
+    });
+
+    it("does not fill a made-for-you discovery queue with four songs by one artist", async () => {
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                likedTracks: [storedTrack("seed", { artist: "Seed Artist" })],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: Array.from({ length: 8 }, (_, index) => [
+                    radioTrack(`flood-${index}`, { artist: "Flood Artist" }),
+                    radioTrack(`other-${index}`, { artist: `Other ${index}` }),
+                ]).flat(),
+            }),
+        });
+
+        const result = await service.getHomeFeed("user-1", 12, {
+            surface: "made-for-you",
+        });
+        expect(
+            result.shelves.discovery.filter(
+                (track) => track.artist.name === "Flood Artist",
+            ),
+        ).toHaveLength(2);
+        expect(result.shelves.discovery.length).toBeGreaterThanOrEqual(10);
+    });
+
+    it("keeps an artist-focused Wave playable when only that artist is available", async () => {
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                likedTracks: [storedTrack("seed", { artist: "Seed Artist" })],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: Array.from({ length: 5 }, (_, index) =>
+                    radioTrack(`artist-${index}`, { artist: "One Artist" }),
+                ),
+            }),
+        });
+
+        const result = await service.getHomeFeed("user-1", 12, {
+            surface: "wave",
+        });
+        expect(result.shelves.discovery).toHaveLength(5);
+    });
+
+    it("stops recommending an artist after dislikes of two different recordings", async () => {
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                likedTracks: [storedTrack("seed", { artist: "Seed Artist" })],
+                dislikedTracks: [
+                    storedTrack("disliked-1", { artist: "Flood Artist" }),
+                    storedTrack("disliked-2", { artist: "Flood Artist" }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [
+                    radioTrack("another-by-flood", {
+                        artist: "Flood Artist",
+                    }),
+                    radioTrack("other", { artist: "Other Artist" }),
+                ],
+            }),
+        });
+
+        const result = await service.getHomeFeed("user-1", 12, {
+            surface: "made-for-you",
+        });
+        expect(
+            result.shelves.discovery.map((track) => track.youtubeVideoId),
+        ).toEqual(["other"]);
     });
 
     it("keeps fulfilled radio results and reports a partial provider failure", async () => {
@@ -1312,5 +1522,53 @@ describe("PersonalizedCatalogService", () => {
             "yt:taste-discovery",
         ]);
         expect(getRadio).toHaveBeenCalledWith("taste-seed", 36);
+    });
+
+    it("loads recent persisted dislikes so another song by that artist is excluded", async () => {
+        const seed = storedTrack("seed", { artist: "Seed Artist" });
+        const disliked = [
+            storedTrack("disliked-1", { artist: "Flood Artist" }),
+            storedTrack("disliked-2", { artist: "Flood Artist" }),
+        ];
+        mockPrisma.play.findMany.mockReset().mockResolvedValue([]);
+        mockPrisma.likedRemoteTrack.findMany
+            .mockReset()
+            .mockResolvedValue([{ trackYtMusicId: seed.id }]);
+        mockPrisma.playlistItem.findMany.mockReset().mockResolvedValue([]);
+        mockPrisma.userSettings.findUnique.mockReset().mockResolvedValue(null);
+        mockPrisma.trackYtMusic.findMany
+            .mockReset()
+            .mockImplementation(
+                async ({ where }: { where: Record<string, unknown> }) =>
+                    where.videoId ? disliked : [seed],
+            );
+        mockPrisma.dislikedEntity.findMany
+            .mockReset()
+            .mockImplementation(
+                async ({ where }: { where: Record<string, unknown> }) =>
+                    where.dislikedAt
+                        ? disliked.map((track) => ({
+                              entityId: `yt:${track.videoId}`,
+                          }))
+                        : [],
+            );
+        mockPrisma.scrobbleConnection.findUnique.mockResolvedValue(null);
+        mockDefaultGetRadio.mockReset().mockResolvedValue({
+            playlistId: null,
+            seedVideoId: "seed",
+            tracks: [
+                radioTrack("another-by-flood", { artist: "Flood Artist" }),
+                radioTrack("other", { artist: "Other Artist" }),
+            ],
+        });
+
+        const result = await personalizedCatalogService.getHomeFeed(
+            "listener-with-dislikes",
+            12,
+            { surface: "made-for-you" },
+        );
+        expect(
+            result.shelves.discovery.map((track) => track.youtubeVideoId),
+        ).toEqual(["other"]);
     });
 });

@@ -7,6 +7,9 @@ import {
     tasteProfileService,
 } from "../services/tasteProfile";
 import { sendRouteError } from "../utils/routeErrorResponse";
+import { deezerService } from "../services/deezer";
+import { lastFmService } from "../services/lastfm";
+import { tasteArtistTags } from "../services/tasteArtistGenres";
 
 const router = Router();
 const tasteLabelSchema = z
@@ -28,14 +31,9 @@ function distinctLabels(values: string[]): string[] {
 
 const tasteProfileRequestSchema = z
     .object({
-        genres: z
-            .array(tasteLabelSchema)
-            .max(10)
-            .default([])
-            .transform(distinctLabels),
+        genres: z.array(tasteLabelSchema).default([]).transform(distinctLabels),
         artists: z
             .array(tasteLabelSchema)
-            .max(10)
             .default([])
             .transform(distinctLabels),
         skip: z.boolean().default(false),
@@ -50,15 +48,125 @@ const tasteProfileRequestSchema = z
             });
             return;
         }
-        if (!value.skip && (signalCount < 3 || signalCount > 16)) {
-            context.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Choose between 3 and 16 taste signals",
-            });
-        }
     });
 
 router.use(requireAuthOrToken);
+
+/**
+ * @openapi
+ * /api/taste-profile/artists:
+ *   get:
+ *     summary: Browse paginated artists by genre for taste setup
+ *     tags: [Taste profile]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: genre
+ *         schema: { type: string, default: all }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, minimum: 1, default: 1 }
+ *     responses:
+ *       200:
+ *         description: Artist names and next page, or null at catalog end
+ *       400:
+ *         description: Invalid genre or page
+ *       401:
+ *         description: Not authenticated
+ *       503:
+ *         description: Catalog temporarily unavailable; retry the same page
+ */
+router.get(
+    "/artists",
+    asyncHandler(async (req, res) => {
+        const query = z
+            .object({
+                genre: z
+                    .string()
+                    .default("all")
+                    .refine(
+                        (value) =>
+                            value === "all" ||
+                            Object.hasOwn(tasteArtistTags, value),
+                    ),
+                page: z.coerce
+                    .number()
+                    .int()
+                    .min(1)
+                    .max(Number.MAX_SAFE_INTEGER)
+                    .default(1),
+            })
+            .safeParse(req.query);
+        if (!query.success)
+            return sendRouteError(res, 400, "Invalid artist catalog query", {
+                code: "INVALID_CATALOG_QUERY",
+            });
+        try {
+            return res.json(
+                await lastFmService.browseTasteArtists(
+                    query.data.genre,
+                    query.data.page,
+                ),
+            );
+        } catch {
+            return sendRouteError(
+                res,
+                503,
+                "Artist catalog temporarily unavailable",
+                { code: "ARTIST_CATALOG_UNAVAILABLE" },
+            );
+        }
+    }),
+);
+
+/**
+ * @openapi
+ * /api/taste-profile/artist-image:
+ *   get:
+ *     summary: Get an exact-matched portrait without loading artist biographies or discographies
+ *     tags: [Taste profile]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *           minLength: 1
+ *           maxLength: 80
+ *     responses:
+ *       200:
+ *         description: Portrait URL or null when unavailable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [image]
+ *               properties:
+ *                 image:
+ *                   type: string
+ *                   nullable: true
+ *       400:
+ *         description: Invalid artist name
+ *       401:
+ *         description: Not authenticated
+ */
+router.get(
+    "/artist-image",
+    asyncHandler(async (req, res) => {
+        const name = tasteLabelSchema.safeParse(req.query.name);
+        if (!name.success)
+            return sendRouteError(res, 400, "Invalid artist name", {
+                code: "INVALID_ARTIST_NAME",
+            });
+        const image = await deezerService.getArtistImageStrict(name.data);
+        return res.json({ image });
+    }),
+);
 
 /**
  * @openapi
@@ -98,20 +206,38 @@ router.use(requireAuthOrToken);
  *       properties:
  *         genres:
  *           type: array
- *           maxItems: 10
  *           items:
  *             type: string
  *         artists:
  *           type: array
- *           maxItems: 10
  *           items:
  *             type: string
  *         seedTracks:
  *           type: array
- *           minItems: 1
+ *           minItems: 0
  *           maxItems: 12
  *           items:
  *             $ref: '#/components/schemas/TasteSeedTrack'
+ *         resolution:
+ *           type: object
+ *           additionalProperties: false
+ *           description: Unresolved choices retried on profile reads after retryAfter, at most three attempts
+ *           required: [pendingQueries, attempts, retryAfter]
+ *           properties:
+ *             pendingQueries:
+ *               type: array
+ *               minItems: 1
+ *               maxItems: 16
+ *               items:
+ *                 type: string
+ *                 maxLength: 100
+ *             attempts:
+ *               type: integer
+ *               minimum: 1
+ *               maximum: 3
+ *             retryAfter:
+ *               type: string
+ *               format: date-time
  *     TasteProfileState:
  *       type: object
  *       additionalProperties: false
@@ -137,17 +263,15 @@ router.use(requireAuthOrToken);
  *       properties:
  *         genres:
  *           type: array
- *           maxItems: 10
  *           items:
  *             type: string
  *         artists:
  *           type: array
- *           maxItems: 10
  *           items:
  *             type: string
  *         skip:
  *           type: boolean
- *       description: Choose 3-16 distinct genres and artists, or send only skip=true
+ *       description: Save any number of distinct genres and artists, or send only skip=true
  */
 
 /**

@@ -18,6 +18,69 @@ const input = () => ({
     }),
 });
 describe("transparent provider fallback", () => {
+    it.each([404, 429, 500, 502, 503, 504])(
+        "recovers upstream HTTP %s before audio starts",
+        async (status) => {
+            const resolve = jest.fn(async () => ({ streamPath: "/alternate" }));
+            const fallback = createMusicSourceFallback({
+                recording: async () => recording,
+                resolve,
+            });
+            await expect(
+                fallback.acquire({
+                    ...input(),
+                    original: async () => {
+                        throw { response: { status } };
+                    },
+                }),
+            ).resolves.toEqual({ redirect: "/alternate" });
+            expect(resolve).toHaveBeenCalledWith(
+                "a",
+                recording,
+                expect.any(AbortSignal),
+            );
+        },
+    );
+    it.each([400, 401, 403, 451])(
+        "preserves explicit HTTP %s restrictions",
+        async (status) => {
+            const resolve = jest.fn();
+            const fallback = createMusicSourceFallback({
+                recording: async () => recording,
+                resolve,
+            });
+            const error = { response: { status } };
+            await expect(
+                fallback.acquire({
+                    ...input(),
+                    original: async () => {
+                        throw error;
+                    },
+                }),
+            ).rejects.toEqual(error);
+            expect(resolve).not.toHaveBeenCalled();
+        },
+    );
+    it("does not pin a late alternate after the listener cancels", async () => {
+        const controller = new AbortController();
+        const reason = new Error("listener switched tracks");
+        const resolve = jest.fn(async () => {
+            controller.abort(reason);
+            return { streamPath: "/stale" };
+        });
+        const fallback = createMusicSourceFallback({
+            recording: async () => recording,
+            resolve,
+        });
+        await expect(
+            fallback.acquire({ ...input(), signal: controller.signal }),
+        ).rejects.toBe(reason);
+        resolve.mockResolvedValueOnce({ streamPath: "/fresh" });
+        await expect(fallback.acquire(input())).resolves.toEqual({
+            redirect: "/fresh",
+        });
+        expect(resolve).toHaveBeenCalledTimes(2);
+    });
     it("keeps acquired audio alive beyond the startup deadline and still forwards listener cancellation", async () => {
         const controller = new AbortController();
         let upstream: AbortSignal | undefined;

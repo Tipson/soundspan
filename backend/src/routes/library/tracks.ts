@@ -10,6 +10,7 @@ import { logger } from "../../utils/logger";
 import fs from "fs";
 import { config } from "../../config";
 import { type Quality as StreamingQuality } from "../../services/audioStreaming";
+import { toVerifiedMusicSourceLikedTrack } from "../../services/musicSourceLikedTrack";
 import { shuffleArray } from "../../utils/shuffle";
 import {
     applyTrackPreferenceOrderBias,
@@ -386,7 +387,14 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
             : { userId, track: TRACK_VISIBLE_WHERE };
     const supportedRemoteWhere: Prisma.LikedRemoteTrackWhereInput = {
         userId,
-        trackYtMusicId: { not: null },
+        AND: [
+            {
+                OR: [
+                    { trackYtMusicId: { not: null } },
+                    { trackMusicSourceId: { not: null } },
+                ],
+            },
+        ],
     };
     const remoteWhere: Prisma.LikedRemoteTrackWhereInput =
         cursorLikedAt && remoteCursorIdParam
@@ -439,6 +447,7 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
             include: {
                 trackTidal: true,
                 trackYtMusic: true,
+                trackMusicSource: true,
             },
             orderBy: [{ likedAt: "desc" }, { id: "asc" }],
             take: fetchTake,
@@ -465,7 +474,9 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
         token: string;
         cursorId: string;
         likedAt: Date;
-        source: import("../../services/remoteProviders/types").MappingProvider;
+        source:
+            | import("../../services/remoteProviders/types").MappingProvider
+            | import("../../services/musicSources/types").MusicSource;
         trackTidalId: string | null;
         trackYtMusicId: string | null;
         remote: (typeof remoteEntries)[number];
@@ -482,6 +493,24 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
         })),
         ...remoteEntries
             .map((entry): RemoteMergedEntry | null => {
+                if (
+                    entry.trackMusicSourceId &&
+                    entry.trackMusicSource &&
+                    entry.trackMusicSource.id === entry.trackMusicSourceId &&
+                    (entry.trackMusicSource.provider === "vk" ||
+                        entry.trackMusicSource.provider === "yandex")
+                ) {
+                    return {
+                        kind: "remote",
+                        token: `m:${entry.trackMusicSourceId}`,
+                        cursorId: `remote:${entry.id}`,
+                        likedAt: entry.likedAt,
+                        source: entry.trackMusicSource.provider,
+                        trackTidalId: null,
+                        trackYtMusicId: null,
+                        remote: entry,
+                    };
+                }
                 if (entry.trackTidalId && entry.trackTidal) {
                     return {
                         kind: "remote",
@@ -685,6 +714,9 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
         );
     };
 
+    type LikedResponseTrack =
+        | ReturnType<typeof toLikedResponseTrack>
+        | NonNullable<ReturnType<typeof toVerifiedMusicSourceLikedTrack>>;
     const deduped = Array.from(grouped.values())
         .map((entries) => {
             const sortedCandidates = [...entries].sort((left, right) => {
@@ -702,6 +734,23 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
                     candidate.likedAt < earliest ? candidate.likedAt : earliest,
                 entries[0].likedAt,
             );
+
+            if (
+                preferred.kind === "remote" &&
+                (preferred.source === "vk" || preferred.source === "yandex")
+            ) {
+                const track = toVerifiedMusicSourceLikedTrack(
+                    preferred.remote.trackMusicSource,
+                    earliestLikedAt,
+                );
+                return track
+                    ? {
+                          cursorId: preferred.cursorId,
+                          likedAt: earliestLikedAt,
+                          track,
+                      }
+                    : null;
+            }
 
             let normalized: UnifiedTrackResponse | null = null;
             if (preferred.kind === "local") {
@@ -731,7 +780,7 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
             ): entry is {
                 cursorId: string;
                 likedAt: Date;
-                track: ReturnType<typeof toLikedResponseTrack>;
+                track: LikedResponseTrack;
             } => entry !== null,
         )
         .sort((left, right) => {

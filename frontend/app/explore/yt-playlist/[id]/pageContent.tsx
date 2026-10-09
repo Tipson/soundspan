@@ -9,16 +9,13 @@ import {
     type ReactNode,
 } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Music2, ListMusic, Shuffle, Plus, Heart, Loader2 } from "lucide-react";
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
 import {
-    Play,
-    Pause,
-    Music2,
-    ListMusic,
-    Shuffle,
-    Plus,
-    Heart,
-    Loader2,
-} from "lucide-react";
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import { api } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -377,31 +374,12 @@ export function YtPlaylistActionDock({
                 data-detail-action-tier="primary"
                 className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none"
             >
-                <button
-                    type="button"
+                <CollectionPlaybackButton
                     onClick={onTogglePlay}
-                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:flex-none"
-                >
-                    {showPlaySpinner ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : isThisPlaylistPlaying && isPlaying ? (
-                        <Pause className="h-5 w-5 fill-current" />
-                    ) : (
-                        <Play className="ml-0.5 h-5 w-5 fill-current" />
-                    )}
-                    <span>
-                        {isThisPlaylistPlaying && isPlaying ? (
-                            searchExtrasRu.youtubePlaylist.pause
-                        ) : (
-                            <>
-                                <span className="sm:hidden">Слушать</span>
-                                <span className="hidden sm:inline">
-                                    {searchExtrasRu.youtubePlaylist.playAll}
-                                </span>
-                            </>
-                        )}
-                    </span>
-                </button>
+                    isPlaying={isThisPlaylistPlaying && isPlaying}
+                    isLoading={showPlaySpinner}
+                    disabled={downloadableTracks.length === 0}
+                />
                 {tracks.length > 1 && (
                     <button
                         type="button"
@@ -690,10 +668,10 @@ function YtMusicPlaylistDetailPageContent() {
         };
     }, [playlistId, isAlbumType]);
 
-    // Check if the current queue is this browse playlist
-    const isThisPlaylistPlaying =
-        currentTrack?.id?.startsWith("yt:") &&
-        playlist?.tracks.some((t) => `yt:${t.videoId}` === currentTrack?.id);
+    const collectionId = `yt-playlist:${playlistId}`;
+    const isThisPlaylistPlaying = Boolean(
+        currentTrack && isCollectionPlayback(collectionId),
+    );
 
     // Play entire playlist
     const handlePlayAll = (startIndex: number = 0) => {
@@ -705,7 +683,12 @@ function YtMusicPlaylistDetailPageContent() {
             toast.error(searchExtrasRu.youtubePlaylist.noPlayableTracks);
             return;
         }
-        playTracks(tracks, startIndex);
+        const generation = getCollectionPlaybackGeneration();
+        playTracks(tracks, startIndex, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(collectionId, generation);
     };
 
     // Toggle play/pause for header button
@@ -759,7 +742,12 @@ function YtMusicPlaylistDetailPageContent() {
             .filter((t) => t.videoId)
             .map(browseTrackToQueueTrack);
         if (tracks.length < 2) return;
-        playTracks(shuffleArray(tracks), 0);
+        const generation = getCollectionPlaybackGeneration();
+        playTracks(shuffleArray(tracks), 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(collectionId, generation);
     };
 
     // Add all to playlist

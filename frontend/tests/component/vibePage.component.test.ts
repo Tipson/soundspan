@@ -675,7 +675,7 @@ test("For you keeps recent listens to a rare accent instead of every third track
         }),
     );
     state.personalizedFeed.shelves.discovery = Array.from(
-        { length: 5 },
+        { length: 20 },
         (_, index) => ({
             id: `yt:discovery-${index + 1}`,
             title: `Discovery ${index + 1}`,
@@ -695,16 +695,16 @@ test("For you keeps recent listens to a rare accent instead of every third track
     await React.act(async () => playWave.click());
 
     assert.deepEqual(state.playedTrackIds.slice(0, 6), [
-        "yt:quick-1",
         "yt:discovery-1",
-        "yt:quick-2",
         "yt:discovery-2",
-        "yt:quick-3",
-        "yt:recent-1",
+        "yt:discovery-3",
+        "yt:discovery-4",
+        "yt:quick-1",
+        "yt:discovery-5",
     ]);
     assert.deepEqual(
         state.playedTrackIds.filter((id) => id.startsWith("yt:recent-")),
-        ["yt:recent-1", "yt:recent-2"],
+        ["yt:recent-1"],
     );
 
     await unmountPage(mounted);

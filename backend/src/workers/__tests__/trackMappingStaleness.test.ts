@@ -89,7 +89,7 @@ describe("trackMappingStaleness worker", () => {
         expect(setIntervalSpy).toHaveBeenCalledTimes(1);
         expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 1500);
         expect(findMany).toHaveBeenCalledWith({
-            where: { stale: false },
+            where: { stale: false, trackMusicSourceId: null },
             select: {
                 id: true,
                 trackTidalId: true,
@@ -132,6 +132,42 @@ describe("trackMappingStaleness worker", () => {
             6 * 60 * 60 * 1000,
         );
 
+        module.stopTrackMappingStalenessWorker();
+    });
+
+    it("keeps direct identities out of the legacy target-check quota", async () => {
+        jest.useFakeTimers();
+        const { module, findMany, markStale } = loadWorker();
+        const directRows = Array.from({ length: 100 }, (_, index) => ({
+            id: `direct-${index}`,
+            trackMusicSourceId: `namespace-${index}`,
+            trackTidalId: null,
+            trackYtMusicId: null,
+            trackTidal: null,
+            trackYtMusic: null,
+        }));
+        const legacy = {
+            id: "legacy-needs-check",
+            trackMusicSourceId: null,
+            trackTidalId: "missing-target",
+            trackYtMusicId: null,
+            trackTidal: null,
+            trackYtMusic: null,
+        };
+        findMany.mockImplementation(async ({ where, take }) =>
+            [...directRows, legacy]
+                .filter((row) =>
+                    where.trackMusicSourceId === null
+                        ? row.trackMusicSourceId === null
+                        : true,
+                )
+                .slice(0, take),
+        );
+        markStale.mockResolvedValue(undefined);
+        module.startTrackMappingStalenessWorker();
+        await flushMicrotasks();
+        expect(markStale).toHaveBeenCalledWith("legacy-needs-check");
+        expect(markStale).toHaveBeenCalledTimes(1);
         module.stopTrackMappingStalenessWorker();
     });
 

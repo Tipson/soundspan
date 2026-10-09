@@ -13,39 +13,51 @@ Account-scoped first-run music-taste setup and its reusable settings editor.
 ## Integration
 
 The protected `AuthenticatedLayout` mounts the onboarding gate once with the
-current `user.id`. Settings can mount `TasteProfileEditor` after its account
-section owns an explicit open/close control; no route or global layout state is
-required.
+current `user.id`. `TasteProfileSettingsSection` mounts `TasteProfileEditor`
+through its explicit open/close control. Loading failures offer a retry in the
+dialog; failed saves keep the current choices available for another attempt.
 
 ## Selection flow
 
-1. Browse 34 genres in six groups or narrow them by text search. Genre selection
-   is optional; the listener can go directly to artists.
-2. Browse a balanced mix of the chosen genres, filter to another genre without
-   implicitly selecting it, or use canonical MusicBrainz artist autocomplete.
-   The curated shelf starts with twelve artists and expands on demand; it is not
-   a live provider catalog. Selected artists remain removable across filters.
-3. Review all selected genres and artists, including saved labels outside the
-   curated catalog, before saving. Returning to earlier steps preserves choices.
+The fullscreen artist-selection screen provides genre shortcuts and an expandable
+“Все жанры” palette with 34 genres in six groups. Escape closes the palette and
+returns focus to its trigger. The screen contains only its title, search, filters,
+artists, selection count and save action; routine explanatory paragraphs are omitted. “Все исполнители” browses Last.fm charts; individual genres
+map to community tags. Catalog pages contain 48 artists and load near the scroll
+boundary, with an accessible load/retry button. Names are deduplicated across
+pages. Saved-genre browsing interleaves those genres one request at a time.
+Catalog-wide canonical artist search is also available. Filters do not implicitly add preferences.
+Saved genres and selected artists remain removable across filters.
 
-The existing API limits remain 3–16 total signals and at most ten of each kind.
-The footer stays visible while long genre and artist lists scroll independently.
-Suggestion browsing makes no provider calls; autocomplete remains debounced and
-cancellable, and saving uses the existing bounded seed-resolution service.
+Genre/search controls sit outside the scrolling results. The save action remains
+visible. Changing a genre resets the result scroll position. Portrait loading is
+cached and limited to three concurrent requests; missing artwork uses initials.
+
+There are no minimum or maximum selection counts. Empty selections explicitly
+clear preferences and finish onboarding. Label validation and the application's
+request-body safety limit still apply. The complete selection is persisted;
+initial playable recommendation seeds use at most sixteen queries sampled across
+the entire selection and at most twelve tracks. Seed recovery retains all labels.
+This finite starter shelf is not an exhaustive playlist for every selected artist.
 
 The interaction reference is Yandex Music's documented genre-filtered artist
 selection, including a mixed shelf and Russian-language genre branches:
 [Yandex accessibility guide](https://inclusion.yandex.ru/tutorials/music-web),
 [preference settings](https://www.yandex.ru/support/music/ru/technical-issues/incorrect-recommendations).
 The labels and curated artist shelves are Soundspan's examples, not an exported
-Yandex taxonomy. The three-step flow is a Soundspan adaptation, not a claim about
-Yandex's exact step count. Preview playback and an infinite artist map are not
-implemented; no likes are created by this flow.
+Yandex taxonomy. The layout is a Soundspan adaptation. The curated shelf is only
+an initial/offline fallback, explicitly labelled on a catalog failure. Shared
+server pages are cached for six hours and concurrent identical requests coalesce.
+Upstream failures return 503 rather than pretending the catalog ended; retry keeps
+already loaded cards and selections. Preview playback is not implemented; no likes
+are created by this flow. Portrait homonyms remain a separate identity issue.
 
 ## Tests
 
-- Unit coverage verifies label normalization, count limits, account query keys,
+- Unit coverage verifies label normalization, unrestricted counts, account query keys,
   and the exact API methods and bodies.
 - Component coverage verifies Russian copy, accessible dialog behavior,
   selection and skip flows, shell gating, and a late account-A mutation while
   account B is active.
+- Editor coverage verifies load retry, failed-save recovery, recommendation
+  invalidation, and reopening saved choices through another API read.

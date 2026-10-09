@@ -4,6 +4,18 @@ import request from "supertest";
 const mockGetProfile = jest.fn();
 const mockSaveProfile = jest.fn();
 const mockSkipProfile = jest.fn();
+const mockArtistImage = jest.fn();
+const mockBrowse = jest.fn();
+jest.mock("../../services/lastfm", () => ({
+    lastFmService: {
+        browseTasteArtists: (...args: unknown[]) => mockBrowse(...args),
+    },
+}));
+jest.mock("../../services/deezer", () => ({
+    deezerService: {
+        getArtistImageStrict: (...args: unknown[]) => mockArtistImage(...args),
+    },
+}));
 
 jest.mock("../../middleware/auth", () => ({
     requireAuthOrToken: (req: Request, res: Response, next: NextFunction) => {
@@ -33,6 +45,56 @@ import { createRouteTestApp } from "./helpers/createRouteTestApp";
 const app = createRouteTestApp("/api/taste-profile", router);
 
 describe("account taste profile routes", () => {
+    it("pages through the artist catalog and rejects invalid page numbers", async () => {
+        mockBrowse.mockResolvedValue({ artists: ["Muse"], nextPage: 3 });
+        const result = await request(app)
+            .get("/api/taste-profile/artists?genre=Рок&page=2")
+            .set("x-test-user", "alice");
+        expect(result.status).toBe(200);
+        expect(result.body).toEqual({ artists: ["Muse"], nextPage: 3 });
+        expect(mockBrowse).toHaveBeenCalledWith("Рок", 2);
+        expect(
+            (
+                await request(app)
+                    .get("/api/taste-profile/artists?page=0")
+                    .set("x-test-user", "alice")
+            ).status,
+        ).toBe(400);
+        expect(
+            (await request(app).get("/api/taste-profile/artists?page=1"))
+                .status,
+        ).toBe(401);
+    });
+    it("loads a portrait by exact artist identity without resolving biography or taste seeds", async () => {
+        mockArtistImage.mockResolvedValue("https://images.example/queen.jpg");
+        const response = await request(app)
+            .get("/api/taste-profile/artist-image?name=Queen")
+            .set("x-test-user", "alice");
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            image: "https://images.example/queen.jpg",
+        });
+        expect(mockArtistImage).toHaveBeenCalledWith("Queen");
+        expect(mockGetProfile).not.toHaveBeenCalled();
+        expect(mockSaveProfile).not.toHaveBeenCalled();
+    });
+    it("validates and authenticates portrait requests before contacting the image provider", async () => {
+        expect(
+            (
+                await request(app).get(
+                    "/api/taste-profile/artist-image?name=Queen",
+                )
+            ).status,
+        ).toBe(401);
+        expect(
+            (
+                await request(app)
+                    .get("/api/taste-profile/artist-image?name=")
+                    .set("x-test-user", "alice")
+            ).status,
+        ).toBe(400);
+        expect(mockArtistImage).not.toHaveBeenCalled();
+    });
     beforeEach(() => {
         jest.clearAllMocks();
         mockGetProfile.mockResolvedValue({
@@ -109,9 +171,6 @@ describe("account taste profile routes", () => {
     );
 
     it.each([
-        {},
-        { genres: ["Rock"], artists: ["Muse"] },
-        { genres: Array.from({ length: 11 }, (_, index) => `Genre ${index}`) },
         { genres: ["Rock", "Metal", "Pop"], unexpected: true },
         { skip: true, genres: ["Rock"] },
         { genres: ["Rock\nMetal", "Pop"], artists: ["Muse"] },
@@ -129,6 +188,25 @@ describe("account taste profile routes", () => {
         expect(mockSaveProfile).not.toHaveBeenCalled();
         expect(mockSkipProfile).not.toHaveBeenCalled();
     });
+
+    it.each([0, 1, 120])(
+        "accepts %i choices without truncating the payload",
+        async (count) => {
+            const artists = Array.from(
+                { length: count },
+                (_, i) => `Artist ${i}`,
+            );
+            const response = await request(app)
+                .put("/api/taste-profile")
+                .set("x-test-user", "alice")
+                .send({ genres: [], artists });
+            expect(response.status).toBe(200);
+            expect(mockSaveProfile).toHaveBeenCalledWith("alice", {
+                genres: [],
+                artists,
+            });
+        },
+    );
 
     it("stores a skip against the authenticated account", async () => {
         const response = await request(app)

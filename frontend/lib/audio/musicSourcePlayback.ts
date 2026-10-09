@@ -38,3 +38,47 @@ export function toMusicSourcePlaybackTrack(value: unknown): Track {
         musicSourceRecording: recording,
     };
 }
+
+/** Detect reserved native claims before any legacy source or identity fallback. */
+export function hasNativeMusicSourceIdentity(value: unknown): boolean {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+        return false;
+    const row = value as Record<string, unknown>,
+        provider = row.provider as Record<string, unknown> | undefined;
+    return (
+        [row.source, row.streamSource, row.mediaSource, provider?.source].some(
+            (source) => source === "vk" || source === "yandex",
+        ) ||
+        row.musicSourceRecording != null ||
+        (typeof row.id === "string" && /^(vk|yandex):/.test(row.id))
+    );
+}
+
+/** Read an exact public native tuple and rebuild only portable, sanitized queue metadata. */
+export function readMusicSourcePlaybackTrack(value: unknown): Track | null {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+        return null;
+    const row = value as Record<string, unknown>,
+        parsed = musicSourceCandidateSchema.safeParse(row.musicSourceRecording);
+    if (!parsed.success) return null;
+    const recording = parsed.data,
+        provider = row.provider as Record<string, unknown> | undefined,
+        artist = row.artist as Record<string, unknown> | undefined;
+    if (
+        row.source !== recording.provider ||
+        row.streamSource !== recording.provider ||
+        (row.mediaSource != null && row.mediaSource !== recording.provider) ||
+        row.id !== `${recording.provider}:${recording.id}` ||
+        provider?.source !== recording.provider ||
+        provider?.providerTrackId !== recording.id ||
+        provider?.youtubeVideoId != null ||
+        provider?.tidalTrackId != null ||
+        row.youtubeVideoId != null ||
+        row.tidalTrackId != null ||
+        row.title !== recording.title ||
+        row.duration !== recording.duration ||
+        artist?.name !== recording.artists.join(", ")
+    )
+        return null;
+    return toMusicSourcePlaybackTrack(recording);
+}

@@ -6,6 +6,11 @@ import {
 } from "../../metrics";
 import type { RecommendationExposureMetricInput } from "../../metrics/recommendationMetrics";
 import { logger } from "../../utils/logger";
+import type { RadioRequestExecution } from "./radioRequestExecution";
+import {
+    hasNativeRecommendationIdentity,
+    readNativeRecommendationRecording,
+} from "./nativeCandidates";
 import type {
     RecommendationDirection,
     RecommendationExposureSignal,
@@ -35,6 +40,7 @@ interface ExposureCreateInput {
 }
 
 interface GenerationCreateInput {
+    execution?: RadioRequestExecution;
     userId: string;
     sessionId: string;
     surface: RecommendationSurface;
@@ -113,6 +119,8 @@ const defaultMetricsRecorder: RecommendationExposureMetricsRecorder = {
 };
 
 export interface RecordRecommendationGenerationInput {
+    /** Server-owned original-radio budget; not serialized into generation metadata. */
+    execution?: RadioRequestExecution;
     userId: string;
     sessionId: string;
     surface: RecommendationSurface;
@@ -132,6 +140,12 @@ function providerIdentity(recommendation: ScoredRecommendation): {
     providerTrackId: string;
 } | null {
     const { track } = recommendation;
+    if (hasNativeRecommendationIdentity(track)) {
+        const recording = readNativeRecommendationRecording(track);
+        return recording
+            ? { provider: recording.provider, providerTrackId: recording.id }
+            : null;
+    }
     if (track.provider.youtubeVideoId) {
         return {
             provider: "youtube",
@@ -195,6 +209,7 @@ export class RecommendationExposureStore {
     }
 
     async record(input: RecordRecommendationGenerationInput): Promise<string> {
+        input.execution?.check();
         const exposures = input.recommendations.flatMap(
             (recommendation, position) => {
                 const identity = providerIdentity(recommendation);
@@ -223,6 +238,7 @@ export class RecommendationExposureStore {
             },
         );
         const generation = await this.dependencies.createGeneration({
+            ...(input.execution ? { execution: input.execution } : {}),
             userId: input.userId,
             sessionId: input.sessionId,
             surface: input.surface,
@@ -236,6 +252,7 @@ export class RecommendationExposureStore {
             context: input.context,
             exposures,
         });
+        input.execution?.check();
         try {
             this.metrics.recordExposures({
                 surface: input.surface,
@@ -355,8 +372,8 @@ export class RecommendationExposureStore {
 }
 
 export const recommendationExposureStore = new RecommendationExposureStore({
-    createGeneration: async (input) =>
-        prisma.recommendationGeneration.create({
+    createGeneration: async (input) => {
+        const args = {
             data: {
                 userId: input.userId,
                 sessionId: input.sessionId,
@@ -371,8 +388,31 @@ export const recommendationExposureStore = new RecommendationExposureStore({
                 context: input.context as Prisma.InputJsonObject | undefined,
                 exposures: { create: input.exposures },
             },
-            select: { id: true },
-        }),
+            select: { id: true as const },
+        };
+        const execution = input.execution;
+        if (!execution) return prisma.recommendationGeneration.create(args);
+        execution.check();
+        const remaining = execution.remainingMs();
+        try {
+            return await prisma.$transaction(
+                async (transaction) => {
+                    // Connection acquisition can itself consume the remaining budget.
+                    execution.check();
+                    const generation =
+                        await transaction.recommendationGeneration.create(args);
+                    // Throwing before callback completion rolls back the nested exposures.
+                    // A COMMIT already dispatched by Prisma cannot be retracted here.
+                    execution.check();
+                    return generation;
+                },
+                { maxWait: remaining, timeout: remaining },
+            );
+        } catch (error) {
+            execution.check();
+            throw error;
+        }
+    },
     loadRecentExposures: (userId, since) =>
         prisma.recommendationExposure
             .findMany({

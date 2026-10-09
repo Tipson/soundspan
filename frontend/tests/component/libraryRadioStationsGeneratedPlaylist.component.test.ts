@@ -32,7 +32,10 @@ mock.module("@/lib/api", {
         api: {
             createRadioPlaylist: async (input: Record<string, unknown>) => {
                 state.createCalls.push(input);
-                return { playlistId: "generated-1", entries: [] };
+                return {
+                    playlistId: "generated-1",
+                    entries: [{ id: "track-1" }],
+                };
             },
             get: async (path: string) => {
                 state.getCalls.push(path);

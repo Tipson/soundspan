@@ -619,6 +619,7 @@ describe("plays routes integration", () => {
                 },
                 trackTidal: true,
                 trackYtMusic: true,
+                trackMusicSource: true,
             },
         });
         expect(res.body).toHaveLength(4);

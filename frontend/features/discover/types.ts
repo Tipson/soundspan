@@ -1,3 +1,5 @@
+import type { Track } from "@/lib/audio-state-context";
+
 export interface DiscoverTrack {
     loudnessLufs?: number | null;
     truePeakDb?: number | null;
@@ -9,10 +11,15 @@ export interface DiscoverTrack {
     artistId?: string | null;
     album: string;
     albumId: string;
-    sourceType?: "local" | "tidal" | "youtube";
-    streamSource?: "tidal" | "youtube";
+    sourceType?: "local" | "tidal" | "youtube" | "vk" | "yandex";
+    streamSource?: "tidal" | "youtube" | "vk" | "yandex";
+    source?: Track["source"];
+    mediaSource?: Track["mediaSource"];
+    provider?: Track["provider"];
+    musicSourceRecording?: Track["musicSourceRecording"];
     tidalTrackId?: number;
     youtubeVideoId?: string;
+    recommendationGenerationId?: string;
     isLiked: boolean;
     likedAt: string | null;
     similarity: number;
@@ -38,6 +45,8 @@ export interface UnavailableAlbum {
 }
 
 export interface DiscoverPlaylist {
+    kind?: "online-weekly";
+    generationId?: string;
     weekStart: string;
     weekEnd: string;
     tracks: DiscoverTrack[];

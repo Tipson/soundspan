@@ -2244,6 +2244,105 @@ describe("youtubeMusic service", () => {
         expect(mockClient.get).toHaveBeenCalledTimes(2);
     });
 
+    describe("explicit radio pool refresh", () => {
+        beforeEach(() => mockClient.get.mockReset());
+        afterEach(() => mockClient.get.mockReset());
+        it("refreshes a settled radio pool without changing seed, limit or the provider query", async () => {
+            const old = { tracks: [{ videoId: "old-radio", title: "Old" }] };
+            const fresh = {
+                tracks: [{ videoId: "fresh-radio", title: "Fresh" }],
+            };
+            mockClient.get
+                .mockResolvedValueOnce({ data: old })
+                .mockResolvedValueOnce({ data: fresh });
+            await expect(
+                ytMusicService.getRadio("refresh-seed", 20),
+            ).resolves.toEqual(old);
+            await expect(
+                ytMusicService.getRadio("refresh-seed", 20),
+            ).resolves.toEqual(old);
+            await expect(
+                ytMusicService.getRadio("refresh-seed", 20, { refresh: true }),
+            ).resolves.toEqual(fresh);
+            await expect(
+                ytMusicService.getRadio("refresh-seed", 20),
+            ).resolves.toEqual(fresh);
+            expect(mockClient.get).toHaveBeenCalledTimes(2);
+            expect(mockClient.get).toHaveBeenLastCalledWith("/radio", {
+                params: { video_id: "refresh-seed", limit: 20 },
+                timeout: 13_000,
+            });
+        });
+
+        it("coalesces simultaneous radio refreshes and ordinary callers into one fresh fill", async () => {
+            const old = { tracks: [{ videoId: "old-radio" }] };
+            const fresh = { tracks: [{ videoId: "fresh-radio" }] };
+            mockClient.get.mockResolvedValueOnce({ data: old });
+            await ytMusicService.getRadio("refresh-join", 20);
+            let release!: (value: { data: typeof fresh }) => void;
+            mockClient.get.mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        release = resolve;
+                    }),
+            );
+            const a = ytMusicService.getRadio("refresh-join", 20, {
+                refresh: true,
+            });
+            const b = ytMusicService.getRadio("refresh-join", 20, {
+                refresh: true,
+            });
+            const c = ytMusicService.getRadio("refresh-join", 20);
+            try {
+                expect(mockClient.get).toHaveBeenCalledTimes(2);
+            } finally {
+                release?.({ data: fresh });
+            }
+            await expect(Promise.all([a, b, c])).resolves.toEqual([
+                fresh,
+                fresh,
+                fresh,
+            ]);
+            expect(mockClient.get).toHaveBeenCalledTimes(2);
+        });
+
+        it("does not reuse the old settled pool or cache an unsuccessful refresh", async () => {
+            const old = { tracks: [{ videoId: "old-radio" }] };
+            const fresh = { tracks: [{ videoId: "fresh-radio" }] };
+            mockClient.get
+                .mockResolvedValueOnce({ data: old })
+                .mockRejectedValueOnce(new Error("refresh unavailable"))
+                .mockResolvedValueOnce({ data: fresh });
+            await ytMusicService.getRadio("refresh-retry", 20);
+            await expect(
+                ytMusicService.getRadio("refresh-retry", 20, { refresh: true }),
+            ).rejects.toThrow("refresh unavailable");
+            await expect(
+                ytMusicService.getRadio("refresh-retry", 20),
+            ).resolves.toEqual(fresh);
+            expect(mockClient.get).toHaveBeenCalledTimes(3);
+        });
+
+        it("a radio refresh retains the existing row cap and shares the bounded key", async () => {
+            const rows = Array.from({ length: 140 }, (_, index) => ({
+                videoId: "v" + index,
+            }));
+            mockClient.get.mockResolvedValue({ data: { tracks: rows } });
+            const result = await ytMusicService.getRadio(
+                "bounded-refresh",
+                1000,
+                { refresh: true },
+            );
+            expect(result.tracks).toHaveLength(100);
+            await ytMusicService.getRadio("bounded-refresh", 100);
+            expect(mockClient.get).toHaveBeenCalledTimes(1);
+            expect(mockClient.get).toHaveBeenCalledWith("/radio", {
+                params: { video_id: "bounded-refresh", limit: 100 },
+                timeout: 13_000,
+            });
+        });
+    });
+
     it("does not cache empty radio responses and records a bounded failure reason", async () => {
         mockClient.get
             .mockResolvedValueOnce({ data: { tracks: [] } })

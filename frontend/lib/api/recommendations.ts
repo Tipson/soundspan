@@ -8,16 +8,43 @@ import type {
 } from "../api";
 import { type ApiClientConstructor, type ApiData } from "./core";
 import { getRecommendationSessionId } from "../recommendationSession";
+import {
+    buildOriginalRadioContinuationPath,
+    type OriginalRadioContinuationRequest,
+    type OriginalRadioContinuationResponse,
+} from "../radio/originalRadioContinuation";
+import {
+    PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
+    PERSONALIZED_HOME_TIMEOUT_RETRY,
+} from "@/features/home/personalizedHomeRequestPolicy";
 
 /** Add recommendation-domain operations to an API client base class. */
 export function WithRecommendations<TBase extends ApiClientConstructor>(
     Base: TBase,
 ) {
     abstract class RecommendationsApi extends Base {
+        /** Continues the authenticated owner's original station with bounded queue exclusions. */
+        async getRadioContinuation(
+            input: OriginalRadioContinuationRequest,
+        ): Promise<OriginalRadioContinuationResponse> {
+            return this.request<OriginalRadioContinuationResponse>(
+                buildOriginalRadioContinuationPath(
+                    input.origin,
+                    input.queue,
+                    input.cursor,
+                    input.limit,
+                    input.sessionId,
+                ),
+                {
+                    timeoutMs: PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
+                    retryOnTimeout: PERSONALIZED_HOME_TIMEOUT_RETRY,
+                },
+            );
+        }
         async reportRecommendationImpressions(
             generationId: string,
             tracks: Array<{
-                provider: "youtube" | "tidal" | "library";
+                provider: "youtube" | "tidal" | "library" | "vk" | "yandex";
                 providerTrackId: string;
             }>,
         ): Promise<{ recorded: number }> {

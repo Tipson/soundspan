@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const files = [
-    "../../app/my-history/page.tsx",
     "../../app/library/page.tsx",
     "../../features/library/components/AlbumsGrid.tsx",
     "../../features/library/components/ArtistsGrid.tsx",
@@ -44,8 +43,6 @@ test("personal library and history keep product-owned copy Russian", () => {
     }
 
     for (const phrase of [
-        "История прослушиваний",
-        "Недавно слушали",
         "Любимые треки",
         "Альбомов пока нет",
         "Исполнителей пока нет",

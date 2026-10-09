@@ -30,10 +30,35 @@ const playbackAutoRestartSuppressedRef: { current: boolean } = {
 let explicitPauseSequence = 0;
 let explicitPauseGeneration = 0;
 let playbackIntentGeneration = 0;
+let queueReplacementGeneration = 0;
+let playbackReplacementGeneration = 0;
 
 /** Fence asynchronous queue work against newer playback commands. */
 export function getPlaybackIntentGeneration(): number {
     return playbackIntentGeneration;
+}
+
+/** Reserves asynchronous user work without resuming, pausing, or replacing current media. */
+export function reservePlaybackIntent(): number {
+    queueReplacementGeneration += 1;
+    return ++playbackIntentGeneration;
+}
+/** Fences adaptive queue work while allowing ordinary pause, seek, and next actions. */
+export function getQueueReplacementGeneration(): number {
+    return queueReplacementGeneration;
+}
+/** Retires pending queue work after a station-context change without altering media or playback intent. */
+export function recordQueueContextChange(): void {
+    queueReplacementGeneration += 1;
+}
+/** Counts media replacements without treating pending asynchronous requests as playback. */
+export function getPlaybackReplacementGeneration(): number {
+    return playbackReplacementGeneration;
+}
+
+/** Record a committed media or queue replacement without changing playback intent or pause state. */
+export function recordPlaybackReplacement(): void {
+    playbackReplacementGeneration += 1;
 }
 
 /** A user seek supersedes queue work even when track and index stay the same. */
@@ -76,6 +101,8 @@ export function writePlaybackAdvanceOrigin(
 export function writePlaybackReplacementIntent(
     originatingTrackId: string | null,
 ): void {
+    recordPlaybackReplacement();
+    queueReplacementGeneration += 1;
     recordExplicitPlaybackResume();
     writePlaybackAdvanceOrigin("manual", originatingTrackId);
     playbackReplacementIntentRef.current = { originatingTrackId };

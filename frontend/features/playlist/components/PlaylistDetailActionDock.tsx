@@ -1,4 +1,5 @@
 "use client";
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
 
 import type { ReactNode } from "react";
 import {
@@ -9,8 +10,6 @@ import {
     Heart,
     ListMusic,
     Loader2,
-    Pause,
-    Play,
     Radio,
     Share2,
     Shuffle,
@@ -27,11 +26,7 @@ interface PlaylistDetailActionDockProps {
     playlistId: string;
     playlistName: string;
     trackItemCount: number;
-    canPlayAll?: boolean;
     playableTracks: Track[];
-    isThisPlaylistPlaying: boolean;
-    isPlaying: boolean;
-    showPlaySpinner: boolean;
     isAllLiked: boolean;
     isApplyingLikeAll: boolean;
     isOwner: boolean;
@@ -40,6 +35,8 @@ interface PlaylistDetailActionDockProps {
     isTogglingShare: boolean;
     isHiding: boolean;
     radioActions: ReactNode;
+    isThisPlaylistPlaying?: boolean;
+    isPlaying?: boolean;
     onPlay: () => void;
     onShuffle: () => void;
     onAddAllToQueue: () => void;
@@ -89,11 +86,7 @@ export function PlaylistDetailActionDock({
     playlistId,
     playlistName,
     trackItemCount,
-    canPlayAll = trackItemCount > 0,
     playableTracks,
-    isThisPlaylistPlaying,
-    isPlaying,
-    showPlaySpinner,
     isAllLiked,
     isApplyingLikeAll,
     isOwner,
@@ -102,6 +95,8 @@ export function PlaylistDetailActionDock({
     isTogglingShare,
     isHiding,
     radioActions,
+    isThisPlaylistPlaying = false,
+    isPlaying = false,
     onPlay,
     onShuffle,
     onAddAllToQueue,
@@ -117,49 +112,21 @@ export function PlaylistDetailActionDock({
         ? ru.playlist.makePrivate
         : ru.playlist.shareWithOthers;
     const visibilityLabel = isHidden ? ru.playlist.show : ru.playlist.hide;
-    const primaryActionLabel =
-        isThisPlaylistPlaying && isPlaying
-            ? ru.common.pause
-            : ru.common.playAll;
 
     return (
         <MusicDetailActionDock
             label={ru.playlist.controls}
-            className="relative sm:!w-full"
+            className="relative min-h-11 w-fit gap-1 rounded-none border-0 bg-transparent p-0 shadow-none backdrop-blur-none supports-[backdrop-filter]:bg-transparent"
         >
             <div
                 data-detail-action-tier="primary"
                 className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
             >
-                {canPlayAll && (
-                    <button
-                        type="button"
+                {playableTracks.length > 0 && (
+                    <CollectionPlaybackButton
+                        isPlaying={isThisPlaylistPlaying && isPlaying}
                         onClick={onPlay}
-                        aria-label={primaryActionLabel}
-                        className="flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-3 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:flex-none sm:px-5"
-                    >
-                        {showPlaySpinner ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : isThisPlaylistPlaying && isPlaying ? (
-                            <Pause className="h-5 w-5 fill-current" />
-                        ) : (
-                            <Play className="ml-0.5 h-5 w-5 fill-current" />
-                        )}
-                        <span
-                            data-playlist-primary-label="compact"
-                            className="min-w-0 truncate sm:hidden"
-                        >
-                            {isThisPlaylistPlaying && isPlaying
-                                ? ru.common.pause
-                                : ru.common.listen}
-                        </span>
-                        <span
-                            data-playlist-primary-label="full"
-                            className="hidden sm:inline"
-                        >
-                            {primaryActionLabel}
-                        </span>
-                    </button>
+                    />
                 )}
                 {playableTracks.length > 1 && (
                     <button

@@ -20,6 +20,9 @@ import { recordingLanguageStore } from "./recordingLanguageRuntime";
 import { remoteAnalysisHotSetScheduler } from "./remoteAnalysisHotSet";
 import { loadSavedCanonicalKeys } from "./savedRecordings";
 import { UnifiedRecommendationService } from "./recommendationService";
+import { loadRadioContinuationCandidates } from "./radioContinuationRuntime";
+import { loadVerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
+import { hasNativeRecommendationIdentity } from "./nativeCandidates";
 import type { RecommendRequest, RecommendationCandidate } from "./types";
 
 const log = logger.child("RecommendationRuntime");
@@ -118,6 +121,7 @@ async function loadSimilarCandidates(request: RecommendRequest) {
 }
 
 export const unifiedRecommendationService = new UnifiedRecommendationService({
+    loadRadioCandidates: loadRadioContinuationCandidates,
     loadSavedCanonicalKeys,
     loadSavedMoodCandidates,
     prepareLanguages: (tracks) => recordingLanguageStore.prepare(tracks),
@@ -131,8 +135,10 @@ export const unifiedRecommendationService = new UnifiedRecommendationService({
     ): Promise<PersonalizedHomeFeed> =>
         personalizedCatalogService.getHomeFeed(userId, limit, options),
     loadSimilarCandidates,
-    resolveCanonical: (candidate) =>
-        canonicalIdentityResolver.resolve(candidate),
+    resolveCanonical: async (candidate) =>
+        hasNativeRecommendationIdentity(candidate)
+            ? ((await findMappedCanonicalCandidates([candidate]))[0] ?? null)
+            : canonicalIdentityResolver.resolve(candidate),
     loadCanonicalMappings: findMappedCanonicalCandidates,
     enrichCandidates: (candidates) =>
         recommendationFeatureStore.enrichCandidates(candidates),
@@ -140,12 +146,14 @@ export const unifiedRecommendationService = new UnifiedRecommendationService({
         recommendationExposureStore.loadRecent(userId, now),
     loadDislikedCanonicalKeys: (userId) =>
         recommendationFeatureStore.loadDislikedCanonicalKeys(userId),
+    loadVerifiedRepeatExclusions: loadVerifiedSourceRepeatExclusions,
     loadTasteContext: async (userId, request) => {
         const [taste, mood] = await Promise.all([
             recommendationFeatureStore.loadTasteContext(userId, {
                 sessionId: request.sessionId,
                 surface: request.intent.surface,
                 context: request.context,
+                crossSurfaceContext: request.timeOfDay,
             }),
             recommendationMoodEmbeddingStore.load(request.intent.mood ?? null),
         ]);

@@ -690,6 +690,9 @@ model Play {
   trackId                    String?
   trackTidalId               String?
   trackYtMusicId             String?
+  trackMusicSourceId         String?
+  /// Owner-only display/replay snapshot; never shared canonical metadata.
+  musicSourceRecording       Json?
   playedAt                   DateTime                  @default(now())
   source                     ListenSource              @default(LIBRARY)
   listenedSeconds            Float?
@@ -703,6 +706,7 @@ model Play {
   track                      Track?                    @relation(fields: [trackId], references: [id], onDelete: SetNull)
   trackTidal                 TrackTidal?               @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
   trackYtMusic               TrackYtMusic?             @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  trackMusicSource           TrackMusicSource?         @relation(fields: [trackMusicSourceId], references: [id], onDelete: SetNull)
   user                       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   recommendationGeneration   RecommendationGeneration? @relation(fields: [recommendationGenerationId], references: [id], onDelete: SetNull)
 
@@ -710,6 +714,7 @@ model Play {
   @@index([trackId])
   @@index([trackTidalId])
   @@index([trackYtMusicId])
+  @@index([trackMusicSourceId])
   @@index([source])
   @@index([recommendationGenerationId])
   @@index([userId, recommendationSessionId, playedAt])
@@ -1062,17 +1067,21 @@ model TrackRating {
 }
 
 model LikedRemoteTrack {
-  id             String        @id @default(cuid())
-  userId         String
-  trackTidalId   String?
-  trackYtMusicId String?
-  likedAt        DateTime      @default(now())
-  trackTidal     TrackTidal?   @relation(fields: [trackTidalId], references: [id], onDelete: Cascade)
-  trackYtMusic   TrackYtMusic? @relation(fields: [trackYtMusicId], references: [id], onDelete: Cascade)
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String            @id @default(cuid())
+  userId             String
+  trackTidalId       String?
+  trackYtMusicId     String?
+  trackMusicSourceId String?
+  likedAt            DateTime          @default(now())
+  trackTidal         TrackTidal?       @relation(fields: [trackTidalId], references: [id], onDelete: Cascade)
+  trackYtMusic       TrackYtMusic?     @relation(fields: [trackYtMusicId], references: [id], onDelete: Cascade)
+  trackMusicSource   TrackMusicSource? @relation(fields: [trackMusicSourceId], references: [id], onDelete: Cascade)
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, trackTidalId])
   @@unique([userId, trackYtMusicId])
+  @@unique([userId, trackMusicSourceId])
+  @@index([trackMusicSourceId])
   @@index([userId])
   @@index([likedAt])
 }
@@ -1483,6 +1492,8 @@ enum ListenSource {
   DISCOVERY_KEPT
   TIDAL
   YOUTUBE_MUSIC
+  VK
+  YANDEX
 }
 
 enum AlbumLocation {
@@ -1610,14 +1621,32 @@ model TrackYtMusic {
   @@index([albumId])
 }
 
+/// Exact provider identity; server-confirmed metadata is separate from each owner's private Play claims.
+model TrackMusicSource {
+  id                        String             @id @default(cuid())
+  provider                  String
+  providerTrackId           String
+  createdAt                 DateTime           @default(now())
+  /// Exact server adapter lookup after a successful bounded audio probe; never client metadata.
+  verifiedMetadata          Json?
+  metadataObservedAt        DateTime?
+  metadataConnectionVersion Int?
+  plays                     Play[]
+  mappings                  TrackMapping[]
+  likedTracks               LikedRemoteTrack[]
+
+  @@unique([provider, providerTrackId])
+}
+
 model TrackMapping {
   id                   String              @id @default(cuid())
   /// Active-row linkage uniqueness is enforced in SQL migrations:
-  /// - stale=false rows are unique by (trackId, trackTidalId, trackYtMusicId)
-  /// - at least one linkage key must be present
+  /// - legacy tuples remain unique by (trackId, trackTidalId, trackYtMusicId)
+  /// - direct-only rows are unique by trackMusicSourceId; mixed/empty tuples are forbidden
   trackId              String?
   trackTidalId         String?
   trackYtMusicId       String?
+  trackMusicSourceId   String?
   canonicalRecordingId String?
   confidence           Float
   source               String // "gap-fill" | "isrc" | "import-match" | "manual" | "federation"
@@ -1627,11 +1656,13 @@ model TrackMapping {
   track                Track?              @relation(fields: [trackId], references: [id], onDelete: SetNull)
   trackTidal           TrackTidal?         @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
   trackYtMusic         TrackYtMusic?       @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  trackMusicSource     TrackMusicSource?   @relation(fields: [trackMusicSourceId], references: [id], onDelete: Cascade)
   canonicalRecording   CanonicalRecording? @relation(fields: [canonicalRecordingId], references: [id], onDelete: SetNull)
 
   @@index([trackId])
   @@index([trackTidalId])
   @@index([trackYtMusicId])
+  @@index([trackMusicSourceId])
   @@index([canonicalRecordingId])
   @@index([stale])
   @@index([stale, staleAt])

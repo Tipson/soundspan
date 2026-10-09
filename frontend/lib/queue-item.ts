@@ -8,6 +8,7 @@
  */
 
 import type { Track } from "./audio-state-context";
+import { normalizePlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
 
 /** Queue entry representing a podcast episode in the unified play queue. */
 export interface EpisodeQueueItem {
@@ -139,8 +140,11 @@ export function normalizeQueueItems(raw: unknown): QueueItem[] {
             continue;
         }
 
+        const { radioOrigin: rawRadioOrigin, ...trackFields } = candidate;
+        const radioOrigin = normalizePlaybackRadioOrigin(rawRadioOrigin);
         items.push({
-            ...(candidate as unknown as Track),
+            ...(trackFields as unknown as Track),
+            ...(radioOrigin ? { radioOrigin } : {}),
             itemType: "track",
         });
     }

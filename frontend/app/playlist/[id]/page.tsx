@@ -1,5 +1,9 @@
 "use client";
 
+import { normalizeRadioTracks } from "@/lib/radio/loadTrackRadio";
+import { requestRadioQueue } from "@/lib/radio/radioRequestIntent";
+import { getPlaybackIntentGeneration } from "@/lib/audio-engine/playbackAdvanceOrigin";
+
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -10,9 +14,14 @@ import {
 } from "@/lib/api";
 import {
     useAudioState,
-    usePlaybackStatus,
     useAudioControls,
+    usePlaybackStatus,
 } from "@/lib/audio-context";
+import {
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import { cn } from "@/utils/cn";
 import { shuffleArray } from "@/utils/shuffle";
 import { formatTime } from "@/utils/formatTime";
@@ -21,7 +30,6 @@ import {
     getUnplayableMessage,
     isLocalPlayableTrackItem,
     isPlayableTrackItem,
-    selectPlaylistPlaybackQueue,
     toAudioTrack,
     TRACK_REMOVED_TOOLTIP,
 } from "@/lib/playlistItemPlayback";
@@ -43,7 +51,6 @@ import { useToast } from "@/lib/toast-context";
 import { movePlaylistItemToIndexInCache } from "./playlistCacheUpdates";
 import { useDownloadContext } from "@/lib/download-context";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import {
     Play,
     ArrowDown,
@@ -91,9 +98,13 @@ export default function PlaylistDetailPage() {
     const { toast } = useToast();
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack, queue } = useAudioState();
+    const { playTracks, addTracksToQueue, pause, resume } = useAudioControls();
     const { isPlaying } = usePlaybackStatus();
-    const { playTracks, pause, resume, addTracksToQueue } = useAudioControls();
     const playlistId = params.id as string;
+    const collectionId = `playlist:${playlistId}`;
+    const isThisPlaylistPlaying = Boolean(
+        currentTrack && isCollectionPlayback(collectionId),
+    );
 
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isHiding, setIsHiding] = useState(false);
@@ -102,8 +113,6 @@ export default function PlaylistDetailPage() {
     const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(
         null,
     );
-    const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
-        usePlayButtonFeedback();
     const [retryingTrackId, setRetryingTrackId] = useState<string | null>(null);
     const [removingTrackId, setRemovingTrackId] = useState<string | null>(null);
     const [isRenaming, setIsRenaming] = useState(false);
@@ -508,18 +517,6 @@ export default function PlaylistDetailPage() {
         }
     };
 
-    // Check if this playlist is currently playing
-    const playlistTrackIds = useMemo(() => {
-        return new Set(playableTracks.map((track) => track.id));
-    }, [playableTracks]);
-
-    const isThisPlaylistPlaying = useMemo(() => {
-        if (!isPlaying || !currentTrack || playableTracks.length === 0)
-            return false;
-        // Check if current track is in this playlist
-        return playlistTrackIds.has(currentTrack.id);
-    }, [isPlaying, currentTrack, playlistTrackIds, playableTracks.length]);
-
     // Calculate total duration - MUST be before early returns
     const totalDuration = useMemo(() => {
         if (trackItems.length === 0) return 0;
@@ -530,27 +527,18 @@ export default function PlaylistDetailPage() {
         );
     }, [trackItems]);
 
-    const handlePlayPlaylist = () => {
-        if (displayItems.length === 0) return;
-
-        // If this playlist is playing, toggle pause/resume
-        if (isThisPlaylistPlaying) {
-            if (isPlaying) {
-                pause();
-            } else {
-                resume();
-            }
-            return;
-        }
-
-        triggerPlayFeedback();
+    const startOrderedPlaylist = (selectedItemId: string) => {
         const intent = {};
+        let generation = getPlaybackIntentGeneration();
         playAllIntentRef.current = intent;
         void playPlaylistProgressively({
             initialPages: playlistPages?.pages ?? [],
+            selectedItemId,
             initialHasNextPage: Boolean(hasNextPage),
             fetchNextPage: () => fetchNextPage({ cancelRefetch: false }),
-            isCurrentIntent: () => playAllIntentRef.current === intent,
+            isCurrentIntent: () =>
+                playAllIntentRef.current === intent &&
+                getPlaybackIntentGeneration() === generation,
             getCurrentQueueKeys: () =>
                 playbackQueueRef.current.map(playlistQueueEntryKey),
             getCurrentPlaybackKey: () =>
@@ -558,7 +546,13 @@ export default function PlaylistDetailPage() {
                     ? playlistQueueEntryKey(playbackCurrentRef.current)
                     : null,
             playTracks: (tracks) => {
-                playTracks(tracks, 0);
+                const collectionGeneration = getCollectionPlaybackGeneration();
+                playTracks(tracks, 0, false, {
+                    replaceQueue: true,
+                    preserveOrder: true,
+                });
+                markCollectionPlayback(collectionId, collectionGeneration);
+                generation = getPlaybackIntentGeneration();
                 playbackQueueRef.current = tracks;
             },
             appendTracks: (tracks) => {
@@ -585,10 +579,24 @@ export default function PlaylistDetailPage() {
         });
     };
 
+    const handlePlayPlaylist = () => {
+        if (isThisPlaylistPlaying) {
+            if (isPlaying) pause();
+            else resume();
+        } else if (playableTrackItems[0]) {
+            startOrderedPlaylist(playableTrackItems[0].id);
+        }
+    };
+
     const handleShufflePlaylist = () => {
         if (playableTracks.length < 2) return;
         playAllIntentRef.current = null;
-        playTracks(shuffleArray(playableTracks), 0);
+        const collectionGeneration = getCollectionPlaybackGeneration();
+        playTracks(shuffleArray(playableTracks), 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(collectionId, collectionGeneration);
     };
 
     const handlePlayTrack = (itemId: string) => {
@@ -600,31 +608,27 @@ export default function PlaylistDetailPage() {
             toast.error(fallbackMessage);
             return;
         }
-        const selection = selectPlaylistPlaybackQueue(trackItems, itemId);
-        if (selection.startIndex >= 0)
-            playTracks(selection.tracks, selection.startIndex);
+        startOrderedPlaylist(itemId);
     };
 
     const handleStartRadio = async () => {
         playAllIntentRef.current = null;
         try {
             toast.info(ru.playlist.startingRadio);
-            const response = await api.getRadioTracks("playlist", playlistId);
+            const response = await requestRadioQueue(() =>
+                api.getRadioTracks("playlist", playlistId),
+            );
+            if (!response) return;
             if (response.tracks && response.tracks.length > 0) {
-                const tracks = response.tracks.map(
-                    (t: Record<string, unknown>) => ({
-                        id: t.id as string,
-                        title: t.title as string,
-                        artist: t.artist as { name: string; id?: string },
-                        album: t.album as {
-                            title: string;
-                            coverArt?: string;
-                            id?: string;
-                        },
-                        duration: t.duration as number,
-                    }),
-                );
-                playTracks(tracks, 0);
+                const tracks = normalizeRadioTracks(response.tracks);
+                if (tracks.length === 0) {
+                    toast.error(ru.playlist.noRadioTracks);
+                    return;
+                }
+                playTracks(tracks, 0, true, {
+                    replaceQueue: true,
+                    preserveOrder: true,
+                });
                 toast.success(
                     `Радио запущено: ${tracks.length} ${pluralRu(tracks.length, ["трек", "трека", "треков"])}`,
                 );
@@ -686,11 +690,7 @@ export default function PlaylistDetailPage() {
                         playlistId={playlistId}
                         playlistName={playlist.name}
                         trackItemCount={trackItems.length}
-                        canPlayAll={displayItems.length > 0}
                         playableTracks={playableTracks}
-                        isThisPlaylistPlaying={isThisPlaylistPlaying}
-                        isPlaying={isPlaying}
-                        showPlaySpinner={showPlaySpinner}
                         isAllLiked={isAllLiked}
                         isApplyingLikeAll={isApplyingLikeAll}
                         isOwner={playlist.isOwner}
@@ -709,6 +709,8 @@ export default function PlaylistDetailPage() {
                                 playlistId={playlistId}
                             />
                         }
+                        isThisPlaylistPlaying={isThisPlaylistPlaying}
+                        isPlaying={isPlaying}
                         onPlay={handlePlayPlaylist}
                         onShuffle={handleShufflePlaylist}
                         onAddAllToQueue={handleAddAllToQueue}

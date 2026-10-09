@@ -1929,10 +1929,11 @@ class YouTubeMusicService {
         return data;
     }
 
-    /** Load a bounded public radio queue for one provider track. */
+    /** Load a bounded public radio queue; refresh discards settled cache while joining an existing fill. */
     async getRadio(
         videoId: string,
         limit: number = 25,
+        options?: { refresh?: boolean },
     ): Promise<YtMusicRadioQueue> {
         const normalizedVideoId = videoId.trim();
         const boundedLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
@@ -1978,6 +1979,7 @@ class YouTubeMusicService {
             }
             this.radioLoaders.set(cacheKey, loader);
         }
+        if (options?.refresh === true) loader.clear();
         return loader();
     }
 

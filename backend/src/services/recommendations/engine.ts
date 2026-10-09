@@ -4,7 +4,18 @@ import { recordRecommendationGenerationMetrics } from "../../metrics";
 import type { RecommendationGenerationMetricInput } from "../../metrics/recommendationMetrics";
 import { moodRankingScore, rankRecommendationCandidates } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
-import { isWaveMusicCandidate, matchesWaveMood } from "./wavePolicy";
+import type { RadioRequestExecution } from "./radioRequestExecution";
+import type { VerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
+import {
+    hasNativeRecommendationIdentity,
+    readNativeRecommendationRecording,
+    toNativeRecommendationCandidate,
+} from "./nativeCandidates";
+import {
+    isWaveMusicCandidate,
+    matchesWaveMood,
+    needsWaveMoodAnalysis,
+} from "./wavePolicy";
 import type {
     RecommendRequest,
     RecommendResult,
@@ -14,6 +25,8 @@ import type {
 } from "./types";
 
 const CANONICAL_RESOLUTION_BATCH_SIZE = 8;
+// Matches the existing scheduler's total admission capacity, not a queue quota.
+const MOOD_ANALYSIS_RESERVE_LIMIT = 48;
 const recommendationLogger = logger.child("RecommendationEngine");
 
 export type RecommendationEngineMode = "baseline" | "shadow" | "active";
@@ -41,6 +54,8 @@ export interface RecommendationTasteContext {
 }
 
 export interface RecordEngineGenerationInput {
+    /** Optional server-owned radio deadline for atomic exposure persistence. */
+    execution?: RadioRequestExecution;
     userId: string;
     sessionId: string;
     surface: RecommendRequest["intent"]["surface"];
@@ -60,6 +75,7 @@ export interface ScheduleRecommendationHotSetInput {
     sessionId: string;
     surface: RecommendRequest["intent"]["surface"];
     candidates: RecommendationCandidate[];
+    unmeasuredCanonicalIds?: readonly string[];
 }
 
 export interface RecommendationEngineDependencies {
@@ -68,10 +84,11 @@ export interface RecommendationEngineDependencies {
     explorationRate: number;
     loadCandidates: (
         request: RecommendRequest,
+        policyTime: Date,
     ) => Promise<RecommendationCandidateBatch>;
     resolveCanonical: (
         candidate: RecommendationCandidate,
-    ) => Promise<CanonicalRecommendationIdentity>;
+    ) => Promise<CanonicalRecommendationIdentity | null>;
     /** Request-local prefetch; null slots retain ordinary canonical resolution. */
     loadCanonicalMappings?: (
         candidates: readonly RecommendationCandidate[],
@@ -84,6 +101,12 @@ export interface RecommendationEngineDependencies {
         now: Date,
     ) => Promise<RecommendationExposureSignal[]>;
     loadDislikedCanonicalKeys: (userId: string) => Promise<ReadonlySet<string>>;
+    /** Exact owned native history, without requiring embeddings or a matching session. */
+    loadVerifiedRepeatExclusions?: (
+        userId: string,
+        now: Date,
+        check?: () => void,
+    ) => Promise<VerifiedSourceRepeatExclusions>;
     /** Saved originals for Discoveries, including another upload of the same recording. */
     loadSavedCanonicalKeys?: (
         userId: string,
@@ -146,6 +169,8 @@ function appendDegradedSource(target: string[], source: string): void {
 }
 
 function hasPlayableIdentity(candidate: RecommendationCandidate): boolean {
+    if (candidate.source === "vk" || candidate.source === "yandex")
+        return readNativeRecommendationRecording(candidate) !== null;
     return Boolean(
         candidate.provider.youtubeVideoId ||
         candidate.provider.tidalTrackId !== null ||
@@ -273,13 +298,28 @@ export class RecommendationEngine {
         const startedAt = this.dependencies.now();
         const cursor = request.cursor ?? 0;
         const limit = Math.max(0, Math.floor(request.limit));
-        const loaded = await this.dependencies.loadCandidates(request);
+        const loaded = await this.dependencies.loadCandidates(
+            request,
+            startedAt,
+        );
         const isWave = request.intent.surface === "wave";
         const degradedSources = [...new Set(loaded.degradedSources)];
+        const sourceCandidates = loaded.candidates.flatMap((candidate) => {
+            if (!hasNativeRecommendationIdentity(candidate)) return [candidate];
+            const recording = readNativeRecommendationRecording(candidate);
+            if (!recording) return [];
+            // Provider metadata cannot assert an existing canonical FK or measured features.
+            // Both may be added only by the request's strict mapping/feature-store reads.
+            const fresh = toNativeRecommendationCandidate(
+                recording,
+                candidate.candidateSources.join("+"),
+            )!;
+            return [{ ...fresh, lane: candidate.lane ?? fresh.lane }];
+        });
         let candidates = await this.resolveCanonicalCandidates(
             isWave
-                ? loaded.candidates.filter(isWaveMusicCandidate)
-                : loaded.candidates,
+                ? sourceCandidates.filter(isWaveMusicCandidate)
+                : sourceCandidates,
             degradedSources,
         );
         if (this.dependencies.enrichCandidates && candidates.length > 0) {
@@ -295,6 +335,15 @@ export class RecommendationEngine {
                 );
             }
         }
+        const pendingMoodCandidates = isWave
+            ? candidates.filter(
+                  (candidate) =>
+                      candidate.lane === "discovery" &&
+                      candidate.canonicalRecordingId &&
+                      candidate.provider.youtubeVideoId &&
+                      needsWaveMoodAnalysis(candidate, request.intent.mood),
+              )
+            : [];
         // Apply eligibility before lane quotas and either ranker, so discovery
         // and familiar insertions cannot reintroduce an incompatible recording.
         if (isWave)
@@ -333,7 +382,7 @@ export class RecommendationEngine {
                 const savedKeys =
                     await this.dependencies.loadSavedCanonicalKeys(
                         request.userId,
-                        candidates,
+                        [...candidates, ...pendingMoodCandidates],
                     );
                 for (const key of savedKeys) excludes.add(key);
             } catch (error) {
@@ -344,6 +393,60 @@ export class RecommendationEngine {
                 candidates = [];
             }
         }
+        if (
+            request.intent.surface !== "home" &&
+            this.dependencies.loadVerifiedRepeatExclusions
+        ) {
+            try {
+                const repeat =
+                    await this.dependencies.loadVerifiedRepeatExclusions(
+                        request.userId,
+                        startedAt,
+                    );
+                for (const id of repeat.hardIds) excludes.add(id);
+                const eligible = candidates.filter(
+                    (candidate) =>
+                        hasPlayableIdentity(candidate) &&
+                        !isExcluded(candidate, excludes),
+                );
+                const fresh = eligible.filter(
+                    (candidate) => !isExcluded(candidate, repeat.ids),
+                );
+                // Preserve the catalog's empty-pool personal fallback, never last-day attempts.
+                if (
+                    fresh.length > 0 ||
+                    eligible.length === 0 ||
+                    request.intent.direction === "new" ||
+                    request.intent.surface === "similar-tracks"
+                ) {
+                    for (const id of repeat.ids) excludes.add(id);
+                }
+            } catch {
+                appendDegradedSource(
+                    degradedSources,
+                    "source-listening-history",
+                );
+                recommendationLogger.warn(
+                    "Verified source listening history unavailable",
+                );
+            }
+        }
+        const analysisReserve =
+            limit > 0 &&
+            ![
+                "canonical-identity",
+                "canonical-features",
+                "exposure-history",
+                "taste-dislikes",
+                "saved-recordings",
+                "source-listening-history",
+            ].some((source) => degradedSources.includes(source))
+                ? baselineRank(
+                      pendingMoodCandidates,
+                      excludes,
+                      MOOD_ANALYSIS_RESERVE_LIMIT,
+                  )
+                : [];
         const baseline = baselineRank(
             candidates,
             excludes,
@@ -363,7 +466,7 @@ export class RecommendationEngine {
                 recommendations: baseline,
                 startedAt,
             });
-            this.scheduleHotSet(request, baseline);
+            this.scheduleHotSet(request, baseline, analysisReserve);
             return {
                 tracks: baseline.map(({ track }) => track),
                 nextCursor: loaded.nextCursor,
@@ -424,7 +527,7 @@ export class RecommendationEngine {
                         startedAt,
                     }),
             );
-            this.scheduleHotSet(request, hybrid);
+            this.scheduleHotSet(request, hybrid, analysisReserve);
             return {
                 tracks: baseline.map(({ track }) => track),
                 nextCursor: loaded.nextCursor,
@@ -469,7 +572,7 @@ export class RecommendationEngine {
                     }),
             );
         }
-        this.scheduleHotSet(request, hybrid);
+        this.scheduleHotSet(request, hybrid, analysisReserve);
         return {
             tracks: servedRecommendations.map(({ track }) => track),
             nextCursor: loaded.nextCursor,
@@ -513,12 +616,16 @@ export class RecommendationEngine {
             );
             identities.forEach((identity, index) => {
                 const candidate = batch[index];
-                if (identity.status === "fulfilled") {
+                if (identity.status === "fulfilled" && identity.value) {
                     resolved.push({
                         ...candidate,
                         canonicalRecordingId: identity.value.id,
                         canonicalKey: identity.value.canonicalKey,
                     });
+                    return;
+                }
+                if (identity.status === "fulfilled") {
+                    resolved.push(candidate);
                     return;
                 }
                 appendDegradedSource(degradedSources, "canonical-identity");
@@ -626,8 +733,10 @@ export class RecommendationEngine {
     private scheduleHotSet(
         request: RecommendRequest,
         recommendations: readonly ScoredRecommendation[],
+        analysisReserve: readonly ScoredRecommendation[] = [],
     ): void {
-        if (recommendations.length === 0) return;
+        if (recommendations.length === 0 && analysisReserve.length === 0)
+            return;
         superviseBackground(
             "hot-set scheduling",
             { userId: request.userId, sessionId: request.sessionId },
@@ -636,7 +745,18 @@ export class RecommendationEngine {
                     userId: request.userId,
                     sessionId: request.sessionId,
                     surface: request.intent.surface,
-                    candidates: recommendations.map(({ track }) => track),
+                    // Completed returned songs must not consume the fair input
+                    // lane before its unknown, explicitly requested discoveries.
+                    candidates: [...analysisReserve, ...recommendations].map(
+                        ({ track }) => track,
+                    ),
+                    ...(analysisReserve.length > 0
+                        ? {
+                              unmeasuredCanonicalIds: analysisReserve.map(
+                                  ({ track }) => track.canonicalRecordingId!,
+                              ),
+                          }
+                        : {}),
                 }),
         );
     }

@@ -18,6 +18,15 @@ const EVENTS = new Set([
     "player.visibility_change",
 ]);
 const IDENTIFIER = /^[a-zA-Z0-9_:-]{1,128}$/;
+const SOURCE_RECOVERY_OUTCOMES = new Set([
+    "not_applicable",
+    "in_progress",
+    "recovered",
+    "stale",
+    "no_candidate",
+    "failed",
+    "exhausted",
+]);
 const RETENTION_MS = 24 * 60 * 60_000;
 
 /** Sender identity for queued diagnostic delivery, never trusted as authentication. */
@@ -106,6 +115,13 @@ export function sanitizePlaybackDiagnosticFields(
     ])
         if (typeof input[key] === "string" && IDENTIFIER.test(input[key]))
             result[key] = input[key];
+    // Match the client allowlist without permitting arbitrary error text.
+    if (
+        input.reason === "server_source_recovery" &&
+        typeof input.outcome === "string" &&
+        SOURCE_RECOVERY_OUTCOMES.has(input.outcome)
+    )
+        result.outcome = input.outcome;
     return result;
 }
 

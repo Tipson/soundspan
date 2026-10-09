@@ -28,19 +28,22 @@ import {
 import { trackMappingService } from "../../services/trackMappingService";
 import { resolveRemoteTrackMetadataForRequest } from "../../services/remoteTrackMetadataResolver";
 import { logger } from "../../utils/logger";
+import { prisma } from "../../utils/db";
+import { readVerifiedMusicSourceRecording } from "../../services/musicSources/verifiedMetadata";
+import { MusicSourceError } from "../../services/musicSources/types";
 
 /**
  * Router segment for remoteTracks routes registered at this position.
  */
 export const remoteTracksRouter = Router();
 const remoteTrackPreferenceLogger = logger.child("RemoteTrackPreference");
-// ── Remote Track Preference (YT Music + historical TIDAL reads/clears) ─────
+// Remote preferences: YouTube, exact VK/Yandex, historical TIDAL reads/clears.
 
 /**
  * @openapi
  * /api/library/remote-tracks/{id}/preference:
  *   get:
- *     summary: Get preference for a remote (YT/TIDAL) track
+ *     summary: Get the owner's remote track preference
  *     tags: [Library]
  *     security:
  *       - apiKeyAuth: []
@@ -50,7 +53,7 @@ const remoteTrackPreferenceLogger = logger.child("RemoteTrackPreference");
  *         required: true
  *         schema:
  *           type: string
- *         description: "Composite track ID (yt:videoId or tidal:trackId)"
+ *         description: "Exact composite track ID: yt:videoId, vk:ownerId_audioId, yandex:trackId, or historical tidal:trackId."
  *     responses:
  *       200:
  *         description: Remote track preference state
@@ -74,7 +77,7 @@ export async function handleGetRemoteTrackPreference(
     const parsed = parseRemoteTrackPreferenceReference(req.params.id);
     if (!parsed) {
         return res.status(400).json({
-            error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
+            error: "Invalid remote track ID.",
         });
     }
 
@@ -112,7 +115,24 @@ async function resolveLikedRemoteTrack(
     parsed: RemoteTrackPreferenceReference,
     userId: string,
     metadata: RemotePreferenceMetadata,
-) {
+): Promise<RemoteTrackLikeTarget> {
+    if (parsed.provider === "vk" || parsed.provider === "yandex") {
+        const namespace = await prisma.trackMusicSource.findUnique({
+            where: {
+                provider_providerTrackId: {
+                    provider: parsed.provider,
+                    providerTrackId: parsed.externalId,
+                },
+            },
+        });
+        if (
+            namespace?.provider !== parsed.provider ||
+            namespace.providerTrackId !== parsed.externalId ||
+            !readVerifiedMusicSourceRecording(namespace)
+        )
+            throw new MusicSourceError("not_found");
+        return { provider: parsed.provider, trackMusicSourceId: namespace.id };
+    }
     if (parsed.provider !== "youtube") {
         throw new Error("Retired TIDAL preferences cannot be materialized");
     }
@@ -123,7 +143,7 @@ async function resolveLikedRemoteTrack(
         fetchArtworkIfMissing: true,
         metadata,
     });
-    return trackMappingService.ensureRemoteTrack({
+    const ensured = await trackMappingService.ensureRemoteTrack({
         provider: "youtube",
         videoId: parsed.externalId,
         title: resolved.title,
@@ -132,6 +152,7 @@ async function resolveLikedRemoteTrack(
         duration: resolved.duration,
         thumbnailUrl: resolved.thumbnailUrl,
     });
+    return { provider: "youtube", trackYtMusicId: ensured.id };
 }
 
 /**
@@ -148,7 +169,7 @@ async function resolveLikedRemoteTrack(
  *         required: true
  *         schema:
  *           type: string
- *         description: "Composite track ID. New preferences use yt:videoId; tidal:trackId only supports clearing historical state."
+ *         description: "Exact yt:videoId, vk:ownerId_audioId or yandex:trackId. Direct likes require existing server-confirmed recording facts; tidal:trackId only supports clearing historical state."
  *     requestBody:
  *       required: true
  *       content:
@@ -163,6 +184,7 @@ async function resolveLikedRemoteTrack(
  *                 enum: [thumbs_up, thumbs_down, clear]
  *               metadata:
  *                 type: object
+ *                 description: YouTube display metadata only; ignored for direct VK/Yandex identities.
  *                 properties:
  *                   title:
  *                     type: string
@@ -181,6 +203,8 @@ async function resolveLikedRemoteTrack(
  *         description: Invalid remote track ID or signal
  *       401:
  *         description: Not authenticated
+ *       404:
+ *         description: Direct track has no valid server-confirmed recording metadata
  */
 /**
  * Handles POST /api/library/remote-tracks/:id/preference.
@@ -197,7 +221,7 @@ export async function handleSetRemoteTrackPreference(
     const parsed = parseRemoteTrackPreferenceReference(req.params.id);
     if (!parsed) {
         return res.status(400).json({
-            error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
+            error: "Invalid remote track ID.",
         });
     }
 
@@ -227,15 +251,11 @@ export async function handleSetRemoteTrackPreference(
     try {
         let likedTarget: RemoteTrackLikeTarget | undefined;
         if (signal === "thumbs_up") {
-            const ensured = await resolveLikedRemoteTrack(
+            likedTarget = await resolveLikedRemoteTrack(
                 parsed,
                 userId,
                 metadata,
             );
-            likedTarget = {
-                provider: "youtube",
-                trackYtMusicId: ensured.id,
-            };
         }
         preference = await applyRemoteTrackPreferenceSignal({
             userId,
@@ -258,6 +278,12 @@ export async function handleSetRemoteTrackPreference(
                 { cleanupError },
             );
         }
+        if (
+            (parsed.provider === "vk" || parsed.provider === "yandex") &&
+            error instanceof MusicSourceError &&
+            error.code === "not_found"
+        )
+            return sendRouteError(res, 404, "track_not_verified");
         throw error;
     }
 

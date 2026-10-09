@@ -32,6 +32,7 @@ export interface PlaylistNextPageResult {
 
 interface ProgressivePlaylistPlaybackOptions {
     initialPages: PlaylistDetailResponse[];
+    selectedItemId?: string;
     initialHasNextPage: boolean;
     fetchNextPage: () => Promise<PlaylistNextPageResult>;
     isCurrentIntent: () => boolean;
@@ -106,6 +107,7 @@ async function fetchNextPageWithRetry(
  */
 export async function playPlaylistProgressively({
     initialPages,
+    selectedItemId,
     initialHasNextPage,
     fetchNextPage,
     isCurrentIntent,
@@ -115,6 +117,16 @@ export async function playPlaylistProgressively({
     appendTracks,
     retryCount = 1,
 }: ProgressivePlaylistPlaybackOptions): Promise<ProgressivePlaylistPlaybackResult> {
+    // A clicked row must still be playable in the initiating view. Never fall
+    // through to an unrelated first row after a remove/refetch.
+    const selected = selectedItemId
+        ? initialPages
+              .flatMap((page) => page.items)
+              .find((item) => item.id === selectedItemId)
+        : undefined;
+    if (selectedItemId && (!selected || !isPlayableTrackItem(selected))) {
+        return { status: "no-playable", playableCount: 0 };
+    }
     let pages = initialPages;
     let hasMore = initialHasNextPage;
     let priorPageCount = pages.length;
@@ -143,7 +155,9 @@ export async function playPlaylistProgressively({
         newEntries.forEach((entry) => seenEntries.add(entryKey(entry)));
         lastEntry = newEntries.at(-1) ?? lastEntry;
         const tracks = newEntries.flatMap((entry) =>
-            entry.type === "track" && isPlayableTrackItem(entry)
+            entry.type === "track" &&
+            isPlayableTrackItem(entry) &&
+            (!selected || comparePlaylistEntries(entry, selected) >= 0)
                 ? [toAudioTrack(entry)]
                 : [],
         );

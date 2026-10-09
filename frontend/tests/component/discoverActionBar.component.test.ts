@@ -105,7 +105,8 @@ test("DiscoverActionBar renders all consolidated buttons when playlist has track
         React.createElement(DiscoverActionBar, baseProps),
     );
 
-    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /aria-label="Воспроизвести всё"/);
+    assert.doesNotMatch(html, />Воспроизвести всё</);
     assert.match(html, /title="Перемешать всё"/);
     assert.match(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Добавить всё в плейлист"/);
@@ -161,7 +162,8 @@ test("DiscoverActionBar shows Pause when playlist is playing", async () => {
         }),
     );
 
-    assert.match(html, /<span>Пауза<\/span>/);
+    assert.match(html, /aria-label="Пауза"/);
+    assert.doesNotMatch(html, />Пауза</);
     assert.doesNotMatch(html, /<span>Воспроизвести всё<\/span>/);
 });
 
@@ -192,4 +194,18 @@ test("DiscoverActionBar hides Add to Queue when onAddAllToQueue is not provided"
 
     assert.doesNotMatch(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Перемешать всё"/);
+});
+
+test("online weekly discovery retains playback but hides local download generation/settings", async () => {
+    const { DiscoverActionBar } =
+        await import("../../features/discover/components/DiscoverActionBar");
+    const html = renderToStaticMarkup(
+        React.createElement(DiscoverActionBar, {
+            ...baseProps,
+            playlist: { ...playlist, kind: "online-weekly" },
+        }),
+    );
+    assert.match(html, /aria-label="Воспроизвести всё"/);
+    assert.doesNotMatch(html, /title="Собрать заново"/);
+    assert.doesNotMatch(html, /title="Настройки"/);
 });

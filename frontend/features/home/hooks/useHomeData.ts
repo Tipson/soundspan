@@ -1,36 +1,32 @@
-/** Home feed data: account signals plus live online-catalog discovery. */
+/** Home feed data: personal listening signals and mixes. */
 
-import { useEffect, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useFeatures } from "@/lib/features-context";
 import { frontendLogger as log } from "@/lib/logger";
-import { useUserSettingsExplorePrefs } from "@/features/explore/hooks/useUserSettingsExplorePrefs";
 import { useAudioState } from "@/lib/audio-state-context";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
-import type { Mix, PersonalizedHomeFeed } from "../types";
+import type { Mix, PersonalDailyMix, PersonalizedHomeFeed } from "../types";
+import { timeOfDayMixForHour, type TimeOfDayMix } from "../timeOfDayMix";
 import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
 import {
-    mapYtMusicChartsToFeaturedPlaylists,
     queryKeys,
     useDiscoverWeeklySummaryQuery,
     useMixesQuery,
     useRefreshMixesMutation,
-    useYtMusicChartsQuery,
-    useYtMusicHomeShelvesQuery,
-    type PlaylistPreview,
-    type YtMusicHomeShelf,
 } from "@/hooks/useQueries";
 
 export interface UseHomeDataReturn {
     mixes: Mix[];
     discoverWeekly: DiscoverWeeklySummary | null;
     personalizedFeed: PersonalizedHomeFeed | null;
-    showYtMusicExplore: boolean;
-    homeShelves: YtMusicHomeShelf[];
-    chartPlaylists: PlaylistPreview[];
+    dailyMixFeed: PersonalizedHomeFeed | null;
+    dailyStyleMixes: PersonalDailyMix[] | null;
+    timeOfDayFeed: PersonalizedHomeFeed | null;
+    timeOfDayMix: TimeOfDayMix | null;
     isLoading: boolean;
     isRefreshingMixes: boolean;
     isPersonalizedLoading: boolean;
@@ -43,13 +39,54 @@ export function useHomeData(): UseHomeDataReturn {
     const { isAuthenticated } = useAuth();
     const { discovery, autoPlaylists } = useFeatures();
     const { waveMode, waveMood } = useAudioState();
-    const { showYtMusicExplore } = useUserSettingsExplorePrefs();
     const queryClient = useQueryClient();
+    const [localHour, setLocalHour] = useState<number | null>(null);
+    useEffect(() => {
+        const updateHour = () => setLocalHour(new Date().getHours());
+        updateHour();
+        const interval = window.setInterval(updateHour, 60_000);
+        window.addEventListener("focus", updateHour);
+        document.addEventListener("visibilitychange", updateHour);
+        return () => {
+            window.clearInterval(interval);
+            window.removeEventListener("focus", updateHour);
+            document.removeEventListener("visibilitychange", updateHour);
+        };
+    }, []);
+    const timeOfDayMix =
+        localHour === null ? null : timeOfDayMixForHour(localHour);
     const personalizedQuery = usePersonalizedHomeFeed(
         12,
         isAuthenticated,
         waveMode,
         waveMood,
+    );
+    const dailyMixQuery = usePersonalizedHomeFeed(
+        25,
+        isAuthenticated,
+        "for-you",
+        null,
+        "made-for-you",
+    );
+    const dailyStyleMixQuery = useQuery({
+        queryKey: queryKeys.personalDailyMixes(),
+        queryFn: ({ signal }) =>
+            api.request<{ mixes: PersonalDailyMix[] }>(
+                "/personalized/daily-mixes",
+                { method: "GET", signal, timeoutMs: 60_000 },
+            ),
+        enabled: isAuthenticated,
+        staleTime: 60 * 60 * 1000,
+        retry: 1,
+    });
+    const timeOfDayQuery = usePersonalizedHomeFeed(
+        25,
+        isAuthenticated && timeOfDayMix !== null,
+        "for-you",
+        null,
+        "made-for-you",
+        "any",
+        timeOfDayMix?.key ?? null,
     );
 
     useEffect(() => {
@@ -64,18 +101,15 @@ export function useHomeData(): UseHomeDataReturn {
     const mixesQuery = useMixesQuery(autoPlaylists);
     const discoverQuery = useDiscoverWeeklySummaryQuery(discovery);
 
-    const shelvesQuery = useYtMusicHomeShelvesQuery({
-        enabled: showYtMusicExplore,
-    });
-    const chartsQuery = useYtMusicChartsQuery({
-        enabled: showYtMusicExplore,
-    });
     const { mutateAsync: refreshMixes, isPending: isRefreshingMixes } =
         useRefreshMixesMutation();
 
     const handleRefreshMixes = async () => {
         try {
             await refreshMixes();
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.personalDailyMixes(),
+            });
             toast.success("Миксы обновлены — новые подборки уже готовы");
         } catch (error) {
             log.error("Failed to refresh mixes:", error);
@@ -113,12 +147,12 @@ export function useHomeData(): UseHomeDataReturn {
         mixes,
         discoverWeekly,
         personalizedFeed: personalizedQuery.data ?? null,
-        showYtMusicExplore,
-        homeShelves: shelvesQuery.data ?? [],
-        chartPlaylists: mapYtMusicChartsToFeaturedPlaylists(
-            chartsQuery.data,
-            12,
-        ),
+        dailyMixFeed: dailyMixQuery.data ?? null,
+        dailyStyleMixes: dailyStyleMixQuery.isPending
+            ? null
+            : (dailyStyleMixQuery.data?.mixes ?? []),
+        timeOfDayFeed: timeOfDayQuery.data ?? null,
+        timeOfDayMix,
         isLoading: !isAuthenticated || (!hasPrimaryData && allPrimaryLoading),
         isRefreshingMixes,
         isPersonalizedLoading: personalizedQuery.isLoading,

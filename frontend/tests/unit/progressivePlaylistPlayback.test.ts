@@ -561,3 +561,54 @@ test("a newer play intent cancels the previous tail without touching its queue",
     assert.equal(appendCount, 0);
     assert.deepEqual(queueIds, ["new-intent-track"]);
 });
+
+for (const position of [1, 5]) {
+    test(`row ${position} starts its remainder across subsequent cursor pages`, async () => {
+        const pages = pagesForSize(205);
+        let queue: import("../../lib/audio-state-context").Track[] = [];
+        let pageCount = 1;
+        const result = await playPlaylistProgressively({
+            initialPages: [pages[0]],
+            initialHasNextPage: true,
+            selectedItemId: `item-${position}`,
+            fetchNextPage: async () => ({
+                data: { pages: pages.slice(0, ++pageCount) },
+                hasNextPage: pageCount < pages.length,
+            }),
+            isCurrentIntent: () => true,
+            getCurrentQueueKeys: () => queue.map(playlistQueueEntryKey),
+            playTracks: (tracks) => {
+                queue = tracks;
+            },
+            appendTracks: (tracks) => {
+                queue.push(...tracks);
+            },
+        });
+        assert.equal(result.status, "completed");
+        assert.deepEqual(
+            queue.map((track) => track.id),
+            Array.from(
+                { length: 206 - position },
+                (_, index) => `track-${position + index}`,
+            ),
+        );
+    });
+}
+
+test("a removed selected playlist position never starts another row", async () => {
+    let starts = 0;
+    const result = await playPlaylistProgressively({
+        initialPages: [page([playableEntry(1)])],
+        initialHasNextPage: false,
+        selectedItemId: "removed-item",
+        fetchNextPage: async () => ({}),
+        isCurrentIntent: () => true,
+        getCurrentQueueKeys: () => [],
+        playTracks: () => {
+            starts++;
+        },
+        appendTracks: () => {},
+    });
+    assert.equal(starts, 0);
+    assert.equal(result.status, "no-playable");
+});

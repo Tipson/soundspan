@@ -93,7 +93,7 @@ router.get("/generate/status/:jobId", handleGenerateStatus);
  *       - apiKeyAuth: []
  *     responses:
  *       200:
- *         description: Current discovery playlist with tracks and unavailable albums
+ *         description: Current local discovery playlist, or stable online weekly discoveries when local tracks are absent
  *       401:
  *         description: Not authenticated
  */
@@ -250,13 +250,13 @@ router.get("/popular-artists", handlePopularArtists);
  * @openapi
  * /api/discover/clear:
  *   delete:
- *     summary: Clear the discovery playlist (move liked to library, delete the rest)
+ *     summary: Clear local discoveries and keep the online week empty until next Monday
  *     tags: [Discover]
  *     security:
  *       - apiKeyAuth: []
  *     responses:
  *       200:
- *         description: Playlist cleared with summary of moved and deleted albums
+ *         description: Combined cleared track count; saved play attribution remains available
  *       401:
  *         description: Not authenticated
  */

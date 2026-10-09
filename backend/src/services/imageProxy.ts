@@ -64,6 +64,34 @@ const PROXY_AWARE_IMAGE_HOSTS = new Set([
     "lh3.googleusercontent.com",
 ]);
 
+/** Keep late socket data/errors away from a cancelled Web Stream controller. */
+function toCancellableImageBody(source: Readable): ReadableStream<Uint8Array> {
+    const iterator = source[Symbol.asyncIterator]();
+    let cancelled = false;
+    return new ReadableStream<Uint8Array>(
+        {
+            async pull(controller) {
+                try {
+                    const { done, value } = await iterator.next();
+                    if (cancelled) return;
+                    if (done) controller.close();
+                    else controller.enqueue(value);
+                } catch (error) {
+                    if (!cancelled) controller.error(error);
+                }
+            },
+            cancel() {
+                // Mark cancelled before destroying the socket: pending next() may
+                // settle during destruction. Do not wait on the remote endpoint.
+                cancelled = true;
+                source.destroy();
+                void iterator.return?.().catch(() => {});
+            },
+        },
+        { highWaterMark: 64 * 1024, size: (chunk) => chunk.byteLength },
+    );
+}
+
 async function fetchImageResponse(
     url: string,
     timeoutMs: number,
@@ -114,14 +142,7 @@ async function fetchImageResponseTransport(
         const noBody = [204, 205, 304].includes(upstream.status);
         if (noBody) upstream.data.destroy();
         return new Response(
-            noBody
-                ? null
-                : (Readable.toWeb(upstream.data, {
-                      strategy: {
-                          highWaterMark: 64 * 1024,
-                          size: (chunk: Buffer) => chunk.byteLength,
-                      },
-                  }) as ReadableStream<Uint8Array>),
+            noBody ? null : toCancellableImageBody(upstream.data),
             {
                 status: upstream.status,
                 statusText: upstream.statusText,

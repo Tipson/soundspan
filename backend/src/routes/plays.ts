@@ -19,6 +19,10 @@ import {
 } from "../services/scrobbleForwarder";
 import { sendInternalRouteError } from "../utils/routeErrorResponse";
 import { recommendationExposureStore } from "../services/recommendations/exposureStore";
+import {
+    musicSourcePlayRecordingSchema,
+    normalizeMusicSourcePlaySnapshot,
+} from "../services/musicSourcePlaySnapshot";
 
 const router = Router();
 
@@ -52,6 +56,7 @@ const playSchema = z
         trackId: z.string().optional(),
         tidalTrackId: z.number().int().positive().optional(),
         youtubeVideoId: z.string().trim().min(1).optional(),
+        musicSourceRecording: musicSourcePlayRecordingSchema.optional(),
         title: z.string().trim().min(1).optional(),
         artist: z.string().trim().min(1).optional(),
         album: z.string().trim().min(1).optional(),
@@ -72,8 +77,12 @@ const playSchema = z
             data.trackId ? 1 : 0,
             data.tidalTrackId ? 1 : 0,
             data.youtubeVideoId ? 1 : 0,
+            data.musicSourceRecording ? 1 : 0,
         ].reduce((sum, value) => sum + value, 0);
-        if (providedIdentifiers !== 1) {
+        if (
+            providedIdentifiers !== 1 ||
+            (data.musicSourceRecording && data.trackId !== undefined)
+        ) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 path: ["trackId"],
@@ -134,7 +143,7 @@ async function recommendationContextData(
 }
 
 interface RecommendationPlaybackIdentity {
-    provider: "library" | "tidal" | "youtube";
+    provider: "library" | "tidal" | "youtube" | "vk" | "yandex";
     providerTrackId: string;
 }
 
@@ -425,6 +434,7 @@ router.delete("/history", async (req, res) => {
  *                   anyOf:
  *                     - required: [tidalTrackId]
  *                     - required: [youtubeVideoId]
+ *                     - required: [musicSourceRecording]
  *                 properties:
  *                   trackId:
  *                     type: string
@@ -442,6 +452,7 @@ router.delete("/history", async (req, res) => {
  *                   anyOf:
  *                     - required: [trackId]
  *                     - required: [tidalTrackId]
+ *                     - required: [musicSourceRecording]
  *                 properties:
  *                   youtubeVideoId:
  *                     type: string
@@ -462,6 +473,68 @@ router.delete("/history", async (req, res) => {
  *                   thumbnailUrl:
  *                     type: string
  *                     minLength: 1
+ *                   playContext:
+ *                     type: string
+ *                     enum: [wave, home, search, playlist, album, artist, library]
+ *                   waveMode:
+ *                     type: string
+ *                     enum: [for-you, new, familiar]
+ *               - type: object
+ *                 required: [musicSourceRecording]
+ *                 not:
+ *                   anyOf:
+ *                     - required: [trackId]
+ *                     - required: [youtubeVideoId]
+ *                     - required: [tidalTrackId]
+ *                 properties:
+ *                   musicSourceRecording:
+ *                     type: object
+ *                     description: Private owner-claimed display and replay snapshot. Unknown fields are stripped and cannot become shared catalog metadata.
+ *                     required: [provider, id, title, artists, duration, contentVersion, preview]
+ *                     properties:
+ *                       provider:
+ *                         type: string
+ *                         enum: [vk, yandex]
+ *                       id:
+ *                         type: string
+ *                         maxLength: 42
+ *                       title:
+ *                         type: string
+ *                         minLength: 1
+ *                         maxLength: 200
+ *                       artists:
+ *                         type: array
+ *                         minItems: 1
+ *                         maxItems: 10
+ *                         items:
+ *                           type: string
+ *                           minLength: 1
+ *                           maxLength: 100
+ *                       duration:
+ *                         type: number
+ *                         minimum: 0
+ *                         exclusiveMinimum: true
+ *                         maximum: 3600
+ *                       contentVersion:
+ *                         type: string
+ *                         enum: [explicit, clean, unknown]
+ *                       preview:
+ *                         type: boolean
+ *                         enum: [false]
+ *                       isrc:
+ *                         type: string
+ *                         pattern: '^[A-Za-z]{2}[A-Za-z0-9]{3}[0-9]{7}$'
+ *                     oneOf:
+ *                       - properties:
+ *                           provider:
+ *                             enum: [vk]
+ *                           id:
+ *                             pattern: '^-?[0-9]{1,20}_[0-9]{1,20}$'
+ *                       - properties:
+ *                           provider:
+ *                             enum: [yandex]
+ *                           id:
+ *                             pattern: '^[0-9]{1,20}$'
  *                   playContext:
  *                     type: string
  *                     enum: [wave, home, search, playlist, album, artist, library]
@@ -508,6 +581,51 @@ router.post("/", async (req, res) => {
             userId,
             payload,
         );
+
+        if (payload.musicSourceRecording) {
+            const recording = payload.musicSourceRecording;
+            const playedAt = new Date();
+            // The shared row is an identity namespace only. Client-claimed metadata
+            // belongs to this owner's Play and never enters canonical or scrobble writers.
+            const play = await prisma.$transaction(async (transaction) => {
+                const identity = await transaction.trackMusicSource.upsert({
+                    where: {
+                        provider_providerTrackId: {
+                            provider: recording.provider,
+                            providerTrackId: recording.id,
+                        },
+                    },
+                    update: { providerTrackId: recording.id },
+                    create: {
+                        provider: recording.provider,
+                        providerTrackId: recording.id,
+                    },
+                });
+                return transaction.play.create({
+                    data: {
+                        userId,
+                        trackMusicSourceId: identity.id,
+                        musicSourceRecording: recording,
+                        source: recording.provider === "vk" ? "VK" : "YANDEX",
+                        playedAt,
+                        ...recommendationContext,
+                    },
+                });
+            });
+            await attributeRecommendationPlayback({
+                userId,
+                identity: {
+                    provider: recording.provider,
+                    providerTrackId: recording.id,
+                },
+                playedAt,
+                listenedSeconds: null,
+                completionRatio: null,
+                outcome: null,
+                generationId: recommendationContext.recommendationGenerationId,
+            });
+            return res.json(play);
+        }
 
         if (payload.trackId) {
             // Verify local track exists
@@ -724,26 +842,40 @@ router.patch("/:playId/engagement", async (req, res) => {
                 playedAt: true,
                 trackTidal: { select: { tidalId: true } },
                 trackYtMusic: { select: { videoId: true } },
+                trackMusicSource: {
+                    select: { provider: true, providerTrackId: true },
+                },
+                source: true,
+                musicSourceRecording: true,
                 recommendationGenerationId: true,
             },
         });
-        const identity: RecommendationPlaybackIdentity | null = attributedPlay
-            ?.trackYtMusic?.videoId
+        const directTrack = attributedPlay
+            ? normalizeMusicSourcePlaySnapshot(attributedPlay)
+            : null;
+        const identity: RecommendationPlaybackIdentity | null = directTrack
             ? {
-                  provider: "youtube",
-                  providerTrackId: attributedPlay.trackYtMusic.videoId,
+                  provider: directTrack.source,
+                  providerTrackId: directTrack.musicSourceRecording.id,
               }
-            : attributedPlay?.trackTidal?.tidalId
+            : attributedPlay?.trackYtMusic?.videoId
               ? {
-                    provider: "tidal",
-                    providerTrackId: String(attributedPlay.trackTidal.tidalId),
+                    provider: "youtube",
+                    providerTrackId: attributedPlay.trackYtMusic.videoId,
                 }
-              : attributedPlay?.trackId
+              : attributedPlay?.trackTidal?.tidalId
                 ? {
-                      provider: "library",
-                      providerTrackId: attributedPlay.trackId,
+                      provider: "tidal",
+                      providerTrackId: String(
+                          attributedPlay.trackTidal.tidalId,
+                      ),
                   }
-                : null;
+                : attributedPlay?.trackId
+                  ? {
+                        provider: "library",
+                        providerTrackId: attributedPlay.trackId,
+                    }
+                  : null;
         if (attributedPlay && identity) {
             await attributeRecommendationPlayback({
                 userId: req.user!.id,
@@ -819,12 +951,21 @@ router.get("/", async (req, res) => {
                 },
                 trackTidal: true,
                 trackYtMusic: true,
+                trackMusicSource: true,
             },
         });
 
         res.json(
             plays
                 .map((play) => {
+                    const directTrack = normalizeMusicSourcePlaySnapshot(play);
+                    if (directTrack)
+                        return {
+                            id: play.id,
+                            playedAt: play.playedAt,
+                            source: play.source,
+                            track: directTrack,
+                        };
                     if (play.track) {
                         const normalized = normalizeLocalTrack(
                             play.track as any,

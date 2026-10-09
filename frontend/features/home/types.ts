@@ -3,6 +3,7 @@
  *
  * Defines all the data structures used throughout the Home page feature
  */
+import type { Track } from "@/lib/audio-state-context";
 
 /**
  * Artist entity from the library
@@ -104,14 +105,17 @@ export interface PersonalizedTrack {
         title: string;
         coverArt: string | null;
     };
-    source: "youtube" | "tidal" | "library";
+    source: "youtube" | "tidal" | "library" | "vk" | "yandex";
     provider: {
+        source?: "vk" | "yandex";
+        providerTrackId?: string;
         tidalTrackId: number | null;
         youtubeVideoId: string | null;
     };
-    streamSource: "youtube" | "tidal" | "library";
+    streamSource: "youtube" | "tidal" | "library" | "vk" | "yandex";
     youtubeVideoId?: string;
     tidalTrackId?: number;
+    musicSourceRecording?: Track["musicSourceRecording"];
 }
 
 export interface PersonalizedHomeFeed {
@@ -136,4 +140,13 @@ export interface PersonalizedHomeFeed {
     nextCursor?: number;
     generationId?: string;
     degradedSources?: string[];
+}
+
+/** One playable account-specific style mix from the daily-mixes endpoint. */
+export interface PersonalDailyMix {
+    key: string;
+    title: string;
+    description: string;
+    tracks: PersonalizedTrack[];
+    generationId?: string;
 }

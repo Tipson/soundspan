@@ -8,32 +8,22 @@ import {
     useState,
     type FormEvent,
 } from "react";
-import {
-    Check,
-    ChevronLeft,
-    ChevronRight,
-    LoaderCircle,
-    Music2,
-    Search,
-    Sparkles,
-    X,
-} from "lucide-react";
+import { ArrowUpRight, Check, LoaderCircle, Search, X } from "lucide-react";
 import { nextFocusIndex } from "@/components/ui/focusTrapMath";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { useTasteArtistCatalog } from "../hooks/useTasteArtistCatalog";
+import { useTasteArtistArtwork } from "../hooks/useTasteArtistArtwork";
 import { cn } from "@/utils/cn";
 import {
     addTasteLabel,
     isTasteLabelSelected,
-    MAX_TASTE_LABELS_PER_KIND,
-    MAX_TASTE_SIGNALS,
     normalizeTasteProfileSelection,
     toggleTasteLabel,
     validateTasteProfileSelection,
 } from "../model";
-import {
-    GENRE_GROUPS,
-    SUGGESTED_GENRES,
-    suggestArtistsForGenres,
-} from "../suggestions";
+import { TasteGenrePicker } from "./TasteGenrePicker";
+import { TasteSelectionSignature } from "./TasteSelectionSignature";
+import { suggestArtistsForGenres } from "../suggestions";
 import {
     useCanonicalArtistSearch,
     type CanonicalArtistSearchResult,
@@ -41,9 +31,6 @@ import {
 import type { TasteProfileSelection } from "../types";
 
 type TasteProfileDialogMode = "onboarding" | "edit";
-type TasteProfileStep = "genres" | "artists" | "review";
-
-const STEPS = ["genres", "artists", "review"] as const;
 
 export interface TasteProfileDialogProps {
     mode: TasteProfileDialogMode;
@@ -56,59 +43,10 @@ export interface TasteProfileDialogProps {
 }
 
 const FOCUSABLE_SELECTOR =
-    'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
-
-function selectionSummary(selection: TasteProfileSelection): string {
-    const labels = [...selection.genres, ...selection.artists];
-    if (labels.length === 0) return "Пока ничего не выбрано";
-    const visible = labels.slice(0, 4).join(" · ");
-    const hiddenCount = labels.length - 4;
-    return hiddenCount > 0 ? `${visible} · ещё ${hiddenCount}` : visible;
-}
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
 function artistOptionId(mbid: string): string {
     return `taste-artist-option-${mbid}`;
-}
-
-function ChoiceButton({
-    label,
-    selected,
-    disabled,
-    onClick,
-}: {
-    label: string;
-    selected: boolean;
-    disabled: boolean;
-    onClick: () => void;
-}) {
-    return (
-        <button
-            type="button"
-            aria-pressed={selected}
-            disabled={disabled}
-            onClick={onClick}
-            className={cn(
-                "group inline-flex min-h-11 items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition-[transform,background-color,border-color,color] duration-200",
-                "active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none",
-                selected
-                    ? "border-brand/60 bg-brand/15 text-content"
-                    : "border-white/10 bg-black/20 text-content-secondary hover:border-white/20 hover:bg-white/[0.06] hover:text-content",
-            )}
-        >
-            <span
-                className={cn(
-                    "grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors motion-reduce:transition-none",
-                    selected
-                        ? "border-brand bg-brand text-black"
-                        : "border-white/20 text-transparent group-hover:border-white/35",
-                )}
-                aria-hidden="true"
-            >
-                <Check className="h-3.5 w-3.5" />
-            </span>
-            <span>{label}</span>
-        </button>
-    );
 }
 
 /** Accessible mobile sheet / desktop dialog for first-run and later taste editing. */
@@ -121,29 +59,26 @@ export function TasteProfileDialog({
     onSkip,
     onClose,
 }: TasteProfileDialogProps) {
-    const [step, setStep] = useState<TasteProfileStep>("genres");
     const [selection, setSelection] = useState(() =>
         normalizeTasteProfileSelection(initialSelection),
     );
     const [artistSearch, setArtistSearch] = useState("");
-    const [genreSearch, setGenreSearch] = useState("");
-    const [artistGenre, setArtistGenre] = useState("selected");
-    const [artistLimit, setArtistLimit] = useState(12);
+    const [artistGenre, setArtistGenre] = useState("all");
+    const moreRef = useRef<HTMLButtonElement>(null);
     const [activeArtistIndex, setActiveArtistIndex] = useState(-1);
     const [localError, setLocalError] = useState<string | null>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
-    const contentRef = useRef<HTMLDivElement>(null);
-    const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+    const resultsRef = useRef<HTMLDivElement>(null);
     const closeRef = useRef(onClose);
     const savingRef = useRef(isSaving);
     const submissionRef = useRef<"save" | "skip" | null>(null);
     const titleId = useId();
-    const descriptionId = useId();
     const validation = useMemo(
         () => validateTasteProfileSelection(selection),
         [selection],
     );
     const count = validation.count;
+    const selectionProgress = Math.min(count / 5, 1);
     const suggestedArtists = useMemo(
         () =>
             normalizeTasteProfileSelection({
@@ -155,14 +90,52 @@ export function TasteProfileDialog({
                             : artistGenre === "all"
                               ? []
                               : [artistGenre],
-                        200,
+                        1000,
                     ),
                 ],
             }).artists,
         [selection.genres, artistGenre],
     );
-    const canonicalArtistSearch = useCanonicalArtistSearch(
-        step === "artists" ? artistSearch : "",
+    const canonicalArtistSearch = useCanonicalArtistSearch(artistSearch);
+    const catalog = useTasteArtistCatalog(
+        artistGenre === "selected"
+            ? selection.genres
+            : artistGenre === "all"
+              ? []
+              : [artistGenre],
+        !canonicalArtistSearch.hasQuery,
+    );
+    const visibleArtists = catalog.artists ?? suggestedArtists.slice(0, 24);
+    const { hasNextPage, isFetching, isError, fetchNextPage } = catalog;
+    useEffect(() => {
+        if (
+            !hasNextPage ||
+            isFetching ||
+            isError ||
+            canonicalArtistSearch.hasQuery ||
+            isSaving ||
+            typeof IntersectionObserver === "undefined"
+        )
+            return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting))
+                    void fetchNextPage();
+            },
+            { root: resultsRef.current, rootMargin: "200px" },
+        );
+        if (moreRef.current) observer.observe(moreRef.current);
+        return () => observer.disconnect();
+    }, [
+        hasNextPage,
+        isFetching,
+        isError,
+        fetchNextPage,
+        canonicalArtistSearch.hasQuery,
+        isSaving,
+    ]);
+    const artwork = useTasteArtistArtwork(
+        canonicalArtistSearch.hasQuery ? [] : visibleArtists,
     );
     const activeArtist = canonicalArtistSearch.results[activeArtistIndex];
 
@@ -222,6 +195,14 @@ export function TasteProfileDialog({
     }, [mode]);
 
     const updateChoice = (kind: "genres" | "artists", label: string) => {
+        if (
+            kind === "genres" &&
+            artistGenre === "selected" &&
+            selection.genres.length === 1 &&
+            isTasteLabelSelected(selection.genres, label)
+        ) {
+            setArtistGenre("all");
+        }
         setSelection(
             (current) => toggleTasteLabel(current, kind, label).selection,
         );
@@ -269,728 +250,475 @@ export function TasteProfileDialog({
         }
     };
     const visibleError = localError ?? error;
-    const stepIndex = STEPS.indexOf(step);
-    const selectionLimitLabel =
-        step === "genres"
-            ? `Жанры ${selection.genres.length} из ${MAX_TASTE_LABELS_PER_KIND} · Всего ${count} из ${MAX_TASTE_SIGNALS}`
-            : step === "artists"
-              ? `Артисты ${selection.artists.length} из ${MAX_TASTE_LABELS_PER_KIND} · Всего ${count} из ${MAX_TASTE_SIGNALS}`
-              : `Всего ${count} из ${MAX_TASTE_SIGNALS}`;
-    const changeStep = (nextStep: TasteProfileStep) => {
-        setStep(nextStep);
-        setLocalError(null);
-        // The heading stays mounted; focusing it announces the next step.
-        stepHeadingRef.current?.focus();
-        contentRef.current?.scrollTo({ top: 0 });
+    const changeGenre = (genre: string) => {
+        setArtistGenre(genre);
+        setArtistSearch("");
+        if (resultsRef.current) resultsRef.current.scrollTop = 0;
     };
 
     return (
         <div
-            className="fixed inset-0 z-[10020] flex items-end justify-center overflow-hidden bg-black/75 backdrop-blur-sm sm:items-center sm:p-5"
+            className="fixed inset-0 z-[10020] bg-surface-raised"
             role="presentation"
             onMouseDown={(event) => {
                 if (
                     event.target === event.currentTarget &&
                     mode === "edit" &&
                     !isSaving
-                ) {
+                )
                     onClose();
-                }
             }}
         >
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/15 via-transparent to-brand-light/10"
-            />
             <div
                 ref={dialogRef}
                 role="dialog"
                 data-testid="taste-profile-dialog"
-                data-taste-stage="spectral"
+                data-taste-stage="artists"
                 aria-modal="true"
                 aria-labelledby={titleId}
-                aria-describedby={descriptionId}
                 aria-busy={isSaving}
                 tabIndex={-1}
-                className="wave-material relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border border-white/10 bg-surface-raised/95 px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-[max(1.25rem,var(--safe-area-top))] shadow-2xl shadow-black/70 backdrop-blur-2xl focus:outline-none sm:h-auto sm:max-h-[min(90dvh,52rem)] sm:max-w-3xl sm:rounded-[2rem] sm:p-7"
+                className="relative grid h-[100dvh] w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden lg:grid-cols-[18rem_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] bg-surface-raised text-content focus:outline-none"
             >
-                <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-4">
-                    <span className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl border border-brand/25 bg-brand/12 text-brand-light sm:grid">
-                        <Music2 className="h-5 w-5" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                        <p className="hidden text-[0.68rem] font-bold uppercase tracking-[0.18em] text-brand-light sm:block">
-                            {mode === "onboarding"
-                                ? "Первый запуск"
-                                : "Ваш музыкальный профиль"}
-                        </p>
-                        <h2
-                            id={titleId}
-                            className="mt-1.5 text-xl font-black tracking-[-0.035em] text-content sm:text-3xl"
-                        >
-                            {mode === "onboarding"
-                                ? "Настроим музыку под вас"
-                                : "Изменить музыкальные вкусы"}
-                        </h2>
-                        <p
-                            id={descriptionId}
-                            className="mt-2 max-w-xl text-xs leading-5 text-content-secondary sm:text-sm sm:leading-6"
-                        >
-                            Выберите от 3 до 16 вариантов суммарно — не больше
-                            10 жанров и 10 артистов. Настройка не ставит лайки
-                            автоматически.
-                        </p>
-                    </div>
-                    {mode === "edit" ? (
-                        <button
-                            type="button"
-                            disabled={isSaving}
-                            onClick={onClose}
-                            aria-label="Закрыть настройку вкусов"
-                            className="grid min-h-11 min-w-11 place-items-center rounded-full border border-white/10 bg-black/25 text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50 motion-reduce:transition-none"
-                        >
-                            <X className="h-5 w-5" aria-hidden="true" />
-                        </button>
-                    ) : (
-                        <span aria-hidden="true" className="h-11 w-1" />
-                    )}
-                </header>
-
-                <div
-                    ref={contentRef}
-                    data-testid="taste-profile-scroll-region"
-                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]"
-                >
-                    <div
-                        className="mt-6 grid grid-cols-3 gap-2"
-                        aria-hidden="true"
+                {mode === "edit" && (
+                    <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={onClose}
+                        aria-label="Закрыть настройку вкусов"
+                        className="absolute right-3 top-[max(0.75rem,var(--safe-area-top))] z-30 grid h-11 w-11 place-items-center rounded-full bg-surface-raised text-content-secondary hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light sm:top-3 lg:top-10"
                     >
-                        {STEPS.map((item, index) => (
-                            <span
-                                key={item}
-                                className={cn(
-                                    "h-1.5 rounded-full",
-                                    index === stepIndex
-                                        ? "bg-brand"
-                                        : index < stepIndex
-                                          ? "bg-brand/40"
-                                          : "bg-white/10",
-                                )}
+                        <X className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                )}
+                <header className="shrink-0 px-5 pb-5 pr-20 pt-[max(1.5rem,var(--safe-area-top))] sm:px-10 sm:pr-20 sm:pt-8 lg:col-start-1 lg:row-start-1 lg:px-8 lg:pb-6 lg:pt-10">
+                    <h2
+                        id={titleId}
+                        className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl"
+                    >
+                        Любимые исполнители
+                    </h2>
+                </header>
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:pt-10">
+                    <div
+                        data-testid="taste-profile-controls"
+                        className="relative z-10 shrink-0 space-y-4 bg-surface-raised px-5 pb-5 sm:px-10 lg:pl-4 lg:pr-20"
+                    >
+                        <TasteGenrePicker
+                            value={artistGenre}
+                            hasSavedGenres={selection.genres.length > 0}
+                            disabled={isSaving}
+                            onChange={changeGenre}
+                        />
+                        <form
+                            onSubmit={submitCustomArtist}
+                            className="relative max-w-xl"
+                        >
+                            <Search
+                                className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted"
+                                aria-hidden="true"
                             />
-                        ))}
-                    </div>
-
-                    <section className="mt-5">
-                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
-                            Шаг {stepIndex + 1} из 3
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-                            <div>
-                                <h3
-                                    ref={stepHeadingRef}
-                                    tabIndex={-1}
-                                    className="text-xl font-bold tracking-[-0.025em] text-content focus:outline-none"
-                                >
-                                    {step === "genres"
-                                        ? "Какая музыка вам близка?"
-                                        : step === "artists"
-                                          ? "Кого вы хотите слышать чаще?"
-                                          : "Всё ли вам близко?"}
-                                </h3>
-                                <p className="mt-1 text-sm leading-6 text-content-secondary">
-                                    {step === "genres"
-                                        ? "Выберите направления или сразу перейдите к артистам."
-                                        : step === "artists"
-                                          ? "Фильтруйте по жанру или найдите любимого артиста."
-                                          : "Уберите лишнее. Этот выбор станет отправной точкой рекомендаций."}
-                                </p>
-                            </div>
-                            <span
-                                aria-live="polite"
-                                className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-semibold text-content-secondary"
-                            >
-                                {selectionLimitLabel}
-                            </span>
-                        </div>
-
-                        {step === "genres" ? (
-                            <div className="mt-5 space-y-5">
-                                <input
-                                    type="search"
-                                    aria-label="Найти жанр"
-                                    placeholder="Найти жанр — например, рэп или джаз"
-                                    value={genreSearch}
-                                    onChange={(event) =>
-                                        setGenreSearch(event.target.value)
+                            <input
+                                type="search"
+                                value={artistSearch}
+                                disabled={isSaving}
+                                onChange={(event) => {
+                                    setArtistSearch(event.target.value);
+                                    setActiveArtistIndex(-1);
+                                    setLocalError(null);
+                                }}
+                                onKeyDown={(event) => {
+                                    const resultCount =
+                                        canonicalArtistSearch.results.length;
+                                    if (
+                                        event.key === "ArrowDown" &&
+                                        resultCount > 0
+                                    ) {
+                                        event.preventDefault();
+                                        setActiveArtistIndex((current) =>
+                                            current < 0
+                                                ? 0
+                                                : (current + 1) % resultCount,
+                                        );
+                                    } else if (
+                                        event.key === "ArrowUp" &&
+                                        resultCount > 0
+                                    ) {
+                                        event.preventDefault();
+                                        setActiveArtistIndex((current) =>
+                                            current <= 0
+                                                ? resultCount - 1
+                                                : current - 1,
+                                        );
+                                    } else if (
+                                        event.key === "Enter" &&
+                                        activeArtist
+                                    ) {
+                                        event.preventDefault();
+                                        selectCanonicalArtist(activeArtist);
+                                    } else if (event.key === "Escape") {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setArtistSearch("");
+                                        setActiveArtistIndex(-1);
                                     }
-                                    disabled={isSaving}
-                                    className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/25 px-4 text-sm text-content outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
-                                />
-                                {GENRE_GROUPS.map((group) => {
-                                    const genres = group.genres.filter(
-                                        (genre) =>
-                                            genre
-                                                .toLocaleLowerCase("ru-RU")
-                                                .includes(
-                                                    genreSearch
-                                                        .trim()
-                                                        .toLocaleLowerCase(
-                                                            "ru-RU",
-                                                        ),
-                                                ),
-                                    );
-                                    return genres.length > 0 ? (
-                                        <fieldset key={group.label}>
-                                            <legend className="mb-2 text-xs font-semibold text-content-muted">
-                                                {group.label}
-                                            </legend>
-                                            <div className="flex flex-wrap gap-2">
-                                                {genres.map((genre) => (
-                                                    <ChoiceButton
-                                                        key={genre}
-                                                        label={genre}
-                                                        selected={isTasteLabelSelected(
-                                                            selection.genres,
-                                                            genre,
-                                                        )}
-                                                        disabled={
-                                                            isSaving ||
-                                                            (!isTasteLabelSelected(
-                                                                selection.genres,
-                                                                genre,
-                                                            ) &&
-                                                                (selection
-                                                                    .genres
-                                                                    .length >=
-                                                                    MAX_TASTE_LABELS_PER_KIND ||
-                                                                    count >=
-                                                                        MAX_TASTE_SIGNALS))
-                                                        }
-                                                        onClick={() =>
-                                                            updateChoice(
-                                                                "genres",
-                                                                genre,
-                                                            )
-                                                        }
-                                                    />
-                                                ))}
-                                            </div>
-                                        </fieldset>
-                                    ) : null;
-                                })}
-                                {!SUGGESTED_GENRES.some((genre) =>
-                                    genre
-                                        .toLocaleLowerCase("ru-RU")
-                                        .includes(
-                                            genreSearch
-                                                .trim()
-                                                .toLocaleLowerCase("ru-RU"),
-                                        ),
-                                ) && (
-                                    <p
-                                        role="status"
-                                        className="text-sm text-content-secondary"
-                                    >
-                                        Жанр не найден. Попробуйте другое
-                                        название или выберите артиста.
-                                    </p>
-                                )}
-                            </div>
-                        ) : step === "artists" ? (
-                            <div className="mt-5">
-                                <label className="mb-4 block text-xs font-semibold text-content-muted">
-                                    Артисты по жанру
-                                    <select
-                                        aria-label="Фильтр артистов по жанру"
-                                        value={artistGenre}
-                                        disabled={isSaving}
-                                        onChange={(event) => {
-                                            setArtistGenre(event.target.value);
-                                            setArtistLimit(12);
-                                            setArtistSearch("");
-                                        }}
-                                        className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-surface-raised px-3 text-sm text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                                    >
-                                        <option value="selected">
-                                            По выбранным жанрам
-                                        </option>
-                                        <option value="all">
-                                            Микс всех жанров
-                                        </option>
-                                        {SUGGESTED_GENRES.map((genre) => (
-                                            <option key={genre} value={genre}>
-                                                {genre}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                                <form
-                                    onSubmit={submitCustomArtist}
-                                    className="relative"
+                                }}
+                                aria-label="Найти или добавить артиста"
+                                placeholder="Имя артиста или группы"
+                                maxLength={80}
+                                autoComplete="off"
+                                role="combobox"
+                                aria-autocomplete="list"
+                                aria-controls="taste-artist-results"
+                                aria-expanded={canonicalArtistSearch.hasQuery}
+                                aria-activedescendant={
+                                    activeArtist
+                                        ? artistOptionId(activeArtist.mbid)
+                                        : undefined
+                                }
+                                className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-11 pr-4 text-sm text-content outline-none transition-colors placeholder:text-content-muted hover:border-white/20 focus:border-brand/60 focus:ring-2 focus:ring-brand/20 disabled:opacity-55 motion-reduce:transition-none"
+                            />
+                        </form>
+                    </div>
+                    <div
+                        ref={resultsRef}
+                        data-testid="taste-profile-scroll-region"
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-2 sm:px-10 lg:pl-4"
+                    >
+                        {!canonicalArtistSearch.hasQuery ? (
+                            <>
+                                <div
+                                    className="grid grid-cols-3 gap-x-4 gap-y-7 pt-2 sm:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:gap-x-8 sm:gap-y-10"
+                                    aria-label="Исполнители"
                                 >
-                                    <Search
-                                        className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted"
-                                        aria-hidden="true"
-                                    />
-                                    <input
-                                        type="search"
-                                        value={artistSearch}
-                                        disabled={isSaving}
-                                        onChange={(event) => {
-                                            setArtistSearch(event.target.value);
-                                            setActiveArtistIndex(-1);
-                                            setLocalError(null);
-                                        }}
-                                        onKeyDown={(event) => {
-                                            const resultCount =
-                                                canonicalArtistSearch.results
-                                                    .length;
-                                            if (
-                                                event.key === "ArrowDown" &&
-                                                resultCount > 0
-                                            ) {
-                                                event.preventDefault();
-                                                setActiveArtistIndex(
-                                                    (current) =>
-                                                        current < 0
-                                                            ? 0
-                                                            : (current + 1) %
-                                                              resultCount,
-                                                );
-                                            } else if (
-                                                event.key === "ArrowUp" &&
-                                                resultCount > 0
-                                            ) {
-                                                event.preventDefault();
-                                                setActiveArtistIndex(
-                                                    (current) =>
-                                                        current <= 0
-                                                            ? resultCount - 1
-                                                            : current - 1,
-                                                );
-                                            } else if (
-                                                event.key === "Enter" &&
-                                                activeArtist
-                                            ) {
-                                                event.preventDefault();
-                                                selectCanonicalArtist(
-                                                    activeArtist,
-                                                );
-                                            } else if (event.key === "Escape") {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                setArtistSearch("");
-                                                setActiveArtistIndex(-1);
-                                            }
-                                        }}
-                                        aria-label="Найти или добавить артиста"
-                                        placeholder="Имя артиста или группы"
-                                        maxLength={80}
-                                        autoComplete="off"
-                                        role="combobox"
-                                        aria-autocomplete="list"
-                                        aria-controls="taste-artist-results"
-                                        aria-expanded={
-                                            canonicalArtistSearch.hasQuery
-                                        }
-                                        aria-activedescendant={
-                                            activeArtist
-                                                ? artistOptionId(
-                                                      activeArtist.mbid,
-                                                  )
-                                                : undefined
-                                        }
-                                        className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-11 pr-4 text-sm text-content outline-none transition-colors placeholder:text-content-muted hover:border-white/20 focus:border-brand/60 focus:ring-2 focus:ring-brand/20 disabled:opacity-55 motion-reduce:transition-none"
-                                    />
-                                </form>
-                                {!canonicalArtistSearch.hasQuery ? (
-                                    <div className="mt-3 flex flex-wrap gap-2.5">
-                                        {suggestedArtists
-                                            .slice(0, artistLimit)
-                                            .map((artist) => (
-                                                <ChoiceButton
-                                                    key={artist}
-                                                    label={artist}
-                                                    selected={isTasteLabelSelected(
-                                                        selection.artists,
-                                                        artist,
-                                                    )}
-                                                    disabled={
-                                                        isSaving ||
-                                                        (!isTasteLabelSelected(
-                                                            selection.artists,
-                                                            artist,
-                                                        ) &&
-                                                            (selection.artists
-                                                                .length >=
-                                                                MAX_TASTE_LABELS_PER_KIND ||
-                                                                count >=
-                                                                    MAX_TASTE_SIGNALS))
-                                                    }
-                                                    onClick={() =>
-                                                        updateChoice(
-                                                            "artists",
-                                                            artist,
-                                                        )
-                                                    }
-                                                />
-                                            ))}
-                                        {suggestedArtists.length === 0 && (
-                                            <p
-                                                role="status"
-                                                className="text-sm text-content-secondary"
-                                            >
-                                                Для этого жанра пока нет
-                                                подсказок. Найдите артиста или
-                                                откройте микс всех жанров.
-                                            </p>
-                                        )}
-                                        {suggestedArtists.length >
-                                            artistLimit && (
+                                    {visibleArtists.map((artist) => {
+                                        const selected = isTasteLabelSelected(
+                                            selection.artists,
+                                            artist,
+                                        );
+                                        return (
                                             <button
                                                 type="button"
+                                                key={artist}
+                                                aria-label={artist}
+                                                aria-pressed={selected}
                                                 disabled={isSaving}
                                                 onClick={() =>
-                                                    setArtistLimit(
-                                                        (current) =>
-                                                            current + 12,
+                                                    updateChoice(
+                                                        "artists",
+                                                        artist,
                                                     )
                                                 }
-                                                className="min-h-11 rounded-full border border-white/15 px-4 text-sm text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                                                className="group min-w-0 rounded-xl text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
                                             >
-                                                Ещё артисты
-                                            </button>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div
-                                        id="taste-artist-results"
-                                        role="listbox"
-                                        aria-label="Найденные артисты"
-                                        className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/25"
-                                    >
-                                        {canonicalArtistSearch.isSearching ? (
-                                            <div className="flex min-h-16 items-center gap-2 px-4 text-sm text-content-secondary">
-                                                <LoaderCircle
-                                                    className="h-4 w-4 animate-spin motion-reduce:animate-none"
-                                                    aria-hidden="true"
-                                                />
-                                                Ищем артистов…
-                                            </div>
-                                        ) : canonicalArtistSearch.error ? (
-                                            <p className="px-4 py-3 text-sm text-red-200">
-                                                Не удалось найти артистов.
-                                                Проверьте подключение и
-                                                попробуйте ещё раз.
-                                            </p>
-                                        ) : canonicalArtistSearch.results
-                                              .length === 0 ? (
-                                            <p className="px-4 py-3 text-sm text-content-secondary">
-                                                Артисты не найдены. Уточните
-                                                имя.
-                                            </p>
-                                        ) : (
-                                            canonicalArtistSearch.results.map(
-                                                (artist) => (
-                                                    <button
-                                                        key={artist.mbid}
-                                                        id={artistOptionId(
-                                                            artist.mbid,
-                                                        )}
-                                                        type="button"
-                                                        role="option"
-                                                        data-artist-mbid={
-                                                            artist.mbid
-                                                        }
-                                                        aria-selected={isTasteLabelSelected(
-                                                            selection.artists,
-                                                            artist.name,
-                                                        )}
-                                                        disabled={
-                                                            isSaving ||
-                                                            (selection.artists
-                                                                .length >=
-                                                                MAX_TASTE_LABELS_PER_KIND &&
-                                                                !isTasteLabelSelected(
-                                                                    selection.artists,
-                                                                    artist.name,
-                                                                )) ||
-                                                            (count >=
-                                                                MAX_TASTE_SIGNALS &&
-                                                                !isTasteLabelSelected(
-                                                                    selection.artists,
-                                                                    artist.name,
-                                                                ))
-                                                        }
-                                                        onClick={() =>
-                                                            selectCanonicalArtist(
-                                                                artist,
-                                                            )
-                                                        }
-                                                        onMouseEnter={() =>
-                                                            setActiveArtistIndex(
-                                                                canonicalArtistSearch.results.indexOf(
-                                                                    artist,
-                                                                ),
-                                                            )
-                                                        }
-                                                        className={cn(
-                                                            "flex min-h-14 w-full items-center justify-between gap-3 border-b border-white/8 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light disabled:opacity-55 motion-reduce:transition-none",
-                                                            activeArtist?.mbid ===
-                                                                artist.mbid &&
-                                                                "bg-white/[0.06]",
-                                                        )}
-                                                    >
-                                                        <span className="min-w-0">
-                                                            <span className="block truncate text-sm font-semibold text-content">
-                                                                {artist.name}
-                                                            </span>
-                                                            {(artist.disambiguation ||
-                                                                artist.country) && (
-                                                                <span className="mt-0.5 block truncate text-xs text-content-muted">
-                                                                    {[
-                                                                        artist.disambiguation,
-                                                                        artist.country,
-                                                                    ]
-                                                                        .filter(
-                                                                            Boolean,
+                                                <span
+                                                    className={cn(
+                                                        "relative mx-auto block aspect-square w-full max-w-40 rounded-full border-[3px] p-1 transition-[border-color,transform] group-hover:scale-[1.025] motion-reduce:transform-none motion-reduce:transition-none",
+                                                        selected
+                                                            ? "border-brand"
+                                                            : "border-transparent",
+                                                    )}
+                                                >
+                                                    <span className="relative block h-full w-full overflow-hidden rounded-full bg-surface-highlight">
+                                                        <CachedImage
+                                                            src={
+                                                                artwork[artist]
+                                                            }
+                                                            alt=""
+                                                            fill
+                                                            sizes="(max-width: 639px) 28vw, 150px"
+                                                            className="object-cover"
+                                                            fallback={
+                                                                <span
+                                                                    aria-hidden="true"
+                                                                    className="flex h-full items-center justify-center text-2xl font-semibold text-content-muted"
+                                                                >
+                                                                    {artist
+                                                                        .split(
+                                                                            /\s+/,
+                                                                        )
+                                                                        .slice(
+                                                                            0,
+                                                                            2,
+                                                                        )
+                                                                        .map(
+                                                                            (
+                                                                                word,
+                                                                            ) =>
+                                                                                word[0],
                                                                         )
                                                                         .join(
-                                                                            " · ",
+                                                                            "",
                                                                         )}
                                                                 </span>
-                                                            )}
-                                                        </span>
-                                                        {isTasteLabelSelected(
-                                                            selection.artists,
-                                                            artist.name,
-                                                        ) && (
+                                                            }
+                                                        />
+                                                    </span>
+                                                    {selected && (
+                                                        <span className="absolute bottom-1 right-1 grid h-7 w-7 place-items-center rounded-full border-[3px] border-surface-raised bg-brand text-black">
                                                             <Check
-                                                                className="h-4 w-4 shrink-0 text-brand-light"
+                                                                className="h-4 w-4"
                                                                 aria-hidden="true"
                                                             />
-                                                        )}
-                                                    </button>
-                                                ),
-                                            )
-                                        )}
-                                    </div>
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                <span className="mt-2 block break-words text-xs font-semibold leading-5 sm:text-sm">
+                                                    {artist}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {catalog.isFetching && (
+                                    <p
+                                        role="status"
+                                        className="mt-5 text-center text-sm text-content-secondary"
+                                    >
+                                        Загружаем исполнителей…
+                                    </p>
                                 )}
-                                {selection.artists.length > 0 && (
-                                    <div className="mt-5 border-t border-white/10 pt-4">
-                                        <p className="mb-2 text-xs font-semibold text-content-muted">
-                                            Выбранные артисты ·{" "}
-                                            {selection.artists.length}
+                                {catalog.isError && (
+                                    <p
+                                        role="status"
+                                        className="mt-5 text-center text-sm text-content-secondary"
+                                    >
+                                        {catalog.artists
+                                            ? "Не удалось загрузить продолжение."
+                                            : "Каталог временно недоступен."}
+                                    </p>
+                                )}
+                                {(catalog.hasNextPage || catalog.isError) && (
+                                    <button
+                                        ref={moreRef}
+                                        type="button"
+                                        disabled={
+                                            isSaving || catalog.isFetching
+                                        }
+                                        onClick={() =>
+                                            void (catalog.artists
+                                                ? catalog.fetchNextPage()
+                                                : catalog.refetch())
+                                        }
+                                        className="mx-auto mt-7 block min-h-11 rounded-full border border-white/15 px-6 text-sm text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                                    >
+                                        {catalog.isError
+                                            ? "Повторить загрузку"
+                                            : "Ещё артисты"}
+                                    </button>
+                                )}
+                                {catalog.artists &&
+                                    !catalog.hasNextPage &&
+                                    !catalog.isFetching &&
+                                    !catalog.isError && (
+                                        <p className="mt-5 text-center text-xs text-content-muted">
+                                            Больше исполнителей не найдено.
                                         </p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {selection.artists.map((artist) => (
+                                    )}
+                            </>
+                        ) : (
+                            <div
+                                id="taste-artist-results"
+                                role="listbox"
+                                aria-label="Найденные артисты"
+                                className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/25"
+                            >
+                                {canonicalArtistSearch.isSearching ? (
+                                    <div className="flex min-h-16 items-center gap-2 px-4 text-sm text-content-secondary">
+                                        <LoaderCircle
+                                            className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                                            aria-hidden="true"
+                                        />
+                                        Ищем артистов…
+                                    </div>
+                                ) : canonicalArtistSearch.error ? (
+                                    <p className="px-4 py-3 text-sm text-red-200">
+                                        Не удалось найти артистов. Проверьте
+                                        подключение и попробуйте ещё раз.
+                                    </p>
+                                ) : canonicalArtistSearch.results.length ===
+                                  0 ? (
+                                    <p className="px-4 py-3 text-sm text-content-secondary">
+                                        Артисты не найдены. Уточните имя.
+                                    </p>
+                                ) : (
+                                    canonicalArtistSearch.results.map(
+                                        (artist) => (
+                                            <button
+                                                key={artist.mbid}
+                                                id={artistOptionId(artist.mbid)}
+                                                type="button"
+                                                role="option"
+                                                data-artist-mbid={artist.mbid}
+                                                aria-selected={isTasteLabelSelected(
+                                                    selection.artists,
+                                                    artist.name,
+                                                )}
+                                                disabled={isSaving}
+                                                onClick={() =>
+                                                    selectCanonicalArtist(
+                                                        artist,
+                                                    )
+                                                }
+                                                onMouseEnter={() =>
+                                                    setActiveArtistIndex(
+                                                        canonicalArtistSearch.results.indexOf(
+                                                            artist,
+                                                        ),
+                                                    )
+                                                }
+                                                className={cn(
+                                                    "flex min-h-14 w-full items-center justify-between gap-3 border-b border-white/8 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light disabled:opacity-55 motion-reduce:transition-none",
+                                                    activeArtist?.mbid ===
+                                                        artist.mbid &&
+                                                        "bg-white/[0.06]",
+                                                )}
+                                            >
+                                                <span className="min-w-0">
+                                                    <span className="block truncate text-sm font-semibold text-content">
+                                                        {artist.name}
+                                                    </span>
+                                                    {(artist.disambiguation ||
+                                                        artist.country) && (
+                                                        <span className="mt-0.5 block truncate text-xs text-content-muted">
+                                                            {[
+                                                                artist.disambiguation,
+                                                                artist.country,
+                                                            ]
+                                                                .filter(Boolean)
+                                                                .join(" · ")}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                {isTasteLabelSelected(
+                                                    selection.artists,
+                                                    artist.name,
+                                                ) && (
+                                                    <Check
+                                                        className="h-4 w-4 shrink-0 text-brand-light"
+                                                        aria-hidden="true"
+                                                    />
+                                                )}
+                                            </button>
+                                        ),
+                                    )
+                                )}
+                            </div>
+                        )}
+                        {count > 0 && (
+                            <section
+                                className="mt-7 border-t border-white/10 pt-5"
+                                aria-label="Выбранные предпочтения"
+                            >
+                                <h3 className="mb-3 text-sm font-semibold text-content-secondary">
+                                    Выбрано · {count}
+                                </h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {(["genres", "artists"] as const).flatMap(
+                                        (kind) =>
+                                            selection[kind].map((label) => (
                                                 <button
-                                                    key={artist}
+                                                    key={`${kind}:${label}`}
                                                     type="button"
-                                                    aria-label={`Убрать артиста: ${artist}`}
+                                                    aria-label={`Убрать ${kind === "genres" ? "жанр" : "артиста"}: ${label}`}
                                                     disabled={isSaving}
                                                     onClick={() =>
                                                         updateChoice(
-                                                            "artists",
-                                                            artist,
+                                                            kind,
+                                                            label,
                                                         )
                                                     }
                                                     className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full bg-brand/15 px-3 text-sm text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                                                 >
                                                     <span className="truncate">
-                                                        {artist}
+                                                        {label}
                                                     </span>
                                                     <X
                                                         className="h-4 w-4 shrink-0"
                                                         aria-hidden="true"
                                                     />
                                                 </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="mt-5 space-y-5">
-                                {(["genres", "artists"] as const).map(
-                                    (kind) => (
-                                        <section
-                                            key={kind}
-                                            aria-label={
-                                                kind === "genres"
-                                                    ? "Выбранные жанры"
-                                                    : "Выбранные артисты"
-                                            }
-                                        >
-                                            <h4 className="mb-2 text-sm font-semibold text-content">
-                                                {kind === "genres"
-                                                    ? "Жанры"
-                                                    : "Артисты"}{" "}
-                                                · {selection[kind].length}
-                                            </h4>
-                                            <div className="flex flex-wrap gap-2">
-                                                {selection[kind].map(
-                                                    (label) => (
-                                                        <button
-                                                            key={label}
-                                                            type="button"
-                                                            aria-label={`Убрать ${kind === "genres" ? "жанр" : "артиста"}: ${label}`}
-                                                            disabled={isSaving}
-                                                            onClick={() =>
-                                                                updateChoice(
-                                                                    kind,
-                                                                    label,
-                                                                )
-                                                            }
-                                                            className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3 text-sm text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                                                        >
-                                                            <span className="truncate">
-                                                                {label}
-                                                            </span>
-                                                            <X
-                                                                className="h-4 w-4 shrink-0"
-                                                                aria-hidden="true"
-                                                            />
-                                                        </button>
-                                                    ),
-                                                )}
-                                            </div>
-                                            {selection[kind].length === 0 && (
-                                                <p className="text-sm text-content-muted">
-                                                    Не выбраны
-                                                </p>
-                                            )}
-                                        </section>
-                                    ),
-                                )}
-                            </div>
+                                            )),
+                                    )}
+                                </div>
+                            </section>
                         )}
-                    </section>
-
-                    <div className="mt-6 flex items-start gap-3 rounded-2xl border border-brand/20 bg-brand/[0.07] px-4 py-3.5">
-                        <Sparkles
-                            className="mt-0.5 h-4 w-4 shrink-0 text-brand-light"
-                            aria-hidden="true"
-                        />
-                        <div className="min-w-0">
-                            <p className="text-xs font-bold uppercase tracking-[0.13em] text-brand-light">
-                                Ваш выбор
-                            </p>
-                            <p className="mt-1 break-words text-sm leading-5 text-content-secondary">
-                                {selectionSummary(selection)}
-                            </p>
-                        </div>
                     </div>
-
-                    {visibleError && (
-                        <p
-                            role="alert"
-                            className="mt-4 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm leading-5 text-red-200"
-                        >
-                            {visibleError}
-                        </p>
-                    )}
                 </div>
                 <footer
                     data-testid="taste-profile-footer"
-                    className="mt-4 grid shrink-0 gap-3 border-t border-white/8 bg-surface-raised/95 pt-4 sm:mt-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    className="shrink-0 border-t border-white/5 bg-surface-raised px-5 pb-[max(1rem,var(--safe-area-bottom))] pt-4 sm:px-10 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:overflow-y-auto lg:border-0 lg:px-8 lg:pt-0"
                 >
-                    <div className="text-sm leading-5 text-content-secondary">
-                        {validation.code === "valid"
-                            ? "Выбор можно изменить позже."
-                            : validation.message}
-                    </div>
+                    <TasteSelectionSignature
+                        artists={selection.artists}
+                        artwork={artwork}
+                        count={count}
+                        progress={selectionProgress}
+                    />
+                    {validation.message && (
+                        <p role="alert" className="mb-3 text-sm text-red-200">
+                            {validation.message}
+                        </p>
+                    )}
+                    {visibleError && (
+                        <p role="alert" className="mb-3 text-sm text-red-200">
+                            {visibleError}
+                        </p>
+                    )}
                     <div
                         data-testid="taste-profile-actions"
-                        className="grid grid-cols-2 gap-2 sm:flex sm:justify-end"
+                        className="flex flex-wrap items-center justify-end gap-3 lg:flex-col lg:items-stretch"
                     >
+                        {count > 0 && (
+                            <span
+                                aria-live="polite"
+                                className="mr-auto text-sm text-content-secondary"
+                            >
+                                Выбрано: {count}
+                            </span>
+                        )}
+                        <button
+                            type="button"
+                            aria-label="Сохранить вкусы"
+                            disabled={isSaving || validation.code !== "valid"}
+                            onClick={() => void save()}
+                            className="relative isolate inline-flex min-h-14 min-w-40 flex-1 items-center justify-center gap-2 overflow-hidden rounded-full border border-brand-light/40 bg-brand px-5 text-sm font-bold text-black shadow-[0_8px_28px_-10px_rgba(168,112,255,0.6)] transition-[background-color,transform] hover:bg-brand-light active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none motion-reduce:transform-none lg:w-full lg:flex-none"
+                        >
+                            <span
+                                aria-hidden="true"
+                                data-testid="taste-action-fill"
+                                className="pointer-events-none absolute inset-0 -z-10 origin-left rounded-full bg-gradient-to-r from-white/35 to-white/10 transition-transform duration-500 ease-out motion-reduce:transition-none"
+                                style={{
+                                    transform: `scaleX(${selectionProgress})`,
+                                }}
+                            />
+                            {isSaving && (
+                                <LoaderCircle
+                                    className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                                    aria-hidden="true"
+                                />
+                            )}
+                            {isSaving
+                                ? "Сохраняем…"
+                                : count === 0
+                                  ? "Настроить под меня"
+                                  : "Применить выбор"}
+                            {!isSaving && (
+                                <ArrowUpRight
+                                    className="h-4 w-4 shrink-0"
+                                    aria-hidden="true"
+                                />
+                            )}
+                        </button>
                         {mode === "onboarding" && onSkip && (
                             <button
                                 type="button"
                                 aria-label="Пропустить настройку"
                                 disabled={isSaving}
                                 onClick={() => void skip()}
-                                className="order-3 col-span-2 inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-70 motion-reduce:transition-none sm:order-none sm:col-span-1"
+                                className="min-h-11 rounded-full text-sm text-content-secondary hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                             >
                                 Пропустить
-                            </button>
-                        )}
-                        {step !== "genres" ? (
-                            <button
-                                type="button"
-                                aria-label={
-                                    step === "review"
-                                        ? "Назад к артистам"
-                                        : "Назад к жанрам"
-                                }
-                                disabled={isSaving}
-                                onClick={() => {
-                                    changeStep(
-                                        step === "review"
-                                            ? "artists"
-                                            : "genres",
-                                    );
-                                }}
-                                className="order-1 inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-70 motion-reduce:transition-none sm:order-none"
-                            >
-                                <ChevronLeft
-                                    className="h-4 w-4"
-                                    aria-hidden="true"
-                                />
-                                Назад
-                            </button>
-                        ) : mode === "edit" ? (
-                            <button
-                                type="button"
-                                disabled={isSaving}
-                                onClick={onClose}
-                                className="order-1 inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-70 motion-reduce:transition-none sm:order-none"
-                            >
-                                Отмена
-                            </button>
-                        ) : null}
-
-                        {step !== "review" ? (
-                            <button
-                                type="button"
-                                aria-label={
-                                    step === "genres"
-                                        ? "Дальше: артисты"
-                                        : "Дальше: проверить выбор"
-                                }
-                                disabled={isSaving}
-                                onClick={() => {
-                                    changeStep(
-                                        step === "genres"
-                                            ? "artists"
-                                            : "review",
-                                    );
-                                }}
-                                className="order-2 col-start-2 inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand px-5 py-2.5 text-sm font-black text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised disabled:opacity-70 motion-reduce:transition-none sm:order-none sm:col-start-auto"
-                            >
-                                {step === "genres" ? "К артистам" : "Проверить"}
-                                <ChevronRight
-                                    className="h-4 w-4"
-                                    aria-hidden="true"
-                                />
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                aria-label="Сохранить вкусы"
-                                disabled={
-                                    isSaving || validation.code !== "valid"
-                                }
-                                onClick={() => void save()}
-                                className="order-2 col-start-2 inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand px-5 py-2.5 text-sm font-black text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none sm:order-none sm:col-start-auto"
-                            >
-                                {isSaving && (
-                                    <LoaderCircle
-                                        className="h-4 w-4 animate-spin motion-reduce:animate-none"
-                                        aria-hidden="true"
-                                    />
-                                )}
-                                {isSaving ? "Сохраняем…" : "Сохранить"}
                             </button>
                         )}
                     </div>

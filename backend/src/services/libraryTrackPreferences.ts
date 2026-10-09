@@ -7,6 +7,8 @@ import {
     type ResolvedTrackPreference,
 } from "./trackPreference";
 import type { UnifiedTrackResponse } from "./unifiedTrackResponse";
+import { readVerifiedMusicSourceRecording } from "./musicSources/verifiedMetadata";
+import { MusicSourceError, type MusicSource } from "./musicSources/types";
 
 const REMOTE_PREFERENCE_TRANSACTION_ATTEMPTS = 3;
 const REMOTE_PREFERENCE_TRANSACTION_OPTIONS = {
@@ -31,17 +33,30 @@ export type RemoteTrackPreferenceReference =
           provider: "tidal";
           externalId: string;
           tidalId: number;
-      };
+      }
+    | { provider: MusicSource; externalId: string };
 
 /** Materialized remote row targeted by a thumbs-up mutation. */
 export type RemoteTrackLikeTarget =
     | { provider: "youtube"; trackYtMusicId: string }
-    | { provider: "tidal"; trackTidalId: string };
+    | { provider: "tidal"; trackTidalId: string }
+    | { provider: MusicSource; trackMusicSourceId: string };
 
 /** Parse and canonicalize a supported remote track composite id. */
 export function parseRemoteTrackPreferenceReference(
     compositeId: string,
 ): RemoteTrackPreferenceReference | null {
+    const direct = /^(vk|yandex):(.+)$/.exec(compositeId);
+    if (direct) {
+        const provider = direct[1] as MusicSource;
+        const externalId = direct[2];
+        return (provider === "vk"
+            ? /^-?\d{1,20}_\d{1,20}$/
+            : /^\d{1,20}$/
+        ).test(externalId)
+            ? { provider, externalId }
+            : null;
+    }
     if (compositeId.startsWith("yt:")) {
         const externalId = compositeId.slice(3).trim();
         return YOUTUBE_VIDEO_ID_PATTERN.test(externalId)
@@ -69,7 +84,7 @@ function canonicalRemotePreferenceId(
 ): string {
     return reference.provider === "tidal"
         ? `tidal:${reference.tidalId}`
-        : `yt:${reference.externalId}`;
+        : `${reference.provider === "youtube" ? "yt" : reference.provider}:${reference.externalId}`;
 }
 
 type RemotePreferenceClient = Pick<
@@ -79,6 +94,7 @@ type RemotePreferenceClient = Pick<
     | "remotePreferenceIntent"
     | "trackTidal"
     | "trackYtMusic"
+    | "trackMusicSource"
 >;
 
 async function findRemoteLikedAt(
@@ -86,6 +102,28 @@ async function findRemoteLikedAt(
     userId: string,
     reference: RemoteTrackPreferenceReference,
 ): Promise<Date | null> {
+    if (reference.provider === "vk" || reference.provider === "yandex") {
+        const track = await client.trackMusicSource.findUnique({
+            where: {
+                provider_providerTrackId: {
+                    provider: reference.provider,
+                    providerTrackId: reference.externalId,
+                },
+            },
+            select: { id: true },
+        });
+        if (!track) return null;
+        const liked = await client.likedRemoteTrack.findUnique({
+            where: {
+                userId_trackMusicSourceId: {
+                    userId,
+                    trackMusicSourceId: track.id,
+                },
+            },
+            select: { likedAt: true },
+        });
+        return liked?.likedAt ?? null;
+    }
     if (reference.provider === "tidal") {
         const track = await client.trackTidal.findUnique({
             where: { tidalId: reference.tidalId },
@@ -161,6 +199,22 @@ async function clearRemoteLike(
     userId: string,
     reference: RemoteTrackPreferenceReference,
 ): Promise<void> {
+    if (reference.provider === "vk" || reference.provider === "yandex") {
+        const track = await tx.trackMusicSource.findUnique({
+            where: {
+                provider_providerTrackId: {
+                    provider: reference.provider,
+                    providerTrackId: reference.externalId,
+                },
+            },
+            select: { id: true },
+        });
+        if (track)
+            await tx.likedRemoteTrack.deleteMany({
+                where: { userId, trackMusicSourceId: track.id },
+            });
+        return;
+    }
     if (reference.provider === "tidal") {
         const track = await tx.trackTidal.findUnique({
             where: { tidalId: reference.tidalId },
@@ -192,6 +246,35 @@ async function saveRemoteLike(
     target: RemoteTrackLikeTarget | undefined,
     likedAt: Date,
 ): Promise<void> {
+    if (reference.provider === "vk" || reference.provider === "yandex") {
+        if (
+            !target ||
+            target.provider !== reference.provider ||
+            !("trackMusicSourceId" in target)
+        ) {
+            throw new MusicSourceError("invalid_request");
+        }
+        const namespace = await tx.trackMusicSource.findUnique({
+            where: { id: target.trackMusicSourceId },
+        });
+        if (
+            namespace?.provider !== reference.provider ||
+            namespace.providerTrackId !== reference.externalId ||
+            !readVerifiedMusicSourceRecording(namespace)
+        )
+            throw new MusicSourceError("not_found");
+        await tx.likedRemoteTrack.upsert({
+            where: {
+                userId_trackMusicSourceId: {
+                    userId,
+                    trackMusicSourceId: namespace.id,
+                },
+            },
+            create: { userId, trackMusicSourceId: namespace.id, likedAt },
+            update: { likedAt },
+        });
+        return;
+    }
     if (reference.provider === "tidal") {
         if (!target || target.provider !== "tidal") {
             throw new TypeError("A materialized TIDAL target is required");

@@ -16,6 +16,10 @@ import type {
 } from "@/components/track";
 import type { ReactNode } from "react";
 import { discoverRu } from "@/lib/i18n/discoverRu";
+import {
+    hasNativeDiscoverIdentity,
+    mapDiscoverTrackToPlaybackTrack,
+} from "../playback";
 
 const tierColors: Record<string, string> = {
     high: "text-success",
@@ -56,7 +60,11 @@ function getSourceBadge(
     let label: string;
     let badgeClassName: string;
 
-    if (track.sourceType === "tidal") {
+    if (track.sourceType === "vk" || track.sourceType === "yandex") {
+        label = track.sourceType === "vk" ? "VK Музыка" : "Яндекс Музыка";
+        badgeClassName =
+            "border border-line-muted bg-surface-active text-content-muted";
+    } else if (track.sourceType === "tidal") {
         label = "Недоступно";
         badgeClassName = "border border-warning/30 bg-warning/10 text-warning";
     } else if (!track.available) {
@@ -86,10 +94,15 @@ function getSourceBadge(
     );
 }
 
+function isPlayableTrack(track: DiscoverTrack): boolean {
+    return hasNativeDiscoverIdentity(track)
+        ? mapDiscoverTrackToPlaybackTrack(track) !== null
+        : (track.sourceType === "youtube" && Boolean(track.youtubeVideoId)) ||
+              (track.sourceType === "local" && track.available);
+}
+
 function toRowItem(track: DiscoverTrack): TrackRowItem {
-    const isPlayable =
-        (track.sourceType === "youtube" && Boolean(track.youtubeVideoId)) ||
-        (track.sourceType === "local" && track.available);
+    const isPlayable = isPlayableTrack(track);
     return {
         id: track.id,
         title: track.title,
@@ -119,10 +132,7 @@ export function TrackList({
     const handlePlay = useCallback(
         (_track: DiscoverTrack, index: number) => {
             const track = tracks[index];
-            const isPlayable =
-                (track.sourceType === "youtube" &&
-                    Boolean(track.youtubeVideoId)) ||
-                (track.sourceType === "local" && track.available);
+            const isPlayable = isPlayableTrack(track);
             if (!isPlayable) return;
             const isTrackPlaying = currentTrack?.id === track.id;
             if (isTrackPlaying && isPlaying) {
@@ -182,22 +192,16 @@ export function TrackList({
     );
 
     const rowOverflow = useCallback(
-        (track: DiscoverTrack): OverflowConfig => ({
-            track: {
-                id: track.id,
-                title: track.title,
-                artist: { name: track.artist, id: track.artistId ?? undefined },
-                album: {
-                    title: track.album,
-                    id: track.albumId,
-                    coverArt: track.coverUrl ?? track.albumId ?? undefined,
-                },
-                duration: track.duration,
-                streamSource: track.streamSource,
-                youtubeVideoId: track.youtubeVideoId,
-            },
-            showGoToAlbum: !!track.albumId,
-        }),
+        (track: DiscoverTrack): OverflowConfig | null => {
+            const playbackTrack = mapDiscoverTrackToPlaybackTrack(track);
+            return playbackTrack
+                ? {
+                      track: playbackTrack,
+                      showGoToAlbum:
+                          !!track.albumId && !hasNativeDiscoverIdentity(track),
+                  }
+                : null;
+        },
         [],
     );
 

@@ -9,6 +9,7 @@ import { deezerService } from "./deezer";
 import { rateLimiter } from "./rateLimiter";
 import { normalizeToArray } from "../utils/normalize";
 import { stripAlbumEdition } from "../utils/artistNormalization";
+import { tasteArtistTags } from "./tasteArtistGenres";
 
 interface SimilarArtist {
     name: string;
@@ -83,6 +84,92 @@ function providerErrorCode(data: unknown): number | undefined {
 }
 
 class LastFmService {
+    private readonly tastePages = new Map<
+        string,
+        Promise<{ artists: string[]; nextPage: number | null }>
+    >();
+
+    /** Browse real catalog pages without per-artist enrichment or a curated-list cap. */
+    async browseTasteArtists(
+        genre: string,
+        page: number,
+    ): Promise<{ artists: string[]; nextPage: number | null }> {
+        const tag = genre === "all" ? undefined : tasteArtistTags[genre];
+        if (
+            (genre !== "all" && !tag) ||
+            !Number.isSafeInteger(page) ||
+            page < 1
+        )
+            throw new Error("Invalid artist catalog page");
+        const key = `lastfm:taste-artists:v1:${genre}:${page}`;
+        const existing = this.tastePages.get(key);
+        if (existing) return existing;
+        if (this.tastePages.size >= 64) throw new Error("Artist catalog busy");
+        const load = async () => {
+            try {
+                const cached = await redisClient.get(key);
+                if (cached)
+                    return JSON.parse(cached) as {
+                        artists: string[];
+                        nextPage: number | null;
+                    };
+            } catch {
+                /* Catalog remains usable without Redis. */
+            }
+            await this.ensureInitialized();
+            if (!this.apiKey) throw new Error("Artist catalog unavailable");
+            const data = await this.request({
+                method: tag ? "tag.getTopArtists" : "chart.getTopArtists",
+                ...(tag ? { tag } : {}),
+                api_key: this.apiKey,
+                format: "json",
+                limit: 48,
+                page,
+            });
+            const container = tag ? data.topartists : data.artists;
+            if (!container || !Array.isArray(container.artist))
+                throw new Error("Invalid artist catalog response");
+            const artists = [
+                ...new Set<string>(
+                    container.artist
+                        .map((artist: { name?: unknown }) =>
+                            typeof artist.name === "string"
+                                ? artist.name.trim()
+                                : "",
+                        )
+                        .filter(
+                            (name: string) =>
+                                name.length > 0 &&
+                                name.length <= 80 &&
+                                !/[\u0000-\u001f\u007f]/u.test(name),
+                        ),
+                ),
+            ];
+            const totalPages = Number(container["@attr"]?.totalPages);
+            if (!Number.isSafeInteger(totalPages) || totalPages < 0)
+                throw new Error("Invalid artist catalog pagination");
+            const result = {
+                artists,
+                nextPage:
+                    container.artist.length > 0 && page < totalPages
+                        ? page + 1
+                        : null,
+            };
+            try {
+                await redisClient.setEx(key, 21600, JSON.stringify(result));
+            } catch {
+                /* Cache is optional. */
+            }
+            return result;
+        };
+        const pending = load();
+        this.tastePages.set(key, pending);
+        try {
+            return await pending;
+        } finally {
+            this.tastePages.delete(key);
+        }
+    }
     private client: AxiosInstance;
     private readonly envApiKey: string;
     private apiKey: string;

@@ -2,10 +2,12 @@ import type { Request, Response } from "express";
 import fs from "node:fs";
 
 const mockYtMusicGetRadio = jest.fn();
+const mockYtMusicSearchCanonical = jest.fn();
 
 jest.mock("../../services/youtubeMusic", () => ({
     ytMusicService: {
         getRadio: mockYtMusicGetRadio,
+        searchCanonical: mockYtMusicSearchCanonical,
     },
 }));
 
@@ -382,6 +384,7 @@ import {
 
 const mockTrackFindMany = prisma.track.findMany as jest.Mock;
 const mockLikedTrackFindMany = prisma.likedTrack.findMany as jest.Mock;
+const mockLikedRemoteFindMany = prisma.likedRemoteTrack.findMany as jest.Mock;
 const mockDislikedEntityFindMany = prisma.dislikedEntity.findMany as jest.Mock;
 const mockOwnedAlbumFindMany = prisma.ownedAlbum.findMany as jest.Mock;
 const mockSimilarArtistFindMany = prisma.similarArtist.findMany as jest.Mock;
@@ -517,6 +520,7 @@ describe("library branch coverage focus", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockLikedTrackFindMany.mockResolvedValue([]);
+        mockLikedRemoteFindMany.mockResolvedValue([]);
         mockDislikedEntityFindMany.mockResolvedValue([]);
         mockTrackFindMany.mockResolvedValue([]);
         mockOwnedAlbumFindMany.mockResolvedValue([]);
@@ -526,6 +530,7 @@ describe("library branch coverage focus", () => {
         mockArtistFindMany.mockResolvedValue([]);
         mockPlaylistFindUnique.mockResolvedValue(null);
         mockPlaylistItemFindMany.mockResolvedValue([]);
+        mockYtMusicSearchCanonical.mockResolvedValue({ results: [] });
         mockYtMusicGetRadio.mockResolvedValue({
             playlistId: null,
             seedVideoId: "",
@@ -594,8 +599,9 @@ describe("library branch coverage focus", () => {
         });
     });
 
-    it("returns empty tracks when artist-name lookup has no match", async () => {
+    it("returns empty tracks only after unmatched artist-name falls back to an empty external catalog search", async () => {
         mockArtistFindFirst.mockResolvedValueOnce(null);
+        mockYtMusicSearchCanonical.mockResolvedValueOnce({ results: [] });
         const req = {
             query: {
                 type: "artist-name",
@@ -610,6 +616,14 @@ describe("library branch coverage focus", () => {
 
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ tracks: [] });
+        expect(mockYtMusicSearchCanonical).toHaveBeenCalledWith(
+            "__public__",
+            "No Such Artist",
+            "songs",
+            20,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(mockYtMusicGetRadio).not.toHaveBeenCalled();
     });
 
     it("requires auth for liked radio", async () => {
@@ -683,6 +697,45 @@ describe("library branch coverage focus", () => {
         expect(mockYtMusicGetRadio).not.toHaveBeenCalled();
     });
 
+    it("builds My Liked radio from the authenticated user's remote seeds", async () => {
+        mockLikedRemoteFindMany.mockResolvedValueOnce([
+            { trackYtMusic: { videoId: "AAAAAAAAAAA" } },
+        ]);
+        mockYtMusicGetRadio.mockResolvedValueOnce({
+            tracks: [
+                {
+                    videoId: "BBBBBBBBBBB",
+                    title: "Recommendation",
+                    artist: "Artist",
+                    album: "Album",
+                    duration: 180,
+                },
+            ],
+        });
+        const req = {
+            query: { type: "playlist", value: "my-liked", limit: "5" },
+            user: { id: "u1" },
+        } as any;
+        const res = createRes();
+
+        await radioHandler(req, res);
+
+        expect(mockLikedRemoteFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { userId: "u1", trackYtMusicId: { not: null } },
+                take: 3,
+            }),
+        );
+        expect(mockYtMusicGetRadio).toHaveBeenCalledWith("AAAAAAAAAAA", 5);
+        expect(res.statusCode).toBe(200);
+        expect(res.body.tracks).toEqual([
+            expect.objectContaining({
+                youtubeVideoId: "BBBBBBBBBBB",
+                streamSource: "youtube",
+            }),
+        ]);
+        expect(mockPlaylistItemFindMany).not.toHaveBeenCalled();
+    });
     it("builds playlist radio from YouTube Music items and falls back to playlist tracks", async () => {
         mockPlaylistFindUnique.mockResolvedValue({
             userId: "u1",

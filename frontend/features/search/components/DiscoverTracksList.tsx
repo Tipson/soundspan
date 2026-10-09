@@ -45,12 +45,6 @@ const getTrackArtistHref = (track: DiscoverResult): string | null => {
 function rowKey(track: DiscoverResult, index: number): string {
     return `discover-track-${track.id || track.name}-${index}`;
 }
-function versionKey(track: DiscoverResult): string {
-    return track.musicSourceRecording
-        ? `${track.musicSourceRecording.provider}:${track.musicSourceRecording.id}`
-        : `youtube:${track.youtubeVideoId ?? track.id ?? ""}`;
-}
-
 function toPlaybackTrack(
     track: DiscoverResult,
     key: string,
@@ -102,28 +96,11 @@ export function DiscoverTracksList({
 }: DiscoverTracksListProps) {
     const router = useRouter();
     const { playTracks } = useAudioControls();
-    const [selections, setSelections] = useState<Record<string, string>>({});
     const [playbackNotice, setPlaybackNotice] = useState("");
 
     const visibleTracks = useMemo(
-        () =>
-            (limit === null ? tracks : tracks.slice(0, limit)).map(
-                (track, index) => {
-                    const selected = track.versions?.find(
-                        (version) =>
-                            versionKey(version) ===
-                            selections[rowKey(track, index)],
-                    );
-                    return selected
-                        ? {
-                              ...selected,
-                              id: track.id,
-                              versions: track.versions,
-                          }
-                        : track;
-                },
-            ),
-        [tracks, limit, selections],
+        () => (limit === null ? tracks : tracks.slice(0, limit)),
+        [tracks, limit],
     );
 
     const directMatches = useMemo(() => {
@@ -174,22 +151,44 @@ export function DiscoverTracksList({
             const match = matches.get(key);
             if (match) {
                 const together = isListenTogetherActiveOrPending();
-                if (together && match.musicSourceRecording) {
-                    setPlaybackNotice(
-                        "Этот источник доступен для личного прослушивания. Сначала выйдите из совместной сессии.",
-                    );
-                    return;
-                }
-                setPlaybackNotice("");
                 const eligibleQueue = together
-                    ? playableQueue.filter(
-                          (item) => !item.track.musicSourceRecording,
-                      )
+                    ? visibleTracks.flatMap((candidate, index) => {
+                          const candidateKey = rowKey(candidate, index);
+                          const youtubeVersion = candidate.versions?.find(
+                              (version) =>
+                                  version.streamSource === "youtube" &&
+                                  version.youtubeVideoId,
+                          );
+                          const selected = youtubeVersion ?? candidate;
+                          const selectedMatch = youtubeVersion
+                              ? getDirectProviderMatch(youtubeVersion)
+                              : matches.get(candidateKey);
+                          return selectedMatch &&
+                              !selectedMatch.musicSourceRecording
+                              ? [
+                                    {
+                                        key: candidateKey,
+                                        track: toPlaybackTrack(
+                                            selected,
+                                            candidateKey,
+                                            selectedMatch,
+                                        ),
+                                    },
+                                ]
+                              : [];
+                      })
                     : playableQueue;
                 const selectedIndex = eligibleQueue.findIndex(
                     (candidate) => candidate.key === key,
                 );
-                if (selectedIndex < 0) return;
+                if (selectedIndex < 0) {
+                    if (together && match.musicSourceRecording)
+                        setPlaybackNotice(
+                            "Этот источник доступен для личного прослушивания. Сначала выйдите из совместной сессии.",
+                        );
+                    return;
+                }
+                setPlaybackNotice("");
                 playTracks(
                     eligibleQueue.map((candidate) => candidate.track),
                     selectedIndex,
@@ -199,7 +198,7 @@ export function DiscoverTracksList({
             const artistHref = getTrackArtistHref(track);
             if (artistHref) router.push(artistHref);
         },
-        [matches, playableQueue, playTracks, router],
+        [matches, playableQueue, playTracks, router, visibleTracks],
     );
 
     if (tracks.length === 0) {
@@ -292,49 +291,6 @@ export function DiscoverTracksList({
                                 {track.artist}
                                 {track.album ? ` — ${track.album}` : ""}
                             </p>
-                            {track.versions && track.versions.length > 1 ? (
-                                <select
-                                    aria-label={`Источник и версия: ${track.name}`}
-                                    className="mt-1 min-h-11 max-w-full rounded-lg border border-line-strong bg-surface-elevated px-2 text-xs text-content-secondary"
-                                    value={versionKey(track)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => e.stopPropagation()}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-                                        setSelections((previous) => ({
-                                            ...Object.fromEntries(
-                                                Object.entries(previous).slice(
-                                                    -99,
-                                                ),
-                                            ),
-                                            [key]: value,
-                                        }));
-                                    }}
-                                >
-                                    {track.versions.map((version) => (
-                                        <option
-                                            key={versionKey(version)}
-                                            value={versionKey(version)}
-                                        >
-                                            {version.musicSourceRecording
-                                                ?.provider === "vk"
-                                                ? "VK"
-                                                : version.musicSourceRecording
-                                                        ?.provider === "yandex"
-                                                  ? "Яндекс Музыка"
-                                                  : "YouTube Music"}
-                                            {version.musicSourceRecording
-                                                ?.contentVersion === "explicit"
-                                                ? " · Explicit"
-                                                : version.musicSourceRecording
-                                                        ?.contentVersion ===
-                                                    "clean"
-                                                  ? " · С цензурой"
-                                                  : " · Версия не отмечена"}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : null}
                         </div>
                         <div
                             className="flex items-center"

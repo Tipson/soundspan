@@ -1,3 +1,10 @@
+jest.mock("../../services/playlistRemoteRadio", () => ({
+    buildRemotePlaylistRadio: jest.fn(),
+    buildRemoteTrackRadio: jest.fn(),
+    buildRemoteLikedRadio: jest.fn(),
+    buildRemoteArtistRadio: jest.fn(),
+}));
+import { buildRemoteArtistRadio } from "../../services/playlistRemoteRadio";
 import {
     express,
     Request,
@@ -710,6 +717,73 @@ describe("library catalog list runtime coverage", () => {
         expectNoUnboundedIdPoolFetch();
     });
 
+    it("builds artist radio for a catalog artist without local audio files", async () => {
+        mockTrackFindMany.mockResolvedValueOnce([]);
+        mockArtistFindUnique.mockResolvedValueOnce({ name: "2CELLOS" });
+        const tracks = [
+            {
+                id: "yt:next0000001",
+                youtubeVideoId: "next0000001",
+                streamSource: "youtube",
+            },
+        ];
+        (buildRemoteArtistRadio as jest.Mock).mockResolvedValueOnce(tracks);
+        const res = createRes();
+        await radioHandler(
+            {
+                query: { type: "artist", value: "catalog-artist", limit: "25" },
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+        expect(res.body).toEqual({ tracks });
+        expect(buildRemoteArtistRadio).toHaveBeenCalledWith("2CELLOS", 25);
+        expect(mockTrackFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    origin: "LOCAL",
+                    filePath: { not: null },
+                    NOT: { filePath: "" },
+                    album: {
+                        artistId: "catalog-artist",
+                        location: {
+                            in: ["LIBRARY", "DISCOVER", "REMOTE", "FEDERATED"],
+                        },
+                    },
+                }),
+            }),
+        );
+    });
+
+    it("artist-name radio uses the external catalog when there is no local artist row", async () => {
+        mockArtistFindFirst.mockResolvedValueOnce(null);
+        const tracks = [
+            {
+                id: "yt:next0000001",
+                youtubeVideoId: "next0000001",
+                streamSource: "youtube",
+            },
+        ];
+        (buildRemoteArtistRadio as jest.Mock).mockResolvedValueOnce(tracks);
+        const res = createRes();
+        await radioHandler(
+            {
+                query: {
+                    type: "artist-name",
+                    value: "Папин Олимпос",
+                    limit: "25",
+                },
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+        expect(res.body).toEqual({ tracks });
+        expect(buildRemoteArtistRadio).toHaveBeenCalledWith(
+            "Папин Олимпос",
+            25,
+        );
+    });
+
     it("supports artist radio validation, empty artist libraries, and mixed artist+similar queues", async () => {
         const missingArtistReq = {
             query: { type: "artist" },
@@ -836,6 +910,21 @@ describe("library catalog list runtime coverage", () => {
             "a2",
             "s2",
         ]);
+        expect(mockTrackFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    origin: "LOCAL",
+                    filePath: { not: null },
+                    NOT: { filePath: "" },
+                    album: {
+                        artistId: { in: ["artist-sim-1"] },
+                        location: {
+                            in: ["LIBRARY", "DISCOVER", "REMOTE", "FEDERATED"],
+                        },
+                    },
+                }),
+            }),
+        );
     });
 
     it("caps overrepresented similar artists in artist radio results", async () => {
@@ -1164,6 +1253,18 @@ describe("library catalog list runtime coverage", () => {
             if (Array.isArray(args.where?.album?.artistId?.in)) {
                 return [{ id: "sim-b1" }];
             }
+            if (args.where?.trackGenres?.some) {
+                return [{ id: "genre-c1" }];
+            }
+            if (
+                args.select?.id &&
+                args.orderBy?.id === "asc" &&
+                args.skip !== undefined
+            ) {
+                return Array.from({ length: 50 }, (_unused, index) => ({
+                    id: `rnd-d${index + 1}`,
+                }));
+            }
             if (Array.isArray(args.where?.id?.in) && args.include?.album) {
                 return (args.where.id.in as string[]).map(
                     (id: string, index: number) =>
@@ -1185,13 +1286,7 @@ describe("library catalog list runtime coverage", () => {
             { toArtistId: "artist-sim-1", weight: 0.9 },
         ]);
         mockLoadVibeRadioCandidateIds.mockResolvedValueOnce(["an-1", "an-2"]);
-        mockPrismaQueryRaw
-            .mockResolvedValueOnce([{ id: "genre-c1" }])
-            .mockResolvedValueOnce(
-                Array.from({ length: 50 }, (_unused, index) => ({
-                    id: `rnd-d${index + 1}`,
-                })),
-            );
+        mockTrackCount.mockResolvedValueOnce(1).mockResolvedValueOnce(50);
 
         const missingSourceReq = {
             query: { type: "vibe" },
@@ -1261,8 +1356,27 @@ describe("library catalog list runtime coverage", () => {
                 take: 400,
             }),
         );
-        expectBoundedRandomQuery(mockPrismaQueryRaw.mock.calls[0], 55);
-        expectBoundedRandomQuery(mockPrismaQueryRaw.mock.calls[1], 50);
+        expect(mockPrismaQueryRaw).not.toHaveBeenCalled();
+        expect(mockTrackCount).toHaveBeenCalledTimes(2);
+        expect(mockTrackFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    trackGenres: expect.any(Object),
+                }),
+                select: { id: true },
+                orderBy: { id: "asc" },
+                skip: 0,
+                take: 1,
+            }),
+        );
+        expect(mockTrackFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                select: { id: true },
+                orderBy: { id: "asc" },
+                skip: 0,
+                take: 50,
+            }),
+        );
     });
 
     it("covers favorites, decade, genre, mood, and all radio branches", async () => {

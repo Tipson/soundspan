@@ -91,6 +91,80 @@ describe("server music sources", () => {
             false,
         );
     });
+    it.each([
+        ["2011 Remaster", "2024 Remaster"],
+        ["Alpha Remix", "Beta Remix"],
+        ["Live at Wembley", "Live at Madison Square Garden"],
+        ["Piano Instrumental", "Guitar Instrumental"],
+    ])("keeps %s separate from %s despite the same ISRC", (wanted, other) => {
+        const original = {
+            ...track,
+            title: `Song (${wanted})`,
+            isrc: "RUA012600001",
+        };
+        expect(
+            matchesRecording(original, {
+                ...original,
+                title: `Song (${other})`,
+            }),
+        ).toBe(false);
+    });
+    it("matches the same named version with ordinary punctuation and case", () => {
+        const original = {
+            ...track,
+            title: "Song (Alpha Remix)",
+            isrc: "RUA012600001",
+        };
+        expect(
+            matchesRecording(original, {
+                ...original,
+                title: "SONG — Alpha Remix!",
+            }),
+        ).toBe(true);
+    });
+    it("does not open a wrong named version returned as the only ISRC match", async () => {
+        const wanted = {
+            ...track,
+            title: "Song (Alpha Remix)",
+            isrc: "RUA012600001",
+        };
+        const source = adapter();
+        source.search = jest.fn(async () => [
+            { ...wanted, title: "Song (Beta Remix)" },
+        ]);
+        const resolver = createMusicSourceResolver({
+            connections: async () => [source],
+        });
+        expect(await resolver.resolve("a", wanted, signal())).toBeNull();
+        expect(source.open).not.toHaveBeenCalled();
+        expect(resolver.health().leases).toBe(0);
+    });
+    it("tries the exact backup after rejecting a different remaster year", async () => {
+        const wanted = {
+            ...track,
+            title: "Song (2024 Remaster)",
+            isrc: "RUA012600001",
+        };
+        const wrong = adapter();
+        wrong.search = jest.fn(async () => [
+            { ...wanted, title: "Song (2011 Remaster)" },
+        ]);
+        const backup = adapter("vk");
+        backup.search = jest.fn(async () => [
+            { ...wanted, provider: "vk" as const, id: "-12_34" },
+        ]);
+        const resolver = createMusicSourceResolver({
+            connections: async () => [wrong, backup],
+        });
+        const lease = await resolver.resolve("a", wanted, signal());
+        expect(lease?.provider).toBe("vk");
+        expect(wrong.open).not.toHaveBeenCalled();
+        expect(backup.open).toHaveBeenCalledWith(
+            "-12_34",
+            { range: "bytes=0-0" },
+            expect.any(AbortSignal),
+        );
+    });
     it("shares the service connection but binds each lease to its Soundspan user", async () => {
         const source = adapter();
         const resolver = createMusicSourceResolver({

@@ -133,6 +133,7 @@ const apiState = {
     ytMatches: [] as Array<Record<string, unknown> | null>,
     tidalPayloads: [] as Array<Record<string, unknown>[]>,
     ytPayloads: [] as Array<Record<string, unknown>[]>,
+    ytStatusCalls: 0,
 };
 
 mock.module("react", {
@@ -165,6 +166,7 @@ mock.module("@/lib/api", {
                 return apiState.tidalStatus;
             },
             getYtMusicStatus: async () => {
+                apiState.ytStatusCalls++;
                 if (apiState.failYtStatus) {
                     throw new Error("yt status failed");
                 }
@@ -222,6 +224,39 @@ beforeEach(() => {
     apiState.ytMatches = [];
     apiState.tidalPayloads = [];
     apiState.ytPayloads = [];
+    apiState.ytStatusCalls = 0;
+});
+
+test("resolved online weekly tracks skip status and batch matching even during provider outage", async () => {
+    const { useDiscoverProviderGapFill } =
+        await import("../../features/discover/hooks/useDiscoverProviderGapFill");
+    const tracks = [
+        {
+            id: "yt:weekly",
+            title: "Weekly",
+            artist: "Artist",
+            album: "Album",
+            albumId: "album",
+            similarity: 0,
+            tier: "explore" as const,
+            coverUrl: null,
+            available: true,
+            duration: 180,
+            isLiked: false,
+            likedAt: null,
+            sourceType: "youtube" as const,
+            streamSource: "youtube" as const,
+            youtubeVideoId: "weekly",
+            recommendationGenerationId: "generation",
+        },
+    ];
+    apiState.failYtStatus = true;
+    const result = await settleHook(() => useDiscoverProviderGapFill(tracks));
+    assert.deepEqual(result.tracks, tracks);
+    assert.equal(result.isMatching, false);
+    assert.equal(apiState.ytStatusCalls, 0);
+    assert.equal(apiState.ytPayloads.length, 0);
+    assert.equal(result.providerCounts.youtube, 1);
 });
 
 async function settleHook<T>(hookFn: () => T): Promise<T> {

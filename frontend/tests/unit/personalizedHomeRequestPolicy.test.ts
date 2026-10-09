@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     buildPersonalizedHomeFeedUrl,
+    personalizedHomeFeedQueryKey,
     PERSONALIZED_HOME_QUERY_RETRY,
     PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
     PERSONALIZED_HOME_TIMEOUT_RETRY,
@@ -71,4 +72,46 @@ test("personalized home request carries coarse client context", () => {
     assert.equal(url.searchParams.get("localHour"), "21");
     assert.equal(url.searchParams.get("timezoneOffsetMinutes"), "180");
     assert.equal(url.searchParams.get("deviceClass"), "mobile");
+});
+
+test("time-of-day feed uses a separate cache entry for each period", () => {
+    const daily = personalizedHomeFeedQueryKey(
+        25,
+        "for-you",
+        null,
+        "made-for-you",
+        "any",
+    );
+    const morning = personalizedHomeFeedQueryKey(
+        25,
+        "for-you",
+        null,
+        "made-for-you",
+        "any",
+        "morning",
+    );
+    const evening = personalizedHomeFeedQueryKey(
+        25,
+        "for-you",
+        null,
+        "made-for-you",
+        "any",
+        "evening",
+    );
+    assert.notDeepEqual(morning, daily);
+    assert.notDeepEqual(morning, evening);
+    const url = new URL(
+        buildPersonalizedHomeFeedUrl(
+            25,
+            "for-you",
+            null,
+            "made-for-you",
+            "tab-1",
+            { localHour: 9, timezoneOffsetMinutes: 180, deviceClass: "mobile" },
+            "any",
+            "morning",
+        ),
+        "https://soundspan.test",
+    );
+    assert.equal(url.searchParams.get("timeOfDay"), "1");
 });

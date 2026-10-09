@@ -37,6 +37,7 @@
         "test:component:coverage:changed": "bash -lc 'set -o pipefail; npm run test:component:coverage 2>&1 | node scripts/check-social-changed-coverage.mjs'",
         "test:coverage:social": "npm run test:coverage && npm run test:component:coverage:changed",
         "test:e2e": "playwright test",
+        "test:core-journeys": "node --test --import tsx scripts/core-journey-report.test.mjs tests/unit/coreJourneyMediaClock.test.ts && node scripts/run-core-user-journeys.mjs",
         "test:predeploy": "playwright test tests/e2e/predeploy --reporter=list",
         "test:predeploy:ui": "playwright test tests/e2e/predeploy --ui",
         "test:predeploy:headed": "playwright test tests/e2e/predeploy --headed",

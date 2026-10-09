@@ -1,8 +1,13 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { performance } from "node:perf_hooks";
 
 import { prisma } from "../../utils/db";
 import type { RecommendationCandidate } from "./types";
+import {
+    hasNativeRecommendationIdentity,
+    readNativeRecommendationRecording,
+} from "./nativeCandidates";
+import { readVerifiedMusicSourceRecording } from "../musicSources/verifiedMetadata";
 
 export interface ResolvedCanonicalRecording {
     id: string;
@@ -174,14 +179,16 @@ export async function runCanonicalIdentityTransaction<T>(
     throw new Error("Canonical identity transaction retry bound was exceeded");
 }
 
-/** Follow a preserved merge alias to its one live canonical survivor. */
+/** Follow a preserved merge alias, optionally checking the caller's fence between hops. */
 export async function resolveCanonicalSurvivor(
     database: Pick<Prisma.TransactionClient, "canonicalRecording">,
     initial: CanonicalAliasRow,
+    check?: () => void,
 ): Promise<ResolvedCanonicalRecording> {
     const visited = new Set<string>();
     let current = initial;
     for (let depth = 0; depth < CANONICAL_MERGE_MAX_DEPTH; depth += 1) {
+        check?.();
         if (visited.has(current.id)) {
             throw new Error("Canonical merge alias cycle detected");
         }
@@ -198,6 +205,7 @@ export async function resolveCanonicalSurvivor(
             where: { id: current.mergedIntoId },
             select: canonicalAliasSelect,
         });
+        check?.();
         if (!target) {
             throw new Error("Canonical merge alias target is missing");
         }
@@ -208,7 +216,7 @@ export async function resolveCanonicalSurvivor(
 
 /** Minimal provider identity used outside the recommendation pipeline. */
 export interface ProviderTrackIdentity {
-    source: RecommendationCandidate["source"];
+    source: "youtube" | "tidal" | "library";
     providerTrackId: string | number;
     title: string;
     artist: string;
@@ -308,6 +316,8 @@ export function buildCanonicalRecordingKey(
 }
 
 function providerTrackId(candidate: RecommendationCandidate): string | null {
+    if (hasNativeRecommendationIdentity(candidate))
+        return readNativeRecommendationRecording(candidate)?.id ?? null;
     if (candidate.source === "youtube") {
         return (
             candidate.provider.youtubeVideoId ??
@@ -331,6 +341,12 @@ export class CanonicalIdentityResolver {
     async resolve(
         candidate: RecommendationCandidate,
     ): Promise<ResolvedCanonicalRecording> {
+        // Native recommendation metadata is not the server byte-probe attestation.
+        // Only the verified playback writer may create this fourth mapping.
+        if (hasNativeRecommendationIdentity(candidate))
+            throw new Error(
+                "Native identity requires a confirmed exact mapping",
+            );
         const providerId = providerTrackId(candidate);
         if (providerId) {
             const mapped = await this.dependencies.findProviderMapping(
@@ -404,14 +420,17 @@ async function findProviderMapping(
 
 /**
  * Read known provider identities in bounded batches, preserving input positions.
- * Misses, ambiguous mappings and invalid aliases use the ordinary resolver.
+ * Legacy misses use the ordinary resolver; native misses remain neutral and read-only.
  * The result is request-local: merges and stale flags are never globally cached.
  */
 export async function findMappedCanonicalCandidates(
     candidates: readonly RecommendationCandidate[],
+    check?: () => void,
 ): Promise<Array<ResolvedCanonicalRecording | null>> {
+    check?.();
     const result: Array<ResolvedCanonicalRecording | null> = [];
     for (let offset = 0; offset < candidates.length; offset += 250) {
+        check?.();
         const batch = candidates.slice(offset, offset + 250);
         const ids = (source: RecommendationCandidate["source"]) => [
             ...new Set(
@@ -424,7 +443,26 @@ export async function findMappedCanonicalCandidates(
         const youtube = ids("youtube");
         const tidal = ids("tidal").map(Number).filter(Number.isSafeInteger);
         const library = ids("library");
+        const native = (["vk", "yandex"] as const).flatMap((provider) => {
+            const providerTrackIds = ids(provider);
+            return providerTrackIds.length
+                ? [
+                      {
+                          trackMusicSource: {
+                              is: {
+                                  provider,
+                                  providerTrackId: { in: providerTrackIds },
+                                  verifiedMetadata: { not: Prisma.AnyNull },
+                                  metadataObservedAt: { not: null },
+                                  metadataConnectionVersion: { gt: 0 },
+                              },
+                          },
+                      },
+                  ]
+                : [];
+        });
         const filters: Prisma.TrackMappingWhereInput[] = [
+            ...native,
             ...(youtube.length
                 ? [{ trackYtMusic: { is: { videoId: { in: youtube } } } }]
                 : []),
@@ -451,9 +489,23 @@ export async function findMappedCanonicalCandidates(
                 trackYtMusic: { select: { videoId: true } },
                 trackTidal: { select: { tidalId: true } },
                 track: { select: { id: true } },
+                ...(native.length
+                    ? {
+                          trackMusicSource: {
+                              select: {
+                                  provider: true,
+                                  providerTrackId: true,
+                                  verifiedMetadata: true,
+                                  metadataObservedAt: true,
+                                  metadataConnectionVersion: true,
+                              },
+                          },
+                      }
+                    : {}),
                 canonicalRecording: { select: canonicalAliasSelect },
             },
         });
+        check?.();
         // A truncated duplicate set cannot prove an unambiguous identity.
         if (rows.length === bound) {
             result.push(...batch.map(() => null));
@@ -462,7 +514,11 @@ export async function findMappedCanonicalCandidates(
         const mapped = new Map<string, CanonicalAliasRow | null>();
         for (const row of rows) {
             if (!row.canonicalRecording) continue;
+            const recording = readVerifiedMusicSourceRecording(
+                row.trackMusicSource,
+            );
             const keys = [
+                recording ? `${recording.provider}:${recording.id}` : null,
                 row.trackYtMusic ? `youtube:${row.trackYtMusic.videoId}` : null,
                 row.trackTidal ? `tidal:${row.trackTidal.tidalId}` : null,
                 row.track ? `library:${row.track.id}` : null,
@@ -481,6 +537,7 @@ export async function findMappedCanonicalCandidates(
         }
         const survivors = new Map<string, ResolvedCanonicalRecording | null>();
         for (const candidate of batch) {
+            check?.();
             const row = mapped.get(
                 `${candidate.source}:${providerTrackId(candidate)}`,
             );
@@ -492,15 +549,18 @@ export async function findMappedCanonicalCandidates(
                 try {
                     survivors.set(
                         row.id,
-                        await resolveCanonicalSurvivor(prisma, row),
+                        await resolveCanonicalSurvivor(prisma, row, check),
                     );
                 } catch {
+                    check?.();
                     survivors.set(row.id, null);
                 }
             }
+            check?.();
             result.push(survivors.get(row.id) ?? null);
         }
     }
+    check?.();
     return result;
 }
 

@@ -32,8 +32,13 @@ const track: TrackFixture = {
 const media: {
     currentTrack: typeof track | null;
     currentAudiobook: null;
-    currentPodcast: null;
-    playbackType: "track" | null;
+    currentPodcast: {
+        title: string;
+        podcastTitle: string;
+        duration: number;
+        coverUrl: null;
+    } | null;
+    playbackType: "track" | "podcast" | null;
 } = {
     currentTrack: track,
     currentAudiobook: null,
@@ -130,6 +135,7 @@ beforeEach(() => {
     playback.isPlaying = false;
     playback.currentTime = 0;
     media.currentTrack = track;
+    media.currentPodcast = null;
     media.playbackType = "track";
     registered.clear();
     registrationCounts.clear();
@@ -140,6 +146,8 @@ beforeEach(() => {
     engineControls.pause.mock.resetCalls();
     controls.resume.mock.resetCalls();
     controls.pause.mock.resetCalls();
+    controls.next.mock.resetCalls();
+    controls.skipForward.mock.resetCalls();
     Object.defineProperty(navigator, "mediaSession", {
         configurable: true,
         value: mediaSession,
@@ -321,6 +329,56 @@ test("stable OS handlers invoke the latest committed queue callbacks", async (t)
     assert.equal(registered.get("nexttrack"), handler);
     handler?.();
     assert.equal(newNext.mock.callCount(), 1);
+});
+
+test("music exposes track skip while podcasts expose short seeking", async (t) => {
+    const { useMediaSession } = await import("../../hooks/useMediaSession");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    function Probe() {
+        useMediaSession();
+        return null;
+    }
+
+    playback.isPlaying = true;
+    await React.act(async () => root.render(React.createElement(Probe)));
+    assert.equal(typeof registered.get("previoustrack"), "function");
+    assert.equal(typeof registered.get("nexttrack"), "function");
+    assert.equal(registered.get("seekbackward") ?? null, null);
+    assert.equal(registered.get("seekforward") ?? null, null);
+    assert.equal(typeof registered.get("seekto"), "function");
+    registered.get("nexttrack")?.();
+    assert.equal(controls.next.mock.callCount(), 1);
+
+    media.currentTrack = null;
+    media.currentPodcast = {
+        title: "Episode",
+        podcastTitle: "Podcast",
+        duration: 1200,
+        coverUrl: null,
+    };
+    media.playbackType = "podcast";
+    await React.act(async () => root.render(React.createElement(Probe)));
+    assert.equal(typeof registered.get("seekbackward"), "function");
+    assert.equal(typeof registered.get("seekforward"), "function");
+    const seekForward = registered.get("seekforward") as (details: {
+        seekOffset: number;
+    }) => void;
+    seekForward({ seekOffset: 10 });
+    assert.equal(controls.skipForward.mock.calls[0]?.arguments[0], 10);
+
+    media.currentPodcast = null;
+    media.currentTrack = track;
+    media.playbackType = "track";
+    await React.act(async () => root.render(React.createElement(Probe)));
+    assert.equal(registered.get("seekbackward") ?? null, null);
+    assert.equal(registered.get("seekforward") ?? null, null);
 });
 
 test("media controls and lock-screen state clear after playback is paused and media is removed", async (t) => {

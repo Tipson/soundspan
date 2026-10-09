@@ -13,6 +13,14 @@ export interface MusicSourceTrack {
     contentVersion: "explicit" | "clean" | "unknown";
     preview: boolean;
 }
+/** Server-only result of an exact lookup; private Play snapshots are not attestations. */
+export interface VerifiedMusicSourceRecording {
+    provider: MusicSource;
+    providerTrackId: string;
+    connectionVersion: number;
+    recording: MusicSourceTrack;
+    observedAt: Date;
+}
 /** Recording request independent of any particular transport. */
 export type RecordingRequest = Omit<
     MusicSourceTrack,
@@ -36,6 +44,12 @@ export interface MusicSourceAdapter {
     version: number;
     enabled: boolean;
     search(query: string, signal: AbortSignal): Promise<MusicSourceTrack[]>;
+    /** Exact recording neighbours, without account stations or playback side effects. */
+    recommendations?(
+        id: string,
+        limit: number,
+        signal: AbortSignal,
+    ): Promise<MusicSourceTrack[]>;
     lookup(id: string, signal: AbortSignal): Promise<MusicSourceTrack | null>;
     open(
         id: string,

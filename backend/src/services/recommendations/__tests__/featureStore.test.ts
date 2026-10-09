@@ -166,6 +166,49 @@ describe("canonical recommendation feature store", () => {
         expect(taste.negativeCentroids[0][1]).toBeGreaterThan(0.9);
     });
 
+    it("learns a time-of-day mix from listening across recommendation surfaces", async () => {
+        const dependencies = {
+            loadCanonicalFeatures: jest.fn().mockResolvedValue([]),
+            loadTasteRows: jest.fn().mockResolvedValue([]),
+            loadDislikedCanonicalKeys: jest.fn().mockResolvedValue([]),
+            loadSeedCanonicalRecordingId: jest.fn().mockResolvedValue(null),
+            loadSessionRows: jest.fn().mockResolvedValue([]),
+            loadContextRows: jest.fn().mockImplementation((_userId, surface) =>
+                Promise.resolve(
+                    surface === "wave"
+                        ? [
+                              {
+                                  embedding: [1, 0],
+                                  outcome: "completed",
+                                  completionRatio: 1,
+                                  listenedSeconds: 180,
+                              },
+                          ]
+                        : [],
+                ),
+            ),
+            now: () => new Date("2026-09-01T12:00:00Z"),
+        };
+        const store = new RecommendationFeatureStore(dependencies);
+
+        const taste = await store.loadTasteContext("alice", {
+            surface: "made-for-you",
+            context: { localHour: 9, deviceClass: "mobile" },
+            crossSurfaceContext: true,
+        });
+
+        expect(dependencies.loadContextRows).toHaveBeenCalledTimes(3);
+        for (const surface of ["wave", "home", "made-for-you"]) {
+            expect(dependencies.loadContextRows).toHaveBeenCalledWith(
+                "alice",
+                surface,
+                { localHour: 9, deviceClass: undefined },
+                expect.any(Date),
+            );
+        }
+        expect(taste.contextCentroids[0][0]).toBeGreaterThan(0.9);
+    });
+
     it("returns only canonical dislikes loaded for the authenticated account", async () => {
         const dependencies = {
             loadCanonicalFeatures: jest.fn().mockResolvedValue([]),

@@ -136,9 +136,11 @@ export function usePlaybackOrchestratorRefs({
     const autoMatchVibeLastAttemptAtRef = useRef<number>(0);
     const pendingAutoMatchAdvanceRef = useRef<{
         trackId: string;
+        radioOrigin: Track["radioOrigin"] | null;
         loadId: number;
         seekOperationId: number;
         playbackIntentGeneration: number;
+        queueReplacementGeneration: number;
         queueIdentity: readonly unknown[];
         playbackPositionGeneration: number;
         viaWatchdog: boolean;
@@ -235,9 +237,16 @@ export function usePlaybackOrchestratorRefs({
 
     // The replacement owns timeline/load events until its validated seek completes.
     const serverSourceRecoveryLoadIdRef = useRef<number | null>(null);
+    // A stopped native element loses its clock. Keep the target for explicit
+    // retry, correlated to queue occurrence, load and auth generation.
+    const serverSourceRecoveryPositionRef = useRef<{
+        key: string;
+        value: number;
+    } | null>(null);
 
     return {
         serverSourceRecoveryLoadIdRef,
+        serverSourceRecoveryPositionRef,
         lastTrackIdRef,
         hasSeenTrackLoadRef,
         lastPlayingStateRef,

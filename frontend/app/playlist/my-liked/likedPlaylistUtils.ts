@@ -10,10 +10,43 @@ export type { LikedPlaylistTrack };
 
 /**
  * Converts a LikedPlaylistTrack to an AudioTrack for playback.
- * Preserves YouTube streaming fields so remote liked tracks stay playable.
+ * Preserves remote provider identity and the complete direct recording contract.
  */
 export function toAudioTrack(track: LikedPlaylistTrack): AudioTrack | null {
     if (!isTrackActionable(track)) return null;
+    if (
+        track.source === "vk" ||
+        track.source === "yandex" ||
+        /^(vk|yandex):/.test(track.id)
+    ) {
+        return normalizeActionableAudioTrack({
+            id: track.id,
+            title: track.title,
+            duration: track.duration,
+            artist: {
+                id: track.artist.id ?? undefined,
+                name: track.artist.name,
+            },
+            album: {
+                id: track.album.id ?? undefined,
+                title: track.album.title,
+                coverArt: track.album.coverArt,
+            },
+            filePath: track.filePath || undefined,
+            source:
+                track.source === "vk" || track.source === "yandex"
+                    ? track.source
+                    : undefined,
+            streamSource: track.streamSource,
+            provider: track.provider?.source
+                ? {
+                      source: track.provider.source,
+                      providerTrackId: track.provider.providerTrackId,
+                  }
+                : undefined,
+            musicSourceRecording: track.musicSourceRecording,
+        });
+    }
     const providerYtId =
         typeof track.provider?.youtubeVideoId === "string"
             ? track.provider.youtubeVideoId
@@ -59,6 +92,8 @@ export function toAudioTrack(track: LikedPlaylistTrack): AudioTrack | null {
 export function toLikedTrackActionTarget(
     track: LikedPlaylistTrack,
 ): AudioTrack {
+    const playable = toAudioTrack(track);
+    if (playable) return playable;
     const tidalTrackId = Number(
         track.tidalTrackId ?? track.provider?.tidalTrackId,
     );

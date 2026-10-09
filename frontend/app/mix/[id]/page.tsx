@@ -2,16 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-    ListPlus,
-    Loader2,
-    Music,
-    Pause,
-    Play,
-    Save,
-    Shuffle,
-} from "lucide-react";
+import { ListPlus, Loader2, Music, Save, Shuffle } from "lucide-react";
 import { toast } from "sonner";
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
+import {
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import { api } from "@/lib/api";
 import type { Track } from "@/lib/audio-state-context";
 import {
@@ -127,12 +125,9 @@ function MixPageContent() {
         () => tracks.reduce((sum, track) => sum + (track.duration || 0), 0),
         [tracks],
     );
-    const mixTrackIds = useMemo(
-        () => new Set(tracks.map((track) => track.id)),
-        [tracks],
-    );
+    const collectionId = `mix:${mixId}`;
     const isThisMixPlaying = Boolean(
-        isPlaying && currentTrack && mixTrackIds.has(currentTrack.id),
+        currentTrack && isCollectionPlayback(collectionId),
     );
 
     const handlePlayMix = () => {
@@ -145,17 +140,34 @@ function MixPageContent() {
             return;
         }
 
-        playTracks(tracks.map(mixTrackToPlaybackTrack), 0);
+        const generation = getCollectionPlaybackGeneration();
+        playTracks(tracks.map(mixTrackToPlaybackTrack), 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(collectionId, generation);
     };
 
     const handlePlayTrack = (index: number) => {
         if (tracks.length === 0) return;
-        playTracks(tracks.map(mixTrackToPlaybackTrack), index);
+        const generation = getCollectionPlaybackGeneration();
+        playTracks(tracks.map(mixTrackToPlaybackTrack), index, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(collectionId, generation);
     };
 
     const handleShuffle = () => {
         if (tracks.length === 0) return;
-        playTracks(shuffleArray(tracks.map(mixTrackToPlaybackTrack)), 0);
+        const generation = getCollectionPlaybackGeneration();
+        playTracks(
+            shuffleArray(tracks.map(mixTrackToPlaybackTrack)),
+            0,
+            false,
+            { replaceQueue: true, preserveOrder: true },
+        );
+        markCollectionPlayback(collectionId, generation);
     };
 
     const handleSaveAsPlaylist = async () => {
@@ -259,24 +271,11 @@ function MixPageContent() {
                             className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
                         >
                             {tracks.length > 0 && (
-                                <button
-                                    type="button"
+                                <CollectionPlaybackButton
                                     onClick={handlePlayMix}
-                                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:flex-none"
-                                >
-                                    {showPlaySpinner ? (
-                                        <Loader2 className="h-5 w-5 animate-spin" />
-                                    ) : isThisMixPlaying && isPlaying ? (
-                                        <Pause className="h-5 w-5 fill-current" />
-                                    ) : (
-                                        <Play className="ml-0.5 h-5 w-5 fill-current" />
-                                    )}
-                                    <span>
-                                        {isThisMixPlaying && isPlaying
-                                            ? "Пауза"
-                                            : "Слушать"}
-                                    </span>
-                                </button>
+                                    isPlaying={isThisMixPlaying && isPlaying}
+                                    isLoading={showPlaySpinner}
+                                />
                             )}
                             {tracks.length > 1 && (
                                 <button

@@ -95,6 +95,41 @@ function createDependencies(
 }
 
 describe("TasteProfileService", () => {
+    it("persists every selection without increasing the provider request budget", async () => {
+        const dependencies = createDependencies();
+        const service = new TasteProfileService(dependencies);
+        const selection = {
+            genres: Array.from({ length: 34 }, (_, i) => `Genre ${i}`),
+            artists: Array.from({ length: 120 }, (_, i) => `Artist ${i}`),
+        };
+        const result = await service.saveProfile("alice", selection);
+        expect(result.profile?.genres).toEqual(selection.genres);
+        expect(result.profile?.artists).toEqual(selection.artists);
+        expect(dependencies.searchSongs).toHaveBeenCalledTimes(16);
+        expect(result.profile?.seedTracks.length).toBeLessThanOrEqual(12);
+    });
+    it("accepts one choice and an explicitly cleared profile", async () => {
+        const dependencies = createDependencies();
+        const service = new TasteProfileService(dependencies);
+        expect(
+            (
+                await service.saveProfile("alice", {
+                    genres: [],
+                    artists: ["Muse"],
+                })
+            ).profile?.artists,
+        ).toEqual(["Muse"]);
+        const empty = await service.saveProfile("alice", {
+            genres: [],
+            artists: [],
+        });
+        expect(empty.profile).toEqual({
+            genres: [],
+            artists: [],
+            seedTracks: [],
+        });
+        expect(empty.needsOnboarding).toBe(false);
+    });
     it("keeps profile reads and signal checks scoped to the authenticated account", async () => {
         const states = new Map<string, TasteProfilePersistenceState>([
             [
@@ -228,8 +263,8 @@ describe("TasteProfileService", () => {
         expect(result.needsOnboarding).toBe(false);
     });
 
-    it("does not mark onboarding complete when no playable seed can be resolved", async () => {
-        const saveState = jest.fn();
+    it("persists recoverable preferences when no seed can be resolved", async () => {
+        const saveState = createDependencies().saveState;
         const service = new TasteProfileService(
             createDependencies({
                 saveState,
@@ -244,8 +279,16 @@ describe("TasteProfileService", () => {
                 genres: ["Rock", "Metal"],
                 artists: ["Muse"],
             }),
-        ).rejects.toBeInstanceOf(TasteProfileUnavailableError);
-        expect(saveState).not.toHaveBeenCalled();
+        ).resolves.toMatchObject({
+            profile: {
+                genres: ["Rock", "Metal"],
+                artists: ["Muse"],
+                seedTracks: [],
+                resolution: { attempts: 1 },
+            },
+            needsOnboarding: false,
+        });
+        expect(saveState).toHaveBeenCalledTimes(1);
     });
 
     it("never runs more than three provider seed queries concurrently", async () => {
@@ -297,9 +340,9 @@ describe("TasteProfileService", () => {
                 genres: ["Rock", "Metal", "Pop"],
                 artists: [],
             });
-            const assertion = expect(result).rejects.toBeInstanceOf(
-                TasteProfileUnavailableError,
-            );
+            const assertion = expect(result).resolves.toMatchObject({
+                profile: { seedTracks: [], resolution: { attempts: 1 } },
+            });
             await jest.advanceTimersByTimeAsync(5_001);
             await assertion;
         } finally {
@@ -335,7 +378,9 @@ describe("TasteProfileService", () => {
                 genres: ["Rock", "Metal", "Pop"],
                 artists: [],
             }),
-        ).rejects.toBeInstanceOf(TasteProfileUnavailableError);
+        ).resolves.toMatchObject({
+            profile: { seedTracks: [], resolution: { attempts: 1 } },
+        });
     });
 
     it("stores skip per account and allows a later completed profile to replace it", async () => {

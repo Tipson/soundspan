@@ -1,5 +1,6 @@
 "use client";
 
+import { isCollectionPlayback } from "@/lib/collectionPlayback";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Music2, Sparkles } from "lucide-react";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
@@ -23,7 +24,8 @@ import { UnavailableAlbums } from "@/features/discover/components/UnavailableAlb
 import { HowItWorks } from "@/features/discover/components/HowItWorks";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { useFeatures } from "@/lib/features-context";
-import { toAddToPlaylistRef } from "@/lib/trackRef";
+import { isPlaybackOnlyTrack, toAddToPlaylistRef } from "@/lib/trackRef";
+import { mapDiscoverTrackToPlaybackTrack } from "@/features/discover/playback";
 import { discoverAddedCount, discoverRu } from "@/lib/i18n/discoverRu";
 
 const DISCOVER_RECENT_GENERATION_WINDOW_MS = 45 * 60 * 1000;
@@ -101,6 +103,15 @@ function DiscoverWeeklyPageContent() {
     const displayPlaylist = playlist
         ? { ...playlist, tracks: providerEnrichedTracks }
         : null;
+    const onlineWeekly = displayPlaylist?.kind === "online-weekly";
+    const playlistSupportedTracks = (displayPlaylist?.tracks || []).filter(
+        (track) => {
+            const playbackTrack = mapDiscoverTrackToPlaybackTrack(track);
+            return (
+                playbackTrack !== null && !isPlaybackOnlyTrack(playbackTrack)
+            );
+        },
+    );
     const {
         handleGenerate,
         handlePlayPlaylist,
@@ -132,18 +143,22 @@ function DiscoverWeeklyPageContent() {
     }, [config?.lastGeneratedAt]);
     const shouldRetryPlaylistHydration =
         !loading &&
+        !onlineWeekly &&
         !hasPlaylistContent &&
         !isGenerating &&
         generatedRecently &&
         playlistRecoveryAttempts < DISCOVER_RECOVERY_MAX_ATTEMPTS;
     const shouldShowResolvingState =
+        !onlineWeekly &&
         !loading &&
         !hasPlaylistContent &&
         (isGenerating || shouldRetryPlaylistHydration);
 
     // Check if we're playing from this playlist
-    const isPlaylistPlaying = displayPlaylist?.tracks.some(
-        (t) => t.id === currentTrack?.id,
+    const isPlaylistPlaying = Boolean(
+        currentTrack &&
+        displayPlaylist &&
+        isCollectionPlayback(`discover:${displayPlaylist.weekStart}`),
     );
 
     useEffect(() => {
@@ -163,20 +178,21 @@ function DiscoverWeeklyPageContent() {
     }, [hasPlaylistContent, generatedRecently]);
 
     const handleAddAllToPlaylist = () => {
+        if (!playlistSupportedTracks.length) return;
         setShowPlaylistSelector(true);
     };
 
     const handlePlaylistSelected = async (playlistId: string) => {
-        if (!displayPlaylist?.tracks.length) return;
+        if (!playlistSupportedTracks.length) return;
         setIsAddingToPlaylist(true);
         try {
-            for (const track of displayPlaylist.tracks) {
+            for (const track of playlistSupportedTracks) {
                 await api.addTrackToPlaylist(
                     playlistId,
                     toAddToPlaylistRef(track),
                 );
             }
-            toast.success(discoverAddedCount(displayPlaylist.tracks.length));
+            toast.success(discoverAddedCount(playlistSupportedTracks.length));
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
@@ -226,20 +242,24 @@ function DiscoverWeeklyPageContent() {
                     isPlaylistPlaying={isPlaylistPlaying || false}
                     isPlaying={isPlaying}
                     onPlayToggle={
-                        isPlaylistPlaying && isPlaying
+                        isPlaylistPlaying
                             ? handleTogglePlay
                             : handlePlayPlaylist
                     }
                     onGenerate={handleGenerate}
                     onToggleSettings={() => setShowSettings(!showSettings)}
-                    onAddToPlaylist={handleAddAllToPlaylist}
+                    onAddToPlaylist={
+                        playlistSupportedTracks.length
+                            ? handleAddAllToPlaylist
+                            : undefined
+                    }
                     onShuffle={handleShufflePlaylist}
                     onAddAllToQueue={handleAddAllToQueue}
-                    isGenerating={isGenerating}
+                    isGenerating={onlineWeekly ? false : isGenerating}
                     batchStatus={batchStatus}
                 />
 
-                {showSettings && (
+                {showSettings && !onlineWeekly && (
                     <div className="mt-4">
                         <DiscoverSettings
                             config={config}
@@ -255,14 +275,22 @@ function DiscoverWeeklyPageContent() {
                         <div className="space-y-6">
                             {hasDiscoverTracks ? (
                                 <>
-                                    <p className="rounded-xl border border-line bg-surface-elevated px-4 py-3 text-xs leading-5 text-content-muted">
-                                        {discoverRu.sourceMix}:{" "}
-                                        {providerCounts.local}{" "}
-                                        {discoverRu.local}
-                                        {providerCounts.youtube > 0
-                                            ? ` • ${providerCounts.youtube} YouTube Music — ${discoverRu.gapFill}`
-                                            : ""}
-                                    </p>
+                                    {!onlineWeekly && (
+                                        <p className="rounded-xl border border-line bg-surface-elevated px-4 py-3 text-xs leading-5 text-content-muted">
+                                            {discoverRu.sourceMix}:{" "}
+                                            {providerCounts.local}{" "}
+                                            {discoverRu.local}
+                                            {providerCounts.youtube > 0
+                                                ? ` • ${providerCounts.youtube} YouTube Music — ${discoverRu.gapFill}`
+                                                : ""}
+                                            {providerCounts.vk > 0
+                                                ? ` • ${providerCounts.vk} VK Музыка`
+                                                : ""}
+                                            {providerCounts.yandex > 0
+                                                ? ` • ${providerCounts.yandex} Яндекс Музыка`
+                                                : ""}
+                                        </p>
+                                    )}
                                     <TrackList
                                         tracks={displayPlaylist?.tracks || []}
                                         isMatching={isMatching}
@@ -284,7 +312,7 @@ function DiscoverWeeklyPageContent() {
                                 onTogglePreview={handleTogglePreview}
                             />
 
-                            <HowItWorks />
+                            {!onlineWeekly && <HowItWorks />}
                         </div>
                     ) : shouldShowResolvingState ? (
                         <div
@@ -310,33 +338,42 @@ function DiscoverWeeklyPageContent() {
                                     />
                                 }
                                 title={discoverRu.status.emptyTitle}
-                                description={discoverRu.status.emptyHint}
+                                description={
+                                    onlineWeekly
+                                        ? "Пока не удалось собрать открытия недели. Попробуйте позже."
+                                        : discoverRu.status.emptyHint
+                                }
                             >
-                                <Button
-                                    variant="ai"
-                                    onClick={handleGenerate}
-                                    disabled={isGenerating}
-                                >
-                                    {isGenerating ? (
-                                        <>
-                                            <GradientSpinner size="sm" />
-                                            {batchStatus?.status === "scanning"
-                                                ? discoverRu.status.finalizing
-                                                : batchStatus?.status ===
-                                                    "generating"
-                                                  ? discoverRu.status.refreshing
-                                                  : `${discoverRu.status.working} ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <RefreshCw
-                                                className="size-5"
-                                                aria-hidden="true"
-                                            />
-                                            {discoverRu.action.generateNow}
-                                        </>
-                                    )}
-                                </Button>
+                                {!onlineWeekly && (
+                                    <Button
+                                        variant="ai"
+                                        onClick={handleGenerate}
+                                        disabled={isGenerating}
+                                    >
+                                        {isGenerating ? (
+                                            <>
+                                                <GradientSpinner size="sm" />
+                                                {batchStatus?.status ===
+                                                "scanning"
+                                                    ? discoverRu.status
+                                                          .finalizing
+                                                    : batchStatus?.status ===
+                                                        "generating"
+                                                      ? discoverRu.status
+                                                            .refreshing
+                                                      : `${discoverRu.status.working} ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <RefreshCw
+                                                    className="size-5"
+                                                    aria-hidden="true"
+                                                />
+                                                {discoverRu.action.generateNow}
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
                             </EmptyState>
                         </div>
                     )}

@@ -14,12 +14,16 @@ GlobalRegistrator.register();
 ).IS_REACT_ACT_ENVIRONMENT = true;
 const listeners = new Map<string, Set<(payload: unknown) => void>>();
 const actions: unknown[][] = [];
+const metrics: Array<{ event: string; fields: Record<string, unknown> }> = [];
+let trustedPosition = 73.5;
+let nativePosition = 73.5;
 const audioEngine = {
     load: (...args: unknown[]) => {
         actions.push(["load", ...args]);
     },
     stop: () => {
         actions.push(["stop"]);
+        nativePosition = 0;
     },
     pause: () => {
         actions.push(["pause"]);
@@ -29,9 +33,10 @@ const audioEngine = {
     },
     seek: (value: number) => {
         actions.push(["seek", value]);
+        nativePosition = value;
     },
-    getCurrentTime: () => 73.5,
-    getActualCurrentTime: () => 73.5,
+    getCurrentTime: () => nativePosition,
+    getActualCurrentTime: () => nativePosition,
     isPlaying: () => false,
     hasTrackEnded: () => false,
     on: (event: string, cb: (payload: unknown) => void) => {
@@ -55,7 +60,15 @@ mock.module("@/lib/api", {
     namedExports: { api: { resolveMusicSourceForRecovery: request } },
 });
 mock.module("@/lib/audio-engine/audioPlaybackOrchestratorRuntime", {
-    namedExports: { audioEngine, logPlaybackClientMetric: () => {} },
+    namedExports: {
+        audioEngine,
+        logPlaybackClientMetric: (
+            event: string,
+            fields: Record<string, unknown>,
+        ) => {
+            metrics.push({ event, fields });
+        },
+    },
 });
 let listenTogether = false;
 mock.module("@/lib/listen-together-session", {
@@ -102,12 +115,12 @@ function Probe() {
         refs.lastPlayingStateRef.current = playing;
         refs.loadIdRef.current = selected === track ? 1 : 2;
         refs.activeEngineTrackIdRef.current = selected.id;
-        refs.currentTimeSnapshotRef.current = 73.5;
+        refs.currentTimeSnapshotRef.current = trustedPosition;
         refs.currentTimeSnapshotTrackIdRef.current = selected.id;
         refs.startupStabilityRef.current = {
             trackId: selected.id,
             firstProgressAtMs: progress ? 1 : null,
-            lastObservedProgressSec: progress ? 73.5 : 0,
+            lastObservedProgressSec: progress ? trustedPosition : 0,
         };
     });
     const helpers = helpersHook.usePlaybackRecoveryHelpers({ refs });
@@ -165,11 +178,35 @@ beforeEach(() => {
     savedPosition = 0;
     playbackSourceUrl = "/api/ytmusic/stream/original001";
     actions.length = 0;
+    metrics.length = 0;
+    trustedPosition = nativePosition = 73.5;
     listeners.clear();
     request.mock.resetCalls();
 });
 after(() => GlobalRegistrator.unregister());
 const path = `/api/music-sources/leases/${"a".repeat(48)}/stream`;
+test("a failed early replacement reports its trusted position after stop resets the native clock", async () => {
+    trustedPosition = nativePosition = 4.96;
+    const view = await mount();
+    try {
+        const pending = attempt(failed);
+        await Promise.resolve();
+        resolveRequest(null);
+        assert.equal(await pending, "no_candidate");
+        assert.equal(nativePosition, 0);
+        const metric = metrics.find(
+            (m) => m.fields.reason === "server_source_recovery",
+        );
+        assert.equal(metric?.fields.outcome, "no_candidate");
+        assert.equal(metric?.fields.resumeAtSec, 4.96);
+        assert.equal(
+            actions.some((a) => a[0] === "play"),
+            false,
+        );
+    } finally {
+        await view.unmount();
+    }
+});
 test("a downloaded YouTube recording cannot be stopped or replaced by server recovery", async () => {
     playbackSourceUrl = "blob:https://soundspan.test/downloaded";
     const view = await mount();
@@ -277,6 +314,10 @@ test("a user seek during source resolution becomes the replacement position", as
     for (const cb of listeners.get("load") ?? []) cb({ durationSec: 240 });
     assert.equal(await pending, "recovered");
     assert.equal(savedPosition, 120);
+    const metric = metrics.find(
+        (m) => m.fields.reason === "server_source_recovery",
+    );
+    assert.equal(metric?.fields.resumeAtSec, 120);
     assert.deepEqual(
         actions.filter((a) => a[0] === "seek" || a[0] === "play"),
         [["seek", 120], ["play"]],

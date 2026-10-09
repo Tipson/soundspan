@@ -20,6 +20,7 @@ export function TasteProfileSettingsSection({
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const tasteProfile = useTasteProfile(accountId);
     const profile = tasteProfile.state?.profile;
+    const resolution = profile?.resolution;
     const signalCount =
         (profile?.genres.length ?? 0) + (profile?.artists.length ?? 0);
     const summary = tasteProfile.isLoading
@@ -33,18 +34,28 @@ export function TasteProfileSettingsSection({
             <SettingsSection
                 id="taste-profile"
                 title="Музыкальные вкусы"
-                description="Эти предпочтения помогают начать рекомендации для нового аккаунта. Прослушивания, лайки и дизлайки продолжат уточнять подборки автоматически."
+                description="Если ваши музыкальные предпочтения изменились, расскажите, каких исполнителей вы хотите слышать чаще."
             >
-                <SettingsRow label="Стартовый профиль" description={summary}>
+                <SettingsRow label="Любимые исполнители" description={summary}>
                     <button
                         type="button"
                         disabled={tasteProfile.isLoading || !accountId.trim()}
                         onClick={() => setIsEditorOpen(true)}
                         className="min-h-11 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-content transition-colors hover:border-white/20 hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        {signalCount > 0 ? "Изменить вкусы" : "Настроить вкусы"}
+                        Уточнить предпочтения
                     </button>
                 </SettingsRow>
+                {resolution && (
+                    <p
+                        role="status"
+                        className="mt-3 text-sm leading-6 text-content-secondary"
+                    >
+                        {resolution.attempts < 3
+                            ? "Предпочтения сохранены. Часть музыки пока недоступна — повторим подбор автоматически, когда приложение будет открыто."
+                            : "Предпочтения сохранены, но часть музыки подобрать не удалось. Откройте «Уточнить предпочтения» и сохраните выбор ещё раз, чтобы повторить подбор."}
+                    </p>
+                )}
             </SettingsSection>
 
             <TasteProfileEditor

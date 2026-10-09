@@ -551,6 +551,7 @@ export class DiscoveryRecommendationsService {
             where: {
                 userId,
                 playedAt: { gte: subDays(new Date(), 14) },
+                trackId: { not: null },
             },
             select: { trackId: true },
             take: 5000,

@@ -95,10 +95,15 @@ test("respects an empty continuation budget", () => {
     assert.deepEqual(collectProviderRadioContinuation(feed, [], 0, "new"), []);
 });
 
-test("uses the same interleaved For You selection as the first Wave page", () => {
+test("uses the same discovery-led For You selection as the first Wave page", () => {
     const feed: PersonalizedHomeFeed = {
         shelves: {
-            discovery: [personalized("seen"), personalized("fresh-a")],
+            discovery: [
+                personalized("seen"),
+                personalized("fresh-a"),
+                personalized("fresh-d"),
+                personalized("fresh-e"),
+            ],
             quickPicks: [personalized("fresh-b"), personalized("fresh-a")],
             listenAgain: [personalized("fresh-c")],
         },
@@ -120,10 +125,10 @@ test("uses the same interleaved For You selection as the first Wave page", () =>
 
     assert.deepEqual(
         tracks.map((track) => track.youtubeVideoId),
-        ["fresh-b", "fresh-a"],
+        ["fresh-a", "fresh-d", "fresh-e", "fresh-b"],
     );
     assert.equal(tracks[0].provider?.source, "youtube");
-    assert.equal(tracks[0].album?.coverArt, "https://img.test/fresh-b.jpg");
+    assert.equal(tracks[0].album?.coverArt, "https://img.test/fresh-a.jpg");
 });
 
 test("recognizes only directly playable YouTube provider tracks", () => {

@@ -1,3 +1,5 @@
+import { musicSourceCandidateSchema } from "./audio/musicSourcePlayback";
+
 export type PlaybackSnapshotType = "track" | "audiobook" | "podcast" | null;
 
 export interface QueueTrackIdentity {
@@ -12,12 +14,21 @@ export interface RestorableQueueTrack extends QueueTrackIdentity {
     streamSource?: string | null;
     youtubeVideoId?: string | null;
     tidalTrackId?: number | string | null;
+    mediaSource?: string | null;
+    provider?: { source?: string; providerTrackId?: string } | null;
+    musicSourceRecording?: unknown;
 }
 
 // Track-id shapes that the library track lookup can never resolve:
-// "yt:<videoId>" / "tidal:<id>" provider composites and the synthetic
+// "yt:<videoId>" / "tidal:<id>" / "vk:<id>" / "yandex:<id>" provider composites and the synthetic
 // "yt-<videoId>" ids of pasted youtube-direct tracks.
-const NON_LIBRARY_TRACK_ID_PREFIXES = ["yt:", "yt-", "tidal:"];
+const NON_LIBRARY_TRACK_ID_PREFIXES = [
+    "yt:",
+    "yt-",
+    "tidal:",
+    "vk:",
+    "yandex:",
+];
 
 /**
  * Returns whether a persisted current-track id refers to a non-library
@@ -43,25 +54,61 @@ export function isNonLibraryTrackId(
 export function findRemoteQueueTrackForRestore<T extends RestorableQueueTrack>(
     trackId: string | null | undefined,
     serverQueue: readonly T[] | null | undefined,
+    currentIndex?: number,
+): T | null {
+    const item = findQueueTrackForRestore(trackId, serverQueue, currentIndex);
+    if (!item) return null;
+    const streamSource = item.streamSource;
+    if (
+        streamSource === "vk" ||
+        streamSource === "yandex" ||
+        /^(vk|yandex):/.test(String(item.id))
+    ) {
+        const parsed = musicSourceCandidateSchema.safeParse(
+            item.musicSourceRecording,
+        );
+        if (!parsed.success) return null;
+        const recording = parsed.data;
+        return item.id === `${recording.provider}:${recording.id}` &&
+            item.provider?.providerTrackId === recording.id &&
+            [item.mediaSource, streamSource, item.provider?.source].every(
+                (source) =>
+                    source === undefined || source === recording.provider,
+            )
+            ? item
+            : null;
+    }
+    const isRemote =
+        isNonLibraryTrackId(String(item.id).trim()) ||
+        streamSource === "tidal" ||
+        streamSource === "youtube" ||
+        streamSource === "youtube-direct" ||
+        Boolean(item.youtubeVideoId) ||
+        (item.tidalTrackId !== null && item.tidalTrackId !== undefined);
+    return isRemote ? item : null;
+}
+
+/** Restores metadata for the selected occurrence, with ID fallback for legacy snapshots. */
+export function findQueueTrackForRestore<T extends QueueTrackIdentity>(
+    trackId: string | null | undefined,
+    serverQueue: readonly T[] | null | undefined,
+    currentIndex?: number,
 ): T | null {
     if (typeof trackId !== "string" || !trackId.trim()) return null;
     if (!Array.isArray(serverQueue) || serverQueue.length === 0) return null;
 
     const normalizedId = trackId.trim();
+    if (Number.isInteger(currentIndex) && (currentIndex as number) >= 0) {
+        const current = serverQueue[currentIndex as number];
+        if (current && String(current.id ?? "").trim() === normalizedId)
+            return current;
+    }
     for (const item of serverQueue) {
         const itemId = item?.id;
         if (itemId === null || itemId === undefined) continue;
         if (String(itemId).trim() !== normalizedId) continue;
 
-        const streamSource = item.streamSource;
-        const isRemote =
-            isNonLibraryTrackId(normalizedId) ||
-            streamSource === "tidal" ||
-            streamSource === "youtube" ||
-            streamSource === "youtube-direct" ||
-            Boolean(item.youtubeVideoId) ||
-            (item.tidalTrackId !== null && item.tidalTrackId !== undefined);
-        return isRemote ? item : null;
+        return item;
     }
     return null;
 }

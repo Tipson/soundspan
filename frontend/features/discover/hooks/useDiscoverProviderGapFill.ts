@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { DiscoverTrack } from "../types";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import {
+    hasNativeDiscoverIdentity,
+    mapDiscoverTrackToPlaybackTrack,
+} from "../playback";
 
 interface YtMatch {
     videoId: string;
@@ -13,6 +17,8 @@ interface GapFillResult {
     providerCounts: {
         local: number;
         youtube: number;
+        vk: number;
+        yandex: number;
     };
 }
 
@@ -24,11 +30,39 @@ interface ProviderMatchState {
 
 function getTracksKey(tracks: DiscoverTrack[]): string {
     return tracks
-        .map((track) => `${track.id}:${track.similarity}:${track.duration}`)
+        .map((track) =>
+            JSON.stringify([
+                track.id,
+                track.similarity,
+                track.duration,
+                track.streamSource,
+                track.youtubeVideoId,
+                track.tidalTrackId,
+                track.recommendationGenerationId,
+                track.sourceType,
+                track.source,
+                track.mediaSource,
+                track.provider,
+                track.musicSourceRecording,
+            ]),
+        )
         .join("|");
 }
 
-function toLocalTrack(track: DiscoverTrack): DiscoverTrack {
+function hasResolvedProvider(track: DiscoverTrack): boolean {
+    return hasNativeDiscoverIdentity(track)
+        ? mapDiscoverTrackToPlaybackTrack(track) !== null
+        : !!(track.streamSource === "youtube" && track.youtubeVideoId);
+}
+
+function toResolvedTrack(track: DiscoverTrack): DiscoverTrack | null {
+    if (hasNativeDiscoverIdentity(track)) {
+        const native = mapDiscoverTrackToPlaybackTrack(track);
+        return native
+            ? { ...track, musicSourceRecording: native.musicSourceRecording }
+            : null;
+    }
+    if (hasResolvedProvider(track)) return track;
     return {
         ...track,
         sourceType: "local",
@@ -49,26 +83,30 @@ export function applyDiscoverProviderGapFill(
     const gapSet = new Set(gapIndices);
     let matchIdx = 0;
 
-    return sourceTracks.map((track, index) => {
+    return sourceTracks.flatMap((track, index) => {
+        const ytMatch = gapSet.has(index) ? ytMatches[matchIdx++] : null;
+        if (hasNativeDiscoverIdentity(track)) {
+            const native = toResolvedTrack(track);
+            return native ? [native] : [];
+        }
         // Already available locally — keep as-is
         if (!gapSet.has(index)) {
-            return toLocalTrack(track);
+            return [toResolvedTrack(track)!];
         }
-
-        const ytMatch = ytMatches[matchIdx];
-        matchIdx++;
 
         if (ytMatch) {
-            return {
-                ...track,
-                sourceType: "youtube",
-                streamSource: "youtube",
-                youtubeVideoId: ytMatch.videoId,
-                tidalTrackId: undefined,
-            };
+            return [
+                {
+                    ...track,
+                    sourceType: "youtube",
+                    streamSource: "youtube",
+                    youtubeVideoId: ytMatch.videoId,
+                    tidalTrackId: undefined,
+                },
+            ];
         }
 
-        return toLocalTrack(track);
+        return [toResolvedTrack(track)!];
     });
 }
 
@@ -78,7 +116,15 @@ export function applyDiscoverProviderGapFill(
 export function useDiscoverProviderGapFill(
     tracks: DiscoverTrack[] | undefined,
 ): GapFillResult {
-    const sourceTracks = useMemo(() => tracks || [], [tracks]);
+    const sourceTracks = useMemo(
+        () =>
+            (tracks || []).flatMap((track) => {
+                if (!hasNativeDiscoverIdentity(track)) return [track];
+                const native = toResolvedTrack(track);
+                return native ? [native] : [];
+            }),
+        [tracks],
+    );
     const tracksKey = useMemo(() => getTracksKey(sourceTracks), [sourceTracks]);
 
     const [matchState, setMatchState] = useState<ProviderMatchState>({
@@ -95,6 +141,21 @@ export function useDiscoverProviderGapFill(
         let cancelled = false;
 
         const matchProviders = async () => {
+            const gapIndices = sourceTracks.flatMap((track, index) =>
+                !track.available && !hasResolvedProvider(track) ? [index] : [],
+            );
+            if (gapIndices.length === 0) {
+                setMatchState({
+                    key: tracksKey,
+                    tracks: sourceTracks
+                        .map(toResolvedTrack)
+                        .filter(
+                            (track): track is DiscoverTrack => track !== null,
+                        ),
+                    isMatching: false,
+                });
+                return;
+            }
             setMatchState({
                 key: tracksKey,
                 tracks: sourceTracks,
@@ -108,18 +169,14 @@ export function useDiscoverProviderGapFill(
             // Match/search uses public sidecar client — no user OAuth required
             const ytAvailable = !!ytStatus?.enabled && !!ytStatus?.available;
 
-            // Only gap-fill tracks that aren't locally available
-            const gapIndices: number[] = [];
-            for (let i = 0; i < sourceTracks.length; i++) {
-                if (!sourceTracks[i].available) {
-                    gapIndices.push(i);
-                }
-            }
-
-            if (!ytAvailable || gapIndices.length === 0) {
+            if (!ytAvailable) {
                 setMatchState({
                     key: tracksKey,
-                    tracks: sourceTracks.map(toLocalTrack),
+                    tracks: sourceTracks
+                        .map(toResolvedTrack)
+                        .filter(
+                            (track): track is DiscoverTrack => track !== null,
+                        ),
                     isMatching: false,
                 });
                 return;
@@ -195,11 +252,17 @@ export function useDiscoverProviderGapFill(
         const counts = {
             local: 0,
             youtube: 0,
+            vk: 0,
+            yandex: 0,
         };
 
         for (const track of effectiveTracks) {
             if (track.sourceType === "youtube") {
                 counts.youtube += 1;
+            } else if (track.sourceType === "vk") {
+                counts.vk += 1;
+            } else if (track.sourceType === "yandex") {
+                counts.yandex += 1;
             } else {
                 counts.local += 1;
             }

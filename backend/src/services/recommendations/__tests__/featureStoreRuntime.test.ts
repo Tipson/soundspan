@@ -4,6 +4,8 @@ const mockMappingFindMany = jest.fn();
 const mockMappingFindFirst = jest.fn();
 const mockPlayFindMany = jest.fn();
 const mockCanonicalFindMany = jest.fn();
+const mockYoutubeFindMany = jest.fn();
+const mockExposureGroupBy = jest.fn();
 
 jest.mock("../../../utils/db", () => ({
     prisma: {
@@ -15,6 +17,8 @@ jest.mock("../../../utils/db", () => ({
         },
         play: { findMany: mockPlayFindMany },
         canonicalRecording: { findMany: mockCanonicalFindMany },
+        trackYtMusic: { findMany: mockYoutubeFindMany },
+        recommendationExposure: { groupBy: mockExposureGroupBy },
     },
 }));
 
@@ -61,11 +65,13 @@ function rawFeature(canonicalRecordingId: string, embedding: string | null) {
 describe("default recommendation feature-store persistence", () => {
     beforeEach(() => {
         mockQueryRaw.mockReset();
-        mockDislikedFindMany.mockReset();
-        mockMappingFindMany.mockReset();
+        mockDislikedFindMany.mockReset().mockResolvedValue([]);
+        mockMappingFindMany.mockReset().mockResolvedValue([]);
         mockMappingFindFirst.mockReset();
-        mockPlayFindMany.mockReset();
+        mockPlayFindMany.mockReset().mockResolvedValue([]);
         mockCanonicalFindMany.mockReset().mockResolvedValue([]);
+        mockYoutubeFindMany.mockReset().mockResolvedValue([]);
+        mockExposureGroupBy.mockReset().mockResolvedValue([]);
     });
 
     afterEach(() => {
@@ -121,7 +127,7 @@ describe("default recommendation feature-store persistence", () => {
             Array.from({ length: 80 }, (_, i) => ({
                 id: `c${i}`,
                 canonicalKey: `c${i}`,
-                arousal: i / 100,
+                arousal: 0.15,
                 energy: 1,
                 valence: 0.5,
                 danceability: 0.5,
@@ -156,6 +162,247 @@ describe("default recommendation feature-store persistence", () => {
             query.where.mappings.some.trackYtMusic.is.likedBy.some.userId,
         ).toBe("alice");
         expect(query.take).toBe(500);
+    });
+
+    function moodRow(
+        videoId: string,
+        artist = `Artist ${videoId}`,
+        title = `Song ${videoId}`,
+    ) {
+        return {
+            id: `canonical-${videoId}`,
+            canonicalKey: `canonical:${videoId}`,
+            arousal: 0.15,
+            energy: 0.2,
+            valence: 0.5,
+            danceability: 0.5,
+            instrumentalness: 0.5,
+            bpm: 100,
+            mappings: [
+                {
+                    trackYtMusic: {
+                        videoId,
+                        artist,
+                        title,
+                        album: "Album",
+                        duration: 180,
+                        thumbnailUrl: null,
+                    },
+                },
+            ],
+        };
+    }
+
+    function moodPlay(
+        videoId: string,
+        ageHours: number,
+        listenedSeconds: number,
+        outcome: string | null = "meaningful",
+        artist = `Artist ${videoId}`,
+        title = `Song ${videoId}`,
+    ) {
+        return {
+            playedAt: new Date(Date.now() - ageHours * 3600000),
+            listenedSeconds,
+            outcome,
+            trackYtMusic: { videoId, artist, title },
+        };
+    }
+
+    it("keeps recent manual listening and another upload out of the saved mood reserve", async () => {
+        jest.useFakeTimers().setSystemTime(new Date("2026-10-08T00:00:00Z"));
+        mockCanonicalFindMany.mockResolvedValue([
+            moodRow("today"),
+            moodRow("alternate", " Same Artist ", "Ｓｏｎｇ!"),
+            moodRow("week"),
+            moodRow("failed"),
+            moodRow("short"),
+            moodRow("expired"),
+            moodRow("future"),
+            moodRow("fresh"),
+        ]);
+        mockPlayFindMany.mockResolvedValue([
+            moodPlay("today", 1, 0, "skipped"),
+            moodPlay("original", 48, 30, "meaningful", "same artist", "song"),
+            moodPlay("week", 24, 30),
+            moodPlay("failed", 1, 100, "failed"),
+            moodPlay("short", 48, 29),
+            moodPlay("expired", 168, 100),
+            moodPlay("future", -1, 100),
+        ]);
+        const result = await loadSavedMoodCandidates("alice", "calm");
+        expect(result.map((x) => x.youtubeVideoId)).toEqual([
+            "expired",
+            "failed",
+            "fresh",
+            "future",
+            "short",
+        ]);
+        const query = mockPlayFindMany.mock.calls[0][0];
+        expect(query.where.userId).toBe("alice");
+        expect(query.where.playedAt).toEqual({
+            gte: new Date("2026-10-01T00:00:00Z"),
+            lte: new Date("2026-10-08T00:00:00Z"),
+        });
+        expect(query.take).toBe(1000);
+    });
+
+    it("filters recent songs before the 48-song reserve quota", async () => {
+        jest.useFakeTimers().setSystemTime(new Date("2026-10-08T00:00:00Z"));
+        const rows = Array.from({ length: 56 }, (_, i) =>
+            moodRow(`song-${String(i).padStart(2, "0")}`),
+        );
+        mockCanonicalFindMany.mockResolvedValue(rows);
+        mockPlayFindMany.mockResolvedValue(
+            rows
+                .slice(0, 8)
+                .map((row) =>
+                    moodPlay(row.mappings[0].trackYtMusic.videoId, 1, 100),
+                ),
+        );
+        const result = await loadSavedMoodCandidates("alice", "calm");
+        expect(result).toHaveLength(48);
+        expect(result[0].youtubeVideoId).toBe("song-08");
+        expect(result[47].youtubeVideoId).toBe("song-55");
+    });
+
+    it("applies exact active dislikes and artist suppression before mood quotas", async () => {
+        mockCanonicalFindMany.mockResolvedValue([
+            moodRow("third", "Blocked"),
+            moodRow("exact"),
+            moodRow("fresh"),
+        ]);
+        mockDislikedFindMany.mockImplementation(async (query) =>
+            query.where.entityId?.in
+                ? [{ entityId: "yt:exact" }]
+                : [{ entityId: "yt:one" }, { entityId: "yt:two" }],
+        );
+        mockYoutubeFindMany.mockResolvedValue([
+            { videoId: "one", artist: "Blocked" },
+            { videoId: "two", artist: " blocked " },
+        ]);
+        const result = await loadSavedMoodCandidates("alice", "calm");
+        expect(result.map((x) => x.youtubeVideoId)).toEqual(["fresh"]);
+        for (const [query] of mockDislikedFindMany.mock.calls)
+            expect(query.where.userId).toBe("alice");
+    });
+
+    it("does not read user history when no analyzed saved candidates exist", async () => {
+        expect(await loadSavedMoodCandidates("alice", "calm")).toEqual([]);
+        expect(mockPlayFindMany).not.toHaveBeenCalled();
+        expect(mockDislikedFindMany).not.toHaveBeenCalled();
+    });
+
+    it("uses older heard mood songs only with empty catalog and no fresh reserve", async () => {
+        jest.useFakeTimers().setSystemTime(new Date("2026-10-08T00:00:00Z"));
+        mockCanonicalFindMany.mockResolvedValue([
+            moodRow("today"),
+            moodRow("week"),
+        ]);
+        mockPlayFindMany.mockResolvedValue([
+            moodPlay("today", 1, 0, "skipped"),
+            moodPlay("week", 48, 30),
+        ]);
+        const result = await loadSavedMoodCandidates("alice", "calm", {
+            allowRecentListeningFallback: true,
+        });
+        expect(
+            result.map((x: RecommendationCandidate) => x.youtubeVideoId),
+        ).toEqual(["week"]);
+        mockCanonicalFindMany.mockResolvedValue([
+            moodRow("today"),
+            moodRow("week"),
+            moodRow("fresh"),
+        ]);
+        const fresh = await loadSavedMoodCandidates("alice", "calm", {
+            allowRecentListeningFallback: true,
+        });
+        expect(
+            fresh.map((x: RecommendationCandidate) => x.youtubeVideoId),
+        ).toEqual(["fresh"]);
+    });
+
+    it("does not count an incompatible fresh mood song as an alternative to the older fitting fallback", async () => {
+        jest.useFakeTimers().setSystemTime(new Date("2026-10-08T00:00:00Z"));
+        mockCanonicalFindMany.mockResolvedValue([
+            moodRow("week"),
+            { ...moodRow("loud"), arousal: 0.8 },
+        ]);
+        mockPlayFindMany.mockResolvedValue([moodPlay("week", 48, 30)]);
+        const result = await loadSavedMoodCandidates("alice", "calm", {
+            allowRecentListeningFallback: true,
+        });
+        expect(result.map((x) => x.youtubeVideoId)).toEqual(["week"]);
+    });
+
+    it("keeps a full fresh mood reserve when early candidates were viewed today", async () => {
+        const now = new Date("2026-10-08T00:00:00Z");
+        const ids = Array.from(
+            { length: 56 },
+            (_, index) => `viewed-${String(index).padStart(2, "0")}`,
+        );
+        mockCanonicalFindMany.mockResolvedValue(ids.map((id) => moodRow(id)));
+        mockExposureGroupBy.mockResolvedValue(
+            ids.slice(0, 8).map((id) => ({ canonicalKey: `canonical:${id}` })),
+        );
+        const result = await loadSavedMoodCandidates("alice", "calm", { now });
+        expect(result.map((track) => track.youtubeVideoId)).toEqual(
+            ids.slice(8),
+        );
+        expect(mockExposureGroupBy).toHaveBeenCalledWith({
+            by: ["canonicalKey"],
+            where: {
+                userId: "alice",
+                canonicalKey: { in: ids.map((id) => `canonical:${id}`) },
+                viewedAt: { gt: new Date(now.getTime() - 86_400_000) },
+                generation: { served: true, userId: "alice" },
+            },
+            orderBy: { canonicalKey: "asc" },
+            take: ids.length,
+        });
+    });
+
+    it("does not let current queue exclusions consume saved mood slots or enable fallback", async () => {
+        const ids = Array.from(
+            { length: 56 },
+            (_, index) => `queued-${String(index).padStart(2, "0")}`,
+        );
+        mockCanonicalFindMany.mockResolvedValue(ids.map((id) => moodRow(id)));
+        const options = {
+            now: new Date("2026-10-08T00:00:00Z"),
+            excludeVideoIds: ids.slice(0, 8).map((id) => ` yt:${id} `),
+        };
+        const result = await loadSavedMoodCandidates("alice", "calm", options);
+        expect(result.map((track) => track.youtubeVideoId)).toEqual(
+            ids.slice(8),
+        );
+        mockCanonicalFindMany.mockResolvedValue([moodRow(ids[0])]);
+        expect(
+            await loadSavedMoodCandidates("alice", "calm", {
+                ...options,
+                allowRecentListeningFallback: true,
+            }),
+        ).toEqual([]);
+    });
+
+    it("does not let another provider's canonical dislikes consume the fresh mood reserve", async () => {
+        const ids = Array.from(
+            { length: 56 },
+            (_, index) => `alias-${String(index).padStart(2, "0")}`,
+        );
+        mockCanonicalFindMany.mockResolvedValue(ids.map((id) => moodRow(id)));
+        mockDislikedFindMany.mockImplementation(async (query) =>
+            query.where.entityId ? [] : [{ entityId: "tidal:42" }],
+        );
+        mockMappingFindMany.mockResolvedValue(
+            ids.slice(0, 8).map((id) => ({
+                canonicalRecording: { canonicalKey: `canonical:${id}` },
+            })),
+        );
+        const result = await loadSavedMoodCandidates("alice", "calm");
+        expect(result.map((track) => track.youtubeVideoId)).toEqual(
+            ids.slice(8),
+        );
     });
 
     it("returns untouched candidates when canonical identities are absent", async () => {
@@ -305,6 +552,7 @@ describe("default recommendation feature-store persistence", () => {
                 where: {
                     userId: "alice",
                     recommendationSessionId: "session-a",
+                    source: { notIn: ["VK", "YANDEX"] },
                 },
                 take: 30,
             }),

@@ -1,5 +1,9 @@
 import { UnifiedRecommendationService } from "../recommendationService";
 import type { RecommendationCandidate } from "../types";
+import type {
+    PersonalizedHomeFeed,
+    PersonalizedTrack,
+} from "../../personalizedCatalog";
 
 const saved: RecommendationCandidate = {
     id: "yt:calm",
@@ -24,26 +28,30 @@ const saved: RecommendationCandidate = {
         instrumentalness: 0.2,
     },
 };
-function setup() {
+function setup(now = () => new Date()) {
     const loadSavedMoodCandidates = jest.fn().mockResolvedValue([saved]);
     const loadDislikedCanonicalKeys = jest.fn().mockResolvedValue(new Set());
-    const deps = {
-        mode: "active" as const,
-        hybridRolloutPercent: 100,
-        explorationRate: 0,
-        loadSavedMoodCandidates,
-        loadPersonalizedFeed: async () => ({
+    const loadRecentExposures = jest.fn().mockResolvedValue([]);
+    const loadPersonalizedFeed = jest.fn(
+        async (): Promise<PersonalizedHomeFeed> => ({
             shelves: { listenAgain: [], quickPicks: [], discovery: [] },
             degraded: false,
             reason: null,
             seedCount: 1,
             nextCursor: 1,
         }),
+    );
+    const deps = {
+        mode: "active" as const,
+        hybridRolloutPercent: 100,
+        explorationRate: 0,
+        loadSavedMoodCandidates,
+        loadPersonalizedFeed,
         resolveCanonical: async (c: RecommendationCandidate) => ({
             id: c.canonicalRecordingId!,
             canonicalKey: c.canonicalKey,
         }),
-        loadRecentExposures: async () => [],
+        loadRecentExposures,
         loadDislikedCanonicalKeys,
         loadTasteContext: async () => ({
             positiveCentroids: [],
@@ -52,12 +60,14 @@ function setup() {
         recordGeneration: async () => "g",
         scheduleHotSet: async () => {},
         loadSimilarCandidates: jest.fn(),
-        now: () => new Date(),
+        now,
     };
     return {
         service: new UnifiedRecommendationService(deps),
         loadSavedMoodCandidates,
         loadDislikedCanonicalKeys,
+        loadPersonalizedFeed,
+        deps,
     };
 }
 const request = {
@@ -70,10 +80,63 @@ const request = {
     mood: "calm" as const,
     excludeVideoIds: [],
 };
+
+test.each(["baseline", "active", "shadow"] as const)(
+    "fills the mood lane across a slow catalog's 24h boundary in %s",
+    async (mode) => {
+        const started = new Date("2026-10-08T00:00:00Z");
+        const viewedAt = new Date(+started - 86_400_000 + 1_000);
+        const clock = jest.fn().mockReturnValue(new Date(+started + 5_000));
+        clock.mockReturnValueOnce(started);
+        const { deps, loadSavedMoodCandidates } = setup(clock);
+        const pool = Array.from({ length: 56 }, (_, index) => ({
+            ...saved,
+            id: `yt:clock-${index}`,
+            canonicalRecordingId: `clock-${index}`,
+            canonicalKey: `clock-${index}`,
+            artist: { id: null, name: `Artist ${index}` },
+            provider: { tidalTrackId: null, youtubeVideoId: `clock-${index}` },
+            youtubeVideoId: `clock-${index}`,
+        }));
+        deps.loadRecentExposures.mockResolvedValue(
+            pool.slice(0, 40).map((track) => ({
+                canonicalKey: track.canonicalKey,
+                exposedAt: viewedAt,
+            })),
+        );
+        loadSavedMoodCandidates.mockImplementation(
+            async (_user, _mood, options) =>
+                pool
+                    .filter(
+                        (_track, index) =>
+                            index >= 40 ||
+                            +viewedAt <= +options.now - 86_400_000,
+                    )
+                    .slice(0, 48),
+        );
+        const service = new UnifiedRecommendationService({ ...deps, mode });
+        const feed = await service.getPersonalizedFeed(request);
+        expect(feed.shelves.quickPicks).toHaveLength(12);
+        expect(
+            feed.shelves.quickPicks.every(
+                (track) =>
+                    track.source === "youtube" &&
+                    Number(track.youtubeVideoId.split("-")[1]) >= 40,
+            ),
+        ).toBe(true);
+    },
+);
 test("mood can reach saved songs outside the pre-truncated provider shelves", async () => {
     const { service, loadSavedMoodCandidates } = setup();
     const feed = await service.getPersonalizedFeed(request);
-    expect(loadSavedMoodCandidates).toHaveBeenCalledWith("alice", "calm");
+    expect(loadSavedMoodCandidates).toHaveBeenCalledWith(
+        "alice",
+        "calm",
+        expect.objectContaining({
+            allowRecentListeningFallback: true,
+            now: expect.any(Date),
+        }),
+    );
     expect(feed.shelves.quickPicks.map((x) => x.youtubeVideoId)).toEqual([
         "calm",
     ]);
@@ -113,3 +176,45 @@ test("a failed optional reserve keeps normal recommendation delivery available",
     const feed = await service.getPersonalizedFeed(request);
     expect(feed.degradedSources).toContain("saved-mood-candidates");
 });
+
+test.each(["listenAgain", "quickPicks", "discovery"] as const)(
+    "does not relax recent-listening exclusions when the catalog has a %s candidate",
+    async (lane) => {
+        const { service, loadSavedMoodCandidates, loadPersonalizedFeed } =
+            setup();
+        const track: PersonalizedTrack = {
+            id: saved.id,
+            title: saved.title,
+            duration: saved.duration,
+            trackNo: null,
+            source: "youtube",
+            streamSource: "youtube",
+            youtubeVideoId: "calm",
+            provider: { tidalTrackId: null, youtubeVideoId: "calm" },
+            artist: saved.artist,
+            album: {
+                ...saved.album,
+                coverArt: "https://example.com/cover.jpg",
+                artist: saved.artist,
+            },
+        };
+        loadPersonalizedFeed.mockResolvedValue({
+            shelves: {
+                listenAgain: [],
+                quickPicks: [],
+                discovery: [],
+                [lane]: [track],
+            },
+            degraded: false,
+            reason: null,
+            seedCount: 1,
+            nextCursor: 1,
+        });
+        await service.getPersonalizedFeed(request);
+        expect(loadSavedMoodCandidates).toHaveBeenCalledWith(
+            "alice",
+            "calm",
+            expect.objectContaining({ allowRecentListeningFallback: false }),
+        );
+    },
+);

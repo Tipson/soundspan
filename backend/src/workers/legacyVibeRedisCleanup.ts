@@ -168,7 +168,16 @@ async function destroyLegacyConsumerGroup(
             ),
         );
     } catch (error) {
-        if (error instanceof Error && error.message.includes("NOGROUP")) return;
+        // Redis reports a missing stream differently from a missing group.
+        // Both mean the retired consumer is absent; other failures must retry.
+        if (
+            error instanceof Error &&
+            (error.message.startsWith("NOGROUP ") ||
+                error.message.startsWith(
+                    "ERR The XGROUP subcommand requires the key to exist.",
+                ))
+        )
+            return;
         throw error;
     }
 }

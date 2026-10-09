@@ -1,3 +1,5 @@
+import { EventEmitter } from "node:events";
+
 describe("workers runtime behavior", () => {
     const originalEnv = process.env;
 
@@ -15,6 +17,7 @@ describe("workers runtime behavior", () => {
 
     function createQueueMock() {
         return {
+            client: { status: "ready" },
             process: jest.fn(),
             on: jest.fn(),
             isReady: jest.fn(async () => undefined),
@@ -2301,6 +2304,33 @@ describe("workers runtime behavior", () => {
             expect.stringContaining("Scheduler job unknown failed (unknown)"),
             "unknown scheduler failure",
         );
+    });
+
+    it("waits for both Redis clients before registering named scheduler processors", async () => {
+        process.env = { ...originalEnv };
+        const mocks = setupWorkerModuleMocks();
+        const fast = Object.assign(new EventEmitter(), {
+            status: "connecting",
+        });
+        const maintenance = Object.assign(new EventEmitter(), {
+            status: "connecting",
+        });
+        mocks.schedulerQueue.client = fast;
+        mocks.schedulerMaintenanceQueue.client = maintenance;
+        loadWorkers();
+        await flushPromises();
+        expect(mocks.schedulerQueue.process).not.toHaveBeenCalled();
+        fast.status = "ready";
+        fast.emit("ready");
+        await flushPromises();
+        expect(mocks.schedulerQueue.process).not.toHaveBeenCalled();
+        maintenance.status = "ready";
+        maintenance.emit("ready");
+        await flushPromises();
+        expect(mocks.schedulerQueue.process).toHaveBeenCalled();
+        expect(mocks.schedulerMaintenanceQueue.process).toHaveBeenCalled();
+        expect(fast.listenerCount("ready")).toBe(0);
+        expect(maintenance.listenerCount("ready")).toBe(0);
     });
 
     it("logs startup failures for enrichment worker startup and scheduler registration", async () => {

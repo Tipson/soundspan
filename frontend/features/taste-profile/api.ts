@@ -57,7 +57,7 @@ export function tasteProfileErrorMessage(error: unknown): string {
     if (error instanceof Error && "status" in error) {
         const status = (error as Error & { status?: number }).status;
         if (status === 400) {
-            return "Проверьте выбор: нужно от 3 до 16 жанров и артистов.";
+            return "Проверьте названия выбранных жанров и исполнителей.";
         }
         if (status === 503) {
             return "Источник музыки не смог подобрать стартовые треки. Попробуйте другие варианты или повторите позже.";

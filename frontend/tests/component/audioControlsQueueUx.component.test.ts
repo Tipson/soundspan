@@ -1,3 +1,8 @@
+import {
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "../../lib/collectionPlayback";
 import assert from "node:assert/strict";
 import { after, afterEach, mock, test } from "node:test";
 import React from "react";
@@ -599,6 +604,170 @@ test("feedback advance bypasses repeat-one and selects the next track", async ()
     assert.equal((state.currentTrack as { id: string }).id, "wave-next");
 });
 
+test("disliking a recommended song removes that artist from the remaining queue", async () => {
+    const currentTrack = {
+        ...makeTrack("disliked-current", "artist-1"),
+        recommendationGenerationId: "generation-1",
+    };
+    const sameArtistOne = makeTrack("same-artist-1", "artist-1");
+    const otherArtist = makeTrack("other-artist", "artist-2");
+    const sameArtistTwo = makeTrack("same-artist-2", "artist-1");
+    const state = createDeferredAudioState({
+        queue: [currentTrack, sameArtistOne, otherArtist, sameArtistTwo],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+    });
+    const playback = createPlaybackStub();
+    const controls = await renderControls({ state, playback });
+
+    controls.advanceQueue("feedback");
+    state.commit();
+
+    assert.deepEqual(
+        (state.queue as Array<{ id: string }>).map((item) => item.id),
+        ["disliked-current", "other-artist"],
+    );
+    assert.equal(state.currentIndex, 1);
+    assert.equal((state.currentTrack as { id: string }).id, "other-artist");
+});
+
+test("feedback remaps shuffled recommendations while keeping played history", async () => {
+    const currentTrack = {
+        ...makeTrack("current", "artist-1"),
+        recommendationGenerationId: "generation-1",
+    };
+    const previous = makeTrack("previous", "artist-1");
+    const other = makeTrack("other", "artist-2");
+    const later = makeTrack("later", "artist-1");
+    const state = createDeferredAudioState({
+        queue: [later, previous, other, currentTrack],
+        currentIndex: 3,
+        currentTrack,
+        playbackType: "track",
+        isShuffle: true,
+        shuffleIndices: [1, 3, 0, 2],
+    });
+    const controls = await renderControls({
+        state,
+        playback: createPlaybackStub(),
+    });
+
+    controls.advanceQueue("feedback");
+    state.commit();
+
+    assert.deepEqual(
+        (state.queue as Array<{ id: string }>).map((item) => item.id),
+        ["previous", "other", "current"],
+    );
+    assert.deepEqual(state.shuffleIndices, [0, 2, 1]);
+    assert.equal(state.currentIndex, 1);
+    assert.equal((state.currentTrack as { id: string }).id, "other");
+});
+
+test("feedback keeps the rest of an explicitly selected album queue", async () => {
+    const currentTrack = makeTrack("current", "artist-1");
+    const nextTrack = makeTrack("next", "artist-1");
+    const state = createDeferredAudioState({
+        queue: [currentTrack, nextTrack],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+    });
+    const controls = await renderControls({
+        state,
+        playback: createPlaybackStub(),
+    });
+
+    controls.advanceQueue("feedback");
+    state.commit();
+
+    assert.deepEqual(
+        (state.queue as Array<{ id: string }>).map((item) => item.id),
+        ["current", "next"],
+    );
+    assert.equal(state.currentIndex, 1);
+});
+
+test("feedback stops when only more recommendations by that artist remain", async () => {
+    const currentTrack = {
+        ...makeTrack("current", "artist-1"),
+        recommendationGenerationId: "generation-1",
+    };
+    const state = createDeferredAudioState({
+        queue: [currentTrack, makeTrack("later", "artist-1")],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+    });
+    const playback = createPlaybackStub();
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+
+    controls.advanceQueue("feedback");
+    state.commit();
+
+    assert.deepEqual(
+        (state.queue as Array<{ id: string }>).map((item) => item.id),
+        ["current"],
+    );
+    assert.equal(playback.isPlaying, false);
+});
+
+test("feedback also cleans an artist-heavy personal style mix without feed generation", async () => {
+    const currentTrack = {
+        ...makeTrack("current", "artist-1"),
+        recommendationSessionId: "session-1",
+    };
+    const state = createDeferredAudioState({
+        queue: [
+            currentTrack,
+            makeTrack("same-artist", "artist-1"),
+            makeTrack("other", "artist-2"),
+        ],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+    });
+    const controls = await renderControls({
+        state,
+        playback: createPlaybackStub(),
+    });
+
+    controls.advanceQueue("feedback");
+    state.commit();
+
+    assert.deepEqual(
+        (state.queue as Array<{ id: string }>).map((item) => item.id),
+        ["current", "other"],
+    );
+});
+
+test("feedback at the end of repeat-all continues with another artist", async () => {
+    const currentTrack = {
+        ...makeTrack("current", "artist-1"),
+        recommendationGenerationId: "generation-1",
+    };
+    const other = makeTrack("other", "artist-2");
+    const state = createDeferredAudioState({
+        queue: [other, currentTrack],
+        currentIndex: 1,
+        currentTrack,
+        playbackType: "track",
+        repeatMode: "all",
+    });
+    const controls = await renderControls({
+        state,
+        playback: createPlaybackStub(),
+    });
+
+    controls.advanceQueue("feedback");
+    state.commit();
+
+    assert.equal(state.currentIndex, 0);
+    assert.equal((state.currentTrack as { id: string }).id, "other");
+});
+
 test("manual next keeps repeat-one behavior", async () => {
     const currentTrack = makeTrack("repeat-current", "artist-1");
     const nextTrack = makeTrack("repeat-next", "artist-2");
@@ -894,7 +1063,7 @@ test("three early Wave skips refresh only the tail and respect a subsequent paus
     }
     // While recommendations are pending, the listener pauses the selection.
     playback.currentTime = 7;
-    playback.isPlaying = false;
+    controlsRef.current!.pause();
     await React.act(async () => {
         releaseFeed();
         await flushAsync();
@@ -1342,4 +1511,324 @@ test("manual next at the Wave tail waits for one refill and advances once", asyn
     );
     assert.equal(playback.currentTime, 0);
     assert.equal(playback.isPlaying, true);
+});
+
+test("radio queue startup enables continuation even when no previous Wave was active", async () => {
+    const tracks = [makeTrack("seed", "artist"), makeTrack("next", "other")];
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub();
+    const controls = await renderControls({ state, playback });
+    controls.playTracks(tracks, 0, true, { replaceQueue: true });
+    state.commit();
+    assert.equal(state.vibeMode, true);
+});
+test("radio origin is explicit on every queued occurrence and clears when a collection replaces it", async () => {
+    const origin = {
+        kind: "track" as const,
+        source: "library" as const,
+        id: "original",
+    };
+    const tracks = [makeTrack("seed", "a"), makeTrack("next", "b")];
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub();
+    let controls = await renderControls({ state, playback });
+    controls.playTracks(tracks, 0, true, {
+        replaceQueue: true,
+        radioOrigin: origin,
+    });
+    state.commit();
+    for (const track of state.queue as Array<{ radioOrigin?: unknown }>)
+        assert.deepEqual(track.radioOrigin, origin);
+    assert.deepEqual(
+        (state.currentTrack as { radioOrigin?: unknown }).radioOrigin,
+        origin,
+    );
+    controls = await renderControls({ state, playback });
+    controls.playTracks(state.queue as typeof tracks, 0, false, {
+        replaceQueue: true,
+    });
+    state.commit();
+    for (const track of state.queue as Array<{ radioOrigin?: unknown }>)
+        assert.equal(track.radioOrigin, undefined);
+    assert.equal(
+        (state.currentTrack as { radioOrigin?: unknown }).radioOrigin,
+        undefined,
+    );
+});
+
+test("upcoming radio stamps the retained song and tail without changing pause or position", async () => {
+    const origin = {
+        kind: "track" as const,
+        source: "library" as const,
+        id: "seed",
+    };
+    const seed = makeTrack("seed", "a");
+    const state = createDeferredAudioState({
+        currentTrack: seed,
+        playbackType: "track",
+        queue: [seed],
+    });
+    const playback = createPlaybackStub({ currentTime: 73 });
+    const controls = await renderControls({ state, playback });
+    controls.setUpcoming([makeTrack("next", "b")], true, true, {
+        radioOrigin: origin,
+    });
+    state.commit();
+    assert.deepEqual(
+        (state.queue as Array<{ radioOrigin?: unknown }>).map(
+            (t) => t.radioOrigin,
+        ),
+        [origin, origin],
+    );
+    assert.deepEqual(
+        (state.currentTrack as { radioOrigin?: unknown }).radioOrigin,
+        origin,
+    );
+    assert.equal(playback.currentTime, 73);
+    assert.equal(playback.isPlaying, false);
+});
+
+test("radio upcoming replacement enables continuation without restarting the current song", async () => {
+    const seed = makeTrack("seed", "artist");
+    const next = makeTrack("next", "other");
+    const state = createDeferredAudioState({
+        isShuffle: true,
+        currentTrack: seed,
+        playbackType: "track",
+        queue: [seed],
+    });
+    const playback = createPlaybackStub({ currentTime: 73 });
+    const controls = await renderControls({ state, playback });
+    controls.setUpcoming([next], true, true);
+    state.commit();
+    assert.equal(state.isShuffle, false);
+    assert.equal(state.vibeMode, true);
+    assert.equal(playback.currentTime, 73);
+    assert.equal(state.currentTrack, seed);
+    assert.deepEqual(state.queue, [seed, next]);
+});
+
+test("ordered queue explicitly clears shuffle from the previous context", async () => {
+    const tracks = [makeTrack("first", "a"), makeTrack("second", "b")];
+    const state = createDeferredAudioState({
+        isShuffle: true,
+        shuffleIndices: [1, 0],
+    });
+    const playback = createPlaybackStub();
+    const controls = await renderControls({ state, playback });
+    controls.playTracks(tracks, 0, false, {
+        replaceQueue: true,
+        preserveOrder: true,
+    });
+    state.commit();
+    assert.equal(state.isShuffle, false);
+    assert.deepEqual(state.shuffleIndices, []);
+});
+
+test("upcoming queue replacement supersedes a pending radio request", async () => {
+    const { requestRadioQueue } =
+        await import("../../lib/radio/radioRequestIntent");
+    const seed = makeTrack("seed", "artist");
+    const state = createDeferredAudioState({
+        currentTrack: seed,
+        playbackType: "track",
+        queue: [seed],
+    });
+    const playback = createPlaybackStub({ currentTime: 73 });
+    const controls = await renderControls({ state, playback });
+    let resolve!: (tracks: ReturnType<typeof makeTrack>[]) => void;
+    const pending = requestRadioQueue(
+        () =>
+            new Promise<ReturnType<typeof makeTrack>[]>((yes) => {
+                resolve = yes;
+            }),
+    );
+    const replacement = makeTrack("chosen", "artist");
+    controls.setUpcoming([replacement], true, true);
+    state.commit();
+    resolve([makeTrack("stale", "artist")]);
+    assert.equal(await pending, null);
+    assert.deepEqual(state.queue, [seed, replacement]);
+    assert.equal(playback.currentTime, 73);
+});
+
+for (const action of [
+    "pending-radio",
+    "replace-queue",
+    "replace-upcoming",
+] as const) {
+    test(`adaptive refresh cannot overwrite ${action}`, async () => {
+        const seed = {
+            ...makeTrack("yt:AAAAAAAAAAA", "a"),
+            streamSource: "youtube" as const,
+            youtubeVideoId: "AAAAAAAAAAA",
+        };
+        const chosen = {
+            ...makeTrack("yt:BBBBBBBBBBB", "b"),
+            streamSource: "youtube" as const,
+            youtubeVideoId: "BBBBBBBBBBB",
+        };
+        personalizedFeed.current = {
+            shelves: {
+                quickPicks: [],
+                listenAgain: [],
+                discovery: [
+                    {
+                        id: "yt:CCCCCCCCCCC",
+                        title: "Stale adaptive",
+                        duration: 180,
+                        trackNo: null,
+                        artist: { name: "C" },
+                        album: { title: "C" },
+                        source: "youtube",
+                        streamSource: "youtube",
+                        youtubeVideoId: "CCCCCCCCCCC",
+                        provider: {
+                            youtubeVideoId: "CCCCCCCCCCC",
+                            tidalTrackId: null,
+                        },
+                    },
+                ],
+            },
+            degraded: false,
+            reason: null,
+            seedCount: 1,
+        };
+        const state = createDeferredAudioState({
+            queue: [seed],
+            currentTrack: seed,
+            playbackType: "track",
+            vibeMode: true,
+        });
+        const playback = createPlaybackStub({ currentTime: 34 });
+        let release!: () => void;
+        personalizedFeedGate.current = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const controls = await renderControls({ state, playback });
+        const pending = controls.startVibeMode({
+            queueStrategy: "replace-upcoming",
+        });
+        if (action === "replace-queue")
+            controls.playTracks([chosen], 0, true, { replaceQueue: true });
+        else if (action === "replace-upcoming")
+            controls.setUpcoming([chosen], true, true);
+        else {
+            const { requestRadioQueue } =
+                await import("../../lib/radio/radioRequestIntent");
+            await requestRadioQueue(async () => []);
+        }
+        state.commit();
+        const selectedQueue = state.queue;
+        release();
+        const result = await pending;
+        state.commit();
+        assert.equal(result.success, false);
+        assert.equal(state.queue, selectedQueue);
+    });
+}
+
+for (const action of ["clear", "audiobook", "podcast", "upcoming"] as const) {
+    test(
+        "collection ownership ends after actual " +
+            action +
+            " playback replacement",
+        async () => {
+            const tracks = [
+                makeTrack("one", "artist"),
+                makeTrack("two", "artist"),
+            ];
+            const state = createDeferredAudioState({});
+            const playback = createPlaybackStub();
+            let controls = await renderControls({ state, playback });
+            const before = getCollectionPlaybackGeneration();
+            controls.playTracks(tracks, 0, false, {
+                replaceQueue: true,
+                preserveOrder: true,
+            });
+            markCollectionPlayback("playlist:one", before);
+            state.commit();
+            assert.equal(isCollectionPlayback("playlist:one"), true);
+            controls = await renderControls({ state, playback });
+            if (action === "clear") controls.clearQueue();
+            if (action === "audiobook")
+                controls.playAudiobook({
+                    id: "book",
+                    title: "Book",
+                    author: "Author",
+                    coverUrl: null,
+                    duration: 600,
+                });
+            if (action === "podcast")
+                controls.playPodcast({
+                    id: "podcast:episode",
+                    title: "Episode",
+                    podcastTitle: "Podcast",
+                    coverUrl: null,
+                    duration: 600,
+                });
+            if (action === "upcoming")
+                controls.setUpcoming(
+                    [makeTrack("radio", "artist")],
+                    true,
+                    true,
+                );
+            state.commit();
+            assert.equal(isCollectionPlayback("playlist:one"), false);
+            controls = await renderControls({ state, playback });
+            controls.playNow(makeTrack("other", "artist"));
+            state.commit();
+            assert.equal(isCollectionPlayback("playlist:one"), false);
+        },
+    );
+}
+
+test("collection ownership survives real next, pause, resume and rejected group starts", async () => {
+    const tracks = [makeTrack("one", "artist"), makeTrack("two", "artist")];
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub();
+    let controls = await renderControls({ state, playback });
+    const before = getCollectionPlaybackGeneration();
+    controls.playTracks(tracks, 0, false, {
+        replaceQueue: true,
+        preserveOrder: true,
+    });
+    markCollectionPlayback("playlist:one", before);
+    state.commit();
+    controls = await renderControls({ state, playback });
+    controls.next();
+    state.commit();
+    controls.pause();
+    controls.resume();
+    assert.equal(isCollectionPlayback("playlist:one"), true);
+    listenTogetherSocketMock.hasActiveGroup = true;
+    listenTogetherSocketMock.activeGroupId = "group";
+    listenTogetherSession.current = {
+        groupId: "group",
+        isHost: false,
+        playback: {
+            isPlaying: true,
+            positionMs: 0,
+            serverTime: Date.now(),
+            currentIndex: 0,
+        },
+    };
+    controls.playAudiobook({
+        id: "book",
+        title: "Book",
+        author: "Author",
+        coverUrl: null,
+        duration: 600,
+    });
+    assert.equal(isCollectionPlayback("playlist:one"), true);
+});
+
+test("fresh playNow records a replacement while queue navigation does not", async () => {
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub();
+    const controls = await renderControls({ state, playback });
+    const before = getCollectionPlaybackGeneration();
+    controls.playNow(makeTrack("fresh", "artist"));
+    state.commit();
+    assert.ok(getCollectionPlaybackGeneration() > before);
 });

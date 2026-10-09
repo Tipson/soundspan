@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
  * Component tests for MiniPlayer enhancements.
  *
  * Tests verify:
- * - MiniPlayer keeps only one preference and play/pause in compact chrome
+ * - MiniPlayer keeps both preferences and play/pause in compact chrome
  * - MiniPlayer does not expose stream diagnostics in the listening surface
  * - MiniPlayer does not render when no media is playing
  */
@@ -252,7 +252,7 @@ beforeEach(() => {
     state.qualityBadge = null;
 });
 
-test("MiniPlayer keeps a compact 64px identity, like and play surface", async () => {
+test("MiniPlayer keeps a compact 64px identity, ratings and play surface", async () => {
     const { MiniPlayer } = await import("../../components/player/MiniPlayer");
 
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
@@ -271,10 +271,14 @@ test("MiniPlayer keeps a compact 64px identity, like and play surface", async ()
         /padding-right:calc\(0\.75rem \+ var\(--safe-area-right\)\)/,
     );
     assert.match(html, /data-mobile-player="dock"/);
-    assert.match(html, /hidden flex-shrink-0 items-center min-\[360px\]:flex/);
+    assert.match(html, /data-player-layout="identity-ratings-play"/);
+    assert.doesNotMatch(
+        html,
+        /hidden flex-shrink-0 items-center min-\[360px\]:flex/,
+    );
 });
 
-test("MiniPlayer exposes only the like preference in compact chrome", async () => {
+test("MiniPlayer exposes both like and dislike in compact chrome", async () => {
     const { MiniPlayer } = await import("../../components/player/MiniPlayer");
 
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
@@ -286,7 +290,7 @@ test("MiniPlayer exposes only the like preference in compact chrome", async () =
         "Should render TrackPreferenceButtons",
     );
     assert.match(html, /data-track-id="t1"/, "Should pass correct track ID");
-    assert.match(html, /data-mode="up-only"/, "Should expose one preference");
+    assert.match(html, /data-mode="both"/, "Should expose both preferences");
 });
 
 test("MiniPlayer retains the pause action while restoring a playing track", async () => {

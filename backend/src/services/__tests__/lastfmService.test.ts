@@ -97,6 +97,56 @@ describe("lastFmService", () => {
         mockDeezerGetArtistImageStrict.mockResolvedValue(null);
     });
 
+    it("browses real genre pages, coalesces requests and respects catalog exhaustion", async () => {
+        mockHttpGet.mockResolvedValue({
+            data: {
+                topartists: {
+                    artist: [
+                        { name: "Muse" },
+                        { name: "Muse" },
+                        { name: "Queen" },
+                    ],
+                    "@attr": { totalPages: "2" },
+                },
+            },
+        });
+        const [one, same] = await Promise.all([
+            lastFmService.browseTasteArtists("Рок", 1),
+            lastFmService.browseTasteArtists("Рок", 1),
+        ]);
+        expect(one).toEqual({ artists: ["Muse", "Queen"], nextPage: 2 });
+        expect(same).toEqual(one);
+        expect(mockHttpGet).toHaveBeenCalledTimes(1);
+        expect(mockHttpGet.mock.calls[0][1].params).toMatchObject({
+            method: "tag.getTopArtists",
+            tag: "rock",
+            page: 1,
+            limit: 48,
+        });
+        expect(
+            (await lastFmService.browseTasteArtists("Рок", 2)).nextPage,
+        ).toBeNull();
+        expect(mockDeezerGetArtistImageStrict).not.toHaveBeenCalled();
+    });
+
+    it("does not cache upstream catalog failures or disguise them as an empty genre", async () => {
+        mockHttpGet.mockResolvedValueOnce({ data: { error: 29 } });
+        await expect(
+            lastFmService.browseTasteArtists("Рок", 1),
+        ).rejects.toThrow();
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+        mockHttpGet.mockResolvedValueOnce({
+            data: { artists: { artist: [], "@attr": { totalPages: "0" } } },
+        });
+        expect(await lastFmService.browseTasteArtists("all", 1)).toEqual({
+            artists: [],
+            nextPage: null,
+        });
+        await expect(
+            lastFmService.browseTasteArtists("invalid", 1),
+        ).rejects.toThrow();
+    });
+
     it("returns quick search results without a metadata request per match", async () => {
         const controller = new AbortController();
         mockHttpGet.mockImplementation(async (_path, config) => ({

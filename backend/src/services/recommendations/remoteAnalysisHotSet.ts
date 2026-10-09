@@ -19,6 +19,7 @@ import {
     runCanonicalIdentityTransaction,
 } from "./canonicalIdentity";
 import { onlineIdentityEnricher } from "./onlineIdentityEnrichment";
+import { normalizeRecommendationArtistKey } from "./identityKeys";
 
 const log = logger.child("RemoteAnalysisHotSet");
 const SPOOL_DIRECTORY = ".soundspan-analysis-spool";
@@ -213,11 +214,60 @@ export class RemoteAnalysisHotSetScheduler {
                 candidate,
             );
         }
+        let inputCandidates = input.candidates;
+        if (input.unmeasuredCanonicalIds?.length) {
+            const requestedIds = new Set(input.unmeasuredCanonicalIds);
+            const reserveIds = new Set<string>();
+            for (const candidate of inputCandidates) {
+                const id = candidate.canonicalRecordingId;
+                if (id && requestedIds.has(id) && remoteIdentity(candidate))
+                    reserveIds.add(id);
+                if (reserveIds.size >= MAX_HOT_SET_CANDIDATES) break;
+            }
+            if (reserveIds.size > 0) {
+                // A completed recording may still lack mood measurements. It
+                // must not crowd out pending discoveries before the fair cap.
+                // This read stays in background admission; refreshed identities
+                // still receive the final coverage check below.
+                let coveredReserve: ReadonlySet<string>;
+                try {
+                    coveredReserve =
+                        await this.dependencies.loadCoveredCanonicalIds([
+                            ...reserveIds,
+                        ]);
+                } catch (error) {
+                    log.warn("Mood hot-set coverage preflight failed", {
+                        userId: input.userId,
+                        error,
+                    });
+                    coveredReserve = reserveIds;
+                }
+                const admittedReserveIds = new Set<string>();
+                const artistCounts = new Map<string, number>();
+                inputCandidates = inputCandidates.filter((candidate) => {
+                    const id = candidate.canonicalRecordingId;
+                    if (!id || !reserveIds.has(id)) return true;
+                    if (coveredReserve.has(id)) return false;
+                    if (admittedReserveIds.has(id)) return true;
+                    const artist = normalizeRecommendationArtistKey(
+                        candidate.artist.name,
+                    );
+                    if (artist && (artistCounts.get(artist) ?? 0) >= 2)
+                        return false;
+                    admittedReserveIds.add(id);
+                    artistCounts.set(
+                        artist,
+                        (artistCounts.get(artist) ?? 0) + 1,
+                    );
+                    return true;
+                });
+            }
+        }
         // Give saved music its own fair lane, instead of making it compete
         // with four listening signals inside half of the admission capacity.
         // Empty lanes yield their slots; the global 48-record cap is unchanged.
         let prioritizedCandidates = selectFairHotSetCandidates([
-            input.candidates,
+            inputCandidates,
             collectionCandidates,
             listeningCandidates,
         ]);

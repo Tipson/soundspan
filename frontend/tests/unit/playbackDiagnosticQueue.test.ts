@@ -73,6 +73,84 @@ function harness() {
         },
     };
 }
+test("source recovery retains only its closed outcome codes", () => {
+    for (const outcome of [
+        "not_applicable",
+        "in_progress",
+        "recovered",
+        "stale",
+        "no_candidate",
+        "failed",
+        "exhausted",
+    ]) {
+        assert.deepEqual(
+            sanitizePlaybackDiagnosticFields({
+                reason: "server_source_recovery",
+                outcome,
+                resumeAtSec: 4.96,
+            }),
+            { reason: "server_source_recovery", outcome, resumeAtSec: 4.96 },
+        );
+        assert.deepEqual(sanitizePlaybackDiagnosticFields({ outcome }), {});
+    }
+    for (const outcome of [
+        "secret",
+        "https://media/?token=secret",
+        "failed\nsecret",
+        "FAILED",
+        1,
+        {},
+        null,
+    ]) {
+        assert.deepEqual(
+            sanitizePlaybackDiagnosticFields({
+                reason: "server_source_recovery",
+                outcome,
+            }),
+            { reason: "server_source_recovery" },
+        );
+    }
+    assert.deepEqual(
+        sanitizePlaybackDiagnosticFields({
+            reason: "heartbeat_buffer_timeout",
+            outcome: "failed",
+        }),
+        { reason: "heartbeat_buffer_timeout" },
+    );
+});
+
+test("source recovery outcome survives offline storage and reload", async () => {
+    const h = harness();
+    h.queue.enqueue("player.rebuffer_timeout", {
+        reason: "server_source_recovery",
+        outcome: "no_candidate",
+        resumeAtSec: 4.96,
+        token: "secret",
+        url: "https://media/?token=secret",
+    });
+    h.queue.dispose();
+    const reloaded = createPlaybackDiagnosticQueue({
+        storage: h.storage,
+        ownerId: () => "user-a",
+        online: () => true,
+        now: () => 120_000,
+        send: async (event) => {
+            h.sent.push(event);
+        },
+    });
+    try {
+        await reloaded.flush();
+        assert.equal(h.sent.length, 1);
+        assert.deepEqual((h.sent[0] as { fields: unknown }).fields, {
+            reason: "server_source_recovery",
+            outcome: "no_candidate",
+            resumeAtSec: 4.96,
+        });
+        assert.equal(JSON.stringify(h.sent).includes("secret"), false);
+    } finally {
+        reloaded.dispose();
+    }
+});
 test("manual reports survive automatic diagnostic pressure and are delivered first", async () => {
     const h = harness();
     assert.equal(

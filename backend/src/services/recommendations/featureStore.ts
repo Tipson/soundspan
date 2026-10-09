@@ -1,11 +1,30 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/db";
 import { parseEmbedding } from "../../utils/embedding";
 import { buildTasteCentroids, moodFeatureScore } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
-import { isWaveMusicCandidate } from "./wavePolicy";
+import { isWaveMusicCandidate, matchesWaveMood } from "./wavePolicy";
 import { isEarlyRecommendationSkip } from "./playbackEvidence";
+import {
+    loadDislikedYouTubeIds,
+    loadRecentlyViewedCanonicalKeys,
+    loadSuppressedYouTubeArtists,
+    loadYouTubeRepeatExclusions,
+} from "../personalizedTrackPreferences";
+import { songRepeatKey } from "../personalizedRepeatPolicy";
+import { personalNativeCandidateService } from "./personalNativeCandidates";
+import { readVerifiedMusicSourceRecording } from "../musicSources/verifiedMetadata";
+import { toNativeRecommendationCandidate } from "./nativeCandidates";
+import { nativeArtistCreditKey } from "./nativeSourceAdmission";
+import type { RadioRequestExecution } from "./radioRequestExecution";
 import type { RecommendationCandidate } from "./types";
+import {
+    isMusicSourceFeedbackReference,
+    loadVerifiedLikedCanonicalIds,
+    loadVerifiedDislikedCanonicalKeys,
+    loadVerifiedSeedCanonicalId,
+    loadVerifiedSessionPlays,
+} from "./verifiedSourceFeedback";
 import type {
     RecommendationRequestContext,
     RecommendationSurface,
@@ -131,6 +150,7 @@ export class RecommendationFeatureStore {
             sessionId?: string;
             surface?: RecommendationSurface;
             context?: RecommendationRequestContext;
+            crossSurfaceContext?: boolean;
         },
     ): Promise<{
         positiveCentroids: number[][];
@@ -144,7 +164,19 @@ export class RecommendationFeatureStore {
             this.dependencies.now().getTime() -
                 TASTE_LOOKBACK_DAYS * 24 * 60 * 60 * 1_000,
         );
-        const [rows, sessionRows, contextRows, likedEmbeddings] =
+        const contextSurfaces: RecommendationSurface[] =
+            options?.crossSurfaceContext &&
+            options.surface === "made-for-you" &&
+            options.context?.localHour !== undefined
+                ? ["wave", "home", "made-for-you"]
+                : options?.surface
+                  ? [options.surface]
+                  : [];
+        const context =
+            options?.context && options.crossSurfaceContext
+                ? { ...options.context, deviceClass: undefined }
+                : options?.context;
+        const [rows, sessionRows, contextRowsBySurface, likedEmbeddings] =
             await Promise.all([
                 this.dependencies.loadTasteRows(userId, since),
                 options?.sessionId
@@ -154,12 +186,16 @@ export class RecommendationFeatureStore {
                           30,
                       )
                     : Promise.resolve([]),
-                options?.surface && options.context
-                    ? this.dependencies.loadContextRows(
-                          userId,
-                          options.surface,
-                          options.context,
-                          since,
+                context
+                    ? Promise.all(
+                          contextSurfaces.map((surface) =>
+                              this.dependencies.loadContextRows(
+                                  userId,
+                                  surface,
+                                  context,
+                                  since,
+                              ),
+                          ),
                       )
                     : Promise.resolve([]),
                 this.dependencies.loadLikedEmbeddings?.(userId) ??
@@ -194,7 +230,8 @@ export class RecommendationFeatureStore {
                 (row) => tasteDelta(row) !== 0,
             ).length,
             contextCentroids: buildTasteCentroids(
-                contextRows
+                contextRowsBySurface
+                    .flat()
                     .filter((row) => tasteDelta(row) > 0)
                     .map((row) => row.embedding),
                 3,
@@ -369,8 +406,15 @@ export async function loadLikedTasteEmbeddings(
             }),
         ),
     );
+    const directIds = await loadVerifiedLikedCanonicalIds(
+        userId,
+        MAX_TASTE_ROWS,
+    );
     const canonicalIds = [
-        ...new Set(providerRows.flatMap((rows) => rows.map((row) => row.id))),
+        ...new Set([
+            ...providerRows.flatMap((rows) => rows.map((row) => row.id)),
+            ...directIds,
+        ]),
     ];
     if (canonicalIds.length === 0) return [];
     // The global top 500 is contained in the union of each provider's top 500.
@@ -385,12 +429,174 @@ export async function loadLikedTasteEmbeddings(
     return rows.flatMap((row) => (row.embedding ? [row.embedding] : []));
 }
 
-/** Rank a bounded saved-music reserve before the provider shelf truncation. */
+/** Catalog emptiness permits only the existing older-listening fallback, after fresh reserve is exhausted. */
+export interface SavedMoodCandidateOptions {
+    allowRecentListeningFallback?: boolean;
+    excludeVideoIds?: readonly string[];
+    now?: Date;
+    /** Same server-owned cancellation/deadline fence as the catalog and generation writer. */
+    execution?: RadioRequestExecution;
+}
+
+async function loadNativeSavedMoodPool(
+    userId: string,
+    mood: RecommendationMood,
+    options: SavedMoodCandidateOptions,
+) {
+    const check = options.execution?.check ?? (() => {}),
+        now = options.now ?? new Date();
+    const nativeMapping: Prisma.TrackMappingWhereInput = {
+        stale: false,
+        trackMusicSource: {
+            is: {
+                provider: { in: ["vk", "yandex"] },
+                verifiedMetadata: { not: Prisma.AnyNull },
+                metadataObservedAt: { not: null },
+                metadataConnectionVersion: { gt: 0 },
+                likedTracks: { some: { userId, likedAt: { lte: now } } },
+            },
+        },
+    };
+    const measured = new Map<
+        string,
+        {
+            candidate: RecommendationCandidate;
+            canonicalId: string;
+            features: RecommendationCandidate["audioFeatures"];
+        }
+    >();
+    let cursor: string | undefined;
+    // Strict stored metadata is checked before the existing500 reserve bound; malformed namespaces consume only the bounded defensive scan.
+    for (let page = 0; page < 10 && measured.size < MAX_TASTE_ROWS; page++) {
+        check();
+        const rows = await prisma.canonicalRecording.findMany({
+            where: {
+                mergedIntoId: null,
+                identitySource: { not: "identity-merged" },
+                analysisStatus: "completed",
+                arousal: { not: null },
+                mappings: { some: nativeMapping },
+            },
+            orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+            take: 100,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            select: {
+                id: true,
+                canonicalKey: true,
+                analysisStatus: true,
+                mergedIntoId: true,
+                identitySource: true,
+                bpm: true,
+                energy: true,
+                arousal: true,
+                valence: true,
+                danceability: true,
+                instrumentalness: true,
+                mappings: {
+                    where: nativeMapping,
+                    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+                    take: 100,
+                    select: {
+                        trackMusicSource: {
+                            select: {
+                                provider: true,
+                                providerTrackId: true,
+                                verifiedMetadata: true,
+                                metadataObservedAt: true,
+                                metadataConnectionVersion: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        check();
+        for (const row of rows.slice(0, 100)) {
+            // Validate the bounded mapping reserve before choosing this canonical's recording.
+            const recording = row.mappings
+                .map((mapping) =>
+                    readVerifiedMusicSourceRecording(mapping.trackMusicSource),
+                )
+                .find((value) => value !== null);
+            const candidate = recording
+                ? toNativeRecommendationCandidate(recording, "saved-mood")
+                : null;
+            if (
+                !candidate ||
+                row.analysisStatus !== "completed" ||
+                row.mergedIntoId ||
+                row.identitySource === "identity-merged" ||
+                row.arousal === null ||
+                !Number.isFinite(row.arousal)
+            )
+                continue;
+            measured.set(candidate.id, {
+                candidate: { ...candidate, lane: "quickPicks" },
+                canonicalId: row.id,
+                features: {
+                    bpm: row.bpm,
+                    energy: row.energy,
+                    arousal: row.arousal,
+                    valence: row.valence,
+                    danceability: row.danceability,
+                    instrumentalness: row.instrumentalness,
+                },
+            });
+            if (measured.size >= MAX_TASTE_ROWS) break;
+        }
+        if (rows.length < 100 || !rows.at(-1)?.id) break;
+        cursor = rows.at(-1)!.id;
+    }
+    if (!measured.size) return { fresh: [], fallback: [] };
+    // Admission re-resolves the live exact mapping. Measurements cannot migrate to another survivor between these reads.
+    const admitted = await personalNativeCandidateService.admit(
+        {
+            userId,
+            policyTime: now,
+            options: {
+                surface: "wave",
+                execution: options.execution,
+                excludeVideoIds: options.excludeVideoIds,
+            },
+            recent: [],
+            liked: [],
+            plays: [],
+            knownIds: new Set(),
+            seeds: [],
+            degradedSources: [],
+        },
+        [...measured.values()].map((row) => row.candidate),
+    );
+    check();
+    const project = (rows: RecommendationCandidate[]) =>
+        rows.flatMap((candidate) => {
+            const saved = measured.get(candidate.id);
+            if (!saved || saved.canonicalId !== candidate.canonicalRecordingId)
+                return [];
+            const row = {
+                ...candidate,
+                audioFeatures: saved.features,
+                candidateSources: ["saved-mood"],
+                providerPrior: 1.15,
+                accountAffinity: 0.55,
+            };
+            return matchesWaveMood(row, mood) ? [row] : [];
+        });
+    return {
+        fresh: project(admitted.fresh),
+        fallback: project(admitted.fallback),
+    };
+}
+
+/** Rank an eligible saved-music reserve before artist and total quotas. */
 export async function loadSavedMoodCandidates(
     userId: string,
     mood: RecommendationMood,
+    options: SavedMoodCandidateOptions = {},
 ): Promise<RecommendationCandidate[]> {
     if (!["calm", "energetic", "focus", "workout"].includes(mood)) return [];
+    const check = options.execution?.check ?? (() => {});
+    check();
     const mappingWhere = {
         stale: false,
         trackYtMusic: { is: { likedBy: { some: { userId } } } },
@@ -433,6 +639,7 @@ export async function loadSavedMoodCandidates(
             },
         },
     });
+    check();
     const candidates: RecommendationCandidate[] = rows.flatMap((row) => {
         const track = row.mappings[0]?.trackYtMusic;
         if (!track) return [];
@@ -468,16 +675,76 @@ export async function loadSavedMoodCandidates(
             },
         ];
     });
-    candidates.sort(
+    const native = await loadNativeSavedMoodPool(userId, mood, options);
+    check();
+    if (
+        candidates.length === 0 &&
+        !native.fresh.length &&
+        !native.fallback.length
+    )
+        return [];
+    const now = options.now ?? new Date();
+    const excluded = new Set(
+        (options.excludeVideoIds ?? []).map((id) =>
+            id.trim().replace(/^yt:/, "").trim(),
+        ),
+    );
+    const [repeat, disliked, suppressed, viewed, dislikedCanonicalKeys] =
+        await Promise.all([
+            loadYouTubeRepeatExclusions(userId, now),
+            loadDislikedYouTubeIds(
+                userId,
+                candidates.map((track) => track.youtubeVideoId!),
+            ),
+            loadSuppressedYouTubeArtists(userId, now),
+            loadRecentlyViewedCanonicalKeys(
+                userId,
+                candidates.map((track) => track.canonicalKey),
+                now,
+            ),
+            loadDislikedCanonicalKeys(userId),
+        ]);
+    check();
+    const dislikedCanonical = new Set(dislikedCanonicalKeys);
+    const eligible = candidates.filter((track) => {
+        const key = songRepeatKey(track.artist.name, track.title);
+        return (
+            isWaveMusicCandidate(track) &&
+            matchesWaveMood(track, mood) &&
+            !excluded.has(track.youtubeVideoId!) &&
+            !viewed.has(track.canonicalKey) &&
+            !dislikedCanonical.has(track.canonicalKey) &&
+            !disliked.has(track.youtubeVideoId!) &&
+            !suppressed.has(
+                track.artist.name.trim().toLocaleLowerCase("en-US"),
+            ) &&
+            !repeat.hardVideoIds.has(track.youtubeVideoId!) &&
+            !(key && repeat.hardSongKeys.has(key))
+        );
+    });
+    const fresh = eligible.filter((track) => {
+        const key = songRepeatKey(track.artist.name, track.title);
+        return (
+            !repeat.videoIds.has(track.youtubeVideoId!) &&
+            !(key && repeat.songKeys.has(key))
+        );
+    });
+    const combinedFresh = [...fresh, ...native.fresh];
+    const pool =
+        combinedFresh.length > 0 || !options.allowRecentListeningFallback
+            ? combinedFresh
+            : [...eligible, ...native.fallback];
+    pool.sort(
         (a, b) =>
             moodFeatureScore(b, mood) - moodFeatureScore(a, mood) ||
             a.canonicalKey.localeCompare(b.canonicalKey),
     );
     const artists = new Map<string, number>();
     const selected: RecommendationCandidate[] = [];
-    for (const candidate of candidates) {
-        if (!isWaveMusicCandidate(candidate)) continue;
-        const artist = normalizeRecommendationArtistKey(candidate.artist.name);
+    for (const candidate of pool) {
+        const artist =
+            nativeArtistCreditKey(candidate.musicSourceRecording) ??
+            normalizeRecommendationArtistKey(candidate.artist.name);
         if ((artists.get(artist) ?? 0) >= 4) continue;
         artists.set(artist, (artists.get(artist) ?? 0) + 1);
         selected.push(candidate);
@@ -492,21 +759,28 @@ async function loadSessionRows(
     limit: number,
 ): Promise<RecommendationSessionRow[]> {
     const boundedLimit = Math.max(1, Math.min(30, limit));
-    const plays = await prisma.play.findMany({
-        where: { userId, recommendationSessionId: sessionId },
-        orderBy: { playedAt: "desc" },
-        take: boundedLimit,
-        select: {
-            trackId: true,
-            trackTidalId: true,
-            trackYtMusicId: true,
-            playedAt: true,
-            outcome: true,
-            completionRatio: true,
-            listenedSeconds: true,
-        },
-    });
-    if (plays.length === 0) return [];
+    const [plays, directPlays] = await Promise.all([
+        prisma.play.findMany({
+            where: {
+                userId,
+                recommendationSessionId: sessionId,
+                source: { notIn: ["VK", "YANDEX"] },
+            },
+            orderBy: { playedAt: "desc" },
+            take: boundedLimit,
+            select: {
+                trackId: true,
+                trackTidalId: true,
+                trackYtMusicId: true,
+                playedAt: true,
+                outcome: true,
+                completionRatio: true,
+                listenedSeconds: true,
+            },
+        }),
+        loadVerifiedSessionPlays(userId, sessionId),
+    ]);
+    if (plays.length === 0 && directPlays.length === 0) return [];
 
     const localIds = plays.flatMap((play) =>
         play.trackId ? [play.trackId] : [],
@@ -517,27 +791,32 @@ async function loadSessionRows(
     const youtubeIds = plays.flatMap((play) =>
         play.trackYtMusicId ? [play.trackYtMusicId] : [],
     );
-    const mappings = await prisma.trackMapping.findMany({
-        where: {
-            stale: false,
-            canonicalRecordingId: { not: null },
-            OR: [
-                ...(localIds.length > 0 ? [{ trackId: { in: localIds } }] : []),
-                ...(tidalIds.length > 0
-                    ? [{ trackTidalId: { in: tidalIds } }]
-                    : []),
-                ...(youtubeIds.length > 0
-                    ? [{ trackYtMusicId: { in: youtubeIds } }]
-                    : []),
-            ],
-        },
-        select: {
-            trackId: true,
-            trackTidalId: true,
-            trackYtMusicId: true,
-            canonicalRecordingId: true,
-        },
-    });
+    const mappings =
+        localIds.length + tidalIds.length + youtubeIds.length === 0
+            ? []
+            : await prisma.trackMapping.findMany({
+                  where: {
+                      stale: false,
+                      canonicalRecordingId: { not: null },
+                      OR: [
+                          ...(localIds.length > 0
+                              ? [{ trackId: { in: localIds } }]
+                              : []),
+                          ...(tidalIds.length > 0
+                              ? [{ trackTidalId: { in: tidalIds } }]
+                              : []),
+                          ...(youtubeIds.length > 0
+                              ? [{ trackYtMusicId: { in: youtubeIds } }]
+                              : []),
+                      ],
+                  },
+                  select: {
+                      trackId: true,
+                      trackTidalId: true,
+                      trackYtMusicId: true,
+                      canonicalRecordingId: true,
+                  },
+              });
     const canonicalByProvider = new Map<string, string>();
     for (const mapping of mappings) {
         if (!mapping.canonicalRecordingId) continue;
@@ -571,7 +850,10 @@ async function loadSessionRows(
             ? canonicalByProvider.get(`youtube:${play.trackYtMusicId}`)
             : undefined);
     const canonicalIds = Array.from(
-        new Set(plays.flatMap((play) => canonicalIdForPlay(play) ?? [])),
+        new Set([
+            ...plays.flatMap((play) => canonicalIdForPlay(play) ?? []),
+            ...directPlays.map((play) => play.canonicalRecordingId),
+        ]),
     );
     const featureByCanonical = new Map(
         (await loadCanonicalFeatures(canonicalIds)).flatMap((feature) =>
@@ -580,13 +862,22 @@ async function loadSessionRows(
                 : [],
         ),
     );
-    return plays.flatMap((play) => {
+    const legacyRows = plays.flatMap((play) => {
         const canonicalId = canonicalIdForPlay(play);
         const embedding = canonicalId
             ? featureByCanonical.get(canonicalId)
             : undefined;
         return embedding ? [{ ...play, embedding }] : [];
     });
+    const directRows = directPlays.flatMap((play) => {
+        const embedding = featureByCanonical.get(play.canonicalRecordingId);
+        return embedding ? [{ ...play, embedding }] : [];
+    });
+    // Failed/neutral plays and malformed vectors cannot consume the shared quota.
+    return [...legacyRows, ...directRows]
+        .filter((row) => tasteDelta(row) !== 0)
+        .sort((a, b) => b.playedAt.getTime() - a.playedAt.getTime())
+        .slice(0, boundedLimit);
 }
 
 function timeBucket(localHour: number | undefined): string | null {
@@ -633,17 +924,29 @@ async function loadContextRows(
 }
 
 async function loadDislikedCanonicalKeys(userId: string): Promise<string[]> {
+    const directKeys = await loadVerifiedDislikedCanonicalKeys(
+        userId,
+        MAX_DISLIKES,
+    );
     const dislikes = await prisma.dislikedEntity.findMany({
-        where: { userId, entityType: "track" },
+        where: {
+            userId,
+            entityType: "track",
+            NOT: [
+                { entityId: { startsWith: "vk:" } },
+                { entityId: { startsWith: "yandex:" } },
+            ],
+        },
         orderBy: { dislikedAt: "desc" },
         take: MAX_DISLIKES,
         select: { entityId: true },
     });
-    if (dislikes.length === 0) return [];
+    if (dislikes.length === 0) return directKeys;
     const localIds: string[] = [];
     const youtubeVideoIds: string[] = [];
     const tidalIds: number[] = [];
     for (const { entityId } of dislikes) {
+        if (isMusicSourceFeedbackReference(entityId)) continue;
         if (entityId.startsWith("yt:")) {
             youtubeVideoIds.push(entityId.slice(3));
         } else if (entityId.startsWith("tidal:")) {
@@ -656,6 +959,8 @@ async function loadDislikedCanonicalKeys(userId: string): Promise<string[]> {
             youtubeVideoIds.push(entityId);
         }
     }
+    if (localIds.length + youtubeVideoIds.length + tidalIds.length === 0)
+        return directKeys;
     const mappings = await prisma.trackMapping.findMany({
         where: {
             stale: false,
@@ -686,11 +991,14 @@ async function loadDislikedCanonicalKeys(userId: string): Promise<string[]> {
             canonicalRecording: { select: { canonicalKey: true } },
         },
     });
-    return mappings.flatMap((mapping) =>
-        mapping.canonicalRecording?.canonicalKey
-            ? [mapping.canonicalRecording.canonicalKey]
-            : [],
-    );
+    return [
+        ...directKeys,
+        ...mappings.flatMap((mapping) =>
+            mapping.canonicalRecording?.canonicalKey
+                ? [mapping.canonicalRecording.canonicalKey]
+                : [],
+        ),
+    ];
 }
 
 function providerSeedIdentity(seedId: string): {
@@ -727,6 +1035,8 @@ function providerSeedIdentity(seedId: string): {
 async function loadSeedCanonicalRecordingId(
     seedId: string,
 ): Promise<string | null> {
+    if (isMusicSourceFeedbackReference(seedId))
+        return loadVerifiedSeedCanonicalId(seedId);
     const identity = providerSeedIdentity(seedId);
     const mapping = await prisma.trackMapping.findFirst({
         where: {

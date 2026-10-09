@@ -3,7 +3,6 @@
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { HomeMadeForYou } from "@/features/home/components/HomeMadeForYou";
 import { HomeListeningDashboard } from "@/features/home/components/HomeListeningDashboard";
-import { HomeOnlineDiscovery } from "@/features/home/components/HomeOnlineDiscovery";
 import { HomeWaveHero } from "@/features/home/components/HomeWaveHero";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
 import { ru } from "@/lib/i18n/ru";
@@ -49,7 +48,7 @@ function PlaylistSkeleton() {
     );
 }
 
-/** Unified online-first music landing: immediate Wave, personal feed, catalog. */
+/** Personal listening home with immediate Wave and offline downloads. */
 export default function HomePage() {
     const online = useNetworkOnline();
     if (!online) {
@@ -72,9 +71,10 @@ function OnlineHomePage() {
         mixes,
         discoverWeekly,
         personalizedFeed,
-        showYtMusicExplore,
-        homeShelves,
-        chartPlaylists,
+        dailyMixFeed,
+        dailyStyleMixes,
+        timeOfDayFeed,
+        timeOfDayMix,
         isLoading,
         isRefreshingMixes,
         isPersonalizedLoading,
@@ -140,18 +140,15 @@ function OnlineHomePage() {
                             <HomeMadeForYou
                                 discoverWeekly={discoverWeekly}
                                 mixes={mixes}
-                                personalizedFeed={personalizedFeed}
+                                personalizedFeed={dailyMixFeed}
+                                dailyStyleMixes={dailyStyleMixes}
+                                timeOfDayFeed={timeOfDayFeed}
+                                timeOfDayMix={timeOfDayMix}
                                 isRefreshingMixes={isRefreshingMixes}
                                 handleRefreshMixes={handleRefreshMixes}
                             />
                         </div>
                     </HomeListeningDashboard>
-
-                    <HomeOnlineDiscovery
-                        enabled={showYtMusicExplore}
-                        homeShelves={homeShelves}
-                        chartPlaylists={chartPlaylists}
-                    />
                 </div>
             </div>
         </div>

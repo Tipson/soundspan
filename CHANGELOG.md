@@ -1,5 +1,174 @@
 # Changelog
 
+## Radio queue identity
+
+- Preserve the selected song or artist on each radio queue occurrence and in playback snapshots. Starting another collection clears the prior station intent; replacing only the upcoming radio tail preserves the current playback position and pause state.
+
+## Unreleased
+
+- Use patched urllib3, OAuthLib and Werkzeug releases in the pinned Python runtimes while retaining the TensorFlow 2.15 compatibility set.
+
+- Discard delayed playback snapshots when a newer selection, session, local save or shared-listening membership has taken authority. Recheck after media hydration so an obsolete response cannot replace or clear the current queue.
+- Keep explicitly named remix, live and remaster versions distinct during automatic source resolution even when their ISRCs match. Preserve ordinary punctuation matching and continue to an eligible backup instead of opening a different version.
+
+- Build personal Home, Wave and listening-time recommendations from confirmed account-owned VK and Yandex listening and likes alongside YouTube. Share the three-seed request budget, admit current feedback and repeat exclusions before quotas, and preserve exact source identities through ordered recommendation attribution.
+- Include exact native recordings in daily style mixes and account-scoped Discover Weekly. Retain long distinct compositions, current dislikes, compatible weekly snapshots and atomic ordered exposure records.
+- Keep native personal recommendations attached to personal Wave continuation and finite Discover queues. Show their actual sources, preserve download identities and avoid reclassifying direct recordings as local or YouTube tracks.
+- Fill explicit Wave mood reserves from saved native recordings only when current confirmed canonical mappings have completed measured audio features. Apply owner feedback and eligibility before the shared reserve capacity.
+
+- Start and continue radio from exact VK and Yandex recordings through the authenticated original-station API. Apply active owner dislikes and confirmed whole-credit artist suppression before selection, preserve station and selected queue occurrence during restore, and retain native playback and exposure identities without substituting library or YouTube tracks when the source fails.
+
+- Add exact-recording VK and Yandex neighbour requests with up to 100 candidates. Share search concurrency and provider backoff, reject rounded or coerced recording IDs, fence obsolete credential generations before caching or delivery, and distinguish an unavailable source from an exhausted pool.
+
+- Preserve exact VK and Yandex candidates through both recommendation rankers, radio responses and generation attribution. Read only confirmed stored canonical mappings; keep misses neutral, strip upstream identity and analysis claims, and reject conflicting native source tuples before exploration can reinsert them.
+
+- Attach exact VK and Yandex canonical identity automatically after a confirmed playable lookup. Reuse the optional metadata transaction and its existing 500 ms allowance, skip superseded observations, and preserve playback when the optional shared write fails.
+
+- Read exact, server-confirmed VK and Yandex listening history for automatic repeat protection without requiring session attribution or audio analysis. Preserve the last-day attempt cooldown and the personal empty-pool older-listening fallback, filter known canonical repeats before radio selector quotas and final generation membership, and stop subsequent history pages after request cancellation. Keep native recording identity separate from unverified artist/title cross-source matches.
+
+- Use real session-tagged VK and Yandex listens in the fast taste profile through confirmed current canonical mappings and active audio vectors. Keep failed, unconfirmed and malformed signals neutral, preserve legacy session reserves, and apply the shared recent-signal quota after validation without reading private display snapshots.
+
+- Read server-confirmed VK and Yandex saved taste and exact canonical feedback without borrowing private playback metadata. Keep malformed direct seeds neutral, preserve legacy provider reserves and the global vector quota, and exclude exact disliked recordings without requiring audio analysis.
+
+- Keep exact VK and Yandex likes and dislikes private to each listener, preserve newer choices during concurrent requests, and replay confirmed recordings from the liked playlist. Show the existing player feedback controls for supported direct recordings while retaining playlist and download restrictions. Ignore late feedback playback callbacks after the player controls unmount or the queue changes, preserving a newly selected podcast, audiobook, or same-song replacement queue.
+
+- Prepare exact canonical mappings from stored server-confirmed VK and Yandex recordings. Preserve legacy linkage uniqueness, shared audio features and private listening history; keep direct identities separate from unverified cross-source version matches and legacy staleness-check quotas.
+
+- Preserve bounded server-confirmed metadata for exact playable VK and Yandex recordings. Keep it separate from private listening snapshots, fence outdated credential generations and observations, and retain playback when the optional metadata write fails.
+
+- Bound original-station radio to one thirteen-second server request budget. Stop following owner phases on timeout or browser cancellation, retain shared provider pools for other callers, and check generation/exposure transactions before completion. Preserve the current queue and return a static timeout response when a connected request exceeds its budget.
+
+- Record private listening history and engagement for direct VK and Yandex recordings. Keep shared identities free of client-supplied display metadata, preserve exact recordings for history replay, and retain playlist-write restrictions.
+
+- Restore direct VK and Yandex queue recordings from their validated public metadata, retaining the selected occurrence and paused position. Keep credentials and signed URLs out of snapshots, reject conflicting identities, and avoid clearing incomplete provider snapshots through a library lookup. Reject held startup snapshots after newer local selections or group membership changes, including before local storage finishes writing.
+- Refresh settled public radio pools for subsequent original-station requests, so recently heard or queued songs cannot repeatedly exhaust the same cached recommendations. Share in-flight provider requests, retain exact artist seeds and partial successes, and apply each listener's exclusions independently before generation.
+- Reconcile a newer radio station on the same selected song without adopting server source, position, shuffle or pause state. Reject divergent queues and superseded local commands, accounts and group sessions; retain the loaded codec and bitrate during station-only updates.
+- Keep automatic and manual radio continuation attached to the original song or artist, including mixed local and YouTube queues. Retain ordered response membership and playback position; reject superseded station, account, pause, seek and group-session responses. Keep artist-radio continuation available without enabling Wave mode.
+- Continue track and artist radio through a bounded original-station API. Apply queue exclusions, actual listening, current dislikes and viewed recordings before seed-selection quotas; retain ordered generation membership and report partial provider failures without substituting unrelated music.
+- Apply an already suppressed artist to both online and local copies in automatic radio continuation. Keep the existing dislike threshold and expiry, and preserve explicitly selected collection playback and the legacy radio endpoint.
+
+- Prepare unmeasured personal discovery songs through the existing bounded background analyzer when an explicit Wave mood excludes them. Check existing coverage before artist and fair admission quotas so completed recordings cannot starve pending discoveries. Keep unverified songs out of the queue and recommendation exposures, honor existing hard exclusions, and retain the scheduler's budget, account fairness and duplicate-work guards.
+
+- Apply current queue exclusions, recently viewed served recordings and canonical dislikes before saved mood reserve quotas, so excluded songs cannot crowd out available fresh candidates. Use the engine's request timestamp across the reserve and final filtering; preserve the existing cooldown, account isolation and older-listening fallback rules.
+
+- Apply the catalog's actual-listening cooldown, exact dislikes, artist suppression and existing mood eligibility to saved mood reserves before their quotas. Exclude recently heard metadata-matched alternate uploads, and permit older familiar fallback only when the catalog and fitting fresh reserve are empty; failed starts remain neutral.
+
+- Attribute daily style mixes to their exact account-owned compositions throughout card impressions, playback queues and listening progress. Persist each final mix atomically with its ordered exposure records, reuse attribution on cache hits, and keep mixes playable if recording fails.
+- Preserve finite personal-mix queues during local or server playback restoration instead of inferring Wave mode from their recommendation attribution.
+
+- Fill online Discover Weekly with up to 40 new songs when no local discovery playlist exists. Save one account-scoped composition until the following UTC Monday, retain generation attribution, recheck current dislikes, and keep explicit clears empty for the rest of the week. Preserve resolved online tracks in playback and hide local download controls for online weeks.
+- Continue the bounded daily-mix candidate search until it has enough songs not heard in the last seven days, instead of stopping at 40 candidates that include recent repeats.
+
+- Apply the existing two-song artist-dislike suppression to daily mixes, including selected/familiar artist directions, genre anchors, returned songs and cached requests. Preserve long distinct queues and allow artists again when the active suppression expires.
+
+- Preserve the confirmed playback position when a listener pauses source replacement and explicitly resumes, including repeated pause/resume, intervening seeks, rejected starts, invalid replacement durations, and a bounded metadata wait. Keep queue and recording identity unchanged.
+- Retain a closed source-recovery outcome and bounded resume position through offline diagnostic delivery and API sanitization, without storing arbitrary strings or source URLs.
+
+- Add isolated, mandatory browser checks for authentication, taste saving and retry, Wave tuning, distinct long mix queues, real audio controls, and downloaded-file playback without a network. Reject skipped or retried successes and preserve browser failure evidence in CI.
+
+- Add a read-only playback diagnostic report that deduplicates delivered events, separates recovered, failed and unresolved audio loads, and emits private aggregate source/platform/hourly counts with explicit input-quality limits.
+
+- Add an operator timer that checks public radio and consecutive audio ranges without recording listening history. Persist repeated-failure incidents and deliver deduplicated outage/recovery notifications to administrators.
+
+- Prefer songs not heard in the last seven days in automatic Wave and Made For You queues, including alternate YouTube uploads with the same artist and title. Keep the last 24 hours blocked and use older familiar songs only if no fresh alternatives remain; Home's Listen Again shelf still offers intentional replays.
+- Keep Made For You discovery and time-of-day queues diverse by limiting repeated artists; after two different disliked songs by one artist, exclude that artist from automatic catalog recommendations for 30 days. A dislike also removes that artist's upcoming songs from the active recommendation queue without changing an explicitly selected album queue.
+- Favor songs the listener has not played in the last seven days in personal style mixes; use older recent plays to fill a mix only when necessary.
+- Let listeners swipe through every available mix on mobile and scroll the Home page vertically from the artwork area; keep the five-card desktop preview with its expand control.
+- Offer up to six distinct, playable daily style mixes from selected genres, selected artists, and familiar artists when listening supports them, while retaining the 20-track minimum and filtering disliked or repeated songs.
+
+## Daily mixes by personal style
+
+- Build up to three long mixes from the listener's selected genres or artists, or from familiar artists when no tastes were selected. Use catalog artists as style anchors and familiar songs alongside related discoveries. Refresh the artist anchors across days and exclude disliked or repeated tracks.
+- Show one balanced mix when there is not enough music for separate directions; keep the local-time mix and Discover Weekly independent.
+
+## Listening-time personal mix
+
+- Let the morning, daytime, evening, and night mix follow the listener's actual habits at those local times. Refresh its separate recommendation cache at period boundaries and use neutral titles instead of prescribing an energetic morning or quiet evening.
+- Include positive listening signals from Home and Wave when ranking the time-of-day mix, while keeping the three daily mixes and Wave seed independent.
+
+## Longer personal mixes
+
+- Request up to 25 recommendations per mix shelf and build independent queues of up to 40 songs for each daily and time-of-day mix, without changing the Home Wave seed.
+- Reuse a fitting song across different mixes when needed, while keeping each queue free of duplicate recordings. Make the balanced, discovery-led, and familiar emphasis clear in their descriptions.
+
+## Personal mixes by day and listening time
+
+- Put playable Discover Weekly first on Home, followed by three distinct daily mixes built from the listener's balanced, discovery, and familiar recommendations.
+- Add a local-time morning, daytime, evening, or night mix ranked for the matching listening context; keep its queue separate from the daily mixes and hide it when no contextual discovery tracks are available.
+
+## Compact player ratings
+
+- Keep both like and dislike visible in the mobile mini player, including narrow screens, while preserving the full-size tap targets and play control.
+
+## Wave discovery balance
+
+- Give discoveries more room in the default For You queue: place one saved track after four discoveries and a recently played track after fifteen selections. Keep Familiar focused on known music and retain a saved-track fallback when discovery is unavailable.
+
+## Focused mobile player actions
+
+- Keep like, track radio, dislike, and playback controls visible in the mobile player. Place the radio button between the two ratings; keep playlist and Wave actions in the track menu without restarting the current song when starting Wave.
+
+## Music controls on iPhone
+
+- Offer previous and next track actions to the system player for music, while keeping short skips for podcasts and audiobooks. The playback position slider remains available for seeking within a song.
+
+## Mobile player navigation and actions
+
+- Keep the player actions menu above the artwork and provide a visible close control on iPhone and other mobile screens.
+
+## Automatic source selection in search results
+
+- Remove the manual source and recording-version selector from search results. Playback uses the automatically preferred version; shared listening selects an available YouTube version when the preferred service source is unavailable there.
+
+## Taste setup carousel and selection action
+
+- Keep full-size genre labels in a stable scrollable strip with previous/next controls and touch scrolling. Move the desktop save action under the title and animate its fill as artists are selected; retain the mobile bottom action and unrestricted selection count.
+
+## Responsive genre shortcuts
+
+- Fill the taste setup genre row according to available width, keep the active genre visible, and expose remaining categories in the subtly accented genre palette.
+
+## Fullscreen taste setup
+
+- Give artist selection the entire viewport, remove explanatory copy and the empty sidebar, and replace the native genre dropdown with shortcuts and a grouped genre palette. Keep pagination, selection, keyboard dismissal and mobile save controls.
+
+## Artist catalog browsing
+
+- Browse genre-tagged Last.fm artists with automatic pagination, duplicate removal and retry without losing selection. The curated shelf is a labelled fallback during catalog outages.
+- Share cached catalog pages across listeners and coalesce concurrent requests; keep artist selection counts unrestricted.
+
+## Taste browsing
+
+- Replace the horizontally scrolling genre strip with a labelled grouped selector outside the artist scroll area; keep search and save controls visible without overlapping portraits.
+- Offer at least twelve curated artists per genre and an explicit all-artists view, with catalog-wide artist search.
+- Remove minimum and maximum taste selection counts across the UI, API and persisted-profile validation. Preserve the complete selection, including an explicitly cleared profile; keep initial recommendation seed work bounded independently of selection size.
+
+## Source recovery and taste settings
+
+- Load exact-matched taste portraits through a lightweight cached image lookup, independently of Wikidata biographies and full artist discovery.
+
+- Preserve cancelled playback attempts when an alternate source resolves late; keep recording-version checks and session-bound audio representations.
+- Save taste selections during catalog outages and retry unresolved queries on later profile reads, with a durable three-attempt limit and protection against overwriting newer edits or skips.
+- Wait for the scheduler's Redis clients before registering named Bull processors, avoiding transient MaxListeners warnings without increasing listener limits.
+- Present taste settings as one artist-selection screen with circular portraits, genre filters, canonical artist search and a persistent save action. Preserve existing preferences and show incomplete catalog resolution in settings.
+
+## Worker startup cleanup
+
+- Complete retired embedding-queue cleanup when its Redis stream is already absent. Preserve retries for permission, wrong-type and connection failures instead of marking an unsuccessful cleanup complete.
+
+## Collection playback and artist radio
+
+- Use a circular icon-only Play/Pause control across music collection pages, with accessible labels and consistent loading feedback. Pause and resume the active collection without restarting it or controlling an unrelated queue.
+- Build artist radio from matching external-catalog recordings when the artist has no local audio. Preserve provider identity, bounded requests, honest empty/error states, and current playback intent, including shared-listening confirmation.
+- Exclude catalog-only track metadata from local artist-radio pools and preserve album visibility filters so artists without audio files reach external recommendations.
+
+## Personal listening and collection controls
+
+- Start an ordered collection queue from the clicked song, including subsequent playlist pages, while keeping downloaded playback device-only. Keep shuffle and collection management accessible without redundant play-all and pause panels.
+- Resolve radio from a remote recording through its provider instead of requiring a matching local-library artist; reject empty stations without replacing the listener's queue.
+- Keep selected genres visible during taste search, include artist filters in keyboard navigation, and expose recoverable profile loading and saving states.
+- Remove the generic New and Notable homepage shelf and its catalog requests, preserving Wave, personal recommendations, mixes and offline downloads.
+
 ## CI and dependency security
 
 - Update Next.js, sharp, anyio, multer and js-yaml dependencies to address reported security advisories; preserve blocking security checks.
@@ -21,7 +190,6 @@
 ## Production playback pacing
 
 - Reduce the retained YouTube extraction pause from 10–15 seconds to 1–2 seconds on the deployed service, preserving bounded concurrency and provider cooldown. See the Wave desktop startup release note for measured scope and rollback.
-
 
 ## Unreleased server music connections
 

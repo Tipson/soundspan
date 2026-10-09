@@ -1,5 +1,6 @@
 "use client";
 
+import { type ReactNode } from "react";
 import { Heart, ThumbsDown } from "lucide-react";
 import { type TrackPreferenceSignal } from "@/lib/api";
 import {
@@ -7,13 +8,14 @@ import {
     type TrackPreferenceMetadata,
 } from "@/hooks/useTrackPreference";
 import { cn } from "@/utils/cn";
-import { isPlaybackOnlyTrack } from "@/lib/trackRef";
+import { supportsTrackPreferences } from "@/lib/trackRef";
 
 interface TrackPreferenceButtonsProps {
     trackId?: string | null;
     className?: string;
     buttonSizeClassName?: string;
     iconSizeClassName?: string;
+    betweenActions?: ReactNode;
     mode?: "both" | "up-only" | "down-only";
     signal?: TrackPreferenceSignal;
     isSaving?: boolean;
@@ -37,6 +39,7 @@ interface TrackPreferenceButtonsContentProps {
     className?: string;
     buttonSizeClassName: string;
     iconSizeClassName: string;
+    betweenActions?: ReactNode;
     preferenceSignal: TrackPreferenceSignal;
     isPreferenceSaving: boolean;
     mode: "both" | "up-only" | "down-only";
@@ -52,6 +55,7 @@ function TrackPreferenceButtonsContent({
     className,
     buttonSizeClassName,
     iconSizeClassName,
+    betweenActions,
     preferenceSignal,
     isPreferenceSaving,
     mode,
@@ -68,6 +72,8 @@ function TrackPreferenceButtonsContent({
         : "Не нравится";
     const showLike = mode !== "down-only";
     const showDislike = mode !== "up-only";
+    const hasBetweenActions =
+        showLike && showDislike && Boolean(betweenActions);
 
     const baseButtonClass = cn(
         "inline-flex items-center justify-center rounded-xl bg-transparent p-0 transition-[color,background-color,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40 enabled:active:scale-95",
@@ -78,7 +84,9 @@ function TrackPreferenceButtonsContent({
         <div
             className={cn("flex items-center gap-1", className)}
             role="group"
-            aria-label="Оценка трека"
+            aria-label={
+                hasBetweenActions ? "Действия с треком" : "Оценка трека"
+            }
             aria-busy={isPreferenceSaving}
         >
             {showLike && (
@@ -113,6 +121,7 @@ function TrackPreferenceButtonsContent({
                     )}
                 </button>
             )}
+            {hasBetweenActions && betweenActions}
             {showDislike && (
                 <button
                     type="button"
@@ -151,6 +160,7 @@ function TrackPreferenceButtonsControlled({
     className,
     buttonSizeClassName,
     iconSizeClassName,
+    betweenActions,
     signal,
     isSaving,
     onToggleThumbsUp,
@@ -173,6 +183,7 @@ function TrackPreferenceButtonsControlled({
             className={className}
             buttonSizeClassName={buttonSizeClassName ?? "h-11 w-11"}
             iconSizeClassName={iconSizeClassName ?? "h-6 w-6"}
+            betweenActions={betweenActions}
             preferenceSignal={signal ?? "clear"}
             isPreferenceSaving={isSaving ?? false}
             mode={mode}
@@ -189,6 +200,7 @@ function TrackPreferenceButtonsWithQuery({
     className,
     buttonSizeClassName,
     iconSizeClassName,
+    betweenActions,
     signal,
     isSaving,
     onToggleThumbsUp,
@@ -221,6 +233,7 @@ function TrackPreferenceButtonsWithQuery({
             className={className}
             buttonSizeClassName={buttonSizeClassName ?? "h-11 w-11"}
             iconSizeClassName={iconSizeClassName ?? "h-6 w-6"}
+            betweenActions={betweenActions}
             preferenceSignal={preferenceSignal}
             isPreferenceSaving={isPreferenceSaving}
             mode={mode}
@@ -237,7 +250,7 @@ function TrackPreferenceButtonsWithQuery({
  */
 export function TrackPreferenceButtons(props: TrackPreferenceButtonsProps) {
     // Fence before the query-owning child mounts, not merely before a mutation.
-    if (isPlaybackOnlyTrack({ id: props.trackId })) return null;
+    if (!supportsTrackPreferences({ id: props.trackId })) return null;
     if (props.resolveFromQuery === false) {
         return <TrackPreferenceButtonsControlled {...props} />;
     }

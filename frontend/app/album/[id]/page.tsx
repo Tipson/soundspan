@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isCollectionPlayback } from "@/lib/collectionPlayback";
 import { toast } from "sonner";
 import {
     useAudioState,
@@ -72,7 +73,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = usePlaybackStatus();
-    const { pause } = useAudioControls();
+    const { pause, resume } = useAudioControls();
     const { isInGroup } = useListenTogether();
 
     // State
@@ -304,7 +305,12 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     colors={colors}
                     onPlayAll={() => {
                         if (!hasTracks) return;
-                        playAlbum(album, 0);
+                        if (
+                            currentTrack &&
+                            isCollectionPlayback(`album:${album.id}`)
+                        )
+                            resume();
+                        else playAlbum(album, 0);
                     }}
                     onAddAllToQueue={() => {
                         if (!hasTracks) return;
@@ -329,7 +335,10 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     )}
                     isApplyingAlbumPreference={isApplyingAlbumPreference}
                     isPlaying={isPlaying}
-                    isPlayingThisAlbum={currentTrack?.album?.id === album.id}
+                    isPlayingThisAlbum={Boolean(
+                        currentTrack &&
+                        isCollectionPlayback(`album:${album.id}`),
+                    )}
                     onPause={pause}
                     downloadsEnabled={downloadsEnabled}
                     requestsEnabled={requestsEnabled}

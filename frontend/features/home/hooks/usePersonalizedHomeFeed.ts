@@ -34,6 +34,7 @@ export function buildPersonalizedHomeFeedUrl(
     sessionId = getRecommendationSessionId(),
     context: RecommendationClientContext | null = getRecommendationClientContext(),
     language: PersonalizedHomeLanguage = "any",
+    contextKey: string | null = null,
 ): string {
     const params = new URLSearchParams({
         limit: String(limit),
@@ -42,6 +43,7 @@ export function buildPersonalizedHomeFeedUrl(
         sessionId,
     });
     if (mood) params.set("mood", mood);
+    if (contextKey && context) params.set("timeOfDay", "1");
     if (surface === "wave" && language !== "any")
         params.set("language", language);
     appendRecommendationClientContext(params, context);
@@ -65,6 +67,25 @@ export function waveLanguageRefreshInterval(
     return 5000;
 }
 
+/** Keeps one contextual feed per listening period without sharing the daily mix cache. */
+export function personalizedHomeFeedQueryKey(
+    limit: number,
+    mode: PersonalizedHomeMode,
+    mood: PersonalizedHomeMood | null,
+    surface: PersonalizedRecommendationSurface,
+    language: PersonalizedHomeLanguage,
+    contextKey: string | null = null,
+) {
+    const base = queryKeys.personalizedHome(
+        limit,
+        mode,
+        mood,
+        surface,
+        language,
+    );
+    return contextKey ? [...base, contextKey] : base;
+}
+
 /** Fetches one server-ranked variant; optional metadata polling stops once playable. */
 export function usePersonalizedHomeFeed(
     limit = 12,
@@ -73,14 +94,16 @@ export function usePersonalizedHomeFeed(
     mood: PersonalizedHomeMood | null = null,
     surface: PersonalizedRecommendationSurface = "home",
     language: PersonalizedHomeLanguage = "any",
+    contextKey: string | null = null,
 ) {
     return useQuery({
-        queryKey: queryKeys.personalizedHome(
+        queryKey: personalizedHomeFeedQueryKey(
             limit,
             mode,
             mood,
             surface,
             language,
+            contextKey,
         ),
         queryFn: ({ signal }) =>
             api.request<PersonalizedHomeFeed>(
@@ -92,6 +115,7 @@ export function usePersonalizedHomeFeed(
                     undefined,
                     undefined,
                     language,
+                    contextKey,
                 ),
                 {
                     method: "GET",

@@ -117,6 +117,352 @@ describe("playbackState routes runtime", () => {
         mockDeleteMany.mockReset();
     });
 
+    it.each(["vk", "yandex"])(
+        "round-trips public %s recording metadata for exact queue restoration",
+        async (provider) => {
+            let stored: unknown;
+            mockUpsert.mockImplementation(async ({ create }) => {
+                stored = structuredClone(create);
+                return stored;
+            });
+            mockFindUnique.mockImplementation(async () => stored);
+            const id =
+                provider === "vk"
+                    ? "-12345678901234567890_12345678901234567890"
+                    : "12345678901234567890";
+            const recording = {
+                provider,
+                id,
+                title: "Exact Song",
+                artists: ["First Artist", "Second Artist"],
+                duration: 180.5,
+                contentVersion: "explicit",
+                preview: false,
+                isrc: "USABC1234567",
+            };
+            const current = {
+                id: `${provider}:${id}`,
+                title: recording.title,
+                artist: { name: recording.artists.join(", ") },
+                duration: recording.duration,
+                streamSource: provider,
+                mediaSource: provider,
+                provider: { source: provider, providerTrackId: id },
+                musicSourceRecording: {
+                    ...recording,
+                    token: "synthetic-private-token",
+                    url: "https://private.example/signed",
+                    nested: { secret: "private" },
+                },
+            };
+            const app = createRuntimeApp();
+            const saved = await request(app)
+                .post("/")
+                .set("X-Playback-Device-Id", "direct-device")
+                .send({
+                    playbackType: "track",
+                    trackId: current.id,
+                    queue: [
+                        {
+                            ...current,
+                            musicSourceRecording: {
+                                ...current.musicSourceRecording,
+                                contentVersion: "clean",
+                            },
+                        },
+                        current,
+                    ],
+                    currentIndex: 1,
+                    currentTime: 73,
+                    isShuffle: true,
+                    isPlaying: false,
+                });
+            expect(saved.status).toBe(200);
+            const restored = await request(app)
+                .get("/")
+                .set("X-Playback-Device-Id", "direct-device");
+            expect(restored.status).toBe(200);
+            expect(restored.body.queue[1].musicSourceRecording).toEqual(
+                recording,
+            );
+            expect(
+                restored.body.queue[0].musicSourceRecording.contentVersion,
+            ).toBe("clean");
+            expect(restored.body).toMatchObject({
+                trackId: current.id,
+                currentIndex: 1,
+                currentTime: 73,
+                isShuffle: true,
+                isPlaying: false,
+            });
+            expect(JSON.stringify(restored.body)).not.toMatch(
+                /private|signed|secret|token/,
+            );
+        },
+    );
+
+    it("discards invalid or mismatched direct recording metadata without dropping queue occurrences", async () => {
+        const recording = {
+            provider: "vk",
+            id: "-12_34",
+            title: "Song",
+            artists: ["Artist"],
+            duration: 180,
+            contentVersion: "unknown",
+            preview: false,
+        };
+        const track = {
+            id: "vk:-12_34",
+            mediaSource: "vk",
+            streamSource: "vk",
+            provider: { source: "vk", providerTrackId: "-12_34" },
+            musicSourceRecording: recording,
+        };
+        const invalid = [
+            { ...track, musicSourceRecording: undefined },
+            {
+                ...track,
+                musicSourceRecording: {
+                    ...recording,
+                    provider: "yandex",
+                    id: "34",
+                },
+            },
+            { ...track, musicSourceRecording: { ...recording, id: "-12_35" } },
+            { ...track, id: "vk:-12_35" },
+            { ...track, provider: { source: "vk", providerTrackId: "-12_35" } },
+            {
+                ...track,
+                provider: { source: "yandex", providerTrackId: "-12_34" },
+            },
+            { ...track, streamSource: "yandex" },
+            { ...track, mediaSource: "local", streamSource: "local" },
+            {
+                ...track,
+                musicSourceRecording: {
+                    ...recording,
+                    id: "http://private.example",
+                },
+            },
+            {
+                ...track,
+                musicSourceRecording: { ...recording, title: "x".repeat(201) },
+            },
+            {
+                ...track,
+                musicSourceRecording: {
+                    ...recording,
+                    artists: ["x".repeat(101)],
+                },
+            },
+            {
+                ...track,
+                musicSourceRecording: {
+                    ...recording,
+                    artists: Array(11).fill("Artist"),
+                },
+            },
+            {
+                ...track,
+                musicSourceRecording: { ...recording, duration: 3601 },
+            },
+            { ...track, musicSourceRecording: { ...recording, preview: true } },
+            {
+                ...track,
+                musicSourceRecording: {
+                    ...recording,
+                    contentVersion: "secret",
+                },
+            },
+            {
+                ...track,
+                musicSourceRecording: { ...recording, isrc: "invalid" },
+            },
+        ];
+        mockUpsert.mockImplementation(async ({ create }) =>
+            structuredClone(create),
+        );
+        const res = createRes();
+        await postState(
+            {
+                user: { id: "u1" },
+                header: () => "device",
+                body: {
+                    playbackType: "track",
+                    queue: invalid,
+                    currentIndex: invalid.length - 1,
+                    currentTime: 73,
+                },
+            },
+            res,
+        );
+        expect(res.statusCode).toBe(200);
+        expect(res.body.queue).toHaveLength(invalid.length);
+        expect(res.body.currentIndex).toBe(invalid.length - 1);
+        expect(
+            res.body.queue.every(
+                (item: any) => item.musicSourceRecording === undefined,
+            ),
+        ).toBe(true);
+    });
+
+    it("round-trips original radio intent without storing credentials or arbitrary fields", async () => {
+        let stored: unknown = null;
+        mockUpsert.mockImplementation(async ({ create }) => {
+            stored = structuredClone(create);
+            return stored;
+        });
+        mockFindUnique.mockImplementation(async () => stored);
+        const origins = [
+            { kind: "track", source: "youtube", id: "seedVideo01" },
+            { kind: "track", source: "library", id: "local-seed" },
+            { kind: "artist", source: "library", id: "artist-seed" },
+            { kind: "artist", source: "discovery", name: "Original Artist" },
+        ];
+        const app = createRuntimeApp();
+        await request(app)
+            .post("/")
+            .set("X-Forwarded-For", "198.51.100.70")
+            .send({
+                playbackType: "track",
+                trackId: "next",
+                currentIndex: 1,
+                currentTime: 73,
+                isPlaying: false,
+                queue: origins.map((origin, i) => ({
+                    id: `next-${i}`,
+                    radioOrigin: {
+                        ...origin,
+                        credential: "never persist",
+                        signedUrl: "https://invalid/signed",
+                    },
+                })),
+            })
+            .expect(200);
+        const restored = await request(app)
+            .get("/")
+            .set("X-Forwarded-For", "198.51.100.70")
+            .expect(200);
+        expect(
+            restored.body.queue.map(
+                (t: { radioOrigin: unknown }) => t.radioOrigin,
+            ),
+        ).toEqual(origins);
+        expect(restored.body.currentTime).toBe(73);
+        expect(restored.body.isPlaying).toBe(false);
+    });
+
+    it("discards malformed radio origin while preserving the playable queue item", async () => {
+        mockUpsert.mockImplementation(async ({ create }) => create);
+        const invalid = [
+            null,
+            "radio",
+            { kind: "track", source: "youtube", id: "https://invalid/seed" },
+            { kind: "artist", source: "discovery", name: "x".repeat(201) },
+            { kind: "artist", source: "library", id: "x".repeat(129) },
+        ];
+        const response = await request(createRuntimeApp())
+            .post("/")
+            .set("X-Forwarded-For", "198.51.100.71")
+            .send({
+                playbackType: "track",
+                queue: invalid.map((radioOrigin, i) => ({
+                    id: `t-${i}`,
+                    radioOrigin,
+                })),
+            })
+            .expect(200);
+        expect(response.body.queue).toHaveLength(invalid.length);
+        for (const track of response.body.queue)
+            expect(track).not.toHaveProperty("radioOrigin");
+    });
+
+    it("round-trips attribution and finite mode on every daily mix queue entry", async () => {
+        let stored: unknown = null;
+        mockUpsert.mockImplementation(async ({ create }) => {
+            stored = structuredClone(create);
+            return stored;
+        });
+        mockFindUnique.mockImplementation(async () => stored);
+        const app = createRuntimeApp();
+        const queue = Array.from({ length: 40 }, (_, i) => ({
+            id: `yt:daily-${i}`,
+            youtubeVideoId: `daily-${i}`,
+            streamSource: "youtube",
+            title: `Song ${i}`,
+            duration: 180,
+            recommendationGenerationId: " daily-generation ",
+            recommendationSessionId: " client-session ",
+            recommendationQueueMode: "finite",
+            arbitraryExtra: "strip me",
+        }));
+        await request(app)
+            .post("/")
+            .set("X-Forwarded-For", "198.51.100.30")
+            .set("X-Playback-Device-Id", "daily-device")
+            .send({ playbackType: "track", trackId: queue[0].id, queue })
+            .expect(200);
+        const restored = await request(app)
+            .get("/")
+            .set("X-Forwarded-For", "198.51.100.30")
+            .set("X-Playback-Device-Id", "daily-device")
+            .expect(200);
+        expect(restored.body.userId).toBe("u1");
+        expect(restored.body.queue).toHaveLength(40);
+        expect(
+            restored.body.queue.map(
+                (t: { youtubeVideoId: string }) => t.youtubeVideoId,
+            ),
+        ).toEqual(queue.map((t) => t.youtubeVideoId));
+        for (const track of restored.body.queue) {
+            expect(track.recommendationGenerationId).toBe("daily-generation");
+            expect(track.recommendationSessionId).toBe("client-session");
+            expect(track.recommendationQueueMode).toBe("finite");
+            expect(track).not.toHaveProperty("arbitraryExtra");
+        }
+    });
+
+    it("bounds queue attribution strings and rejects malformed lineage and queue modes", async () => {
+        mockUpsert.mockImplementation(async ({ create }) => create);
+        const response = await request(createRuntimeApp())
+            .post("/")
+            .set("X-Forwarded-For", "198.51.100.31")
+            .send({
+                playbackType: "track",
+                queue: [
+                    {
+                        id: "valid",
+                        recommendationGenerationId: "g".repeat(200),
+                        recommendationSessionId: "s".repeat(200),
+                    },
+                    {
+                        id: "invalid",
+                        recommendationGenerationId: { arbitrary: true },
+                        recommendationSessionId: ["session"],
+                        recommendationQueueMode: "wave",
+                    },
+                    {
+                        id: "empty",
+                        recommendationGenerationId: "  ",
+                        recommendationSessionId: 1,
+                        recommendationQueueMode: { finite: true },
+                    },
+                ],
+            })
+            .expect(200);
+        expect(response.body.queue[0].recommendationGenerationId).toHaveLength(
+            128,
+        );
+        expect(response.body.queue[0].recommendationSessionId).toHaveLength(
+            128,
+        );
+        for (const track of response.body.queue.slice(1)) {
+            expect(track).not.toHaveProperty("recommendationGenerationId");
+            expect(track).not.toHaveProperty("recommendationSessionId");
+            expect(track).not.toHaveProperty("recommendationQueueMode");
+        }
+    });
+
     it("attaches the playback-state limiter before auth on every route", () => {
         for (const method of ["get", "post", "delete"] as const) {
             const handlers = getRouteHandlers(method, "/");

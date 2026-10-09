@@ -33,6 +33,10 @@ import { userFacingError } from "@/lib/i18n/ru";
 import { getRecommendationSessionId } from "@/lib/recommendationSession";
 import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
 import { recommendationTrackKey } from "../recommendationIdentity";
+import {
+    hasNativeMusicSourceIdentity,
+    readMusicSourcePlaybackTrack,
+} from "@/lib/audio/musicSourcePlayback";
 
 interface PersonalizedTrackShelfProps {
     title: string;
@@ -187,21 +191,45 @@ export function PersonalizedTrackShelf({
 }: PersonalizedTrackShelfProps) {
     const titleId = useId();
     const { playTracks } = useAudioControls();
+    const playableTracks = useMemo(
+        () =>
+            tracks.filter(
+                (track) =>
+                    !hasNativeMusicSourceIdentity(track) ||
+                    readMusicSourcePlaybackTrack(track) !== null,
+            ),
+        [tracks],
+    );
     const queue = useMemo(
         () =>
-            tracks.map((track) =>
+            playableTracks.map((track) =>
                 toProviderPlaybackTrack(track, {
                     generationId,
                     sessionId: getRecommendationSessionId(),
+                    queueMode: "finite",
                 }),
             ),
-        [generationId, tracks],
+        [generationId, playableTracks],
     );
-    const impressionRef = useRecommendationImpressions(generationId, tracks);
+    const impressionRef = useRecommendationImpressions(
+        generationId,
+        playableTracks,
+    );
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
-    const shelfIdentity = `${title}:${tracks.map((track) => track.id).join("|")}`;
+    const shelfIdentity = `${title}:${playableTracks.map((track) => track.id).join("|")}`;
+    const sources = [...new Set(playableTracks.map((track) => track.source))];
+    const sourceLabels = sources.map(
+        (source) =>
+            ({
+                youtube: "YouTube Music",
+                vk: "VK Музыка",
+                yandex: "Яндекс Музыка",
+                library: "Медиатека",
+                tidal: "TIDAL",
+            })[source],
+    );
 
     const syncScrollControls = useCallback(() => {
         const container = scrollContainerRef.current;
@@ -252,7 +280,7 @@ export function PersonalizedTrackShelf({
         });
     };
 
-    if (tracks.length === 0) return null;
+    if (playableTracks.length === 0) return null;
 
     return (
         <section
@@ -270,7 +298,16 @@ export function PersonalizedTrackShelf({
                         >
                             {title}
                         </h2>
-                        <YouTubeBadge />
+                        {sources.length === 1 && sources[0] === "youtube" ? (
+                            <YouTubeBadge />
+                        ) : (
+                            <span
+                                className="text-xs text-content-muted"
+                                title={sourceLabels.join(" · ")}
+                            >
+                                {sourceLabels.join(" · ")}
+                            </span>
+                        )}
                     </div>
                     {subtitle && (
                         <p className="mt-1 text-sm text-content-muted">
@@ -323,7 +360,7 @@ export function PersonalizedTrackShelf({
                 data-testid="personalized-track-shelf-scroll"
                 className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(240px,68vw)] gap-2 overflow-x-auto overscroll-x-contain scroll-smooth sm:auto-cols-[minmax(272px,320px)] motion-reduce:scroll-auto"
             >
-                {tracks.map((track, index) => {
+                {playableTracks.map((track, index) => {
                     const imageUrl = trackImageUrl(track);
                     return (
                         <div
