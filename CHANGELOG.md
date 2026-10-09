@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Use patched urllib3, OAuthLib and Werkzeug releases in the pinned Python runtimes while retaining the TensorFlow 2.15 compatibility set.
+
 - Discard delayed playback snapshots when a newer selection, session, local save or shared-listening membership has taken authority. Recheck after media hydration so an obsolete response cannot replace or clear the current queue.
 - Keep explicitly named remix, live and remaster versions distinct during automatic source resolution even when their ISRCs match. Preserve ordinary punctuation matching and continue to an eligible backup instead of opening a different version.
 

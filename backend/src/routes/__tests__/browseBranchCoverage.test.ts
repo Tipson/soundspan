@@ -66,7 +66,7 @@ const browseImageCacheKey = jest.fn((url: string) => `cache:${url}`);
 const getBrowseImageFromCache = jest.fn();
 const fetchAndCacheBrowseImage = jest.fn();
 jest.mock("../../services/browseImageCache", () => ({
-    getBrowseImageCacheRoot: () => "/tmp",
+    getBrowseImageCacheRoot: () => os.tmpdir(),
     browseImageCacheKey,
     getBrowseImageFromCache,
     fetchAndCacheBrowseImage,

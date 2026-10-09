@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, mock, test } from "node:test";
 import React from "react";
+import * as realReactQuery from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
     installTrackOverflowHarness,
@@ -107,6 +108,8 @@ mock.module("@/hooks/useQueuedTrackIds", {
 
 mock.module("@tanstack/react-query", {
     namedExports: {
+        // Preserve cache classes used by transitive query-client imports.
+        ...realReactQuery,
         useQueryClient: () => ({
             invalidateQueries: async () => undefined,
             setQueryData: () => undefined,

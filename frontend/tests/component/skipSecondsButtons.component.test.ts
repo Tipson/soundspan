@@ -460,11 +460,22 @@ mock.module("framer-motion", {
             get: (elements, tagName: string) => {
                 if (!elements.has(tagName)) {
                     const MotionTag = React.forwardRef(
-                        (props: { children?: React.ReactNode }, ref) =>
+                        (
+                            {
+                                children,
+                                initial: _initial,
+                                animate: _animate,
+                                exit: _exit,
+                                transition: _transition,
+                                layoutId: _layoutId,
+                                ...domProps
+                            }: Record<string, unknown>,
+                            ref,
+                        ) =>
                             React.createElement(
                                 String(tagName),
-                                { ref },
-                                props.children,
+                                { ...domProps, ref },
+                                children as React.ReactNode,
                             ),
                     );
                     MotionTag.displayName = `motion.${String(tagName)}`;
