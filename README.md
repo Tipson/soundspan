@@ -1,14 +1,19 @@
 # soundspan™
 
-[![GHCR Image](https://img.shields.io/badge/Image-ghcr.io%2Fsoundspan%2Fsoundspan-0A84FF)](https://ghcr.io/soundspan/soundspan)
-[![GitHub Release](https://img.shields.io/github/v/release/soundspan/soundspan?label=Release)](https://github.com/soundspan/soundspan/releases)
+[![Core User Journeys](https://github.com/Tipson/soundspan/actions/workflows/core-user-journeys.yml/badge.svg)](https://github.com/Tipson/soundspan/actions/workflows/core-user-journeys.yml)
+[![Upstream Image](https://img.shields.io/badge/Upstream_image-ghcr.io%2Fsoundspan%2Fsoundspan-0A84FF)](https://ghcr.io/soundspan/soundspan)
+[![Upstream Release](https://img.shields.io/github/v/release/soundspan/soundspan?label=Upstream%20release)](https://github.com/soundspan/soundspan/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-A self-hosted, on-demand audio streaming platform that spans all of your listening experiences in one place.
+A self-hosted music platform with personalized radio, daily mixes, multi-source streaming, and offline PWA playback.
 
-soundspan is built for people who want streaming convenience without giving up ownership of their library. Point it at your local music folder, then manage listening, discovery, podcasts, audiobooks, and playlist workflows from one interface. Listen without limits.
+Choose favorite artists, discover music through your personal Wave, and play long mixes shaped by your listening history and feedback. Use YouTube Music and configured VK/Yandex sources alongside your own library, with automatic source selection and exact recording identities. Save tracks to the installed PWA for offline listening.
 
-> Gratitude: soundspan began from the foundation created by [`Chevron7Locked/kima-hub`](https://github.com/Chevron7Locked/kima-hub). Thank you for the original project and momentum!
+This repository develops a music-focused variant of soundspan. It also retains optional podcast, audiobook, playlist-import, and OpenSubsonic integrations. The hosted instance is available at [music.agentik007.ru](https://music.agentik007.ru).
+
+> Credits: this variant builds on [`soundspan/soundspan`](https://github.com/soundspan/soundspan), which began from [`Chevron7Locked/kima-hub`](https://github.com/Chevron7Locked/kima-hub). Thank you to the original projects and their contributors.
+
+The screenshots below show the upstream interface. This variant's taste setup, mixes, and mobile controls have their own layouts.
 
 <a href="assets/screenshots/web-home.png"><img src="assets/screenshots/web-home.png" width="750"/></a>
 
@@ -16,8 +21,16 @@ soundspan is built for people who want streaming convenience without giving up o
 
 ## Highlights
 
+- Personal Wave with current feedback, recent-listening protection, and artist diversity
+- Up to six daily style mixes with 20–40 tracks when enough personal candidates are available, plus mixes for the listener's local time of day
+- Stable account-scoped Discover Weekly compositions when discovery is enabled
+- YouTube Music streaming and optional server-configured VK/Yandex recordings with private likes, dislikes, listening history, and automatic source selection
+- Track and artist radio that retains its original station while loading more songs
+- Full-screen artist selection with genre scrolling and incremental catalog loading
+- Offline PWA downloads, cached startup, and playback of downloaded music without a connection
+- Mobile player navigation, focused track actions, and previous/next system media controls for music
+- Playback recovery diagnostics and automated browser checks for the main listening journeys
 - Local FLAC, MP3, AAC/M4A, OGG/Opus, WAV, WMA, APE, and WavPack library with automatic MusicBrainz/Last.fm enrichment
-- YouTube Music gap-fill streaming with an OAuth-free public path and optional per-user OAuth
 - DCLAP ONNX-powered vibe matching and mood mixer presets
 - Podcast search/subscribe via RSS with resume, played-state tracking, and mobile skip controls
 - Audiobookshelf integration with unified browsing/playback and progress sync
@@ -46,7 +59,9 @@ documented in [YouTube PO recovery](docs/YOUTUBE_PO_RECOVERY.md).
 
 ## Quick Start
 
-### One-command install
+The prebuilt images linked here belong to the upstream distribution. Build from this repository to deploy this variant's code; deployment modes and source-build configuration are documented in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). VK/Yandex playback requires server-enabled sources and their configured access; source availability depends on the provider.
+
+### Upstream one-command install
 
 ```bash
 docker run -d \
@@ -68,7 +83,7 @@ The AIO image includes the MusicCNN analyzer and a CPU-first DCLAP ONNX
 provider. The backend sends text and audio vibe embedding work to the provider
 over container loopback. Its vendored artifacts total a few hundred MB.
 
-### Optional GPU mode for MusiCNN analysis
+### Upstream GPU mode for MusiCNN analysis
 
 ```bash
 docker run -d \
@@ -111,6 +126,7 @@ soundspan supports optional integrations for discovery, downloads, and client co
 - Audiobookshelf
 - Soulseek
 - YouTube Music
+- Server-configured VK and Yandex Music sources
 - Last.fm and ListenBrainz scrobbling
 - AcoustID track identification
 - OpenSubsonic-compatible `/rest` API
@@ -133,6 +149,8 @@ All integration endpoints below require soundspan auth (session or API key where
 ## Web & PWA
 
 soundspan is browser-first. Use it from your desktop or mobile browser, or install it through your browser's PWA flow for app-like behavior, background playback, media controls, and faster repeat loads.
+
+Download music in the PWA before going offline. The cached application shell and account-scoped downloads support startup and playback without a connection; online catalog browsing and new recommendations still require network access. Offline storage and background behavior depend on the browser and device.
 
 ### On mobile
 
@@ -196,7 +214,9 @@ graph TD
 
 ## Roadmap
 
-- Offline playback in the PWA (a backend offline-cache API exists; no app support yet)
+- Cross-device playback handoff with one active playback device
+- Broader cross-source duplicate protection through verified recording-version identity
+- Continued device acceptance and recommendation-quality evaluation
 
 ---
 
@@ -238,6 +258,6 @@ soundspan is released under the [GNU General Public License v3.0](LICENSE).
 
 ## Support
 
-1. Check existing [Issues](https://github.com/soundspan/soundspan/issues)
+1. Check existing [Issues](https://github.com/Tipson/soundspan/issues)
 2. Open a new issue with setup details and reproduction steps
 3. Include relevant logs from `docker compose logs`
