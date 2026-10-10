@@ -11,6 +11,48 @@ import {
     sanitizePlaybackDiagnosticFields,
 } from "../playbackDiagnostics";
 
+it("preserves bounded command context while rejecting unknown commands and private input", () => {
+    for (const lastEngineCommand of [
+        "load",
+        "play",
+        "pause",
+        "stop",
+        "seek",
+        null,
+    ]) {
+        expect(
+            sanitizePlaybackDiagnosticFields({
+                lastEngineCommand,
+                lastEngineCommandAgeMs: 5_000,
+            }),
+        ).toEqual({ lastEngineCommand, lastEngineCommandAgeMs: 5_000 });
+    }
+    for (const lastEngineCommand of [
+        "custom-secret",
+        "https://private.example",
+        {},
+        42,
+    ]) {
+        expect(sanitizePlaybackDiagnosticFields({ lastEngineCommand })).toEqual(
+            {},
+        );
+    }
+    for (const lastEngineCommandAgeMs of [
+        -1,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        86_400_001,
+        "0",
+    ]) {
+        expect(
+            sanitizePlaybackDiagnosticFields({ lastEngineCommandAgeMs }),
+        ).toEqual({});
+    }
+    expect(
+        sanitizePlaybackDiagnosticFields({ lastEngineCommandAgeMs: null }),
+    ).toEqual({ lastEngineCommandAgeMs: null });
+});
+
 describe("playback diagnostic records", () => {
     beforeEach(() => {
         jest.clearAllMocks();

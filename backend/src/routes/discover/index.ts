@@ -44,7 +44,7 @@ router.get("/batch-status", handleModernBatchStatus);
  * @openapi
  * /api/discover/generate:
  *   post:
- *     summary: Generate new Discover Weekly playlist
+ *     summary: Start manual local Discover Weekly generation
  *     tags: [Discover]
  *     security:
  *       - apiKeyAuth: []
@@ -53,6 +53,8 @@ router.get("/batch-status", handleModernBatchStatus);
  *         description: Generation job started successfully
  *       409:
  *         description: Generation already in progress
+ *       503:
+ *         description: Local generation has no available consumer or its queue is paused; online weekly discoveries remain available through GET /api/discover/current
  *       401:
  *         description: Not authenticated
  */
@@ -77,7 +79,7 @@ router.post("/generate", handleModernGenerate);
  *       200:
  *         description: Job status, progress, and result
  *       404:
- *         description: Job not found
+ *         description: Job not found or not owned by the authenticated user
  *       401:
  *         description: Not authenticated
  */

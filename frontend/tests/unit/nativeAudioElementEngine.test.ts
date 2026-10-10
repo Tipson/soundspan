@@ -388,6 +388,8 @@ test("native diagnostics read only the owned active element without exposing its
         const before = [main.playCalls, main.pauseCalls, main.srcAssignments];
         const snapshot = h.engine.getDiagnosticState();
         assert.deepEqual(snapshot, {
+            lastEngineCommand: "load",
+            lastEngineCommandAgeMs: 0,
             nativePaused: true,
             readyState: 4,
             networkState: 1,
@@ -407,6 +409,89 @@ test("native diagnostics read only the owned active element without exposing its
 
 const eventTypes = (harness: Harness): string[] =>
     harness.events.map((event) => event.type);
+
+test("diagnostics distinguish an engine pause request from an uncommanded element pause", () => {
+    const h = createHarness();
+    try {
+        assert.equal(h.engine.getDiagnosticState().lastEngineCommand, null);
+        assert.equal(
+            h.engine.getDiagnosticState().lastEngineCommandAgeMs,
+            null,
+        );
+        h.engine.load("/diagnostic.webm", { autoplay: true });
+        h.mainElement().fireLoadedMetadata(180);
+        h.setNow(2_000);
+        h.engine.play();
+        h.setNow(7_000);
+        h.mainElement().pause();
+        const external = h.engine.getDiagnosticState();
+        assert.equal(external.lastEngineCommand, "play");
+        assert.equal(external.lastEngineCommandAgeMs, 5_000);
+        const playCalls = h.mainElement().playCalls;
+        h.engine.getDiagnosticState();
+        assert.equal(h.mainElement().playCalls, playCalls);
+
+        h.engine.play();
+        const observed: unknown[] = [];
+        h.engine.on("pause", () =>
+            observed.push(h.engine.getDiagnosticState().lastEngineCommand),
+        );
+        h.setNow(8_000);
+        h.engine.pause();
+        assert.ok(observed.length > 0);
+        assert.ok(observed.every((command) => command === "pause"));
+        assert.equal(h.engine.getDiagnosticState().lastEngineCommandAgeMs, 0);
+    } finally {
+        h.engine.destroy();
+    }
+});
+
+test("diagnostic command history follows transport requests without recording source data", () => {
+    const h = createHarness();
+    try {
+        h.engine.load("https://private.example/song?credential=secret");
+        assert.equal(h.engine.getDiagnosticState().lastEngineCommand, "load");
+        h.engine.seek(10);
+        assert.equal(h.engine.getDiagnosticState().lastEngineCommand, "seek");
+        h.engine.stop();
+        assert.equal(h.engine.getDiagnosticState().lastEngineCommand, "stop");
+        h.engine.setVolume(0.5);
+        h.engine.setMuted(true);
+        assert.equal(h.engine.getDiagnosticState().lastEngineCommand, "stop");
+        assert.equal(
+            JSON.stringify(h.engine.getDiagnosticState()).includes("secret"),
+            false,
+        );
+        h.engine.destroy();
+        h.engine.pause();
+        assert.equal(h.engine.getDiagnosticState().lastEngineCommand, null);
+    } finally {
+        h.engine.destroy();
+    }
+});
+
+test("diagnostic command age remains unknown for invalid or out-of-window clocks", () => {
+    const h = createHarness();
+    try {
+        h.engine.load("/clock.webm");
+        for (const now of [
+            0,
+            Number.NaN,
+            Number.POSITIVE_INFINITY,
+            86_401_001,
+        ]) {
+            h.setNow(now);
+            assert.equal(
+                h.engine.getDiagnosticState().lastEngineCommandAgeMs,
+                null,
+            );
+        }
+        h.setNow(1_100);
+        assert.equal(h.engine.getDiagnosticState().lastEngineCommandAgeMs, 100);
+    } finally {
+        h.engine.destroy();
+    }
+});
 
 // ---------------------------------------------------------------------------
 // Single element, single load path

@@ -5,6 +5,52 @@ import {
     sanitizePlaybackDiagnosticFields,
 } from "../../lib/audio-engine/playbackDiagnosticQueue";
 
+test("diagnostic command context accepts only closed commands and bounded ages", () => {
+    for (const lastEngineCommand of [
+        "load",
+        "play",
+        "pause",
+        "stop",
+        "seek",
+        null,
+    ]) {
+        assert.deepEqual(
+            sanitizePlaybackDiagnosticFields({
+                lastEngineCommand,
+                lastEngineCommandAgeMs: 5_000,
+            }),
+            { lastEngineCommand, lastEngineCommandAgeMs: 5_000 },
+        );
+    }
+    for (const lastEngineCommand of [
+        "custom-secret",
+        "https://private.example",
+        {},
+        42,
+    ]) {
+        assert.deepEqual(
+            sanitizePlaybackDiagnosticFields({ lastEngineCommand }),
+            {},
+        );
+    }
+    for (const lastEngineCommandAgeMs of [
+        -1,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        86_400_001,
+        "0",
+    ]) {
+        assert.deepEqual(
+            sanitizePlaybackDiagnosticFields({ lastEngineCommandAgeMs }),
+            {},
+        );
+    }
+    assert.deepEqual(
+        sanitizePlaybackDiagnosticFields({ lastEngineCommandAgeMs: null }),
+        { lastEngineCommandAgeMs: null },
+    );
+});
+
 test("build identity is bounded and cannot contain URLs or multiline input", () => {
     assert.deepEqual(
         sanitizePlaybackDiagnosticFields({ frontendBuildId: "release-abc_1" }),

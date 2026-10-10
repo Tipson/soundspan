@@ -56,6 +56,7 @@ export function sanitizePlaybackDiagnosticFields(
             result[key] = value;
     }
     for (const key of [
+        "lastEngineCommandAgeMs",
         "currentTimeSec",
         "durationSec",
         "bufferedAheadSec",
@@ -116,6 +117,14 @@ export function sanitizePlaybackDiagnosticFields(
         if (typeof input[key] === "string" && IDENTIFIER.test(input[key]))
             result[key] = input[key];
     // Match the client allowlist without permitting arbitrary error text.
+    if (
+        input.lastEngineCommand === null ||
+        (typeof input.lastEngineCommand === "string" &&
+            ["load", "play", "pause", "stop", "seek"].includes(
+                input.lastEngineCommand,
+            ))
+    )
+        result.lastEngineCommand = input.lastEngineCommand;
     if (
         input.reason === "server_source_recovery" &&
         typeof input.outcome === "string" &&

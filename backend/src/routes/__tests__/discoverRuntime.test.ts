@@ -83,6 +83,9 @@ jest.mock("../../services/lidarr", () => ({
 }));
 
 const discoverQueue = {
+    client: { options: { db: 0 } },
+    getWorkers: jest.fn(async () => [{ name: "discover-weekly", db: "0" }]),
+    isPaused: jest.fn(async () => false),
     getJobs: jest.fn(async () => []),
     getJob: jest.fn(async () => null),
     add: jest.fn(async () => ({ id: "job-1" })),
@@ -440,12 +443,14 @@ describe("discover route runtime behavior", () => {
 
     it("returns generation status payload for a known job", async () => {
         (discoverQueue.getJob as jest.Mock).mockResolvedValueOnce({
+            data: { userId: "user-1" },
             getState: jest.fn().mockResolvedValue("completed"),
             progress: jest.fn().mockReturnValue(75),
             returnvalue: { playlistId: "playlist-1" },
         });
 
         const req = {
+            user: { id: "user-1" },
             params: { jobId: "job-1" },
         } as any;
         const res = createRes();

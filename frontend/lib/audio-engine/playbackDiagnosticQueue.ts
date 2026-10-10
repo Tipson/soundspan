@@ -32,6 +32,7 @@ const SOURCE_RECOVERY_OUTCOMES = new Set([
     "exhausted",
 ]);
 const NUMBER_FIELDS = [
+    "lastEngineCommandAgeMs",
     "diagnosticsVersion",
     "currentTimeSec",
     "durationSec",
@@ -114,6 +115,14 @@ export function sanitizePlaybackDiagnosticFields(
     for (const key of CODE_FIELDS)
         if (typeof input[key] === "string" && IDENTIFIER.test(input[key]))
             result[key] = input[key];
+    if (
+        input.lastEngineCommand === null ||
+        (typeof input.lastEngineCommand === "string" &&
+            ["load", "play", "pause", "stop", "seek"].includes(
+                input.lastEngineCommand,
+            ))
+    )
+        result.lastEngineCommand = input.lastEngineCommand;
     // Match the API allowlist: arbitrary outcome text must never reach storage.
     if (
         input.reason === "server_source_recovery" &&

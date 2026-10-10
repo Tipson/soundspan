@@ -44,6 +44,10 @@ export interface AudioEngineTimeUpdatePayload {
 
 /** Read-only state of the active output, never its source URL or preload. */
 export interface AudioEngineDiagnosticState {
+    /** Last engine transport request; correlation context, not a pause-cause verdict. */
+    lastEngineCommand?: "load" | "play" | "pause" | "stop" | "seek" | null;
+    /** Age at observation, or null for unknown/invalid ages outside 24 hours. */
+    lastEngineCommandAgeMs?: number | null;
     nativePaused: boolean | null;
     readyState: number | null;
     networkState: number | null;

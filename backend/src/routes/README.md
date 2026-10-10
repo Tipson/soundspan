@@ -247,6 +247,15 @@ stays rate limited (`apiLimiter`) and returns
 
 ## Conventions
 
+Manual discovery generation (`POST /api/discover/generate`) uses the local Bull
+queue. Admission requires an available consumer and a globally unpaused queue;
+the read-only readiness probe has a two-second deadline. Unavailable admission
+returns a static 503 before modifying jobs. This is separate from the stable
+online week returned by `GET /api/discover/current` when local tracks are absent.
+Job-status responses belong only to the authenticated job owner; inaccessible
+jobs return the same 404 as missing jobs. Failed removal of a stale manual job
+does not announce a successful new generation.
+
 - **One module per mounted prefix.** Each file here owns a single `/api/*` (or `/rest`) prefix listed above; add a new prefix as a new `camelCase` module and register it in `backend/src/index.ts` and in the table above.
 - **Routes orchestrate; services decide.** Keep parsing, validation, authorization decisions, and data access in `backend/src/services/` (and background processors in `backend/src/workers/`); route handlers coordinate and stay within the repository function-size gate.
 - **Data access.** Use Prisma. Raw SQL is limited to the pgvector / full-text-search / row-locking exceptions defined in [`AGENTS.md`](../../../AGENTS.md) and must use parameterized tagged templates.

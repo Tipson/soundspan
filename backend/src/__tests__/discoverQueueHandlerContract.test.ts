@@ -1,4 +1,7 @@
 const discoverQueue = {
+    client: { options: { db: 0 } },
+    getWorkers: jest.fn(async () => [{ name: "discover-weekly", db: "0" }]),
+    isPaused: jest.fn(async () => false),
     getJob: jest.fn(),
     add: jest.fn(),
 };
@@ -16,6 +19,7 @@ jest.mock("../utils/logger", () => ({
         debug: jest.fn(),
         warn: jest.fn(),
         error: jest.fn(),
+        child: jest.fn().mockReturnThis(),
     },
 }));
 jest.mock("../config", () => ({

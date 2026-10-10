@@ -6,6 +6,10 @@
 
 ## Unreleased
 
+- Preserve bounded last-engine-command context in offline playback diagnostics to help distinguish an application pause request from an uncommanded native pause, without changing pause or resume behavior.
+
+- Reject manual local Discover Weekly generation when no consumer is available or the queue is paused, with a bounded readiness check and no new waiting job. Keep online weekly discoveries independent, limit job status to its owner, and avoid reporting a new run after stale-job removal fails.
+
 - Use patched urllib3, OAuthLib and Werkzeug releases in the pinned Python runtimes while retaining the TensorFlow 2.15 compatibility set.
 
 - Discard delayed playback snapshots when a newer selection, session, local save or shared-listening membership has taken authority. Recheck after media hydration so an obsolete response cannot replace or clear the current queue.

@@ -210,6 +210,10 @@ export class NativeAudioElementEngine implements AudioEngine {
     private pageShowCleanup: (() => void) | null = null;
     private elementCleanups: Array<() => void> = [];
     private isDestroyed = false;
+    private lastEngineCommand: {
+        command: NonNullable<AudioEngineDiagnosticState["lastEngineCommand"]>;
+        atMs: number;
+    } | null = null;
     private readonly listeners = new Map<
         AudioEngineEventType,
         Set<AnyAudioEventHandler>
@@ -339,7 +343,17 @@ export class NativeAudioElementEngine implements AudioEngine {
     }
 
     getDiagnosticState(): AudioEngineDiagnosticState {
+        const commandAgeMs = this.lastEngineCommand
+            ? this.now() - this.lastEngineCommand.atMs
+            : Number.NaN;
         return {
+            lastEngineCommand: this.lastEngineCommand?.command ?? null,
+            lastEngineCommandAgeMs:
+                Number.isFinite(commandAgeMs) &&
+                commandAgeMs >= 0 &&
+                commandAgeMs <= 86_400_000
+                    ? commandAgeMs
+                    : null,
             nativePaused: this.element?.paused ?? null,
             readyState: this.element?.readyState ?? null,
             networkState: this.element?.networkState ?? null,
@@ -543,6 +557,7 @@ export class NativeAudioElementEngine implements AudioEngine {
         this.iosBridge.close();
         this.listeners.clear();
         this.policyState = createInitialNativeEngineState();
+        this.lastEngineCommand = null;
     }
 
     // ------------------------------------------------------------------
@@ -553,6 +568,21 @@ export class NativeAudioElementEngine implements AudioEngine {
         if (this.isDestroyed) {
             return;
         }
+        // Read-only context is staged before synchronous engine event observers run.
+        // A browser/OS pause does not create a transport request here.
+        const command =
+            event.type === "LOAD_REQUESTED"
+                ? "load"
+                : event.type === "PLAY_REQUESTED"
+                  ? "play"
+                  : event.type === "PAUSE_REQUESTED"
+                    ? "pause"
+                    : event.type === "STOP_REQUESTED"
+                      ? "stop"
+                      : event.type === "SEEK_REQUESTED"
+                        ? "seek"
+                        : null;
+        if (command) this.lastEngineCommand = { command, atMs: event.nowMs };
         const transition = transitionNativeEngine(this.policyState, event);
         this.policyState = transition.state;
         transition.effects.forEach((effect) => this.executeEffect(effect));

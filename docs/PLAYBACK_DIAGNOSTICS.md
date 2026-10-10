@@ -16,6 +16,16 @@ buffered seconds, play intent, UI/engine state, browser visibility, coarse brows
 family, reported network availability, error category/code and recovery stage.
 Native snapshots add paused/ended status, ready/network state, media error code,
 AudioContext state, coarse effective connection type and data-saving preference.
+Native command context includes `lastEngineCommand` (`load`, `play`, `pause`,
+`stop`, `seek`, or `null`) and `lastEngineCommandAgeMs` at observation. The age is
+`null` before a command, for an invalid or backward clock, or after 24 hours.
+The command is staged before synchronous pause observers and retained in offline
+delivery; native browser/OS events do not create an application command. This is
+correlation context, not an asserted pause cause: commands can originate from
+controls, synchronization or recovery, and a later command can supersede earlier
+context before an asynchronous event arrives. Missing fields from older clients
+mean unknown context, not proof of an external pause. Preload, volume and mute
+operations do not overwrite the transport command.
 `diagnosticsVersion=2` identifies this diagnostic contract, not a server build.
 `frontendBuildId` identifies the executing client bundle and matches its Next
 `BUILD_ID`. It is embedded during compilation and retained with the observation,

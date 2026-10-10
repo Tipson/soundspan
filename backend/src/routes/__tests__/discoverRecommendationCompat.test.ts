@@ -53,6 +53,9 @@ jest.mock("../../services/lidarr", () => ({
 
 jest.mock("../../workers/queues", () => ({
     discoverQueue: {
+        client: { options: { db: 0 } },
+        getWorkers: jest.fn(async () => [{ name: "discover-weekly", db: "0" }]),
+        isPaused: jest.fn(async () => false),
         getJobs: jest.fn(),
         add: jest.fn(),
         getJob: jest.fn(),
@@ -297,7 +300,7 @@ describe("discover recommendation-mode compatibility", () => {
         });
     });
 
-    it("continues queuing when stale-manual-job remove fails", async () => {
+    it("does not announce generation when stale-manual-job remove fails", async () => {
         const staleJob = {
             id: "job-stale-fail",
             data: { userId: "user-1" },
@@ -305,20 +308,15 @@ describe("discover recommendation-mode compatibility", () => {
             remove: jest.fn().mockRejectedValue(new Error("remove failed")),
         };
         mockDiscoverQueueGetJob.mockResolvedValueOnce(staleJob);
-        mockDiscoverQueueAdd.mockResolvedValueOnce({
-            id: "job-after-remove-fail",
-        });
-
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
         await generateHandler(req, res);
 
         expect(staleJob.remove).toHaveBeenCalledTimes(1);
-        expect(mockDiscoverQueueAdd).toHaveBeenCalledTimes(1);
-        expect(res.statusCode).toBe(200);
+        expect(mockDiscoverQueueAdd).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({
-            message: "Discover Weekly recommendation generation started",
-            jobId: "job-after-remove-fail",
+            error: "Failed to start generation",
         });
     });
 
@@ -348,13 +346,17 @@ describe("discover recommendation-mode compatibility", () => {
 
     it("maps generation status payload for known queue jobs", async () => {
         const job = {
+            data: { userId: "user-1" },
             getState: jest.fn().mockResolvedValue("completed"),
             progress: jest.fn().mockReturnValue(100),
             returnvalue: { generated: 25 },
         };
         mockDiscoverQueueGetJob.mockResolvedValueOnce(job);
 
-        const req = { params: { jobId: "job-77" } } as any;
+        const req = {
+            user: { id: "user-1" },
+            params: { jobId: "job-77" },
+        } as any;
         const res = createRes();
 
         await generateStatusHandler(req, res);

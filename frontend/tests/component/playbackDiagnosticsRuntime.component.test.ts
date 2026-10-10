@@ -31,6 +31,8 @@ const engine = {
         networkState: 1,
         mediaErrorCode: null,
         audioContextState: "not_used",
+        lastEngineCommand: "pause",
+        lastEngineCommandAgeMs: 25,
         sourceKind: "device_file",
     }),
 };
@@ -137,6 +139,7 @@ test("runtime retains a full native offline incident durably and flushes on onli
     assert.equal(sent.length, 0);
     const serialized = Object.values(localStorage).join("");
     assert.ok(serialized.includes("player.engine_pause"));
+    assert.ok(serialized.includes('"lastEngineCommand":"pause"'));
     assert.equal(serialized.includes("private-listening-session"), false);
     assert.equal(sessionStorage.length, 0);
     Object.defineProperty(navigator, "onLine", {
@@ -147,6 +150,8 @@ test("runtime retains a full native offline incident durably and flushes on onli
     await settle();
     assert.equal(sent.length, 1);
     assert.equal(sent[0].diagnostic?.ownerId, "user-a");
+    assert.equal(sent[0].fields.lastEngineCommand, "pause");
+    assert.equal(sent[0].fields.lastEngineCommandAgeMs, 25);
     const fields = sent[0].fields;
     assert.equal(fields.diagnosticsVersion, 2);
     assert.equal(fields.frontendBuildId, "current-build");
