@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Rotate personal daily mix radio seeds and available song membership per account and UTC day. Spread available artists without shortening sparse mixes, retain dislike and recent-listening filters, and separate daily and time-of-day browser caches across UTC-day boundaries.
+
 - Preserve bounded last-engine-command context in offline playback diagnostics to help distinguish an application pause request from an uncommanded native pause, without changing pause or resume behavior.
 
 - Reject manual local Discover Weekly generation when no consumer is available or the queue is paused, with a bounded readiness check and no new waiting job. Keep online weekly discoveries independent, limit job status to its owner, and avoid reporting a new run after stale-job removal fails.

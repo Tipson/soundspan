@@ -99,7 +99,11 @@ export const queryKeys = {
 
     // Mixes
     mixes: () => ["mixes"] as const,
-    personalDailyMixes: () => ["home", "personalized", "daily-mixes"] as const,
+    /** Omit the UTC day to invalidate every daily composition. */
+    personalDailyMixes: (utcDay?: string | null) =>
+        utcDay
+            ? (["home", "personalized", "daily-mixes", utcDay] as const)
+            : (["home", "personalized", "daily-mixes"] as const),
     mix: (id: string) => ["mix", id] as const,
 
     // Popular artists

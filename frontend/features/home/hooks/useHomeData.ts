@@ -40,9 +40,21 @@ export function useHomeData(): UseHomeDataReturn {
     const { discovery, autoPlaylists } = useFeatures();
     const { waveMode, waveMood } = useAudioState();
     const queryClient = useQueryClient();
-    const [localHour, setLocalHour] = useState<number | null>(null);
+    const [mixClock, setMixClock] = useState<{
+        localHour: number;
+        utcDay: string;
+    } | null>(null);
     useEffect(() => {
-        const updateHour = () => setLocalHour(new Date().getHours());
+        const updateHour = () => {
+            const now = new Date();
+            const localHour = now.getHours();
+            const utcDay = now.toISOString().slice(0, 10);
+            setMixClock((previous) =>
+                previous?.localHour === localHour && previous.utcDay === utcDay
+                    ? previous
+                    : { localHour, utcDay },
+            );
+        };
         updateHour();
         const interval = window.setInterval(updateHour, 60_000);
         window.addEventListener("focus", updateHour);
@@ -54,7 +66,7 @@ export function useHomeData(): UseHomeDataReturn {
         };
     }, []);
     const timeOfDayMix =
-        localHour === null ? null : timeOfDayMixForHour(localHour);
+        mixClock === null ? null : timeOfDayMixForHour(mixClock.localHour);
     const personalizedQuery = usePersonalizedHomeFeed(
         12,
         isAuthenticated,
@@ -63,19 +75,22 @@ export function useHomeData(): UseHomeDataReturn {
     );
     const dailyMixQuery = usePersonalizedHomeFeed(
         25,
-        isAuthenticated,
+        isAuthenticated && mixClock !== null,
         "for-you",
         null,
         "made-for-you",
+        "any",
+        null,
+        mixClock?.utcDay ?? null,
     );
     const dailyStyleMixQuery = useQuery({
-        queryKey: queryKeys.personalDailyMixes(),
+        queryKey: queryKeys.personalDailyMixes(mixClock?.utcDay),
         queryFn: ({ signal }) =>
             api.request<{ mixes: PersonalDailyMix[] }>(
                 "/personalized/daily-mixes",
                 { method: "GET", signal, timeoutMs: 60_000 },
             ),
-        enabled: isAuthenticated,
+        enabled: isAuthenticated && mixClock !== null,
         staleTime: 60 * 60 * 1000,
         retry: 1,
     });
@@ -87,6 +102,7 @@ export function useHomeData(): UseHomeDataReturn {
         "made-for-you",
         "any",
         timeOfDayMix?.key ?? null,
+        mixClock?.utcDay ?? null,
     );
 
     useEffect(() => {

@@ -4,6 +4,12 @@ import { parseStoredTasteProfile } from "./tasteProfile";
 import { tasteArtistTags } from "./tasteArtistGenres";
 import { lastFmService } from "./lastfm";
 import { ytMusicService } from "./youtubeMusic";
+import {
+    allocateTracksWithArtistWeighting,
+    createSeededRng,
+    getSeededRandom,
+    seededShuffle,
+} from "./artistSlotAllocation";
 import type {
     PersonalizedTrack,
     PersonalizedNativeTrack,
@@ -180,6 +186,38 @@ function mergeFamiliarAndNew(
     return distinct(songs).slice(0, MAX_TRACKS);
 }
 
+/** Advance one catalog position per UTC day without mutating provider results. */
+function rotateForDay<T>(items: T[], day: number, seedKey: string): T[] {
+    if (items.length === 0) return [];
+    const offset = (day + getSeededRandom(seedKey)) % items.length;
+    return [...items.slice(offset), ...items.slice(0, offset)];
+}
+
+/** Space selected songs without dropping repeats needed to fill a sparse pool. */
+function spaceLaneArtists(songs: DailyMixCandidate[]): DailyMixCandidate[] {
+    const buckets = new Map<string, DailyMixCandidate[]>();
+    for (const song of songs) {
+        const key = artistKey(songArtist(song));
+        const bucket = buckets.get(key) ?? [];
+        bucket.push(song);
+        buckets.set(key, bucket);
+    }
+    const result: DailyMixCandidate[] = [];
+    let previous: string | null = null;
+    while (result.length < songs.length) {
+        const available = [...buckets].filter(
+            ([, tracks]) => tracks.length > 0,
+        );
+        const alternative = available.filter(([key]) => key !== previous);
+        const [key, tracks] = (
+            alternative.length ? alternative : available
+        ).sort((left, right) => right[1].length - left[1].length)[0];
+        result.push(tracks.shift()!);
+        previous = key;
+    }
+    return result;
+}
+
 /** Builds distinct, playable daily mixes from account tastes and listening. */
 export class PersonalDailyMixService {
     private readonly cache = new Map<
@@ -336,6 +374,7 @@ export class PersonalDailyMixService {
                     familiar,
                     recentlyPlayed,
                     suppressedArtists,
+                    now,
                     nativeProfile,
                 ),
             )
@@ -384,8 +423,10 @@ export class PersonalDailyMixService {
         familiar: DailyMixCandidate[],
         recentlyPlayed: RecentlyPlayedSong[],
         suppressedArtists: ReadonlySet<string>,
+        generatedAtMs: number,
         nativeProfile?: NativePersonalProfile,
     ): Promise<{ mixes: PersonalDailyMix[]; cacheable: boolean }> {
+        const day = Math.floor(generatedAtMs / 86_400_000);
         let nativeDegraded = (nativeProfile?.degradedSources.length ?? 0) > 0;
         const allowedArtist = (song: DailyMixCandidate) =>
             "source" in song || !suppressedArtists.has(artistKey(song.artist));
@@ -401,8 +442,7 @@ export class PersonalDailyMixService {
         for (const play of nativeProfile?.plays ?? []) {
             if (
                 play.outcome === "failed" ||
-                play.playedAt.getTime() <
-                    this.dependencies.now().getTime() - 7 * 86_400_000
+                play.playedAt.getTime() < generatedAtMs - 7 * 86_400_000
             )
                 continue;
             recentTimes.set(
@@ -495,15 +535,13 @@ export class PersonalDailyMixService {
                                 familiarArtists.has(artistKey(artist)),
                             );
                             const rotating = genreArtists.slice(0, 12);
-                            const day = Math.floor(
-                                this.dependencies.now().getTime() / 86_400_000,
-                            );
-                            const offset =
-                                rotating.length > 0 ? day % rotating.length : 0;
+                            const directionSeed = JSON.stringify([
+                                userId,
+                                direction.key,
+                            ]);
                             const artistQueries = [
-                                ...matched,
-                                ...rotating.slice(offset),
-                                ...rotating.slice(0, offset),
+                                ...rotateForDay(matched, day, directionSeed),
+                                ...rotateForDay(rotating, day, directionSeed),
                             ]
                                 .filter(
                                     (artist, index, all) =>
@@ -542,7 +580,15 @@ export class PersonalDailyMixService {
                                         : searched;
                                     if (matchedSongs.length === 0) continue;
                                     songs.push(...matchedSongs);
-                                    const seeds = matchedSongs.slice(
+                                    const seeds = rotateForDay(
+                                        matchedSongs,
+                                        day,
+                                        JSON.stringify([
+                                            userId,
+                                            direction.key,
+                                            query,
+                                        ]),
+                                    ).slice(
                                         0,
                                         direction.kind === "artist" ? 3 : 1,
                                     );
@@ -637,16 +683,70 @@ export class PersonalDailyMixService {
             const newSongs = pool.filter(
                 (song) => !familiarIds.has(songIdentity(song)),
             );
+            // Native admission owns its ranking. Rotate only the legacy catalog
+            // lanes, keeping familiar/new quotas and fresh-before-recent ordering.
+            const dailyLane = (songs: DailyMixCandidate[], lane: string) => {
+                if (direction.nativeSeedId) return songs;
+                const seedKey = JSON.stringify([
+                    userId,
+                    day,
+                    direction.key,
+                    lane,
+                ]);
+                const shuffled = seededShuffle(songs, seedKey);
+                // Break allocation ties by seeded artist order, not artist-name
+                // alphabet. Otherwise >40 singleton artists keep the same songs.
+                const artistOrder = new Map(
+                    [
+                        ...new Set(
+                            shuffled.map((song) => artistKey(songArtist(song))),
+                        ),
+                    ].map((key, index) => [
+                        key,
+                        String(index).padStart(10, "0"),
+                    ]),
+                );
+                return spaceLaneArtists(
+                    allocateTracksWithArtistWeighting(
+                        shuffled,
+                        (song) => artistOrder.get(artistKey(songArtist(song)))!,
+                        {
+                            targetCount: MAX_TRACKS,
+                            alpha: 0,
+                            // Soft diversification: use every available artist,
+                            // then fill shortages without shrinking a long mix.
+                            ceilingShare: 1,
+                            rng: createSeededRng(getSeededRandom(seedKey)),
+                        },
+                    ),
+                );
+            };
             const fresh = mergeFamiliarAndNew(
-                familiarSongs.filter(
-                    (song) => !recentTimes.has(songIdentity(song)),
+                dailyLane(
+                    familiarSongs.filter(
+                        (song) => !recentTimes.has(songIdentity(song)),
+                    ),
+                    "familiar",
                 ),
-                newSongs.filter((song) => !recentTimes.has(songIdentity(song))),
+                dailyLane(
+                    newSongs.filter(
+                        (song) => !recentTimes.has(songIdentity(song)),
+                    ),
+                    "discovery",
+                ),
             );
             const older = distinct([...familiarSongs, ...newSongs])
                 .filter((song) => recentTimes.has(songIdentity(song)))
                 .sort(oldestPlayFirst);
-            const tracks = [...fresh, ...older].slice(0, MAX_TRACKS);
+            // Select the oldest eligible recordings before spacing them, so
+            // diversity changes presentation, never the recent-play fallback set.
+            const selectedOlder = older.slice(0, MAX_TRACKS - fresh.length);
+            const tracks = [
+                ...fresh,
+                ...(direction.nativeSeedId
+                    ? selectedOlder
+                    : spaceLaneArtists(selectedOlder)),
+            ];
             if (tracks.length < MIN_TRACKS) return [];
             for (const track of tracks)
                 usedAcrossMixes.add(compositionIdentity(track));
@@ -695,11 +795,11 @@ export const personalDailyMixService = new PersonalDailyMixService({
                 sessionId: `personal-daily:${day}:${mix.key}`,
                 surface: "made-for-you",
                 direction: "for-you",
-                algorithm: "personal-daily-mix-v1",
+                algorithm: "personal-daily-mix-v2",
                 served: true,
                 degradedSources: [],
                 latencyMs,
-                context: { dailyMix: { version: 1, key: mix.key, day } },
+                context: { dailyMix: { version: 2, key: mix.key, day } },
                 exposures: {
                     create: mix.tracks.map((track, position) => ({
                         userId,

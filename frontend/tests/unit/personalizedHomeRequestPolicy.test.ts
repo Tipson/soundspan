@@ -115,3 +115,38 @@ test("time-of-day feed uses a separate cache entry for each period", () => {
     );
     assert.equal(url.searchParams.get("timeOfDay"), "1");
 });
+
+test("daily feed cache changes by UTC day while preserving prefix invalidation and period isolation", () => {
+    assert.notDeepEqual(
+        queryKeys.personalDailyMixes("2026-10-09"),
+        queryKeys.personalDailyMixes("2026-10-10"),
+    );
+    assert.deepEqual(
+        queryKeys.personalDailyMixes("2026-10-10").slice(0, 3),
+        queryKeys.personalDailyMixes(),
+    );
+    const makeKey = (day: string, period: string | null = null) =>
+        personalizedHomeFeedQueryKey(
+            25,
+            "for-you",
+            null,
+            "made-for-you",
+            "any",
+            period,
+            day,
+        );
+    assert.notDeepEqual(makeKey("2026-10-09"), makeKey("2026-10-10"));
+    assert.notDeepEqual(makeKey("2026-10-10"), makeKey("2026-10-10", "night"));
+    assert.notDeepEqual(
+        makeKey("2026-10-10", "night"),
+        makeKey("2026-10-11", "night"),
+    );
+    const prefix = queryKeys.personalizedHome(
+        25,
+        "for-you",
+        null,
+        "made-for-you",
+        "any",
+    );
+    assert.deepEqual(makeKey("2026-10-10").slice(0, prefix.length), prefix);
+});

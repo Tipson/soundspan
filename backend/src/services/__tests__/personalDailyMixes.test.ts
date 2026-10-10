@@ -65,6 +65,229 @@ function dependencies(
 }
 
 describe("PersonalDailyMixService", () => {
+    it("renews daily membership from a static catalog while keeping same-day refreshes stable", async () => {
+        let now = new Date("2026-10-09T08:00:00Z");
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                now: () => now,
+            }),
+        );
+        const first = (await service.getMixes("listener")).mixes[0].tracks;
+        now = new Date("2026-10-09T08:11:00Z");
+        expect((await service.getMixes("listener")).mixes[0].tracks).toEqual(
+            first,
+        );
+        now = new Date("2026-10-10T08:00:00Z");
+        const second = (await service.getMixes("listener")).mixes[0].tracks;
+        const firstIds = new Set(first.map((track) => track.id));
+        expect(second).toHaveLength(40);
+        expect(new Set(second.map((track) => track.id)).size).toBe(40);
+        expect(second.some((track) => !firstIds.has(track.id))).toBe(true);
+    });
+
+    it("rotates the actual radio seed daily without increasing provider fan-out", async () => {
+        let now = new Date("2026-10-09T08:00:00Z");
+        const searched = Array.from({ length: 8 }, (_, i) =>
+            song(`Muse-seed-${i}`, "Muse"),
+        );
+        const getRadio = jest.fn(async (seed: string) =>
+            radio(seed, "Related Artist"),
+        );
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    {
+                        key: "artist:Muse",
+                        label: "Muse",
+                        query: "Muse songs",
+                        kind: "artist",
+                    },
+                ],
+                loadFamiliar: async () => [],
+                searchSongs: async () => searched,
+                getRadio,
+                now: () => now,
+            }),
+        );
+        await service.getMixes("listener");
+        const firstSeed = getRadio.mock.calls[0][0];
+        now = new Date("2026-10-10T08:00:00Z");
+        await service.getMixes("listener");
+        expect(getRadio).toHaveBeenCalledTimes(2);
+        expect(getRadio.mock.calls[1][0]).not.toBe(firstSeed);
+        expect(searched.map((track) => track.videoId)).toEqual(
+            Array.from({ length: 8 }, (_, i) => `Muse-seed-${i}`),
+        );
+    });
+
+    it("rotates familiar genre anchors instead of permanently choosing the first catalog artist", async () => {
+        let now = new Date("2026-10-09T08:00:00Z");
+        const searchSongs = jest.fn(async (_userId: string, query: string) => [
+            song(query.replace(/ /g, "-"), query.slice(0, -6)),
+        ]);
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    {
+                        key: "genre:Рок",
+                        label: "Рок",
+                        query: "rock music",
+                        kind: "genre",
+                    },
+                ],
+                loadGenreArtists: async () => ["Muse", "Radiohead", "Nirvana"],
+                loadFamiliar: async () => [
+                    song("known-muse", "Muse"),
+                    song("known-radiohead", "Radiohead"),
+                ],
+                searchSongs,
+                getRadio: async () => radio("related", "Related Artist"),
+                now: () => now,
+            }),
+        );
+        await service.getMixes("listener");
+        // Familiar artist directions start in parallel before the genre catalog resolves.
+        const firstAnchor = searchSongs.mock.calls.at(-1)![1];
+        const firstDayCalls = searchSongs.mock.calls.length;
+        now = new Date("2026-10-10T08:00:00Z");
+        await service.getMixes("listener");
+        const genreAnchor = searchSongs.mock.calls
+            .slice(firstDayCalls)
+            .at(-1)![1];
+        expect(["Muse songs", "Radiohead songs"]).toContain(genreAnchor);
+        expect(genreAnchor).not.toBe(firstAnchor);
+    });
+
+    it("varies daily membership by account without adding unavailable tracks to a short pool", async () => {
+        const service = new PersonalDailyMixService(
+            dependencies({ loadFamiliar: async () => [] }),
+        );
+        const first = (await service.getMixes("listener-a")).mixes[0].tracks;
+        const second = (await service.getMixes("listener-b")).mixes[0].tracks;
+        expect(second.map((track) => track.id).sort()).not.toEqual(
+            first.map((track) => track.id).sort(),
+        );
+        const short = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                getRadio: async () =>
+                    Array.from({ length: 19 }, (_, i) =>
+                        song(`short-${i}`, `Artist ${i}`),
+                    ),
+            }),
+        );
+        expect((await short.getMixes("listener")).mixes[0].tracks).toHaveLength(
+            20,
+        );
+    });
+
+    it("uses the available artist variety before filling the remaining slots from a dominant artist", async () => {
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                getRadio: async () =>
+                    Array.from({ length: 48 }, (_, i) =>
+                        song(
+                            `radio-${i}`,
+                            i < 18 ? "Dominant Artist" : `Artist ${i}`,
+                        ),
+                    ),
+            }),
+        );
+        const tracks = (await service.getMixes("listener")).mixes[0].tracks;
+        expect(tracks).toHaveLength(40);
+        // 31 other playable songs exist: use them before the necessary nine repeats.
+        expect(
+            tracks.filter((track) => track.artist.name === "Dominant Artist"),
+        ).toHaveLength(9);
+        expect(new Set(tracks.map((track) => track.artist.name)).size).toBe(32);
+        expect(
+            tracks.some(
+                (track, i) =>
+                    i > 0 && track.artist.name === tracks[i - 1].artist.name,
+            ),
+        ).toBe(false);
+    });
+
+    it("rotates membership when more than forty artists have one eligible song each", async () => {
+        let now = new Date("2026-10-09T08:00:00Z");
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                getRadio: async () =>
+                    Array.from({ length: 48 }, (_, i) =>
+                        song(`unique-${i}`, `Unique Artist ${i}`),
+                    ),
+                now: () => now,
+            }),
+        );
+        const ids = async (account: string) =>
+            (await service.getMixes(account)).mixes[0].tracks
+                .map((track) => track.id)
+                .sort();
+        const first = await ids("listener-a");
+        expect(await ids("listener-b")).not.toEqual(first);
+        now = new Date("2026-10-10T08:00:00Z");
+        const nextDay = await ids("listener-a");
+        expect(nextDay).toHaveLength(40);
+        expect(nextDay).not.toEqual(first);
+    });
+
+    it("spaces the selected older fallback without replacing the oldest eligible recordings", async () => {
+        const songs = Array.from({ length: 48 }, (_, i) =>
+            song(`older-${i}`, i < 18 ? "Dominant Artist" : `Artist ${i}`),
+        );
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                getRadio: async () => songs,
+                loadRecentlyPlayed: async () =>
+                    songs.map((track, i) => ({
+                        videoId: track.videoId,
+                        playedAt: new Date(
+                            Date.parse("2026-09-25T08:00:00Z") + i * 60_000,
+                        ),
+                    })),
+            }),
+        );
+        const tracks = (await service.getMixes("listener")).mixes[0].tracks;
+        expect(tracks).toHaveLength(40);
+        expect(tracks[0].youtubeVideoId).toBe("rock-seed");
+        expect(
+            tracks
+                .slice(1)
+                .map((track) => track.youtubeVideoId)
+                .sort(),
+        ).toEqual(
+            songs
+                .slice(0, 39)
+                .map((track) => track.videoId)
+                .sort(),
+        );
+        expect(
+            tracks.some(
+                (track, i) =>
+                    i > 0 && track.artist.name === tracks[i - 1].artist.name,
+            ),
+        ).toBe(false);
+    });
+
     it("retains newer cached attribution when an expired pending request fails", async () => {
         let now = new Date("2026-10-07T08:00:00Z");
         let rejectOld!: (error: Error) => void;
@@ -197,10 +420,12 @@ describe("PersonalDailyMixService", () => {
                 ],
                 loadFamiliar: async () => [],
                 loadRecentlyPlayed: async () =>
-                    Array.from({ length: 21 }, (_, i) => ({
-                        videoId: `first-${i}`,
-                        playedAt: new Date("2026-09-25T08:00:00Z"),
-                    })),
+                    ["first", "second"].flatMap((seed) =>
+                        Array.from({ length: 21 }, (_, i) => ({
+                            videoId: `${seed}-${i}`,
+                            playedAt: new Date("2026-09-25T08:00:00Z"),
+                        })),
+                    ),
                 searchSongs: async () => [
                     song("first", "Artist"),
                     song("second", "Artist"),
@@ -215,7 +440,9 @@ describe("PersonalDailyMixService", () => {
             result.mixes[0].tracks.some(
                 (t) =>
                     typeof t.youtubeVideoId === "string" &&
-                    /^first-(?:[0-9]|1[0-9]|20)$/.test(t.youtubeVideoId),
+                    /^(?:first|second)-(?:[0-9]|1[0-9]|20)$/.test(
+                        t.youtubeVideoId,
+                    ),
             ),
         ).toBe(false);
     });
@@ -822,7 +1049,10 @@ describe("PersonalDailyMixService", () => {
         const ids = result.mixes[0].tracks.map((track) => track.youtubeVideoId);
 
         expect(ids.slice(0, 3)).toContain("known-1");
-        expect(ids.slice(0, 3)).toContain("rock-seed");
+        expect(ids.slice(0, 3)).toContain("known-2");
+        expect(
+            ids.slice(0, 3).filter((id) => !id?.startsWith("known-")),
+        ).toHaveLength(1);
         expect(new Set(ids).size).toBe(ids.length);
         expect(ids).toHaveLength(40);
     });

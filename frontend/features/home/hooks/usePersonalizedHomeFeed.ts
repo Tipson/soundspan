@@ -67,7 +67,7 @@ export function waveLanguageRefreshInterval(
     return 5000;
 }
 
-/** Keeps one contextual feed per listening period without sharing the daily mix cache. */
+/** Separates listening periods and UTC-day compositions while retaining query-prefix invalidation. */
 export function personalizedHomeFeedQueryKey(
     limit: number,
     mode: PersonalizedHomeMode,
@@ -75,6 +75,7 @@ export function personalizedHomeFeedQueryKey(
     surface: PersonalizedRecommendationSurface,
     language: PersonalizedHomeLanguage,
     contextKey: string | null = null,
+    cacheDay: string | null = null,
 ) {
     const base = queryKeys.personalizedHome(
         limit,
@@ -83,7 +84,8 @@ export function personalizedHomeFeedQueryKey(
         surface,
         language,
     );
-    return contextKey ? [...base, contextKey] : base;
+    const periodKey = contextKey ? [...base, contextKey] : base;
+    return cacheDay ? [...periodKey, cacheDay] : periodKey;
 }
 
 /** Fetches one server-ranked variant; optional metadata polling stops once playable. */
@@ -95,6 +97,7 @@ export function usePersonalizedHomeFeed(
     surface: PersonalizedRecommendationSurface = "home",
     language: PersonalizedHomeLanguage = "any",
     contextKey: string | null = null,
+    cacheDay: string | null = null,
 ) {
     return useQuery({
         queryKey: personalizedHomeFeedQueryKey(
@@ -104,6 +107,7 @@ export function usePersonalizedHomeFeed(
             surface,
             language,
             contextKey,
+            cacheDay,
         ),
         queryFn: ({ signal }) =>
             api.request<PersonalizedHomeFeed>(
