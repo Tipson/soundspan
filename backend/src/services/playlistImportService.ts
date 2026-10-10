@@ -14,6 +14,10 @@ import { decrypt } from "../utils/encryption";
 import { getSystemSettings } from "../utils/systemSettings";
 import { spotifyService } from "./spotify";
 import { deezerService } from "./deezer";
+import {
+    fetchYandexPlaylistForImport,
+    parseYandexPlaylistUrl,
+} from "./yandexPlaylistImport";
 import { ytMusicService } from "./youtubeMusic";
 import { trackMappingService } from "./trackMappingService";
 import {
@@ -176,7 +180,7 @@ export interface PlaylistImportPreparedData {
     summary: PlaylistImportSummary;
 }
 
-type SourceType = "spotify" | "deezer" | "youtube";
+type SourceType = "spotify" | "deezer" | "youtube" | "yandex";
 type ProviderMatchInput = {
     artist: string;
     title: string;
@@ -198,6 +202,9 @@ class PlaylistImportService {
         const pathSegments = (parsedUrl?.pathname ?? "")
             .split("/")
             .filter(Boolean);
+
+        const yandexId = parsedUrl && parseYandexPlaylistUrl(parsedUrl);
+        if (yandexId) return { source: "yandex", id: yandexId };
 
         // Spotify
         const isSpotifyUri = normalizedUrl.toLowerCase().startsWith("spotify:");
@@ -250,6 +257,7 @@ class PlaylistImportService {
         sourceId: string,
         userId?: string,
     ): Promise<{ name: string; tracks: ImportTrackMeta[] }> {
+        if (source === "yandex") return fetchYandexPlaylistForImport(sourceId);
         if (source === "spotify") {
             const playlist =
                 await spotifyService.getPlaylistForImport(sourceId);

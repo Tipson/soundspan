@@ -46,7 +46,7 @@ Soundspan runs in the browser and can be installed as a PWA. Mobile users have c
 
 - A local library with metadata, artwork, and search.
 - Separate playlists, favorite tracks, and listening history for each user.
-- Spotify and Deezer playlist imports with recording matching against available sources.
+- Public Yandex Music, Spotify and Deezer playlist imports with recording matching against available sources. Paste a playlist link on the import page and follow progress in the activity panel.
 - Shared listening through Listen Together.
 - An OpenSubsonic-compatible API for third-party clients.
 

@@ -14,6 +14,7 @@ import {
     type PlaylistImportProgressEvent,
 } from "./playlistImportService";
 import { SpotifyPlaylistPaginationError } from "./spotifyPlaylistPagination";
+import { YandexPlaylistImportError } from "./yandexPlaylistImport";
 import { backgroundPlaylistImport } from "./backgroundPlaylistImport";
 
 const log = logger.child("GenericImportJobRunner");
@@ -37,7 +38,10 @@ const CANCELLATION_COMPLETION_WARNING =
     "Cancellation requested after playlist creation completed";
 
 function safeFailureMessage(error: unknown): string {
-    if (error instanceof SpotifyPlaylistPaginationError) {
+    if (
+        error instanceof SpotifyPlaylistPaginationError ||
+        error instanceof YandexPlaylistImportError
+    ) {
         return error.codeOwnedMessage();
     }
     return SAFE_FAILURE_MESSAGE;
@@ -63,6 +67,8 @@ function responseStatus(error: unknown): number | null {
 function isNonRetryableImportFailure(error: unknown): boolean {
     return (
         (error instanceof SpotifyPlaylistPaginationError &&
+            !error.providerFailure) ||
+        (error instanceof YandexPlaylistImportError &&
             !error.providerFailure) ||
         responseStatus(error) === 429
     );

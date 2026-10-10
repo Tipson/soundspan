@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Import public Yandex Music playlists from legacy owner links and UUID share links. Read complete track lists anonymously in bounded batches, preserve source order and recording versions, and use the existing background import with progress, cancellation and safe failure messages.
+
 - Rotate personal daily mix radio seeds and available song membership per account and UTC day. Spread available artists without shortening sparse mixes, retain dislike and recent-listening filters, and separate daily and time-of-day browser caches across UTC-day boundaries.
 
 - Preserve bounded last-engine-command context in offline playback diagnostics to help distinguish an application pause request from an uncommanded native pause, without changing pause or resume behavior.

@@ -89,7 +89,7 @@ function toDefaultPlaylistName(sourceType: string): string {
  *             properties:
  *               url:
  *                 type: string
- *                 description: Spotify, Deezer, YouTube Music, or Tidal playlist URL
+ *                 description: Public Yandex Music, Spotify, Deezer, or YouTube Music playlist URL
  *     responses:
  *       200:
  *         description: Track resolution preview
