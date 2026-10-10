@@ -3,10 +3,12 @@
 import React, {
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
     EllipsisVertical,
     Link as LinkIcon,
@@ -100,6 +102,14 @@ export function TrackOverflowMenu({
     const [isPlaylistSelectorOpen, setIsPlaylistSelectorOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
+    const popupRef = useRef<HTMLDivElement | null>(null);
+    const [popupPosition, setPopupPosition] = useState<{
+        left: number;
+        top: number;
+        maxWidth: number;
+        maxHeight: number;
+    } | null>(null);
     const router = useRouter();
     const controls = useAudioControls();
     const deviceOffline = useOptionalDeviceOffline();
@@ -186,6 +196,43 @@ export function TrackOverflowMenu({
             ? `/album/${track.album.id}?track=${encodeURIComponent(track.id)}`
             : null;
 
+    // Escape rounded/virtualized list clipping, but stay anchored and inside
+    // the visible viewport. Prefer the side with room; long menus scroll.
+    useLayoutEffect(() => {
+        if (!isOpen || !triggerRef.current || !popupRef.current) return;
+        const anchor = triggerRef.current.getBoundingClientRect();
+        const popup = popupRef.current.getBoundingClientRect();
+        const viewport = window.visualViewport;
+        const leftEdge = (viewport?.offsetLeft ?? 0) + 8;
+        const topEdge = (viewport?.offsetTop ?? 0) + 8;
+        const rightEdge =
+            leftEdge + (viewport?.width ?? window.innerWidth) - 16;
+        const bottomEdge =
+            topEdge + (viewport?.height ?? window.innerHeight) - 16;
+        const maxWidth = Math.max(0, rightEdge - leftEdge);
+        const width = Math.min(popup.width, maxWidth);
+        const below = Math.max(0, bottomEdge - anchor.bottom - 4);
+        const above = Math.max(0, anchor.top - topEdge - 4);
+        const openBelow = popup.height <= below || below >= above;
+        const maxHeight = openBelow ? below : above;
+        const height = Math.min(popup.height, maxHeight);
+        setPopupPosition({
+            left: Math.max(
+                leftEdge,
+                Math.min(anchor.right - width, rightEdge - width),
+            ),
+            top: Math.max(
+                topEdge,
+                Math.min(
+                    openBelow ? anchor.bottom + 4 : anchor.top - height - 4,
+                    bottomEdge - height,
+                ),
+            ),
+            maxWidth,
+            maxHeight,
+        });
+    }, [isOpen, menuClassName, track.id]);
+
     // Outside click and escape handlers
     useEffect(() => {
         if (!isOpen) return;
@@ -193,7 +240,8 @@ export function TrackOverflowMenu({
         const handleOutsideClick = (event: MouseEvent) => {
             if (
                 menuRef.current &&
-                !menuRef.current.contains(event.target as Node)
+                !menuRef.current.contains(event.target as Node) &&
+                !popupRef.current?.contains(event.target as Node)
             ) {
                 setIsOpen(false);
             }
@@ -204,18 +252,32 @@ export function TrackOverflowMenu({
                 setIsOpen(false);
             }
         };
+        const handleScroll = (event: Event) => {
+            if (!(event.target instanceof Node) || !popupRef.current?.contains(event.target))
+                setIsOpen(false);
+        };
+        const handleResize = () => setIsOpen(false);
 
         document.addEventListener("mousedown", handleOutsideClick);
         document.addEventListener("keydown", handleEscape);
+        window.addEventListener("scroll", handleScroll, true);
+        window.addEventListener("resize", handleResize);
+        window.visualViewport?.addEventListener("resize", handleResize);
+        window.visualViewport?.addEventListener("scroll", handleResize);
 
         return () => {
             document.removeEventListener("mousedown", handleOutsideClick);
             document.removeEventListener("keydown", handleEscape);
+            window.removeEventListener("scroll", handleScroll, true);
+            window.removeEventListener("resize", handleResize);
+            window.visualViewport?.removeEventListener("resize", handleResize);
+            window.visualViewport?.removeEventListener("scroll", handleResize);
         };
     }, [isOpen]);
 
     const handleToggle = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
+        setPopupPosition(null);
         setIsOpen((prev) => !prev);
     }, []);
 
@@ -434,6 +496,7 @@ export function TrackOverflowMenu({
                 )}
             >
                 <button
+                    ref={triggerRef}
                     type="button"
                     onClick={handleToggle}
                     className={cn(
@@ -451,141 +514,168 @@ export function TrackOverflowMenu({
                     <EllipsisVertical className="h-4 w-4" />
                 </button>
 
-                {isOpen && (
-                    <div
-                        className={cn(
-                            "absolute right-0 top-full z-30 mt-1 min-w-[220px] rounded-2xl border border-line bg-surface-overlay p-1.5 shadow-2xl",
-                            menuClassName,
-                        )}
-                        role="menu"
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                    >
-                        {extraItemsBefore}
+                {isOpen &&
+                    typeof document !== "undefined" &&
+                    createPortal(
+                        <div
+                            ref={popupRef}
+                            className={cn(
+                                "fixed z-[10001] overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface-overlay p-1.5 shadow-2xl",
+                                menuClassName,
+                            )}
+                            style={{
+                                position: "fixed",
+                                left: popupPosition?.left ?? 0,
+                                top: popupPosition?.top ?? 0,
+                                right: "auto",
+                                bottom: "auto",
+                                margin: 0,
+                                width: "max-content",
+                            minWidth: popupPosition
+                                ? Math.min(220, popupPosition.maxWidth)
+                                : "min(220px, calc(100vw - 16px))",
+                                maxWidth:
+                                    popupPosition?.maxWidth ??
+                                    "calc(100vw - 16px)",
+                                maxHeight:
+                                    popupPosition?.maxHeight ??
+                                    "calc(100dvh - 16px)",
+                                visibility: popupPosition
+                                    ? "visible"
+                                    : "hidden",
+                            }}
+                            role="menu"
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                        >
+                            {extraItemsBefore}
 
-                        {sourcePageUrl && (
-                            <a
-                                href={sourcePageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                role="menuitem"
-                                onClick={closeMenu}
-                                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-content-body transition-colors hover:bg-surface-hover hover:text-content focus-visible:ring-2 focus-visible:ring-brand"
-                                aria-label="Открыть страницу трека в Audius (новая вкладка)"
-                            >
-                                <LinkIcon
-                                    className="h-4 w-4"
-                                    aria-hidden="true"
-                                />
-                                Открыть в Audius
-                            </a>
-                        )}
+                            {sourcePageUrl && (
+                                <a
+                                    href={sourcePageUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    role="menuitem"
+                                    onClick={closeMenu}
+                                    className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-content-body transition-colors hover:bg-surface-hover hover:text-content focus-visible:ring-2 focus-visible:ring-brand"
+                                    aria-label="Открыть страницу трека в Audius (новая вкладка)"
+                                >
+                                    <LinkIcon
+                                        className="h-4 w-4"
+                                        aria-hidden="true"
+                                    />
+                                    Открыть в Audius
+                                </a>
+                            )}
 
-                        {showPlayNext && isActionable && (
-                            <MenuButton
-                                onClick={handlePlayNext}
-                                icon={<ListEnd className="h-4 w-4" />}
-                                label={ru.trackMenu.playNext}
-                            />
-                        )}
-
-                        {showAddToQueue && isActionable && (
-                            <MenuButton
-                                onClick={handleAddToQueue}
-                                icon={<ListPlus className="h-4 w-4" />}
-                                label={ru.trackMenu.addQueue}
-                            />
-                        )}
-
-                        {showAddToPlaylist && canPersist && (
-                            <MenuButton
-                                onClick={handleAddToPlaylist}
-                                icon={<Plus className="h-4 w-4" />}
-                                label={ru.trackMenu.addPlaylist}
-                            />
-                        )}
-
-                        {deviceOffline && canDownload && (
-                            <MenuButton
-                                onClick={handleDeviceDownload}
-                                disabled={deviceDownloadDisabled}
-                                icon={
-                                    deviceRecord?.status === "ready" &&
-                                    !isAutoManagedReady ? (
-                                        <Check className="h-4 w-4" />
-                                    ) : deviceRecord?.status ===
-                                      "downloading" ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Download className="h-4 w-4" />
-                                    )
-                                }
-                                label={deviceDownloadLabel}
-                            />
-                        )}
-
-                        {showShare && (
-                            <MenuButton
-                                onClick={handleShare}
-                                icon={<Share2 className="h-4 w-4" />}
-                                label={ru.common.share}
-                            />
-                        )}
-
-                        {trackLinkPath && (
-                            <MenuButton
-                                onClick={handleCopyTrackLink}
-                                icon={<LinkIcon className="h-4 w-4" />}
-                                label={ru.trackMenu.copyLink}
-                            />
-                        )}
-
-                        {showGoToArtist && artistHref && (
-                            <MenuButton
-                                onClick={handleGoToArtist}
-                                icon={<User className="h-4 w-4" />}
-                                label={ru.trackMenu.goArtist}
-                            />
-                        )}
-
-                        {showGoToAlbum && albumHref && (
-                            <MenuButton
-                                onClick={handleGoToAlbum}
-                                icon={<Disc3 className="h-4 w-4" />}
-                                label={ru.trackMenu.goAlbum}
-                            />
-                        )}
-
-                        {effectiveShowMatchVibe && track.id && (
-                            <MenuButton
-                                onClick={handleMatchVibe}
-                                disabled={matchVibeDisabled}
-                                icon={<AudioWaveform className="h-4 w-4" />}
-                                label={matchVibeLabel ?? ru.trackMenu.matchVibe}
-                            />
-                        )}
-
-                        {effectiveShowVibeMap && track.id && (
-                            <MenuButton
-                                onClick={handleShowVibeMap}
-                                icon={<MapIcon className="h-4 w-4" />}
-                                label={ru.trackMenu.showVibeMap}
-                            />
-                        )}
-
-                        {showStartRadio &&
-                            ((isRemote && track.artist?.name) ||
-                                (!isRemote && track.artist?.id)) && (
+                            {showPlayNext && isActionable && (
                                 <MenuButton
-                                    onClick={handleStartRadio}
-                                    icon={<Radio className="h-4 w-4" />}
-                                    label={ru.trackMenu.startRadio}
+                                    onClick={handlePlayNext}
+                                    icon={<ListEnd className="h-4 w-4" />}
+                                    label={ru.trackMenu.playNext}
                                 />
                             )}
 
-                        {extraItemsAfter}
-                    </div>
-                )}
+                            {showAddToQueue && isActionable && (
+                                <MenuButton
+                                    onClick={handleAddToQueue}
+                                    icon={<ListPlus className="h-4 w-4" />}
+                                    label={ru.trackMenu.addQueue}
+                                />
+                            )}
+
+                            {showAddToPlaylist && canPersist && (
+                                <MenuButton
+                                    onClick={handleAddToPlaylist}
+                                    icon={<Plus className="h-4 w-4" />}
+                                    label={ru.trackMenu.addPlaylist}
+                                />
+                            )}
+
+                            {deviceOffline && canDownload && (
+                                <MenuButton
+                                    onClick={handleDeviceDownload}
+                                    disabled={deviceDownloadDisabled}
+                                    icon={
+                                        deviceRecord?.status === "ready" &&
+                                        !isAutoManagedReady ? (
+                                            <Check className="h-4 w-4" />
+                                        ) : deviceRecord?.status ===
+                                          "downloading" ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Download className="h-4 w-4" />
+                                        )
+                                    }
+                                    label={deviceDownloadLabel}
+                                />
+                            )}
+
+                            {showShare && (
+                                <MenuButton
+                                    onClick={handleShare}
+                                    icon={<Share2 className="h-4 w-4" />}
+                                    label={ru.common.share}
+                                />
+                            )}
+
+                            {trackLinkPath && (
+                                <MenuButton
+                                    onClick={handleCopyTrackLink}
+                                    icon={<LinkIcon className="h-4 w-4" />}
+                                    label={ru.trackMenu.copyLink}
+                                />
+                            )}
+
+                            {showGoToArtist && artistHref && (
+                                <MenuButton
+                                    onClick={handleGoToArtist}
+                                    icon={<User className="h-4 w-4" />}
+                                    label={ru.trackMenu.goArtist}
+                                />
+                            )}
+
+                            {showGoToAlbum && albumHref && (
+                                <MenuButton
+                                    onClick={handleGoToAlbum}
+                                    icon={<Disc3 className="h-4 w-4" />}
+                                    label={ru.trackMenu.goAlbum}
+                                />
+                            )}
+
+                            {effectiveShowMatchVibe && track.id && (
+                                <MenuButton
+                                    onClick={handleMatchVibe}
+                                    disabled={matchVibeDisabled}
+                                    icon={<AudioWaveform className="h-4 w-4" />}
+                                    label={
+                                        matchVibeLabel ?? ru.trackMenu.matchVibe
+                                    }
+                                />
+                            )}
+
+                            {effectiveShowVibeMap && track.id && (
+                                <MenuButton
+                                    onClick={handleShowVibeMap}
+                                    icon={<MapIcon className="h-4 w-4" />}
+                                    label={ru.trackMenu.showVibeMap}
+                                />
+                            )}
+
+                            {showStartRadio &&
+                                ((isRemote && track.artist?.name) ||
+                                    (!isRemote && track.artist?.id)) && (
+                                    <MenuButton
+                                        onClick={handleStartRadio}
+                                        icon={<Radio className="h-4 w-4" />}
+                                        label={ru.trackMenu.startRadio}
+                                    />
+                                )}
+
+                            {extraItemsAfter}
+                        </div>,
+                        document.body,
+                    )}
             </div>
 
             <PlaylistSelector

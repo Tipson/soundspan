@@ -167,7 +167,9 @@ function findMenuItem(
     container: HTMLElement,
     label: string,
 ): HTMLElement | null {
-    const buttons = Array.from(container.querySelectorAll("button"));
+    const buttons = Array.from(
+        document.querySelectorAll('[role="menu"] button'),
+    );
     return (
         (buttons.find((button) =>
             button.textContent?.includes(label),

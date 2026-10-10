@@ -886,7 +886,7 @@ test("single-track actions explain unavailable storage without blocking folder s
         ).click(),
     );
     const unsupportedMenuAction = [
-        ...menu.container.querySelectorAll("button"),
+        ...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button'),
     ].find((button) =>
         button.textContent?.includes("Загрузки недоступны в этом браузере"),
     );
@@ -954,8 +954,9 @@ test("single-track actions can protect an automatic ready copy", async () => {
             ) as HTMLButtonElement
         ).click(),
     );
-    const keep = [...menu.container.querySelectorAll("button")].find((button) =>
-        button.textContent?.includes("Сохранить на этом устройстве"),
+    const keep = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button')].find(
+        (button) =>
+            button.textContent?.includes("Сохранить на этом устройстве"),
     ) as HTMLButtonElement;
     assert.ok(keep);
     assert.equal(keep.disabled, false);
@@ -1774,9 +1775,9 @@ test("the shared playable-track menu exposes device download for search rows", a
             ) as HTMLButtonElement
         ).click(),
     );
-    const downloadButton = [...view.container.querySelectorAll("button")].find(
-        (button) => button.textContent?.includes("Загрузить на устройство"),
-    );
+    const downloadButton = [
+        ...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button'),
+    ].find((button) => button.textContent?.includes("Загрузить на устройство"));
     assert.ok(downloadButton);
     await React.act(async () => downloadButton.click());
     assert.equal(

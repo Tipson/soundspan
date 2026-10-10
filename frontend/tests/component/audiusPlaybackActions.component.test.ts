@@ -263,7 +263,7 @@ test("service catalog menu downloads an exact recording and does not offer unsup
                 .click(),
         );
         const buttons = [
-            ...container.querySelectorAll<HTMLButtonElement>(
+            ...document.querySelectorAll<HTMLButtonElement>(
                 '[role="menuitem"]',
             ),
         ];
@@ -420,7 +420,7 @@ test("current-track menu runs Wave without restarting playback or duplicating ra
         };
         const clickItem = async (label: string) => {
             const item = [
-                ...container.querySelectorAll<HTMLButtonElement>(
+                ...document.querySelectorAll<HTMLButtonElement>(
                     '[role="menuitem"]',
                 ),
             ].find((button) => button.textContent === label);
@@ -431,7 +431,7 @@ test("current-track menu runs Wave without restarting playback or duplicating ra
         await open();
         assert.equal(
             [
-                ...container.querySelectorAll<HTMLButtonElement>(
+                ...document.querySelectorAll<HTMLButtonElement>(
                     '[role="menuitem"]',
                 ),
             ].some((button) => button.textContent === ru.trackMenu.startRadio),
@@ -477,7 +477,7 @@ test("opened Audius overflow keeps queue actions and removal but hides playlist/
                     .click(),
             );
             const labels = [
-                ...container.querySelectorAll('[role="menuitem"]'),
+                ...document.querySelectorAll('[role="menuitem"]'),
             ].map((item) => item.textContent);
             assert.ok(labels.includes(ru.trackMenu.playNext));
             assert.ok(labels.includes(ru.trackMenu.addQueue));
@@ -492,7 +492,7 @@ test("opened Audius overflow keeps queue actions and removal but hides playlist/
             );
             if (value === audius) {
                 const attribution =
-                    container.querySelector<HTMLAnchorElement>(
+                    document.querySelector<HTMLAnchorElement>(
                         'a[role="menuitem"]',
                     );
                 assert.ok(
@@ -504,7 +504,7 @@ test("opened Audius overflow keeps queue actions and removal but hides playlist/
                 assert.equal(attribution.rel, "noopener noreferrer");
                 assert.match(attribution.textContent, /Открыть в Audius/);
                 const next = [
-                    ...container.querySelectorAll<HTMLButtonElement>(
+                    ...document.querySelectorAll<HTMLButtonElement>(
                         '[role="menuitem"]',
                     ),
                 ].find((item) => item.textContent === ru.trackMenu.playNext)!;
@@ -554,7 +554,7 @@ test("Audius attribution rejects restored unsafe URLs and incidental metadata on
                     )!
                     .click(),
             );
-            assert.equal(container.querySelector('a[role="menuitem"]'), null);
+            assert.equal(document.querySelector('a[role="menuitem"]'), null);
         }
     } finally {
         await act(async () => root.unmount());
