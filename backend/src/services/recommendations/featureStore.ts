@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/db";
+import { logger } from "../../utils/logger";
 import { parseEmbedding } from "../../utils/embedding";
 import { buildTasteCentroids, moodFeatureScore } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
@@ -34,6 +35,7 @@ import type {
 const TASTE_LOOKBACK_DAYS = 180;
 const MAX_TASTE_ROWS = 500;
 const MAX_DISLIKES = 2_000;
+const log = logger.child("RecommendationFeatureStore");
 
 export interface CanonicalFeatureRow {
     canonicalRecordingId: string;
@@ -68,6 +70,8 @@ interface RecommendationFeatureStoreDependencies {
     ) => Promise<RecommendationTasteRow[]>;
     /** Unique, current saved recordings; no inferred listening events. */
     loadLikedEmbeddings?: (userId: string) => Promise<number[][]>;
+    /** Current explicit dislikes with active canonical audio analysis. */
+    loadDislikedEmbeddings?: (userId: string) => Promise<number[][]>;
     loadDislikedCanonicalKeys: (userId: string) => Promise<string[]>;
     loadSeedCanonicalRecordingId: (seedId: string) => Promise<string | null>;
     loadSessionRows: (
@@ -176,31 +180,46 @@ export class RecommendationFeatureStore {
             options?.context && options.crossSurfaceContext
                 ? { ...options.context, deviceClass: undefined }
                 : options?.context;
-        const [rows, sessionRows, contextRowsBySurface, likedEmbeddings] =
-            await Promise.all([
-                this.dependencies.loadTasteRows(userId, since),
-                options?.sessionId
-                    ? this.dependencies.loadSessionRows(
-                          userId,
-                          options.sessionId,
-                          30,
-                      )
-                    : Promise.resolve([]),
-                context
-                    ? Promise.all(
-                          contextSurfaces.map((surface) =>
-                              this.dependencies.loadContextRows(
-                                  userId,
-                                  surface,
-                                  context,
-                                  since,
-                              ),
+        const [
+            rows,
+            sessionRows,
+            contextRowsBySurface,
+            likedEmbeddings,
+            dislikedEmbeddings,
+        ] = await Promise.all([
+            this.dependencies.loadTasteRows(userId, since),
+            options?.sessionId
+                ? this.dependencies.loadSessionRows(
+                      userId,
+                      options.sessionId,
+                      30,
+                  )
+                : Promise.resolve([]),
+            context
+                ? Promise.all(
+                      contextSurfaces.map((surface) =>
+                          this.dependencies.loadContextRows(
+                              userId,
+                              surface,
+                              context,
+                              since,
                           ),
-                      )
-                    : Promise.resolve([]),
-                this.dependencies.loadLikedEmbeddings?.(userId) ??
-                    Promise.resolve([]),
-            ]);
+                      ),
+                  )
+                : Promise.resolve([]),
+            this.dependencies.loadLikedEmbeddings?.(userId) ??
+                Promise.resolve([]),
+            this.dependencies.loadDislikedEmbeddings
+                ? this.dependencies
+                      .loadDislikedEmbeddings(userId)
+                      .catch((error) => {
+                          log.warn("Disliked audio anchors unavailable", {
+                              error,
+                          });
+                          return [];
+                      })
+                : Promise.resolve([]),
+        ]);
         const positive = rows
             .filter((row) => tasteDelta(row) > 0)
             .map((row) => row.embedding);
@@ -208,14 +227,17 @@ export class RecommendationFeatureStore {
             .filter((row) => tasteDelta(row) < 0)
             .map((row) => row.embedding);
         return {
-            // Separate bounded anchors keep imported/saved taste directions
-            // from being drowned out by repeated passive Wave listening.
-            // Ranking still uses the best match, not a sum of extra rewards.
+            // Separate bounded saved likes and dislikes survive repeated
+            // passive Wave listening. Ranking uses the best match per sign,
+            // so the extra anchors do not accumulate rewards or penalties.
             positiveCentroids: [
                 ...buildTasteCentroids(positive, 5),
                 ...buildTasteCentroids(likedEmbeddings, 5),
             ],
-            negativeCentroids: buildTasteCentroids(negative, 3),
+            negativeCentroids: [
+                ...buildTasteCentroids(negative, 3),
+                ...buildTasteCentroids(dislikedEmbeddings, 3),
+            ],
             sessionPositiveEmbedding: decayedSessionEmbedding(
                 sessionRows,
                 this.dependencies.now(),
@@ -421,6 +443,32 @@ export async function loadLikedTasteEmbeddings(
     // Keep final ordering in PostgreSQL, including its text collation on ties.
     const recordings = await prisma.canonicalRecording.findMany({
         where: { ...eligible, id: { in: canonicalIds } },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        take: MAX_TASTE_ROWS,
+        select: { id: true },
+    });
+    const rows = await loadCanonicalFeatures(recordings.map((row) => row.id));
+    return rows.flatMap((row) => (row.embedding ? [row.embedding] : []));
+}
+
+/** Resolve current mapped dislikes to distinct active canonical vectors. */
+export async function loadDislikedTasteEmbeddings(
+    userId: string,
+): Promise<number[][]> {
+    const keys = [...new Set(await loadDislikedCanonicalKeys(userId))].slice(
+        0,
+        MAX_TASTE_ROWS,
+    );
+    if (keys.length === 0) return [];
+    const recordings = await prisma.canonicalRecording.findMany({
+        where: {
+            canonicalKey: { in: keys },
+            mergedIntoId: null,
+            identitySource: { not: "identity-merged" },
+            embeddings: {
+                some: { space: { status: "active", cleaningAt: null } },
+            },
+        },
         orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take: MAX_TASTE_ROWS,
         select: { id: true },
@@ -1074,6 +1122,7 @@ export const recommendationFeatureStore = new RecommendationFeatureStore({
     loadCanonicalFeatures,
     loadTasteRows,
     loadLikedEmbeddings: loadLikedTasteEmbeddings,
+    loadDislikedEmbeddings: loadDislikedTasteEmbeddings,
     loadDislikedCanonicalKeys,
     loadSeedCanonicalRecordingId,
     loadSessionRows,
