@@ -963,7 +963,7 @@ test("provider radio extends the played shuffle order without replaying old trac
     );
 });
 
-test("three early Wave skips refresh only the tail and respect a subsequent pause", async (t) => {
+test("mixed Wave skips and dislikes refresh only the tail and respect a subsequent pause", async (t) => {
     const currentTrack = {
         ...makeTrack("yt:AAAAAAAAAAA", "provider-artist"),
         streamSource: "youtube" as const,
@@ -1055,9 +1055,10 @@ test("three early Wave skips refresh only the tail and respect a subsequent paus
             );
         });
     await render();
-    for (let index = 0; index < 3; index++) {
+    for (const action of ["manual", "feedback", "manual"] as const) {
         assert.ok(controlsRef.current);
-        controlsRef.current.next();
+        playback.currentTime = action === "feedback" ? 90 : 5;
+        controlsRef.current.advanceQueue(action);
         state.commit();
         await render();
     }

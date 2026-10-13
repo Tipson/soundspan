@@ -43,6 +43,57 @@ describe("canonical recommendation feature store", () => {
         expect(taste.sessionSignalCount).toBe(0);
     });
 
+    it("uses mapped explicit dislikes as bounded negative sound anchors", async () => {
+        const dependencies = {
+            loadCanonicalFeatures: jest.fn().mockResolvedValue([]),
+            loadTasteRows: jest.fn().mockResolvedValue([]),
+            loadLikedEmbeddings: jest.fn().mockResolvedValue([]),
+            loadDislikedEmbeddings: jest.fn().mockResolvedValue([[0, 1]]),
+            loadDislikedCanonicalKeys: jest.fn().mockResolvedValue([]),
+            loadSeedCanonicalRecordingId: jest.fn().mockResolvedValue(null),
+            loadSessionRows: jest.fn().mockResolvedValue([]),
+            loadContextRows: jest.fn().mockResolvedValue([]),
+            now: () => new Date("2026-10-13T12:00:00Z"),
+        };
+        const taste = await new RecommendationFeatureStore(
+            dependencies,
+        ).loadTasteContext("alice");
+        expect(dependencies.loadDislikedEmbeddings).toHaveBeenCalledWith(
+            "alice",
+        );
+        expect(taste.positiveCentroids).toEqual([]);
+        expect(taste.negativeCentroids).toHaveLength(1);
+        expect(taste.negativeCentroids[0][1]).toBeGreaterThan(0.99);
+    });
+
+    it("retains existing taste when optional disliked vectors fail", async () => {
+        const dependencies = {
+            loadCanonicalFeatures: jest.fn().mockResolvedValue([]),
+            loadTasteRows: jest.fn().mockResolvedValue([
+                {
+                    embedding: [1, 0],
+                    outcome: "completed",
+                    completionRatio: 1,
+                    listenedSeconds: 200,
+                },
+            ]),
+            loadLikedEmbeddings: jest.fn().mockResolvedValue([[0, 1]]),
+            loadDislikedEmbeddings: jest
+                .fn()
+                .mockRejectedValue(new Error("vector store unavailable")),
+            loadDislikedCanonicalKeys: jest.fn().mockResolvedValue([]),
+            loadSeedCanonicalRecordingId: jest.fn().mockResolvedValue(null),
+            loadSessionRows: jest.fn().mockResolvedValue([]),
+            loadContextRows: jest.fn().mockResolvedValue([]),
+            now: () => new Date("2026-10-14T12:00:00Z"),
+        };
+        const taste = await new RecommendationFeatureStore(
+            dependencies,
+        ).loadTasteContext("alice");
+        expect(taste.positiveCentroids).toHaveLength(2);
+        expect(taste.negativeCentroids).toEqual([]);
+    });
+
     it("does not let hundreds of passive plays erase a saved taste direction", async () => {
         const dependencies = {
             loadCanonicalFeatures: jest.fn().mockResolvedValue([]),

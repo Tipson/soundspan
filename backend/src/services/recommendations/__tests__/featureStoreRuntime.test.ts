@@ -25,6 +25,7 @@ jest.mock("../../../utils/db", () => ({
 import {
     recommendationFeatureStore,
     loadLikedTasteEmbeddings,
+    loadDislikedTasteEmbeddings,
     loadSavedMoodCandidates,
 } from "../featureStore";
 import type { RecommendationCandidate } from "../types";
@@ -114,6 +115,37 @@ describe("default recommendation feature-store persistence", () => {
             in: ["shared", "local", "youtube", "tidal"],
         });
         expect(mockQueryRaw.mock.calls[0][1]).toEqual(["alice-liked"]);
+    });
+
+    it("loads active vectors only for canonical dislikes of the current account", async () => {
+        mockDislikedFindMany.mockImplementation(async (query) =>
+            query.where.userId === "alice" ? [{ entityId: "yt:rejected" }] : [],
+        );
+        mockMappingFindMany.mockResolvedValue([
+            {
+                canonicalRecording: { canonicalKey: "meta:rejected" },
+            },
+        ]);
+        mockCanonicalFindMany.mockResolvedValue([{ id: "canonical-rejected" }]);
+        mockQueryRaw.mockResolvedValue([
+            rawFeature("canonical-rejected", "[0,1]"),
+        ]);
+        expect(await loadDislikedTasteEmbeddings("alice")).toEqual([[0, 1]]);
+        expect(await loadDislikedTasteEmbeddings("bob")).toEqual([]);
+        expect(
+            mockDislikedFindMany.mock.calls.some(
+                ([query]) => query.where.userId === "bob",
+            ),
+        ).toBe(true);
+        const query = mockCanonicalFindMany.mock.calls[0][0];
+        expect(query.where.canonicalKey).toEqual({ in: ["meta:rejected"] });
+        expect(query.where.mergedIntoId).toBeNull();
+        expect(query.where.embeddings.some.space).toEqual({
+            status: "active",
+            cleaningAt: null,
+        });
+        expect(query.take).toBe(500);
+        expect(mockQueryRaw.mock.calls[0][1]).toEqual(["canonical-rejected"]);
     });
 
     it("skips vector reads when the current account has no eligible likes", async () => {

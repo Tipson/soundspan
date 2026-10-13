@@ -638,11 +638,7 @@ function discoveryScore(
     if (mode === "new") {
         // Discover unheard songs, not necessarily unfamiliar artists. Keep
         // bounded taste affinity instead of overriding it with artist novelty.
-        return (
-            providerOrder +
-            (knownTrack ? -100 : 0) +
-            Math.max(0, artistScore) * 0.1
-        );
+        return providerOrder + (knownTrack ? -100 : 0) + artistScore * 0.1;
     }
     if (mode === "familiar") {
         return (

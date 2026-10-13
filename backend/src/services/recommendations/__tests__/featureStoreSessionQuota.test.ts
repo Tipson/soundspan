@@ -7,6 +7,7 @@ jest.mock("../../../utils/db", () => ({
         play: { findMany: mockSessionPlayFindMany },
         trackMapping: { findMany: mockSessionMappingFindMany },
         canonicalRecording: { findMany: jest.fn().mockResolvedValue([]) },
+        dislikedEntity: { findMany: jest.fn().mockResolvedValue([]) },
         $queryRaw: mockSessionQueryRaw,
     },
 }));

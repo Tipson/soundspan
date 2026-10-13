@@ -35,7 +35,7 @@ export function resolveAdaptiveWaveSkip(
             shouldRegenerate: false,
         };
     }
-    if (input.origin !== "manual") {
+    if (input.origin !== "manual" && input.origin !== "feedback") {
         return { nextStreak: 0, shouldRegenerate: false };
     }
 
@@ -46,7 +46,7 @@ export function resolveAdaptiveWaveSkip(
     const isEarlySkip =
         listenedSeconds < EARLY_SKIP_SECONDS ||
         (durationSeconds > 0 && completionRatio <= EARLY_SKIP_RATIO);
-    if (!isEarlySkip) {
+    if (input.origin === "manual" && !isEarlySkip) {
         return { nextStreak: 0, shouldRegenerate: false };
     }
 

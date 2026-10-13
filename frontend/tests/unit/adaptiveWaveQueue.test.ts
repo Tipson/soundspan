@@ -88,3 +88,52 @@ test("leaving provider Wave clears the adaptive streak", () => {
         { nextStreak: 0, shouldRegenerate: false },
     );
 });
+
+test("confirmed dislikes count with early skips regardless of listening time", () => {
+    const inputs = [
+        { origin: "manual" as const, listenedSeconds: 4 },
+        { origin: "feedback" as const, listenedSeconds: 90 },
+        { origin: "manual" as const, listenedSeconds: 8 },
+    ];
+    const decisions = inputs.reduce<
+        { nextStreak: number; shouldRegenerate: boolean }[]
+    >((results, input) => {
+        results.push(
+            resolveAdaptiveWaveSkip({
+                previousStreak: results.at(-1)?.nextStreak ?? 0,
+                vibeMode: true,
+                isProviderTrack: true,
+                durationSeconds: 180,
+                ...input,
+            }),
+        );
+        return results;
+    }, []);
+    assert.deepEqual(decisions, [
+        { nextStreak: 1, shouldRegenerate: false },
+        { nextStreak: 2, shouldRegenerate: false },
+        { nextStreak: 0, shouldRegenerate: true },
+    ]);
+});
+
+test("a provider failure preserves a mixed negative streak", () => {
+    const decision = resolveAdaptiveWaveSkip({
+        previousStreak: 1,
+        origin: "feedback",
+        vibeMode: true,
+        isProviderTrack: true,
+        listenedSeconds: 100,
+        durationSeconds: 180,
+    });
+    assert.deepEqual(
+        resolveAdaptiveWaveSkip({
+            previousStreak: decision.nextStreak,
+            origin: "error",
+            vibeMode: true,
+            isProviderTrack: true,
+            listenedSeconds: 0,
+            durationSeconds: 180,
+        }),
+        { nextStreak: 2, shouldRegenerate: false },
+    );
+});

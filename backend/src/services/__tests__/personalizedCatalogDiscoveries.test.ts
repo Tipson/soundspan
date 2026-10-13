@@ -90,6 +90,47 @@ describe("Discoveries never backfills with a known recording", () => {
         ]);
     });
 
+    it("ranks new songs by a repeatedly skipped artist after neutral candidates", async () => {
+        const catalog = new PersonalizedCatalogService({
+            loadSignals: async () => ({
+                recentPlays: [],
+                likedTracks: [track("liked-seed", "Liked Artist")],
+                playlistTracks: [],
+                dislikedEntityIds: [],
+                playbackSignals: [
+                    {
+                        track: track("skipped", "Rejected Artist"),
+                        outcome: "skipped",
+                        listenedSeconds: 5,
+                        completionRatio: 0.03,
+                        playedAt: new Date("2026-10-13T10:00:00Z"),
+                        waveMode: "new",
+                    },
+                ],
+            }),
+            loadDislikedEntityIds: async () => [],
+            getRadio: async () => ({
+                playlistId: null,
+                seedVideoId: "liked-seed",
+                tracks: [
+                    {
+                        ...track("rejected-new", "Rejected Artist"),
+                        artists: [],
+                    },
+                    { ...track("neutral-new", "Neutral Artist"), artists: [] },
+                ],
+            }),
+            getListenBrainzCandidates: async () => [],
+        });
+        const result = await catalog.getHomeFeed("listener", 2, {
+            mode: "new",
+        });
+        expect(result.shelves.discovery.map((t) => t.youtubeVideoId)).toEqual([
+            "neutral-new",
+            "rejected-new",
+        ]);
+    });
+
     it("returns an empty discovery lane when the provider only has known songs", async () => {
         const result = await service(false).getHomeFeed("listener", 2, {
             mode: "new",
