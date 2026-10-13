@@ -230,6 +230,9 @@ export class PersonalDailyMixService {
     async getMixes(userId: string): Promise<{ mixes: PersonalDailyMix[] }> {
         if (!userId.trim()) throw new TypeError("A user id is required");
         const startedAt = Date.now();
+        const policyTime = this.dependencies.now();
+        const now = policyTime.getTime();
+        const day = Math.floor(now / 86_400_000);
         const [
             directions,
             familiarSongs,
@@ -241,11 +244,10 @@ export class PersonalDailyMixService {
             this.dependencies.loadFamiliar(userId),
             this.dependencies.loadDislikeState(userId),
             this.dependencies.loadSuppressedArtistKeys(userId),
-            this.dependencies.nativeCandidates?.prepare(
-                userId,
-                this.dependencies.now(),
-                { surface: "made-for-you" },
-            ),
+            this.dependencies.nativeCandidates?.prepare(userId, policyTime, {
+                surface: "made-for-you",
+                cursor: day + getSeededRandom(userId),
+            }),
         ]);
         const familiar: DailyMixCandidate[] = [
             ...familiarSongs.filter(
@@ -296,7 +298,38 @@ export class PersonalDailyMixService {
             if (nativeDirections[i])
                 combinedDirections.push(nativeDirections[i]);
         }
-        const chosen = combinedDirections
+        // Keep all directions when tastes are sparse. Once the six slots are
+        // oversubscribed, retain the first selected anchor and rotate the
+        // remaining saved tastes alongside active listening and native seeds.
+        const selectedDirections = [
+            ...directions.slice(0, 1),
+            ...rotateForDay(directions.slice(1), day, `${userId}:selected`),
+        ];
+        const currentDirections = [
+            ...familiarDirections.slice(0, 1),
+            ...rotateForDay(
+                familiarDirections.slice(1),
+                day,
+                `${userId}:familiar`,
+            ),
+        ];
+        const nativeRotated = [
+            ...nativeDirections.slice(0, 1),
+            ...rotateForDay(nativeDirections.slice(1), day, `${userId}:native`),
+        ];
+        const balancedDirections: DailyMixDirection[] = [];
+        if (selectedDirections.length)
+            balancedDirections.push(selectedDirections.shift()!);
+        const pools = [currentDirections, selectedDirections, nativeRotated];
+        for (let index = 0; pools.some((pool) => pool.length > 0); index += 1) {
+            const next = pools[index % pools.length].shift();
+            if (next) balancedDirections.push(next);
+        }
+        const candidateOrder =
+            combinedDirections.length > MAX_DIRECTIONS
+                ? balancedDirections
+                : combinedDirections;
+        const chosen = candidateOrder
             .filter((direction) => {
                 if (
                     !direction.nativeSeedId &&
@@ -313,7 +346,6 @@ export class PersonalDailyMixService {
             })
             .slice(0, MAX_DIRECTIONS);
         if (chosen.length === 0) return { mixes: [] };
-        const now = this.dependencies.now().getTime();
         const key = JSON.stringify([
             userId,
             Math.floor(now / 86_400_000),
@@ -897,7 +929,7 @@ export const personalDailyMixService = new PersonalDailyMixService({
             }),
         ]);
         return distinct(
-            [...liked, ...recent].flatMap((row) =>
+            [...recent, ...liked].flatMap((row) =>
                 row.trackYtMusic ? [fromStoredTrack(row.trackYtMusic)] : [],
             ),
         );
