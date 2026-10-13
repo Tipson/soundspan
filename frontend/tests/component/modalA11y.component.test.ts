@@ -58,18 +58,36 @@ async function unmountModal(mounted: Awaited<ReturnType<typeof mountModal>>) {
     mounted.container.remove();
 }
 
+test("Modal escapes an ancestor that clips and transforms page content", async () => {
+    const mounted = await mountModal();
+    try {
+        mounted.container.style.overflow = "hidden";
+        mounted.container.style.transform = "translateZ(0)";
+        const dialog = document.querySelector('[role="dialog"]');
+        assert.ok(dialog);
+        assert.equal(
+            mounted.container.contains(dialog),
+            false,
+            "dialog stays outside the clipping ancestor",
+        );
+        assert.equal(dialog.parentElement?.parentElement, document.body);
+    } finally {
+        await unmountModal(mounted);
+    }
+});
+
 test("Modal exposes labelled modal dialog semantics", async () => {
     const mounted = await mountModal();
-    const dialog = mounted.container.querySelector('[role="dialog"]');
+    const dialog = document.querySelector('[role="dialog"]');
     assert.ok(dialog, "expected a dialog panel");
     assert.equal(dialog.getAttribute("aria-modal"), "true");
 
     const titleId = dialog.getAttribute("aria-labelledby");
     assert.ok(titleId, "expected the dialog to reference its title");
-    const title = mounted.container.querySelector(`h2[id="${titleId}"]`);
+    const title = document.querySelector(`h2[id="${titleId}"]`);
     assert.equal(title?.textContent, "Accessible modal");
     assert.ok(
-        mounted.container.querySelector('button[aria-label="Закрыть"]'),
+        document.querySelector('button[aria-label="Закрыть"]'),
         "expected an accessible close button name",
     );
     assert.match(dialog.className, /overscroll-contain/);
@@ -80,7 +98,7 @@ test("Modal exposes labelled modal dialog semantics", async () => {
 
 test("Modal moves initial focus inside the dialog", async () => {
     const mounted = await mountModal();
-    const dialog = mounted.container.querySelector('[role="dialog"]');
+    const dialog = document.querySelector('[role="dialog"]');
     assert.ok(dialog, "expected a dialog panel");
     assert.ok(dialog.contains(document.activeElement));
     await unmountModal(mounted);
@@ -160,7 +178,7 @@ test("nested Escape closes only the upper visible modal and retains the parent",
             ),
         );
         assert.deepEqual(closed, ["child"]);
-        assert.equal(container.querySelectorAll('[role="dialog"]').length, 1);
+        assert.equal(document.querySelectorAll('[role="dialog"]').length, 1);
         assert.equal(document.body.style.overflow, "hidden");
         await React.act(async () =>
             document.dispatchEvent(
@@ -168,9 +186,53 @@ test("nested Escape closes only the upper visible modal and retains the parent",
             ),
         );
         assert.deepEqual(closed, ["child", "parent"]);
-        assert.equal(container.querySelectorAll('[role="dialog"]').length, 0);
+        assert.equal(document.querySelectorAll('[role="dialog"]').length, 0);
     } finally {
         await React.act(async () => root.unmount());
         container.remove();
+    }
+});
+
+test("unmounting nested dialogs together restores the original body scroll", async () => {
+    const { createRoot } = await import("react-dom/client");
+    const { Modal } = await import("../../components/ui/Modal");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    document.body.style.overflow = "scroll";
+    try {
+        await React.act(async () =>
+            root.render(
+                React.createElement(
+                    React.Fragment,
+                    null,
+                    React.createElement(
+                        Modal,
+                        {
+                            isOpen: true,
+                            onClose: () => undefined,
+                            title: "Первое",
+                        } as ModalProps,
+                        "Контент",
+                    ),
+                    React.createElement(
+                        Modal,
+                        {
+                            isOpen: true,
+                            onClose: () => undefined,
+                            title: "Второе",
+                        } as ModalProps,
+                        "Контент",
+                    ),
+                ),
+            ),
+        );
+        assert.equal(document.body.style.overflow, "hidden");
+        await React.act(async () => root.render(null));
+        assert.equal(document.body.style.overflow, "scroll");
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+        document.body.style.overflow = "";
     }
 });

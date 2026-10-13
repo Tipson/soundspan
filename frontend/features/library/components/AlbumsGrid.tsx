@@ -68,14 +68,14 @@ const AlbumCardItem = memo(
         const deleteLabel = `Удалить альбом «${album.title}»`;
 
         return (
-            <article className="group min-w-0">
+            <article className="group min-w-0 rounded-[14px] p-2 transition-colors hover:bg-surface-hover motion-reduce:transition-none">
                 <div className="relative mb-3 aspect-square">
                     <Link
                         href={albumHref}
                         prefetch={false}
                         data-tv-card
                         data-tv-card-index={index}
-                        className="flex h-full w-full items-center justify-center overflow-hidden rounded-xl bg-surface-highlight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        className="flex h-full w-full items-center justify-center overflow-hidden rounded-[14px] bg-surface-highlight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         style={{ contain: "content" }}
                     >
                         {coverArtUrl ? (
@@ -98,7 +98,7 @@ const AlbumCardItem = memo(
                                 onClick={handlePlay}
                                 aria-label={playLabel}
                                 title={playLabel}
-                                className="absolute bottom-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-brand-hover text-black shadow-xl transition-[opacity,transform] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                                className="absolute bottom-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-brand-hover text-black shadow-lg transition-[opacity,transform] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                             >
                                 {showPlaySpinner ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -124,7 +124,7 @@ const AlbumCardItem = memo(
                     prefetch={false}
                     className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 >
-                    <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content">
+                    <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                         {album.title}
                     </h3>
                 </Link>

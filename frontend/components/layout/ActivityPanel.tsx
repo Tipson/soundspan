@@ -190,7 +190,7 @@ export function ActivityPanel({
                         </h2>
                         <button
                             onClick={onToggle}
-                            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                            className="grid min-h-11 min-w-11 place-items-center rounded-[var(--music-radius-control)] text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                             title={adminActivityRu.activity.close}
                             aria-label={adminActivityRu.activity.close}
                         >
@@ -422,8 +422,8 @@ export function ActivityPanelToggle({
                     ))
             }
             className={cn(
-                "relative p-2 rounded-full transition-all",
-                "text-white/60 hover:text-white",
+                "relative grid h-11 w-11 place-items-center rounded-[var(--music-radius-control)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                "text-content-muted hover:bg-surface-hover hover:text-content",
             )}
             title={adminActivityRu.activity.toggle}
             aria-label={adminActivityRu.activity.toggle}

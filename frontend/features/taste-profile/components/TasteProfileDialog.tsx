@@ -376,7 +376,7 @@ export function TasteProfileDialog({
                                         ? artistOptionId(activeArtist.mbid)
                                         : undefined
                                 }
-                                className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/25 py-3 pl-11 pr-4 text-sm text-content outline-none transition-colors placeholder:text-content-muted hover:border-white/20 focus:border-brand/60 focus:ring-2 focus:ring-brand/20 disabled:opacity-55 motion-reduce:transition-none"
+                                className="min-h-12 w-full rounded-[var(--music-radius-control)] border border-line bg-surface-overlay py-3 pl-11 pr-4 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-strong focus:border-brand/60 focus:ring-2 focus:ring-brand/20 disabled:opacity-55 motion-reduce:transition-none"
                             />
                         </form>
                     </div>
@@ -521,7 +521,7 @@ export function TasteProfileDialog({
                                 id="taste-artist-results"
                                 role="listbox"
                                 aria-label="Найденные артисты"
-                                className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/25"
+                                className="mt-3 overflow-hidden rounded-[var(--music-radius-card)] border border-line bg-surface-overlay"
                             >
                                 {canonicalArtistSearch.isSearching ? (
                                     <div className="flex min-h-16 items-center gap-2 px-4 text-sm text-content-secondary">
@@ -532,7 +532,7 @@ export function TasteProfileDialog({
                                         Ищем артистов…
                                     </div>
                                 ) : canonicalArtistSearch.error ? (
-                                    <p className="px-4 py-3 text-sm text-red-200">
+                                    <p className="px-4 py-3 text-sm text-error">
                                         Не удалось найти артистов. Проверьте
                                         подключение и попробуйте ещё раз.
                                     </p>
@@ -656,12 +656,12 @@ export function TasteProfileDialog({
                         progress={selectionProgress}
                     />
                     {validation.message && (
-                        <p role="alert" className="mb-3 text-sm text-red-200">
+                        <p role="alert" className="mb-3 text-sm text-error">
                             {validation.message}
                         </p>
                     )}
                     {visibleError && (
-                        <p role="alert" className="mb-3 text-sm text-red-200">
+                        <p role="alert" className="mb-3 text-sm text-error">
                             {visibleError}
                         </p>
                     )}

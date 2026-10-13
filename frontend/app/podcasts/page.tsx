@@ -255,7 +255,7 @@ export default function PodcastsPage() {
                                     }
                                 }}
                                 placeholder={podcastRu.main.quickAdd}
-                                className="min-h-12 w-full rounded-xl border border-line bg-surface-elevated py-3 pl-11 pr-12 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
+                                className="min-h-12 w-full rounded-[10px] border border-line bg-surface-elevated py-3 pl-11 pr-12 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
                             />
                             {isSearching && (
                                 <div className="absolute right-4 top-1/2 z-10 -translate-y-1/2">
@@ -265,7 +265,7 @@ export default function PodcastsPage() {
 
                             {/* Dropdown Results */}
                             {showDropdown && searchResults.length > 0 && (
-                                <div className="absolute left-0 top-full z-50 mt-2 max-h-96 w-full overflow-y-auto rounded-xl border border-line bg-surface-overlay shadow-2xl">
+                                <div className="absolute left-0 top-full z-50 mt-2 max-h-96 w-full overflow-y-auto rounded-[10px] border border-line bg-surface-overlay shadow-2xl">
                                     {searchResults.map((result) => {
                                         const imageUrl = getProxiedImageUrl(
                                             result.coverUrl,
@@ -282,7 +282,7 @@ export default function PodcastsPage() {
                                                     setShowDropdown(false);
                                                 }}
                                             >
-                                                <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-full bg-surface-highlight">
+                                                <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-[8px] bg-surface-highlight">
                                                     {imageUrl ? (
                                                         <Image
                                                             src={imageUrl}
@@ -306,7 +306,7 @@ export default function PodcastsPage() {
                                                     <h3 className="truncate text-sm font-semibold text-content">
                                                         {result.name}
                                                     </h3>
-                                                    <p className="truncate text-xs text-content-muted">
+                                                    <p className="truncate text-sm text-content-secondary">
                                                         {result.artist}
                                                     </p>
                                                 </div>
@@ -322,7 +322,7 @@ export default function PodcastsPage() {
                                 searchResults.length === 0 &&
                                 !isSearching &&
                                 searchQuery.length >= 2 && (
-                                    <div className="absolute left-0 top-full z-50 mt-2 w-full rounded-xl border border-line bg-surface-overlay p-4 shadow-2xl">
+                                    <div className="absolute left-0 top-full z-50 mt-2 w-full rounded-[10px] border border-line bg-surface-overlay p-4 shadow-2xl">
                                         <p className="text-center text-sm text-content-muted">
                                             {formatPodcastSearchEmptyRu(
                                                 searchQuery,
@@ -353,13 +353,13 @@ export default function PodcastsPage() {
                                         placeholder={
                                             podcastRu.main.rssPlaceholder
                                         }
-                                        className="min-h-12 w-full rounded-xl border border-line bg-surface-elevated py-3 pl-11 pr-4 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
+                                        className="min-h-12 w-full rounded-[10px] border border-line bg-surface-elevated py-3 pl-11 pr-4 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
                                     />
                                 </div>
                                 <button
                                     onClick={handleAddByRss}
                                     disabled={isAddingRss}
-                                    className="min-h-12 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
+                                    className="min-h-12 rounded-[10px] bg-brand px-5 py-3 text-sm font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
                                 >
                                     {isAddingRss
                                         ? podcastRu.main.rssAdding
@@ -376,12 +376,12 @@ export default function PodcastsPage() {
                     </section>
                 </div>
 
-                <div className="space-y-12 pt-10">
+                <div className="space-y-8 pt-7 sm:space-y-10">
                     {/* My Podcasts */}
                     {(podcasts.length > 0 || showMyPodcastsSkeleton) && (
                         <section>
                             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                                <h2 className="text-2xl font-black tracking-[-0.03em] text-content">
+                                <h2 className="text-xl font-semibold text-content sm:text-2xl">
                                     {podcastRu.main.myPodcasts}
                                 </h2>
                                 <div className="flex flex-wrap items-center gap-2">
@@ -395,7 +395,7 @@ export default function PodcastsPage() {
                                             setCurrentPage(1);
                                         }}
                                         aria-label="Сортировка подкастов"
-                                        className="min-h-11 rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
+                                        className="min-h-11 rounded-[10px] border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
                                         disabled={showMyPodcastsSkeleton}
                                     >
                                         <option value="title">
@@ -419,7 +419,7 @@ export default function PodcastsPage() {
                                             setCurrentPage(1);
                                         }}
                                         aria-label="Подкастов на странице"
-                                        className="min-h-11 rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
+                                        className="min-h-11 rounded-[10px] border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
                                         disabled={showMyPodcastsSkeleton}
                                     >
                                         {[25, 50, 100, 250].map((count) => (
@@ -457,16 +457,16 @@ export default function PodcastsPage() {
                                                 data-tv-card
                                                 data-tv-card-index={index}
                                                 data-podcast-card="open"
-                                                className="group w-full rounded-xl p-1.5 text-left transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
+                                                className="group min-w-0 w-full rounded-[14px] p-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                             >
-                                                <div className="w-full aspect-square bg-surface-highlight rounded-full mb-2.5 overflow-hidden relative shadow-lg">
+                                                <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-[14px] bg-surface-highlight">
                                                     {imageUrl ? (
                                                         <Image
                                                             src={imageUrl}
                                                             alt={podcast.title}
                                                             fill
                                                             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                                                            className="object-cover group-hover:scale-105 transition-transform"
+                                                            className="object-cover"
                                                             unoptimized
                                                         />
                                                     ) : (
@@ -475,10 +475,10 @@ export default function PodcastsPage() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <h3 className="mb-0.5 truncate text-sm font-semibold text-content">
+                                                <h3 className="mb-1 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                                                     {podcast.title}
                                                 </h3>
-                                                <p className="truncate text-xs text-content-muted">
+                                                <p className="truncate text-sm text-content-secondary">
                                                     {podcast.author}
                                                 </p>
                                             </button>
@@ -493,7 +493,7 @@ export default function PodcastsPage() {
                                     <button
                                         onClick={() => setCurrentPage(1)}
                                         disabled={currentPage === 1}
-                                        className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="min-h-11 rounded-[10px] px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {podcastRu.main.firstPage}
                                     </button>
@@ -504,7 +504,7 @@ export default function PodcastsPage() {
                                             )
                                         }
                                         disabled={currentPage === 1}
-                                        className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="min-h-11 rounded-[10px] px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {podcastRu.main.previousPage}
                                     </button>
@@ -518,7 +518,7 @@ export default function PodcastsPage() {
                                             )
                                         }
                                         disabled={currentPage === totalPages}
-                                        className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="min-h-11 rounded-[10px] px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {podcastRu.main.nextPage}
                                     </button>
@@ -527,7 +527,7 @@ export default function PodcastsPage() {
                                             setCurrentPage(totalPages)
                                         }
                                         disabled={currentPage === totalPages}
-                                        className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="min-h-11 rounded-[10px] px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {podcastRu.main.lastPage}
                                     </button>
@@ -539,7 +539,7 @@ export default function PodcastsPage() {
                     {/* Top Podcasts */}
                     {(topPodcasts.length > 0 || showTopPodcastsSkeleton) && (
                         <section>
-                            <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+                            <h2 className="mb-6 text-xl font-semibold text-content sm:text-2xl">
                                 {podcastRu.main.topPodcasts}
                             </h2>
                             {showTopPodcastsSkeleton ? (
@@ -565,16 +565,16 @@ export default function PodcastsPage() {
                                                 data-tv-card
                                                 data-tv-card-index={index}
                                                 data-podcast-card="open"
-                                                className="group w-full rounded-xl p-1.5 text-left transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
+                                                className="group min-w-0 w-full rounded-[14px] p-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                             >
-                                                <div className="w-full aspect-square bg-surface-highlight rounded-full mb-2.5 overflow-hidden relative shadow-lg">
+                                                <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-[14px] bg-surface-highlight">
                                                     {imageUrl ? (
                                                         <Image
                                                             src={imageUrl}
                                                             alt={podcast.title}
                                                             fill
                                                             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                                                            className="object-cover group-hover:scale-105 transition-transform"
+                                                            className="object-cover"
                                                             unoptimized
                                                         />
                                                     ) : (
@@ -583,10 +583,10 @@ export default function PodcastsPage() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <h3 className="mb-0.5 truncate text-sm font-semibold text-content">
+                                                <h3 className="mb-1 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                                                     {podcast.title}
                                                 </h3>
-                                                <p className="truncate text-xs text-content-muted">
+                                                <p className="truncate text-sm text-content-secondary">
                                                     {podcast.author}
                                                 </p>
                                             </button>
@@ -601,7 +601,7 @@ export default function PodcastsPage() {
 
                     {showGenreDiscoverySkeleton && (
                         <section>
-                            <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+                            <h2 className="mb-6 text-xl font-semibold text-content sm:text-2xl">
                                 {podcastRu.main.loadingDiscovery}
                             </h2>
                             <PodcastGridSkeleton count={5} />
@@ -623,7 +623,7 @@ export default function PodcastsPage() {
                         return genrePodcasts.length > 0 ? (
                             <section key={genreId}>
                                 <div className="flex items-center justify-between mb-6">
-                                    <h2 className="text-2xl font-black tracking-[-0.03em] text-content">
+                                    <h2 className="text-xl font-semibold text-content sm:text-2xl">
                                         {genreName}
                                     </h2>
                                     <button
@@ -632,7 +632,7 @@ export default function PodcastsPage() {
                                                 `/podcasts/genre/${genreId}`,
                                             )
                                         }
-                                        className="min-h-11 rounded-xl px-3 text-sm font-semibold text-content-muted transition-colors hover:bg-surface-elevated hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                                        className="min-h-11 rounded-[10px] px-3 text-sm font-semibold text-content-muted transition-colors hover:bg-surface-elevated hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                                     >
                                         {podcastRu.main.viewMore}
                                     </button>
@@ -657,16 +657,16 @@ export default function PodcastsPage() {
                                                 data-tv-card
                                                 data-tv-card-index={index}
                                                 data-podcast-card="open"
-                                                className="group w-full rounded-xl p-1.5 text-left transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
+                                                className="group min-w-0 w-full rounded-[14px] p-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                             >
-                                                <div className="w-full aspect-square bg-surface-highlight rounded-full mb-2.5 overflow-hidden relative shadow-lg">
+                                                <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-[14px] bg-surface-highlight">
                                                     {imageUrl ? (
                                                         <Image
                                                             src={imageUrl}
                                                             alt={podcast.title}
                                                             fill
                                                             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                                                            className="object-cover group-hover:scale-105 transition-transform"
+                                                            className="object-cover"
                                                             unoptimized
                                                         />
                                                     ) : (
@@ -675,10 +675,10 @@ export default function PodcastsPage() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <h3 className="truncate text-sm font-bold text-content">
+                                                <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                                                     {podcast.title}
                                                 </h3>
-                                                <p className="truncate text-xs text-content-muted">
+                                                <p className="truncate text-sm text-content-secondary">
                                                     {podcast.author}
                                                 </p>
                                             </button>
@@ -747,7 +747,7 @@ function PeerPodcastsSection() {
 
     return (
         <section>
-            <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+            <h2 className="mb-6 text-xl font-semibold text-content sm:text-2xl">
                 {podcastRu.main.peerPodcasts}
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -756,7 +756,7 @@ function PeerPodcastsSection() {
                         key={listing.id}
                         className="border-t border-line p-2 pt-3"
                     >
-                        <div className="relative mb-3 aspect-square overflow-hidden rounded-md bg-surface-highlight">
+                        <div className="relative mb-3 aspect-square overflow-hidden rounded-[14px] bg-surface-highlight">
                             {getProxiedImageUrl(
                                 listing.imageUrl ?? undefined,
                             ) && (
@@ -773,19 +773,19 @@ function PeerPodcastsSection() {
                                 />
                             )}
                         </div>
-                        <h3 className="mb-0.5 truncate text-sm font-semibold text-content">
+                        <h3 className="mb-1 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                             {listing.title}
                         </h3>
-                        <p className="truncate text-xs text-content-muted">
+                        <p className="truncate text-sm text-content-secondary">
                             {listing.author ?? ""}
                         </p>
-                        <div className="mt-2 flex items-center justify-between gap-2">
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                             <PeerBadge
                                 peerName={listing.peer.name}
                                 online={listing.peer.online}
                             />
                             {listing.subscribed ? (
-                                <span className="text-[10px] uppercase text-content-muted">
+                                <span className="text-xs text-content-secondary">
                                     {podcastRu.main.subscribed}
                                 </span>
                             ) : (
@@ -793,7 +793,7 @@ function PeerPodcastsSection() {
                                     type="button"
                                     disabled={subscribingId === listing.id}
                                     onClick={() => void subscribe(listing)}
-                                    className="min-h-11 rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
+                                    className="min-h-11 rounded-[10px] bg-brand px-3 py-2 text-xs font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
                                 >
                                     {podcastRu.main.subscribe}
                                 </button>
@@ -812,9 +812,9 @@ function PodcastGridSkeleton({ count = 10 }: { count?: number }) {
             {Array.from({ length: count }, (_, index) => (
                 <div
                     key={`podcast-skeleton-${index}`}
-                    className="animate-pulse rounded-xl p-2 motion-reduce:animate-none"
+                    className="animate-pulse rounded-[10px] p-2 motion-reduce:animate-none"
                 >
-                    <div className="mb-2.5 aspect-square w-full rounded-full bg-surface-elevated" />
+                    <div className="mb-3 aspect-square w-full rounded-[14px] bg-surface-elevated" />
                     <div className="mb-2 h-4 rounded bg-surface-elevated" />
                     <div className="h-3 w-2/3 rounded bg-surface-elevated" />
                 </div>

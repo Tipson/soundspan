@@ -65,7 +65,9 @@ export default function PodcastDetailPage() {
     if (!podcast && !previewData) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <p className="text-gray-400">{podcastRu.detail.notFound}</p>
+                <p className="text-content-secondary">
+                    {podcastRu.detail.notFound}
+                </p>
             </div>
         );
     }
@@ -121,7 +123,7 @@ export default function PodcastDetailPage() {
                     }}
                 />
 
-                <div className="relative px-4 md:px-8 py-6 space-y-8">
+                <div className="relative mx-auto max-w-[1800px] space-y-7 px-4 py-7 sm:px-6 lg:px-8">
                     {/* Continue Listening - Only for subscribed podcasts */}
                     {podcast && inProgressEpisodes.length > 0 && (
                         <ContinueListening

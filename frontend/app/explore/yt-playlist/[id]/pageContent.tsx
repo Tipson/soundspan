@@ -384,7 +384,7 @@ export function YtPlaylistActionDock({
                     <button
                         type="button"
                         onClick={onShuffle}
-                        className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        className="flex h-11 w-11 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         title={searchExtrasRu.youtubePlaylist.shuffle}
                         aria-label={searchExtrasRu.youtubePlaylist.shuffle}
                     >
@@ -402,7 +402,7 @@ export function YtPlaylistActionDock({
                                 close();
                                 onAddToQueue();
                             }}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            className="flex h-11 w-11 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             title={searchExtrasRu.youtubePlaylist.addAllToQueue}
                             aria-label={
                                 searchExtrasRu.youtubePlaylist.addAllToQueue
@@ -419,7 +419,7 @@ export function YtPlaylistActionDock({
                                 close();
                                 onAddToPlaylist();
                             }}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            className="flex h-11 w-11 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             title={
                                 searchExtrasRu.youtubePlaylist.addAllToPlaylist
                             }
@@ -441,7 +441,7 @@ export function YtPlaylistActionDock({
                                 onClick={onToggleLikeAll}
                                 disabled={isApplyingLikeAll}
                                 className={cn(
-                                    "flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
+                                    "flex h-11 w-11 items-center justify-center rounded-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                                     isApplyingLikeAll
                                         ? "cursor-not-allowed text-content-muted opacity-50"
                                         : isAllLiked
@@ -539,7 +539,7 @@ export function YtPlaylistEditorialSurface({
                             src={artworkUrl}
                             alt={playlist.title}
                             fill
-                            sizes="(max-width: 640px) 176px, 224px"
+                            sizes="(max-width: 640px) 160px, (max-width: 1024px) 192px, 224px"
                             className="object-cover"
                             unoptimized
                         />

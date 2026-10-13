@@ -43,9 +43,9 @@ export function LibraryAlbumsGrid({
                         data-tv-card
                         data-tv-card-index={indexOffset + index}
                         tabIndex={0}
-                        className="group min-w-0 rounded-xl p-1.5 transition duration-200 hover:-translate-y-0.5 hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
+                        className="group min-w-0 rounded-[14px] p-1.5 transition-colors duration-200 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
                     >
-                        <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-surface-elevated shadow-lg shadow-black/20">
+                        <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-[14px] bg-surface-elevated">
                             {coverArtId ? (
                                 <CachedImage
                                     src={api.getCoverArtUrl(coverArtId, 200)}
@@ -62,7 +62,7 @@ export function LibraryAlbumsGrid({
                                 <Disc3 className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />
                             )}
                         </div>
-                        <h3 className="mb-1 line-clamp-1 text-sm font-bold text-content sm:text-base">
+                        <h3 className="mb-1 min-h-10 line-clamp-2 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                             {album.title}
                         </h3>
                         <div className="flex items-center gap-2">

@@ -4,8 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { enrichmentApi } from "@/lib/enrichmentApi";
 import { createFrontendLogger } from "@/lib/logger";
-import { X, RefreshCw, SkipForward, Trash2, AlertCircle } from "lucide-react";
+import { RefreshCw, SkipForward, Trash2, AlertCircle } from "lucide-react";
+import { Modal } from "./ui/Modal";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { queryKeys } from "@/lib/queryKeys";
+
+const FAILURE_ACTION =
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none";
 
 const logger = createFrontendLogger("EnrichmentFailuresModal");
 
@@ -54,42 +59,23 @@ function RetryAllConfirmationDialog({
     onConfirm,
 }: RetryAllConfirmationDialogProps) {
     return (
-        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
-            <div
-                role="alertdialog"
-                aria-modal="true"
-                aria-labelledby="retry-all-title"
-                className="bg-surface-hover rounded-lg p-6 max-w-md border border-white/10"
-            >
-                <h3
-                    id="retry-all-title"
-                    className="text-lg font-bold text-white mb-2"
-                >
-                    Повторить все ошибки в этой вкладке?
-                </h3>
-                <p className="text-sm text-white/70 mb-4">
-                    Будет сброшено {count} неудачных{" "}
-                    {entityType === "audio"
-                        ? "анализов аудио"
-                        : "построений векторов Vibe"}
-                    . Фоновая очередь обработает их постепенно.
-                </p>
-                <div className="flex justify-end gap-2">
-                    <button
-                        onClick={onCancel}
-                        className="px-4 py-2 text-sm bg-white/10 text-white/70 rounded-lg hover:bg-white/20 transition-colors"
-                    >
-                        Отмена
-                    </button>
-                    <button
-                        onClick={onConfirm}
-                        className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                        Повторить всё
-                    </button>
-                </div>
-            </div>
-        </div>
+        <ConfirmDialog
+            isOpen
+            onClose={onCancel}
+            onConfirm={onConfirm}
+            title="Повторить все ошибки в этой вкладке?"
+            message={
+                "Будет сброшено " +
+                count +
+                " неудачных " +
+                (entityType === "audio"
+                    ? "анализов аудио"
+                    : "построений векторов Vibe") +
+                ". Фоновая очередь обработает их постепенно."
+            }
+            confirmText="Повторить всё"
+            variant="info"
+        />
     );
 }
 
@@ -113,14 +99,17 @@ function RetryAllFailuresAction({
 
     return (
         <>
-            <div className="shrink-0 flex items-center justify-between gap-3 px-6 py-3 bg-white/5 border-b border-white/10">
+            <div className="shrink-0 flex flex-col items-start gap-3 border-b border-line py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <p className="text-sm text-white/60">
+                    <p className="text-sm leading-5 text-content-secondary">
                         Повторить все ошибки из этой вкладки. Задачи будут
                         поступать в очередь анализа постепенно.
                     </p>
                     {isError && (
-                        <p role="alert" className="text-xs text-red-400 mt-1">
+                        <p
+                            role="alert"
+                            className="mt-2 text-sm leading-5 text-error"
+                        >
                             Не удалось запустить повтор. Проверьте журналы
                             сервера и попробуйте ещё раз.
                         </p>
@@ -129,8 +118,10 @@ function RetryAllFailuresAction({
                 <button
                     onClick={() => setShowConfirm(true)}
                     disabled={isPending}
-                    className="shrink-0 flex items-center gap-2 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg
-                        hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className={
+                        FAILURE_ACTION +
+                        " shrink-0 bg-brand text-black hover:bg-brand-hover"
+                    }
                 >
                     <RefreshCw className="w-3.5 h-3.5" />
                     {isPending ? "Запускаем…" : `Повторить все (${count})`}
@@ -334,48 +325,77 @@ export function EnrichmentFailuresModal({
     const totalPages = Math.ceil((failures?.total || 0) / pageSize);
 
     return (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-            <div className="bg-surface-hover rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col border border-white/10">
-                {/* Header */}
-                <div className="shrink-0 flex items-center justify-between p-6 border-b border-white/10">
-                    <div>
-                        <h2 className="text-xl font-bold text-white">
-                            Ошибки анализа метаданных
-                        </h2>
-                        <p className="text-sm text-white/50 mt-1">
-                            {totalFailures}{" "}
-                            {ruPlural(
-                                totalFailures,
-                                "ошибка требует",
-                                "ошибки требуют",
-                                "ошибок требуют",
-                            )}{" "}
-                            проверки
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {totalFailures > 0 && (
+        <>
+            <Modal
+                isOpen={isOpen}
+                onClose={onClose}
+                title="Ошибки анализа метаданных"
+                className="flex max-w-4xl flex-col overflow-hidden"
+                headerClassName="shrink-0"
+                contentClassName="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                footerClassName="shrink-0 flex-wrap items-center justify-between border-t border-line pt-3"
+                footer={
+                    totalPages > 1 ? (
+                        <>
                             <button
-                                onClick={() => setShowClearConfirm(true)}
-                                disabled={clearAllMutation.isPending}
-                                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg
-                                    hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                onClick={() =>
+                                    setCurrentPage((p) => Math.max(1, p - 1))
+                                }
+                                disabled={currentPage === 1}
+                                className={
+                                    FAILURE_ACTION +
+                                    " flex-1 bg-surface-hover text-content hover:bg-surface-active min-[420px]:flex-none"
+                                }
                             >
-                                {clearAllMutation.isPending
-                                    ? "Удаляем…"
-                                    : "Удалить всё"}
+                                Назад
                             </button>
-                        )}
+                            <span className="order-first w-full text-center text-sm text-content-secondary min-[420px]:order-none min-[420px]:w-auto">
+                                Страница {currentPage} из {totalPages}
+                            </span>
+                            <button
+                                onClick={() =>
+                                    setCurrentPage((p) =>
+                                        Math.min(totalPages, p + 1),
+                                    )
+                                }
+                                disabled={currentPage === totalPages}
+                                className={
+                                    FAILURE_ACTION +
+                                    " flex-1 bg-surface-hover text-content hover:bg-surface-active min-[420px]:flex-none"
+                                }
+                            >
+                                Вперёд
+                            </button>
+                        </>
+                    ) : undefined
+                }
+            >
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+                    <p className="text-sm text-content-secondary">
+                        {totalFailures}{" "}
+                        {ruPlural(
+                            totalFailures,
+                            "ошибка требует",
+                            "ошибки требуют",
+                            "ошибок требуют",
+                        )}{" "}
+                        проверки
+                    </p>
+                    {totalFailures > 0 && (
                         <button
-                            onClick={onClose}
-                            aria-label="Закрыть список ошибок анализа"
-                            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                            onClick={() => setShowClearConfirm(true)}
+                            disabled={clearAllMutation.isPending}
+                            className={
+                                FAILURE_ACTION +
+                                " bg-error/15 text-error hover:bg-error/25"
+                            }
                         >
-                            <X className="w-5 h-5 text-white/70" />
+                            {clearAllMutation.isPending
+                                ? "Удаляем…"
+                                : "Удалить всё"}
                         </button>
-                    </div>
+                    )}
                 </div>
-
                 {(selectedType === "audio" || selectedType === "vibe") && (
                     <RetryAllFailuresAction
                         count={counts?.[selectedType] || 0}
@@ -385,36 +405,39 @@ export function EnrichmentFailuresModal({
                         onRetry={() => retryAllMutation.mutate(selectedType)}
                     />
                 )}
-
-                {/* Filter Tabs */}
-                <div className="shrink-0 flex gap-3 px-6 py-4 border-b border-white/10 overflow-x-auto">
-                    {[
-                        {
-                            key: "all" as const,
-                            label: failureTypeLabels.all,
-                            count: counts?.total || 0,
-                        },
-                        {
-                            key: "artist" as const,
-                            label: failureTypeLabels.artist,
-                            count: counts?.artist || 0,
-                        },
-                        {
-                            key: "track" as const,
-                            label: failureTypeLabels.track,
-                            count: counts?.track || 0,
-                        },
-                        {
-                            key: "audio" as const,
-                            label: failureTypeLabels.audio,
-                            count: counts?.audio || 0,
-                        },
-                        {
-                            key: "vibe" as const,
-                            label: failureTypeLabels.vibe,
-                            count: counts?.vibe || 0,
-                        },
-                    ].map((tab) => (
+                <div
+                    className="flex shrink-0 gap-2 overflow-x-auto border-b border-line py-3"
+                    aria-label="Категории ошибок"
+                >
+                    {(
+                        [
+                            {
+                                key: "all",
+                                label: failureTypeLabels.all,
+                                count: counts?.total || 0,
+                            },
+                            {
+                                key: "artist",
+                                label: failureTypeLabels.artist,
+                                count: counts?.artist || 0,
+                            },
+                            {
+                                key: "track",
+                                label: failureTypeLabels.track,
+                                count: counts?.track || 0,
+                            },
+                            {
+                                key: "audio",
+                                label: failureTypeLabels.audio,
+                                count: counts?.audio || 0,
+                            },
+                            {
+                                key: "vibe",
+                                label: failureTypeLabels.vibe,
+                                count: counts?.vibe || 0,
+                            },
+                        ] as const
+                    ).map((tab) => (
                         <button
                             key={tab.key}
                             onClick={() => {
@@ -422,67 +445,66 @@ export function EnrichmentFailuresModal({
                                 setCurrentPage(1);
                                 setSelectedFailures(new Set());
                             }}
-                            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                                selectedType === tab.key
-                                    ? "bg-brand text-black"
-                                    : "bg-white/5 text-white/70 hover:bg-white/10"
-                            }`}
                             aria-pressed={selectedType === tab.key}
+                            className={
+                                FAILURE_ACTION +
+                                " shrink-0 whitespace-nowrap " +
+                                (selectedType === tab.key
+                                    ? "bg-brand text-black"
+                                    : "bg-surface-hover text-content-secondary hover:bg-surface-active")
+                            }
                         >
                             {tab.label} ({tab.count})
                         </button>
                     ))}
                 </div>
-
-                {/* Action Bar */}
                 {selectedFailures.size > 0 && (
-                    <div className="shrink-0 flex items-center gap-2 p-4 bg-white/5 border-b border-white/10">
-                        <span className="text-sm text-white/70">
+                    <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line py-3">
+                        <span className="text-sm text-content-secondary">
                             Выбрано: {selectedFailures.size}
                         </span>
-                        <div className="flex gap-2 ml-auto">
+                        <div className="flex flex-wrap gap-2 sm:ml-auto">
                             <button
                                 onClick={handleRetrySelected}
                                 disabled={retryMutation.isPending}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg
-                                    hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className={
+                                    FAILURE_ACTION +
+                                    " bg-brand text-black hover:bg-brand-hover"
+                                }
                             >
-                                <RefreshCw className="w-3.5 h-3.5" />
+                                <RefreshCw className="h-4 w-4" />
                                 Повторить
                             </button>
                             <button
                                 onClick={handleSkipSelected}
                                 disabled={skipMutation.isPending}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white/10 text-white/70 rounded-lg
-                                    hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className={
+                                    FAILURE_ACTION +
+                                    " bg-surface-hover text-content-secondary hover:bg-surface-active"
+                                }
                             >
-                                <SkipForward className="w-3.5 h-3.5" />
+                                <SkipForward className="h-4 w-4" />
                                 Пропустить
                             </button>
                         </div>
                     </div>
                 )}
-
-                {/* Failures List */}
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="py-3">
                     {isLoading ? (
-                        <div className="flex items-center justify-center h-64">
-                            <div className="text-white/50">
-                                Загружаем ошибки…
-                            </div>
+                        <div className="flex h-48 items-center justify-center text-content-secondary">
+                            Загружаем ошибки…
                         </div>
                     ) : failures?.failures.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-64 text-white/50">
-                            <AlertCircle className="w-12 h-12 mb-3 opacity-50" />
+                        <div className="flex h-48 flex-col items-center justify-center text-content-secondary">
+                            <AlertCircle className="mb-3 h-10 w-10 opacity-50" />
                             <p className="text-lg font-medium">Ошибок нет</p>
-                            <p className="text-sm mt-1">
+                            <p className="mt-1 text-sm">
                                 Все элементы успешно обработаны
                             </p>
                         </div>
                     ) : (
                         <div className="space-y-2">
-                            {/* Select All */}
-                            <div className="flex items-center gap-3 px-3 py-2">
+                            <label className="inline-flex min-h-11 items-center gap-3 px-3 text-sm text-content-secondary">
                                 <input
                                     type="checkbox"
                                     aria-label="Выбрать все ошибки на этой странице"
@@ -491,52 +513,56 @@ export function EnrichmentFailuresModal({
                                         failures?.failures.length
                                     }
                                     onChange={handleSelectAll}
-                                    className="w-4 h-4 rounded border-white/20 bg-white/10"
+                                    className="h-5 w-5 shrink-0 rounded border-line accent-brand"
                                 />
-                                <span className="text-sm text-white/50">
-                                    Выбрать все
-                                </span>
-                            </div>
-
+                                Выбрать все
+                            </label>
                             {failures?.failures.map((failure) => (
                                 <div
                                     key={failure.id}
-                                    className="flex items-start gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+                                    className="flex items-start gap-2 rounded-[14px] border border-line bg-surface-hover p-3 sm:gap-3"
                                 >
-                                    <input
-                                        type="checkbox"
-                                        aria-label={`Выбрать ошибку для ${failure.entityName || failure.entityId}`}
-                                        checked={selectedFailures.has(
-                                            failure.id,
-                                        )}
-                                        onChange={() =>
-                                            toggleFailureSelection(failure.id)
-                                        }
-                                        className="w-4 h-4 mt-1 rounded border-white/20 bg-white/10"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm font-medium text-white truncate">
+                                    <label className="inline-flex min-h-11 w-11 shrink-0 items-start justify-center pt-3">
+                                        <input
+                                            type="checkbox"
+                                            aria-label={
+                                                "Выбрать ошибку для " +
+                                                (failure.entityName ||
+                                                    failure.entityId)
+                                            }
+                                            checked={selectedFailures.has(
+                                                failure.id,
+                                            )}
+                                            onChange={() =>
+                                                toggleFailureSelection(
+                                                    failure.id,
+                                                )
+                                            }
+                                            className="h-5 w-5 shrink-0 rounded border-line accent-brand"
+                                        />
+                                    </label>
+                                    <div className="min-w-0 flex-1 py-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="break-words text-sm font-medium text-content">
                                                 {failure.entityName ||
                                                     failure.entityId}
                                             </span>
-                                            <span className="text-xs px-2 py-0.5 bg-white/10 text-white/50 rounded uppercase">
+                                            <span className="rounded bg-surface-active px-2 py-0.5 text-xs text-content-secondary">
                                                 {failureTypeLabels[
                                                     failure.entityType as FailureType
                                                 ] ?? failure.entityType}
                                             </span>
                                         </div>
-                                        <p className="text-xs text-red-400 mt-1">
+                                        <p className="mt-2 break-words text-xs leading-5 text-error">
                                             {failure.errorSummary ||
                                                 failure.errorCode ||
                                                 "Подробности ошибки не сохранены"}
                                         </p>
-                                        <div className="flex items-center gap-3 mt-2 text-[10px] text-white/30">
+                                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-content-muted">
                                             <span>
                                                 Попытка {failure.retryCount}/
                                                 {failure.maxRetries}
                                             </span>
-                                            <span>•</span>
                                             <span>
                                                 Последняя:{" "}
                                                 {new Date(
@@ -550,90 +576,42 @@ export function EnrichmentFailuresModal({
                                             deleteMutation.mutate(failure.id)
                                         }
                                         disabled={deleteMutation.isPending}
-                                        className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
-                                        title="Удалить запись об ошибке"
+                                        aria-label={
+                                            "Удалить запись об ошибке для " +
+                                            (failure.entityName ||
+                                                failure.entityId)
+                                        }
+                                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-error transition-colors hover:bg-error/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                                     >
-                                        <Trash2 className="w-4 h-4 text-red-400" />
+                                        <Trash2 className="h-4 w-4" />
                                     </button>
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="shrink-0 flex items-center justify-between p-4 border-t border-white/10">
-                        <button
-                            onClick={() =>
-                                setCurrentPage((p) => Math.max(1, p - 1))
-                            }
-                            disabled={currentPage === 1}
-                            className="px-3 py-1.5 text-sm bg-white/10 text-white/70 rounded-lg
-                                hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Назад
-                        </button>
-                        <span className="text-sm text-white/50">
-                            Страница {currentPage} из {totalPages}
-                        </span>
-                        <button
-                            onClick={() =>
-                                setCurrentPage((p) =>
-                                    Math.min(totalPages, p + 1),
-                                )
-                            }
-                            disabled={currentPage === totalPages}
-                            className="px-3 py-1.5 text-sm bg-white/10 text-white/70 rounded-lg
-                                hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Вперёд
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* Clear All Confirmation Dialog */}
-            {showClearConfirm && (
-                <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
-                    <div className="bg-surface-hover rounded-lg p-6 max-w-md border border-white/10">
-                        <h3 className="text-lg font-bold text-white mb-2">
-                            Удалить все ошибки?
-                        </h3>
-                        <p className="text-sm text-white/70 mb-4">
-                            Будут безвозвратно удалены ошибки категории «
-                            {failureTypeLabels[selectedType]}»:{" "}
-                            {selectedType === "all"
-                                ? totalFailures
-                                : counts?.[selectedType] || 0}
-                            . Это действие нельзя отменить.
-                        </p>
-                        <div className="flex justify-end gap-2">
-                            <button
-                                onClick={() => setShowClearConfirm(false)}
-                                className="px-4 py-2 text-sm bg-white/10 text-white/70 rounded-lg
-                                    hover:bg-white/20 transition-colors"
-                            >
-                                Отмена
-                            </button>
-                            <button
-                                onClick={() => {
-                                    clearAllMutation.mutate(
-                                        selectedType === "all"
-                                            ? undefined
-                                            : selectedType,
-                                    );
-                                    setShowClearConfirm(false);
-                                }}
-                                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg
-                                    hover:bg-red-700 transition-colors"
-                            >
-                                Удалить всё
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+            </Modal>
+            <ConfirmDialog
+                isOpen={showClearConfirm}
+                onClose={() => setShowClearConfirm(false)}
+                onConfirm={() =>
+                    clearAllMutation.mutate(
+                        selectedType === "all" ? undefined : selectedType,
+                    )
+                }
+                title="Удалить все ошибки?"
+                message={
+                    "Будут безвозвратно удалены ошибки категории «" +
+                    failureTypeLabels[selectedType] +
+                    "»: " +
+                    (selectedType === "all"
+                        ? totalFailures
+                        : counts?.[selectedType] || 0) +
+                    ". Это действие нельзя отменить."
+                }
+                confirmText="Удалить всё"
+                variant="danger"
+            />
+        </>
     );
 }

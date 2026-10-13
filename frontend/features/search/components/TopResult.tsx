@@ -107,22 +107,22 @@ export function TopResult({
         >
             <h2
                 id="search-top-result-title"
-                className="mb-4 text-xl font-black tracking-[-0.025em] text-content sm:text-2xl"
+                className="mb-3 text-xl font-semibold tracking-[-0.02em] text-content sm:text-2xl"
             >
                 {ru.search.topResult}
             </h2>
             <Link
                 href={artistHref}
-                className="group relative isolate flex min-h-[13.5rem] w-full items-end overflow-hidden border-y border-white/[0.09] px-1 py-5 transition duration-200 hover:border-white/[0.17] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:min-h-[15rem] sm:py-6"
+                className="group relative isolate flex min-h-40 w-full flex-wrap items-center gap-3 overflow-hidden rounded-[14px] bg-surface-raised p-4 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:min-h-48 sm:p-5"
                 data-tv-card
                 data-tv-card-index={0}
                 tabIndex={0}
             >
                 <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-brand/20 via-brand/[0.035] to-transparent opacity-80 transition-opacity duration-200 group-hover:opacity-100 motion-reduce:transition-none"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-brand/[0.06] to-transparent"
                 />
-                <div className="relative z-10 h-24 w-24 shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface-elevated shadow-2xl shadow-black/40 sm:h-28 sm:w-28">
+                <div className="relative z-10 h-20 w-20 shrink-0 overflow-hidden rounded-full bg-surface-elevated sm:h-28 sm:w-28">
                     {imageUrl ? (
                         <CachedImage
                             src={api.getCoverArtUrl(imageUrl, 200)}
@@ -138,11 +138,11 @@ export function TopResult({
                         artworkFallback
                     )}
                 </div>
-                <div className="relative z-10 min-w-0 flex-1 px-4 sm:px-6">
-                    <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.18em] text-content-muted">
+                <div className="relative z-10 order-3 w-full min-w-0 basis-full">
+                    <p className="mb-1 text-xs font-medium text-content-secondary">
                         {ru.catalog.artist}
                     </p>
-                    <h3 className="truncate text-3xl font-black tracking-[-0.045em] text-content sm:text-4xl">
+                    <h3 className="text-2xl font-bold leading-tight tracking-[-0.03em] text-content [overflow-wrap:break-word] sm:text-3xl">
                         {name}
                     </h3>
                     {isLibrary &&
@@ -155,7 +155,7 @@ export function TopResult({
                             />
                         )}
                 </div>
-                <span className="relative z-10 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-content text-surface shadow-lg transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none">
+                <span className="relative z-10 ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-[10px] text-content-secondary transition-colors duration-200 group-hover:bg-surface-active group-hover:text-content motion-reduce:transition-none">
                     <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
                     <span className="sr-only">{ru.search.viewArtist}</span>
                 </span>

@@ -224,22 +224,20 @@ export function WaveDirectionSheet({
                 aria-modal="true"
                 aria-labelledby="wave-direction-title"
                 aria-describedby="wave-direction-description"
-                className="wave-material max-h-[90dvh] w-full overflow-y-auto rounded-t-[2rem] border border-white/10 bg-surface-raised/95 px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-5 shadow-2xl shadow-black/60 backdrop-blur-2xl sm:max-w-2xl sm:rounded-[2rem] sm:p-7"
+                className="wave-material max-h-[90dvh] w-full overflow-y-auto rounded-t-[14px] border border-white/10 bg-surface-raised px-4 pb-[max(1rem,var(--safe-area-bottom))] pt-4 shadow-2xl shadow-black/40 sm:max-w-2xl sm:rounded-[14px] sm:p-6"
             >
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-light">
-                            {ru.vibe.tuneEyebrow}
-                        </p>
+                        <p className="sr-only">{ru.vibe.tuneEyebrow}</p>
                         <h2
                             id="wave-direction-title"
-                            className="mt-2 text-2xl font-black tracking-[-0.035em] text-content sm:text-3xl"
+                            className="text-xl font-semibold tracking-[-0.025em] text-content sm:text-2xl"
                         >
                             {ru.vibe.tuneTitle}
                         </h2>
                         <p
                             id="wave-direction-description"
-                            className="mt-2 max-w-md text-sm leading-6 text-content-secondary"
+                            className="mt-1 max-w-md text-sm leading-5 text-content-secondary"
                         >
                             {ru.vibe.tuneDescription}
                         </p>
@@ -249,13 +247,13 @@ export function WaveDirectionSheet({
                         type="button"
                         onClick={onClose}
                         aria-label={ru.vibe.closeTune}
-                        className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-black/25 text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-[10px] text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                     >
                         <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                 </div>
 
-                <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
+                <p className="mt-5 text-sm font-semibold text-content">
                     {ru.vibe.direction}
                 </p>
                 <div
@@ -276,14 +274,14 @@ export function WaveDirectionSheet({
                                 aria-label={mode.label}
                                 tabIndex={selected ? 0 : -1}
                                 onClick={() => setDraftMode(mode.id)}
-                                className={`group flex min-h-[5.5rem] w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-[transform,background-color,border-color] duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                                className={`group flex min-h-16 w-full items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                     selected
                                         ? "border-brand/50 bg-brand/12"
-                                        : "border-white/8 bg-black/20 hover:border-white/15 hover:bg-white/[0.055]"
+                                        : "border-white/8 bg-surface hover:border-white/15 hover:bg-surface-hover"
                                 }`}
                             >
                                 <span
-                                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors motion-reduce:transition-none ${
+                                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-[10px] transition-colors motion-reduce:transition-none ${
                                         selected
                                             ? "bg-brand text-black"
                                             : "bg-white/[0.06] text-content-secondary group-hover:text-content"
@@ -302,10 +300,10 @@ export function WaveDirectionSheet({
                                     )}
                                 </span>
                                 <span className="min-w-0 flex-1 whitespace-normal break-words">
-                                    <span className="block text-[0.62rem] font-bold uppercase tracking-[0.14em] text-brand-light">
+                                    <span className="sr-only">
                                         {mode.shortLabel}
                                     </span>
-                                    <span className="mt-0.5 block text-sm font-bold text-content">
+                                    <span className="block text-sm font-semibold text-content">
                                         {mode.label}
                                     </span>
                                     <span className="mt-0.5 block text-xs leading-4 text-content-muted">
@@ -317,14 +315,12 @@ export function WaveDirectionSheet({
                     })}
                 </div>
 
-                <div className="mt-6 border-t border-white/8 pt-5">
+                <div className="mt-5">
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
+                        <p className="text-sm font-semibold text-content">
                             {ru.vibe.mood}
                         </p>
-                        <p className="mt-1 text-sm leading-6 text-content-secondary">
-                            {ru.vibe.moodDescription}
-                        </p>
+                        <p className="sr-only">{ru.vibe.moodDescription}</p>
                     </div>
                     <div
                         role="radiogroup"
@@ -350,14 +346,14 @@ export function WaveDirectionSheet({
                                     aria-label={mood.label}
                                     tabIndex={selected ? 0 : -1}
                                     onClick={() => setDraftMood(mood.id)}
-                                    className={`group flex min-h-11 min-w-[9.5rem] flex-1 items-center gap-2.5 rounded-full border px-3.5 py-2.5 text-left transition-[transform,background-color,border-color] duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                                    className={`group flex min-h-11 min-w-[9.5rem] flex-1 items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                         selected
                                             ? "border-brand/50 bg-brand/12"
-                                            : "border-white/8 bg-black/20 hover:border-white/15 hover:bg-white/[0.055]"
+                                            : "border-white/8 bg-surface hover:border-white/15 hover:bg-surface-hover"
                                     }`}
                                 >
                                     <span
-                                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+                                        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${
                                             selected
                                                 ? "bg-brand text-black"
                                                 : "bg-white/[0.06] text-content-secondary"
@@ -389,7 +385,7 @@ export function WaveDirectionSheet({
                     </div>
                 </div>
 
-                <div className="mt-6 grid gap-4 border-t border-white/8 pt-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                <div className="mt-5 grid gap-3 border-t border-white/8 pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                     <p className="text-sm leading-5 text-content-secondary">
                         <span className="block font-semibold text-content-body">
                             {ru.vibe.selected}: {selectedDefinition.shortLabel}{" "}
@@ -407,7 +403,7 @@ export function WaveDirectionSheet({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-[10px] px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
                             {ru.common.cancel}
                         </button>
@@ -415,7 +411,7 @@ export function WaveDirectionSheet({
                             type="button"
                             onClick={() => onApply(draftMode, draftMood, "any")}
                             aria-label={`${applyLabel}: ${selectedDefinition.label}, ${selectedMoodDefinition.label}`}
-                            className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
+                            className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-[10px] bg-brand px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
                         >
                             {applyLabel}
                         </button>

@@ -10,6 +10,11 @@ import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 import Image from "next/image";
 import { UserSettings } from "../../types";
 import { ru, userFacingError } from "@/lib/i18n/ru";
+import {
+    SETTINGS_DANGER_BUTTON,
+    SETTINGS_PRIMARY_BUTTON,
+    SETTINGS_SECONDARY_BUTTON,
+} from "../ui/settingsFieldStyles";
 
 interface AccountSectionProps {
     settings: UserSettings;
@@ -187,7 +192,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                     description="Необязательное имя для интерфейса. Не более 80 символов."
                     htmlFor="display-name"
                 >
-                    <div className="w-64">
+                    <div className="w-full sm:w-64">
                         <SettingsInput
                             id="display-name"
                             name="displayName"
@@ -213,7 +218,11 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                     label="Имя пользователя"
                     description={`Вы вошли как ${user?.username}`}
                 >
-                    <span className="text-sm text-gray-400">{user?.role}</span>
+                    <span className="text-sm text-content-muted">
+                        {user?.role === "admin"
+                            ? "Администратор"
+                            : "Пользователь"}
+                    </span>
                 </SettingsRow>
 
                 {/* Email */}
@@ -222,8 +231,8 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                     description="Используется для входа и восстановления аккаунта"
                     htmlFor="email"
                 >
-                    <div className="flex items-center gap-3">
-                        <div className="w-64">
+                    <div className="flex w-full flex-wrap items-center gap-3 sm:justify-end">
+                        <div className="min-w-0 flex-1 sm:min-w-48">
                             <SettingsInput
                                 id="email"
                                 name="email"
@@ -240,8 +249,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                 savingEmail ||
                                 email.trim() === (user?.email || "")
                             }
-                            className="px-4 py-2 bg-white text-black text-sm font-medium rounded-full
-                                hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                            className={SETTINGS_PRIMARY_BUTTON}
                         >
                             {savingEmail ? ru.settings.saving : ru.common.save}
                         </button>
@@ -261,14 +269,14 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                     {!showPasswordForm ? (
                         <button
                             onClick={() => setShowPasswordForm(true)}
-                            className="text-sm text-white hover:underline"
+                            className={SETTINGS_SECONDARY_BUTTON}
                         >
                             Изменить
                         </button>
                     ) : (
                         <button
                             onClick={() => setShowPasswordForm(false)}
-                            className="text-sm text-gray-400 hover:text-white"
+                            className={SETTINGS_SECONDARY_BUTTON}
                         >
                             {ru.common.cancel}
                         </button>
@@ -304,7 +312,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                             onChange={setConfirmPassword}
                             placeholder="Повторите новый пароль"
                         />
-                        <div className="inline-flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                             <button
                                 onClick={handleChangePassword}
                                 disabled={
@@ -313,8 +321,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                     !newPassword ||
                                     newPassword !== confirmPassword
                                 }
-                                className="px-4 py-2 bg-white text-black text-sm font-medium rounded-full
-                                    hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                                className={SETTINGS_PRIMARY_BUTTON}
                             >
                                 {changingPassword
                                     ? "Изменяем…"
@@ -341,10 +348,10 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                     {!settingUpTwoFactor &&
                         !showDisableFlow &&
                         (twoFactorEnabled ? (
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <button
                                     onClick={() => setShowDisableFlow(true)}
-                                    className="text-sm text-red-400 hover:text-red-300"
+                                    className={`${SETTINGS_SECONDARY_BUTTON} text-red-300 hover:text-red-200`}
                                 >
                                     Выключить
                                 </button>
@@ -355,11 +362,11 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                 />
                             </div>
                         ) : (
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <button
                                     onClick={handleSetup2FA}
                                     disabled={tfaStatus === "loading"}
-                                    className="text-sm text-white hover:underline disabled:opacity-50"
+                                    className={SETTINGS_SECONDARY_BUTTON}
                                 >
                                     {tfaStatus === "loading"
                                         ? "Запускаем…"
@@ -403,7 +410,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                 <p className="text-xs text-gray-400 mb-1">
                                     Код для ручного ввода:
                                 </p>
-                                <code className="text-sm text-white bg-surface-highlight px-3 py-1 rounded font-mono">
+                                <code className="break-all text-sm text-content bg-surface-highlight px-3 py-1 rounded font-mono">
                                     {twoFactorSecret}
                                 </code>
                             </div>
@@ -423,12 +430,11 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                             placeholder="Введите 6-значный код"
                         />
 
-                        <div className="inline-flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                             <button
                                 onClick={handleVerify2FA}
                                 disabled={twoFactorToken.length !== 6}
-                                className="px-4 py-2 bg-white text-black text-sm font-medium rounded-full
-                                    hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                                className={SETTINGS_PRIMARY_BUTTON}
                             >
                                 Проверить
                             </button>
@@ -437,7 +443,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                     cancel2FASetup();
                                     setTwoFactorToken("");
                                 }}
-                                className="px-4 py-2 text-sm text-gray-400 hover:text-white"
+                                className={SETTINGS_SECONDARY_BUTTON}
                             >
                                 {ru.common.cancel}
                             </button>
@@ -479,15 +485,14 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                             }
                             placeholder="6-значный код"
                         />
-                        <div className="inline-flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                             <button
                                 onClick={handleDisable2FA}
                                 disabled={
                                     !disablePassword ||
                                     disableToken.length !== 6
                                 }
-                                className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-full
-                                    hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className={SETTINGS_DANGER_BUTTON}
                             >
                                 Выключить 2FA
                             </button>
@@ -497,7 +502,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                     setDisablePassword("");
                                     setDisableToken("");
                                 }}
-                                className="px-4 py-2 text-sm text-gray-400 hover:text-white"
+                                className={SETTINGS_SECONDARY_BUTTON}
                             >
                                 {ru.common.cancel}
                             </button>
@@ -528,26 +533,26 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                         {recoveryCodes.map((code, i) => (
                             <code
                                 key={i}
-                                className="text-sm text-white bg-surface-highlight px-3 py-2 rounded font-mono"
+                                className="break-all text-sm text-content bg-surface-highlight px-3 py-2 rounded-[10px] font-mono"
                             >
                                 {code}
                             </code>
                         ))}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <button
                             onClick={() =>
                                 navigator.clipboard.writeText(
                                     recoveryCodes.join("\n"),
                                 )
                             }
-                            className="px-4 py-2 bg-line-strong text-white text-sm rounded-full hover:bg-line-muted"
+                            className={SETTINGS_SECONDARY_BUTTON}
                         >
                             Копировать
                         </button>
                         <button
                             onClick={closeRecoveryCodes}
-                            className="px-4 py-2 bg-white text-black text-sm font-medium rounded-full hover:scale-105 transition-transform"
+                            className={SETTINGS_PRIMARY_BUTTON}
                         >
                             Готово
                         </button>

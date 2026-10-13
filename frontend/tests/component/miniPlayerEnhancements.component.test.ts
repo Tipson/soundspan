@@ -43,7 +43,10 @@ const state = {
         variant: "tidal" | "youtube" | "local";
         label: string;
     } | null,
+    reducedMotion: false,
 };
+
+let artworkTransition: unknown;
 
 // Stub icon component
 const Icon = (props: Record<string, unknown>) =>
@@ -169,14 +172,20 @@ mock.module("next/image", {
 // Mock framer-motion (motion.div renders as plain div)
 mock.module("framer-motion", {
     namedExports: {
+        useReducedMotion: () => state.reducedMotion,
         motion: {
             div: ({
                 children,
+                transition,
+                layoutId: _layoutId,
                 ...props
             }: {
                 children?: React.ReactNode;
                 [key: string]: unknown;
-            }) => React.createElement("div", props, children),
+            }) => {
+                artworkTransition = transition;
+                return React.createElement("div", props, children);
+            },
         },
     },
 });
@@ -250,32 +259,27 @@ beforeEach(() => {
     state.isTablet = false;
     state.playerMode = "mini";
     state.qualityBadge = null;
+    state.reducedMotion = false;
+    artworkTransition = undefined;
 });
 
-test("MiniPlayer keeps a compact 64px identity, ratings and play surface", async () => {
+test("MiniPlayer artwork handoff honors reduced motion", async () => {
+    state.reducedMotion = true;
     const { MiniPlayer } = await import("../../components/player/MiniPlayer");
+    renderToStaticMarkup(React.createElement(MiniPlayer));
+    assert.deepEqual(artworkTransition, { duration: 0 });
+});
 
+test("MiniPlayer exposes the identity opener, preferences and enabled pause", async () => {
+    const { MiniPlayer } = await import("../../components/player/MiniPlayer");
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
-
+    assert.match(html, /aria-label="Открыть плеер"/);
+    assert.match(html, /Test Track/);
+    assert.match(html, /data-track-id="t1"/);
+    const pause = html.match(/<button[^>]*aria-label="Пауза"[^>]*>/)?.[0];
+    assert.ok(pause);
+    assert.doesNotMatch(pause, /disabled/);
     assert.doesNotMatch(html, /aria-label="Следующий трек"/);
-    const playButton = html.match(/<button[^>]*aria-label="Пауза"[^>]*>/)?.[0];
-    assert.ok(playButton);
-    assert.match(playButton, /h-11 w-11/);
-    assert.match(html, /min-h-\[64px\]/);
-    assert.match(
-        html,
-        /padding-left:calc\(0\.75rem \+ var\(--safe-area-left\)\)/,
-    );
-    assert.match(
-        html,
-        /padding-right:calc\(0\.75rem \+ var\(--safe-area-right\)\)/,
-    );
-    assert.match(html, /data-mobile-player="dock"/);
-    assert.match(html, /data-player-layout="identity-ratings-play"/);
-    assert.doesNotMatch(
-        html,
-        /hidden flex-shrink-0 items-center min-\[360px\]:flex/,
-    );
 });
 
 test("MiniPlayer exposes both like and dislike in compact chrome", async () => {

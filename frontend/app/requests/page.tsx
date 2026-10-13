@@ -124,7 +124,7 @@ function RequestRow(props: {
     return (
         <li className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-elevated px-4 py-4 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-content">
+                <p className="text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere]">
                     <Link
                         href={requestArtistHref(request)}
                         className="hover:underline"
@@ -302,9 +302,9 @@ export default function RequestsPage() {
     ).length;
 
     return (
-        <main
+        <div
             data-utility-page="requests"
-            className="min-h-screen px-4 py-6 md:px-8"
+            className="min-h-full px-4 py-6 md:px-8"
         >
             <div className="mx-auto w-full max-w-6xl">
                 <PageHeader
@@ -383,6 +383,6 @@ export default function RequestsPage() {
                     />
                 )}
             </div>
-        </main>
+        </div>
     );
 }

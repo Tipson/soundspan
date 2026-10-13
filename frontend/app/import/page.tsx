@@ -25,186 +25,15 @@ import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { formatTime } from "@/utils/formatTime";
 import { queryKeys } from "@/lib/queryKeys";
 
+import {
+    tryParsePlaylistUrl,
+    isSupportedPlaylistUrl,
+    executeImportAction,
+    PreviewTrackResolutionList,
+} from "@/features/playlist-import/importPresentation";
+
 type ImportStep = "input" | "preview" | "executing" | "complete";
 type ImportMode = "url" | "file";
-
-function tryParsePlaylistUrl(rawInput: string): URL | null {
-    const trimmed = rawInput.trim();
-    if (!trimmed) return null;
-
-    const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
-        ? trimmed
-        : `https://${trimmed}`;
-    try {
-        const parsed = new URL(withProtocol);
-        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-            return null;
-        }
-        return parsed;
-    } catch {
-        return null;
-    }
-}
-
-function getResolutionSubtitle(track: PlaylistImportResolvedTrack): string {
-    return formatImportResolutionSubtitle(track);
-}
-
-/**
- * Executes isSupportedPlaylistUrl.
- */
-export function isSupportedPlaylistUrl(url: string): boolean {
-    const parsed = tryParsePlaylistUrl(url);
-    if (!parsed) return false;
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        return false;
-    }
-
-    const hostname = parsed.hostname.toLowerCase();
-    const path = parsed.pathname;
-
-    if (
-        [
-            "music.yandex.ru",
-            "music.yandex.com",
-            "music.yandex.kz",
-            "music.yandex.by",
-            "music.yandex.uz",
-        ].includes(hostname)
-    ) {
-        if (parsed.username || parsed.password || parsed.port) return false;
-        return (
-            /^\/users\/[a-z0-9][a-z0-9._-]{0,99}\/playlists\/\d{1,20}\/?$/i.test(
-                path,
-            ) ||
-            /^\/playlists\/(?:[a-z]{1,16}\.)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(
-                path,
-            )
-        );
-    }
-
-    if (hostname === "open.spotify.com") {
-        return /^\/(?:intl-[a-z]{2}(?:-[a-z]{2})?\/)?playlist\/[a-zA-Z0-9]+\/?$/i.test(
-            path,
-        );
-    }
-
-    if (hostname === "deezer.com" || hostname.endsWith(".deezer.com")) {
-        return /^\/(?:[a-z]{2}\/)?playlist\/\d+\/?$/i.test(path);
-    }
-
-    if (
-        hostname === "youtube.com" ||
-        hostname === "www.youtube.com" ||
-        hostname === "music.youtube.com"
-    ) {
-        return path === "/playlist" && parsed.searchParams.has("list");
-    }
-
-    return false;
-}
-
-/**
- * Executes executeImportAction.
- */
-export async function executeImportAction(options: {
-    previewData: PlaylistImportPreviewResponse;
-    name?: string;
-}): Promise<PlaylistImportExecuteResponse> {
-    const name = options.name?.trim();
-    return api.executePlaylistImport({
-        previewData: options.previewData,
-        ...(name ? { name } : {}),
-    });
-}
-
-/**
- * Renders the ImportResolutionBadge component.
- */
-export function ImportResolutionBadge({
-    source,
-}: {
-    source: ImportResolutionSource;
-}) {
-    if (source === "local") {
-        return (
-            <span
-                className="shrink-0 rounded bg-success/15 px-1.5 py-0.5 text-[10px] font-bold text-success"
-                title={importPageRu.localBadge}
-            >
-                {importPageRu.localBadge}
-            </span>
-        );
-    }
-
-    if (source === "youtube") {
-        return <YouTubeBadge />;
-    }
-
-    return (
-        <span
-            className="shrink-0 rounded bg-error/15 px-1.5 py-0.5 text-[10px] font-bold text-error"
-            title={importPageRu.unresolvedBadge}
-        >
-            {importPageRu.unresolvedBadge}
-        </span>
-    );
-}
-
-/**
- * Renders the PreviewTrackResolutionList component.
- */
-export function PreviewTrackResolutionList({
-    tracks,
-}: {
-    tracks: PlaylistImportResolvedTrack[];
-}) {
-    if (tracks.length === 0) {
-        return (
-            <div className="p-4 text-sm text-content-muted">
-                {importPageRu.noTracks}
-            </div>
-        );
-    }
-
-    return (
-        <div className="max-h-96 divide-y divide-line overflow-y-auto">
-            {tracks.map((track, idx) => (
-                <div
-                    key={`${track.index}-${track.artist}-${track.title}-${idx}`}
-                    className="px-4 py-3 transition-colors hover:bg-surface-elevated/70 motion-reduce:transition-none"
-                >
-                    <div className="flex items-start gap-3">
-                        <span className="w-6 pt-0.5 text-right text-xs tabular-nums text-content-muted">
-                            {idx + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                            <div className="truncate text-sm text-content">
-                                {track.title}
-                            </div>
-                            <div className="truncate text-xs text-content-muted">
-                                {track.artist}
-                                {track.album ? ` • ${track.album}` : ""}
-                            </div>
-                            <div className="mt-1 text-[11px] text-content-muted">
-                                {getResolutionSubtitle(track)}
-                            </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                            <ImportResolutionBadge source={track.source} />
-                            {typeof track.duration === "number" &&
-                                track.duration > 0 && (
-                                    <span className="text-[11px] tabular-nums text-content-muted">
-                                        {formatTime(track.duration)}
-                                    </span>
-                                )}
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}
 
 function ImportPageContent() {
     const router = useRouter();
@@ -388,7 +217,7 @@ function ImportPageContent() {
         ? result.summary.total - result.summary.unresolved
         : 0;
     return (
-        <div data-consumer-surface="import" className="min-h-screen bg-surface">
+        <div data-consumer-surface="import" className="min-h-full bg-surface">
             <div className="relative mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
                 <PageHeader
                     title={ru.import.playlistTitle}
@@ -727,7 +556,7 @@ function ImportPageContent() {
                             </p>
                         )}
 
-                        <div className="flex items-center justify-center gap-3 mt-6">
+                        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                             <button
                                 onClick={resetFlow}
                                 className="min-h-11 rounded-xl px-5 py-2.5 text-sm font-semibold text-content-muted transition-colors hover:bg-surface-elevated hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"

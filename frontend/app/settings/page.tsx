@@ -147,7 +147,7 @@ function UserSettingsForm() {
             saveDock={
                 <SettingsSaveDock
                     hasChanges={hasChanges}
-                    placement="inline"
+                    placement="sticky"
                     isSaving={isSaving}
                     status={saveStatus.status}
                     message={saveStatus.message}

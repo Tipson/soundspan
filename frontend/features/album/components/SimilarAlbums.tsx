@@ -22,7 +22,7 @@ export function SimilarAlbums({
 }: SimilarAlbumsProps) {
     return (
         <section>
-            <h2 className="text-xl font-bold mb-4">
+            <h2 className="mb-4 text-xl font-semibold tracking-[-0.02em] sm:text-2xl">
                 {ru.catalog.similarAlbums}
             </h2>
             <div

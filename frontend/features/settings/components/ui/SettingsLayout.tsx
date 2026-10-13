@@ -9,6 +9,7 @@ interface SettingsLayoutProps {
     sidebarItems: SidebarItem[];
     isAdmin: boolean;
     title?: string;
+    description?: string;
 }
 
 /**
@@ -19,6 +20,7 @@ export function SettingsLayout({
     sidebarItems,
     isAdmin,
     title = ru.settings.title,
+    description = ru.settings.description,
 }: SettingsLayoutProps) {
     const [activeSection, setActiveSection] = useState(
         sidebarItems[0]?.id || "",
@@ -180,14 +182,11 @@ export function SettingsLayout({
         >
             <div className="relative mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-10 xl:px-10">
                 <header className="mb-6 max-w-2xl md:mb-8">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-light">
-                        {ru.settings.eyebrow}
-                    </p>
-                    <h1 className="text-3xl font-bold tracking-[-0.04em] text-content md:text-4xl">
+                    <h1 className="text-3xl font-bold tracking-tight text-content md:text-4xl">
                         {title}
                     </h1>
                     <p className="mt-3 text-sm leading-6 text-content-secondary md:text-base">
-                        {ru.settings.description}
+                        {description}
                     </p>
                 </header>
 

@@ -46,6 +46,23 @@ mock.module("@/hooks/usePlayButtonFeedback", {
     },
 });
 
+// This suite covers conditional action availability with the sheet open.
+// discoverSecondaryActions.component.test.ts covers real opening and dismissal.
+mock.module("@/components/music-detail/MusicDetailSecondaryActions", {
+    namedExports: {
+        MusicDetailSecondaryActions: ({
+            children,
+        }: {
+            children: (close: () => void) => React.ReactNode;
+        }) =>
+            React.createElement(
+                "div",
+                null,
+                children(() => undefined),
+            ),
+    },
+});
+
 const noop = () => undefined;
 
 const makeTrack = (id: string, title: string): DiscoverTrack => ({
@@ -98,7 +115,7 @@ beforeEach(() => {
     // Reset to defaults — each test clones baseProps as needed
 });
 
-test("DiscoverActionBar renders all consolidated buttons when playlist has tracks", async () => {
+test("DiscoverActionBar retains all actions when the secondary sheet is open", async () => {
     const { DiscoverActionBar } =
         await import("../../features/discover/components/DiscoverActionBar");
     const html = renderToStaticMarkup(

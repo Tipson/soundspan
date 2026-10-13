@@ -10,7 +10,8 @@ import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
+import { useInlineStatus } from "@/components/ui/InlineStatus";
+import { SettingsSaveDock } from "@/features/settings/components/SettingsSaveDock";
 import { SettingsLayout } from "@/features/settings/components/ui";
 import { useFeatures } from "@/lib/features-context";
 import { getPersonalStreamingAdminSidebarItems } from "@/features/settings/personalStreamingAdminSections";
@@ -220,6 +221,7 @@ export default function AdminPage() {
                 sidebarItems={sidebarItems}
                 isAdmin={true}
                 title={adminActivityRu.admin.title}
+                description="Источники музыки, работа сервера и доступ пользователей."
             >
                 <PlaybackSourcesSection
                     settings={systemSettings}
@@ -262,24 +264,16 @@ export default function AdminPage() {
                     />
                 )}
 
-                {/* Save Button - Fixed at bottom */}
-                <div className="sticky bottom-0 border-t border-line bg-surface/95 pb-8 pt-5 backdrop-blur-sm">
-                    <div className="relative">
-                        <button
-                            data-admin-save="true"
-                            onClick={handleSaveAll}
-                            disabled={isSaving}
-                            className="min-h-12 w-full rounded-xl bg-brand px-4 py-3 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
-                        >
-                            {isSaving
-                                ? adminActivityRu.admin.saving
-                                : adminActivityRu.admin.save}
-                        </button>
-                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-surface/90 px-3 py-0.5 backdrop-blur-sm">
-                            <InlineStatus {...saveStatus.props} />
-                        </div>
-                    </div>
-                </div>
+                <SettingsSaveDock
+                    isSaving={isSaving}
+                    status={saveStatus.status}
+                    message={saveStatus.message}
+                    onStatusClear={saveStatus.reset}
+                    onSave={handleSaveAll}
+                    saveLabel={adminActivityRu.admin.save}
+                    savingLabel={adminActivityRu.admin.saving}
+                    idleMessage="Настройки сервера"
+                />
             </SettingsLayout>
 
             <RestartModal

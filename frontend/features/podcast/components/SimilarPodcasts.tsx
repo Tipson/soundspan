@@ -29,43 +29,44 @@ export function SimilarPodcasts({ podcasts }: SimilarPodcastsProps) {
 
     return (
         <section>
-            <h2 className="text-xl font-bold mb-4">
+            <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
                 {podcastRu.detail.similar}
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {podcasts.map((podcast) => {
                     const imageUrl = getProxiedImageUrl(podcast.coverUrl);
                     return (
-                        <div
+                        <button
                             key={podcast.id}
-                            className="bg-transparent hover:bg-white/5 transition-all p-3 rounded-md cursor-pointer group"
+                            type="button"
+                            className="group min-w-0 rounded-[14px] p-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                             onClick={() =>
                                 router.push(`/podcasts/${podcast.id}`)
                             }
                         >
-                            <div className="w-full aspect-square bg-surface-highlight rounded-full mb-2.5 overflow-hidden relative shadow-lg">
+                            <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-[14px] bg-surface-highlight">
                                 {imageUrl ? (
                                     <Image
                                         src={imageUrl}
                                         alt={podcast.title}
                                         fill
                                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-                                        className="object-cover group-hover:scale-105 transition-transform"
+                                        className="object-cover"
                                         unoptimized
                                     />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center">
-                                        <Mic2 className="w-10 h-10 text-gray-400" />
+                                        <Mic2 className="h-10 w-10 text-content-muted" />
                                     </div>
                                 )}
                             </div>
-                            <h3 className="font-semibold text-white truncate text-sm mb-0.5">
+                            <h3 className="mb-1 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                                 {podcast.title}
                             </h3>
-                            <p className="text-xs text-white/50 truncate">
+                            <p className="truncate text-sm text-content-secondary">
                                 {podcast.author}
                             </p>
-                        </div>
+                        </button>
                     );
                 })}
             </div>

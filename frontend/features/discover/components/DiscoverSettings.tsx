@@ -77,7 +77,7 @@ export function DiscoverSettings({
 
     return (
         <div>
-            <Card className="rounded-2xl border-line bg-surface-elevated p-5 sm:p-6">
+            <Card className="rounded-[14px] border-line bg-surface-elevated p-4 sm:p-5">
                 <h2 className="mb-5 text-xl font-semibold text-content">
                     {discoverRu.settings.title}
                 </h2>

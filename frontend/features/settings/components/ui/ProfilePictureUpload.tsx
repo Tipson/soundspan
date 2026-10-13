@@ -98,7 +98,7 @@ export function ProfilePictureUpload({
                 {hasPicture && user ? (
                     <img
                         key={previewKey}
-                        src={`${api.getProfilePictureUrl(user.id)}&_k=${previewKey}`}
+                        src={`${api.getProfilePictureUrl(user.id)}?_k=${previewKey}`}
                         alt="Фото профиля"
                         className="w-full h-full object-cover"
                     />
@@ -107,7 +107,7 @@ export function ProfilePictureUpload({
                 )}
                 {isBusy && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <Loader2 className="w-5 h-5 animate-spin text-white" />
+                        <Loader2 className="w-5 h-5 animate-spin text-white motion-reduce:animate-none" />
                     </div>
                 )}
             </div>
@@ -124,7 +124,7 @@ export function ProfilePictureUpload({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isBusy}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-white/[0.07] px-3 py-2 text-xs font-semibold text-content transition-colors hover:bg-white/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
+                className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-line px-3 py-2 text-sm font-semibold text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50 motion-reduce:transition-none"
             >
                 <Upload className="w-3.5 h-3.5" />
                 Загрузить
@@ -134,7 +134,7 @@ export function ProfilePictureUpload({
                     type="button"
                     onClick={handleRemove}
                     disabled={isBusy}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-white/[0.07] px-3 py-2 text-xs font-semibold text-content-muted transition-colors hover:bg-red-500/20 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-line px-3 py-2 text-sm font-semibold text-content-muted transition-colors hover:bg-red-500/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50 motion-reduce:transition-none"
                 >
                     <Trash2 className="w-3.5 h-3.5" />
                     Удалить

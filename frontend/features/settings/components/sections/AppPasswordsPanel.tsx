@@ -8,6 +8,12 @@ import type { AppPasswordMetadata, CreatedAppPassword } from "@/lib/api/auth";
 import { createFrontendLogger } from "@/lib/logger";
 import { formatDate } from "@/utils/formatTime";
 import { ru, userFacingError } from "@/lib/i18n/ru";
+import {
+    SETTINGS_DANGER_BUTTON,
+    SETTINGS_FIELD_FOCUS_RING,
+    SETTINGS_PRIMARY_BUTTON,
+    SETTINGS_SECONDARY_BUTTON,
+} from "../ui/settingsFieldStyles";
 
 const logger = createFrontendLogger("Settings.AppPasswordsPanel");
 
@@ -25,21 +31,21 @@ function SecretDisplay({
     onDismiss,
 }: SecretDisplayProps) {
     return (
-        <div className="space-y-3 rounded-lg border border-yellow-700/50 bg-yellow-900/20 p-4">
+        <div className="space-y-3 rounded-[10px] border border-warning/25 bg-warning/10 p-4">
             <h4 className="text-sm font-medium text-yellow-200">
                 Новый пароль приложения
             </h4>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
                 <input
                     aria-label="Новый пароль приложения"
                     readOnly
                     value={credential.secret}
-                    className="min-w-0 flex-1 rounded border border-yellow-700/50 bg-black/50 px-3 py-2 font-mono text-sm text-white"
+                    className={`min-h-11 min-w-0 flex-1 rounded-[10px] border border-line bg-surface-elevated px-3 py-2 font-mono text-base text-content ${SETTINGS_FIELD_FOCUS_RING}`}
                 />
                 <button
                     type="button"
                     onClick={onCopy}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black"
+                    className={SETTINGS_SECONDARY_BUTTON}
                 >
                     <Copy className="h-4 w-4" />
                     {copied ? "Скопировано" : "Копировать"}
@@ -52,7 +58,7 @@ function SecretDisplay({
                 <button
                     type="button"
                     onClick={onDismiss}
-                    className="text-sm text-gray-400 hover:text-white"
+                    className={SETTINGS_SECONDARY_BUTTON}
                 >
                     Скрыть
                 </button>
@@ -68,9 +74,9 @@ interface AppPasswordRowProps {
 
 function AppPasswordRow({ credential, onRevoke }: AppPasswordRowProps) {
     return (
-        <div className="flex items-center justify-between gap-4 rounded-lg border border-white/5 bg-white/[0.03] p-4">
-            <div>
-                <p className="text-sm font-medium text-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-4 last:border-0">
+            <div className="min-w-0 flex-1">
+                <p className="break-words text-sm font-medium text-content">
                     {credential.displayName}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-400">
@@ -83,7 +89,7 @@ function AppPasswordRow({ credential, onRevoke }: AppPasswordRowProps) {
             <button
                 type="button"
                 onClick={() => onRevoke(credential)}
-                className="text-sm text-red-400 hover:text-red-300"
+                className={`${SETTINGS_SECONDARY_BUTTON} text-red-300 hover:text-red-200`}
             >
                 Отозвать
             </button>
@@ -105,8 +111,11 @@ function AppPasswordForm({
     onSubmit,
 }: AppPasswordFormProps) {
     return (
-        <form onSubmit={onSubmit} className="flex items-end gap-3">
-            <div className="min-w-0 flex-1">
+        <form
+            onSubmit={onSubmit}
+            className="flex flex-col items-start gap-3 sm:flex-row sm:items-end"
+        >
+            <div className="min-w-0 w-full flex-1">
                 <label
                     htmlFor="app-password-display-name"
                     className="mb-1.5 block text-sm text-gray-300"
@@ -121,13 +130,13 @@ function AppPasswordForm({
                     }
                     maxLength={64}
                     placeholder="Например, телефон или плеер в гостиной"
-                    className="w-full rounded-md border-0 bg-line-strong px-3 py-2 text-sm text-white outline-none placeholder:text-gray-400 focus:bg-line-muted"
+                    className={`min-h-11 w-full rounded-[10px] border border-line bg-surface-elevated px-3 py-2 text-base text-content placeholder:text-content-muted ${SETTINGS_FIELD_FOCUS_RING}`}
                 />
             </div>
             <button
                 type="submit"
                 disabled={!displayName.trim() || creating}
-                className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black hover:scale-105 disabled:opacity-50"
+                className={`${SETTINGS_PRIMARY_BUTTON} shrink-0`}
             >
                 {creating ? "Создаём…" : "Создать пароль приложения"}
             </button>
@@ -200,11 +209,11 @@ function RevokeModal({
                         {error}
                     </p>
                 )}
-                <div className="flex justify-end gap-3">
+                <div className="flex flex-wrap justify-end gap-3">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-sm text-gray-400 hover:text-white"
+                        className={SETTINGS_SECONDARY_BUTTON}
                     >
                         {ru.common.cancel}
                     </button>
@@ -212,7 +221,7 @@ function RevokeModal({
                         type="button"
                         onClick={onConfirm}
                         disabled={revoking}
-                        className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                        className={SETTINGS_DANGER_BUTTON}
                     >
                         {revoking ? "Отзываем…" : "Отозвать"}
                     </button>
@@ -367,12 +376,12 @@ export function AppPasswordsPanel() {
     const visibleError = creation.error || data.loadError;
 
     return (
-        <div className="space-y-3 border-t border-white/5 pt-5">
+        <div className="space-y-4 border-t border-line pt-5">
             <div>
                 <h3 className="text-sm font-medium text-white">
                     Пароли приложений
                 </h3>
-                <p className="mt-0.5 text-xs text-gray-400">
+                <p className="mt-1 text-sm leading-5 text-content-muted">
                     Используйте отдельные пароли в приложениях OpenSubsonic, не
                     раскрывая основной пароль аккаунта.
                 </p>

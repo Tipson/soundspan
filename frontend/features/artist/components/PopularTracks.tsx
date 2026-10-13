@@ -254,10 +254,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
         >
             <div className="mb-5 flex items-end justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.18em] text-content-muted">
-                        Каталог исполнителя
-                    </p>
-                    <h2 className="text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                    <h2 className="text-xl font-semibold tracking-[-0.02em] sm:text-2xl">
                         {popularHref ? (
                             <Link
                                 href={popularHref}
@@ -269,15 +266,11 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                             "Популярные треки"
                         )}
                     </h2>
-                    <p className="mt-1 text-sm text-content-secondary">
-                        После выбранного трека очередь продолжится в показанном
-                        порядке.
-                    </p>
                 </div>
                 {onAddAllToQueue && (
                     <button
                         onClick={() => onAddAllToQueue(visibleTracks)}
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         title="Добавить показанные популярные треки в очередь"
                         aria-label="Добавить показанные популярные треки в очередь"
                     >
@@ -303,7 +296,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
             {canExpand && !showAll && (
                 <button
                     onClick={() => setExpanded((prev) => !prev)}
-                    className="mt-2 flex min-h-11 items-center gap-1 rounded-full px-2 text-sm font-semibold text-gray-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                    className="mt-2 flex min-h-11 items-center gap-1 rounded-[10px] px-3 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 >
                     {expanded ? (
                         <>

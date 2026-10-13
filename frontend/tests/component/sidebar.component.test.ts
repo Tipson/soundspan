@@ -275,6 +275,36 @@ test("returns null for auth routes", async () => {
     assert.equal(state.playlistQueryCalls, 0);
 });
 
+test("a closed sidebar leaves an existing dialog's scroll lock intact on unmount", async () => {
+    state.isMobile = true;
+    document.body.style.overflow = "hidden";
+    const mounted = await mountSidebar();
+    await mounted.unmount();
+    assert.equal(document.body.style.overflow, "hidden");
+    document.body.style.overflow = "";
+});
+
+test("mobile sidebar restores the prior body overflow after closing", async () => {
+    state.isMobile = true;
+    document.body.style.overflow = "scroll";
+    const mounted = await mountSidebar();
+    try {
+        await React.act(async () =>
+            window.dispatchEvent(new Event("toggle-mobile-menu")),
+        );
+        assert.equal(document.body.style.overflow, "hidden");
+        await React.act(async () =>
+            document.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape" }),
+            ),
+        );
+        assert.equal(document.body.style.overflow, "scroll");
+    } finally {
+        await mounted.unmount();
+        document.body.style.overflow = "";
+    }
+});
+
 test("mobile and tablet shells do not start desktop playlist queries", async () => {
     const { Sidebar } = await import("../../components/layout/Sidebar");
 

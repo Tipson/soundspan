@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { EllipsisVertical, ListEnd, ListPlus } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import type { Episode } from "../types";
 import { podcastRu } from "@/lib/i18n/podcastRu";
+import { Modal } from "@/components/ui/Modal";
 
 interface EpisodeOverflowMenuProps {
     episode: Episode;
@@ -25,36 +26,7 @@ export function EpisodeOverflowMenu({
     triggerClassName,
 }: EpisodeOverflowMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement | null>(null);
     const { addEpisodeToQueue, playEpisodeNext } = useAudioControls();
-
-    // Outside click and escape handlers
-    useEffect(() => {
-        if (!isOpen) return;
-
-        const handleOutsideClick = (event: MouseEvent) => {
-            if (
-                menuRef.current &&
-                !menuRef.current.contains(event.target as Node)
-            ) {
-                setIsOpen(false);
-            }
-        };
-
-        const handleEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                setIsOpen(false);
-            }
-        };
-
-        document.addEventListener("mousedown", handleOutsideClick);
-        document.addEventListener("keydown", handleEscape);
-
-        return () => {
-            document.removeEventListener("mousedown", handleOutsideClick);
-            document.removeEventListener("keydown", handleEscape);
-        };
-    }, [isOpen]);
 
     const handleToggle = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
@@ -81,7 +53,6 @@ export function EpisodeOverflowMenu({
 
     return (
         <div
-            ref={menuRef}
             className={cn(
                 "relative flex items-center justify-center",
                 className,
@@ -91,7 +62,7 @@ export function EpisodeOverflowMenu({
                 type="button"
                 onClick={handleToggle}
                 className={cn(
-                    "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 rounded-full p-2 transition-colors",
+                    "flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] opacity-100 transition-colors focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 motion-reduce:transition-none",
                     isOpen
                         ? "bg-surface-active text-content"
                         : "text-content-muted hover:bg-surface-hover hover:text-content",
@@ -99,25 +70,23 @@ export function EpisodeOverflowMenu({
                 )}
                 aria-label={podcastRu.detail.episodeActions}
                 aria-expanded={isOpen}
-                aria-haspopup="menu"
+                aria-haspopup="dialog"
                 title={podcastRu.detail.episodeActions}
             >
                 <EllipsisVertical className="h-4 w-4" />
             </button>
 
-            {isOpen && (
-                <div
-                    className="absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-xl border border-line-strong bg-surface-raised p-1 shadow-xl"
-                    role="menu"
-                    tabIndex={-1}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                >
+            <Modal
+                isOpen={isOpen}
+                onClose={() => setIsOpen(false)}
+                title={podcastRu.detail.episodeActions}
+                className="sm:max-w-sm"
+            >
+                <div className="space-y-1">
                     <button
                         type="button"
                         onClick={handlePlayNext}
-                        className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content"
-                        role="menuitem"
+                        className="flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                         title={podcastRu.detail.playNext}
                     >
                         <ListEnd className="h-4 w-4" />
@@ -126,15 +95,14 @@ export function EpisodeOverflowMenu({
                     <button
                         type="button"
                         onClick={handleAddToQueue}
-                        className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content"
-                        role="menuitem"
+                        className="flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                         title={podcastRu.detail.addToQueue}
                     >
                         <ListPlus className="h-4 w-4" />
                         {podcastRu.detail.addToQueue}
                     </button>
                 </div>
-            )}
+            </Modal>
         </div>
     );
 }

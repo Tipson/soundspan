@@ -34,14 +34,14 @@ export function SettingsToggle({
             />
             <div
                 className={`
-                relative w-10 h-6 rounded-full transition-colors
+                relative w-11 h-6 rounded-full transition-colors motion-reduce:transition-none
                 ${disabled ? "opacity-50 cursor-not-allowed" : ""}
                 ${checked ? "bg-brand" : "bg-line-muted"}
                 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-brand-hover
                 after:content-[''] after:absolute after:top-[2px] after:left-[2px]
                 after:bg-white after:rounded-full after:h-5 after:w-5
-                after:transition-transform after:duration-200
-                ${checked ? "after:translate-x-4" : "after:translate-x-0"}
+                after:transition-transform after:duration-200 motion-reduce:after:transition-none
+                ${checked ? "after:translate-x-5" : "after:translate-x-0"}
             `}
             />
         </label>

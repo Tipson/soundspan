@@ -76,7 +76,7 @@ function TrackPreferenceButtonsContent({
         showLike && showDislike && Boolean(betweenActions);
 
     const baseButtonClass = cn(
-        "inline-flex items-center justify-center rounded-xl bg-transparent p-0 transition-[color,background-color,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40 enabled:active:scale-95",
+        "inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-[10px] bg-transparent p-0 transition-[color,background-color,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40 enabled:active:scale-95 motion-reduce:transition-none motion-reduce:transform-none",
         buttonSizeClassName,
     );
 
@@ -181,7 +181,7 @@ function TrackPreferenceButtonsControlled({
     return (
         <TrackPreferenceButtonsContent
             className={className}
-            buttonSizeClassName={buttonSizeClassName ?? "h-11 w-11"}
+            buttonSizeClassName={buttonSizeClassName ?? "h-[44px] w-[44px]"}
             iconSizeClassName={iconSizeClassName ?? "h-6 w-6"}
             betweenActions={betweenActions}
             preferenceSignal={signal ?? "clear"}
@@ -231,7 +231,7 @@ function TrackPreferenceButtonsWithQuery({
     return (
         <TrackPreferenceButtonsContent
             className={className}
-            buttonSizeClassName={buttonSizeClassName ?? "h-11 w-11"}
+            buttonSizeClassName={buttonSizeClassName ?? "h-[44px] w-[44px]"}
             iconSizeClassName={iconSizeClassName ?? "h-6 w-6"}
             betweenActions={betweenActions}
             preferenceSignal={preferenceSignal}

@@ -2,7 +2,7 @@ import Image from "next/image";
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/utils/cn";
 
-type ArtworkShape = "round" | "square";
+type ArtworkShape = "round" | "square" | "portrait";
 
 interface AmbientColors {
     vibrant?: string;
@@ -29,7 +29,7 @@ function ambientStyle(colors?: AmbientColors | null): CSSProperties {
     const middle = colors?.darkVibrant ?? "var(--music-raised)";
     const bottom = colors?.darkMuted ?? "var(--music-canvas)";
     return {
-        background: `linear-gradient(155deg, color-mix(in srgb, ${top} 38%, var(--music-stage)) 0%, color-mix(in srgb, ${middle} 52%, var(--music-stage)) 44%, ${bottom} 100%)`,
+        background: `linear-gradient(155deg, color-mix(in srgb, ${top} 22%, var(--music-stage)) 0%, color-mix(in srgb, ${middle} 36%, var(--music-stage)) 44%, ${bottom} 100%)`,
     };
 }
 
@@ -62,7 +62,7 @@ export function MusicDetailHero({
             />
             {backgroundImage && (
                 <div
-                    className="pointer-events-none absolute inset-0 overflow-hidden opacity-35"
+                    className="pointer-events-none absolute inset-0 overflow-hidden opacity-20"
                     aria-hidden="true"
                 >
                     <Image
@@ -81,36 +81,39 @@ export function MusicDetailHero({
                 aria-hidden="true"
             />
 
-            <div className="relative mx-auto max-w-[1800px] px-4 pb-6 pt-9 sm:px-6 sm:pb-8 sm:pt-12 lg:px-8 lg:pb-10 lg:pt-16">
-                <div className="flex flex-col items-center gap-6 text-center sm:flex-row sm:items-end sm:gap-8 sm:text-left">
+            <div className="relative mx-auto max-w-[1800px] px-4 pb-6 pt-6 sm:px-6 sm:pb-8 sm:pt-10 lg:px-8 lg:pb-10 lg:pt-12">
+                <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-end sm:gap-7 sm:text-left">
                     <div
                         className={cn(
-                            "relative h-44 w-44 shrink-0 overflow-hidden bg-surface-highlight shadow-[0_26px_70px_rgb(0_0_0/0.42)] ring-1 ring-white/15 sm:h-52 sm:w-52 lg:h-56 lg:w-56",
+                            "relative shrink-0 overflow-hidden bg-surface-highlight shadow-[0_16px_42px_rgb(0_0_0/0.3)]",
+                            artworkShape === "portrait"
+                                ? "h-48 w-36 sm:h-60 sm:w-44 lg:h-64 lg:w-48"
+                                : "h-40 w-40 sm:h-48 sm:w-48 lg:h-56 lg:w-56",
                             artworkShape === "round"
                                 ? "rounded-full"
-                                : "rounded-[22px]",
+                                : "rounded-[14px]",
                         )}
                     >
                         {artwork}
                     </div>
 
                     <div className="min-w-0 w-full flex-1 pb-1">
-                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-white/75">
+                        <p className="mb-2 text-sm font-medium text-content-secondary">
                             {eyebrow}
                         </p>
                         <div className="flex min-w-0 items-start justify-center gap-3 sm:justify-start">
-                            <h1 className="min-w-0 max-w-full text-[clamp(2.25rem,8vw,5.5rem)] font-black leading-[0.92] tracking-[-0.055em] text-white [overflow-wrap:anywhere]">
+                            <h1 className="min-w-0 max-w-full text-balance text-3xl sm:text-5xl lg:text-6xl font-bold leading-[1.04] tracking-[-0.035em] text-content [overflow-wrap:anywhere]">
                                 {title}
                             </h1>
                             {titleAfter}
                         </div>
                         {metadata && (
-                            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm font-medium text-white/75 sm:justify-start">
+                            <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm font-medium text-content-secondary sm:justify-start">
                                 {metadata}
                             </div>
                         )}
                         {description && (
-                            <div className="mt-3 max-w-2xl text-sm leading-6 text-white/65">
+                            <div className="mt-3 max-w-2xl text-sm leading-6 text-content-secondary">
                                 {description}
                             </div>
                         )}

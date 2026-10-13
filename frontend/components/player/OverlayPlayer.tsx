@@ -445,12 +445,12 @@ export function OverlayPlayer() {
                 type="button"
                 onClick={handleStartRadio}
                 disabled={isRadioLoading}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40"
+                className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-[10px] text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40 motion-reduce:transition-none"
                 title={ru.player.startArtistRadio}
                 aria-label={ru.player.startArtistRadio}
             >
                 {isRadioLoading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <Loader2 className="h-6 w-6 animate-spin motion-reduce:animate-none" />
                 ) : (
                     <Radio className="h-6 w-6" />
                 )}
@@ -548,7 +548,7 @@ export function OverlayPlayer() {
                             returnToPreviousMode();
                         }}
                         onTouchStart={(e) => e.stopPropagation()}
-                        className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:ring-2 focus-visible:ring-brand-light"
+                        className="flex h-[44px] w-[44px] items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         aria-label="Свернуть плеер"
                         title="Свернуть плеер"
                     >
@@ -556,13 +556,13 @@ export function OverlayPlayer() {
                     </button>
                     {/* Now Playing indicator */}
                     <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400 uppercase tracking-widest font-medium">
+                        <span className="text-xs font-medium text-content-muted">
                             {ru.player.nowPlaying}
                         </span>
                         <SyncBadge compact />
                     </div>
                     <div
-                        className="w-11"
+                        className="w-[44px]"
                         onTouchStart={(event) => event.stopPropagation()}
                     >
                         {playbackType === "track" && currentTrack && (
@@ -581,6 +581,7 @@ export function OverlayPlayer() {
                                         : ru.player.matchVibe
                                 }
                                 matchVibeDisabled={isVibeLoading}
+                                triggerClassName="!h-[44px] !w-[44px] !p-0 !opacity-100"
                                 menuClassName="max-h-[min(70dvh,560px)] overflow-y-auto"
                                 extraItemsAfter={
                                     <PlaybackReport
@@ -602,12 +603,12 @@ export function OverlayPlayer() {
                 className={cn(
                     "overlay-player-layout relative z-10 flex-1 min-h-0 px-4 pt-2",
                     isMobileOrTablet
-                        ? "overflow-hidden pb-24"
+                        ? "overflow-y-auto overscroll-y-contain pb-24"
                         : "overflow-hidden pb-6 landscape:px-8",
                 )}
                 style={isMobileOrTablet ? undefined : { paddingRight: "50%" }}
             >
-                <div className="mx-auto flex h-full w-full max-w-5xl flex-col items-center justify-center gap-4 landscape:gap-6">
+                <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center justify-center gap-4 landscape:gap-6">
                     {/* Left Rail: artwork + transport */}
                     <div
                         className={cn(
@@ -621,7 +622,7 @@ export function OverlayPlayer() {
                             className={cn(
                                 "mx-auto aspect-square w-full relative",
                                 isMobileOrTablet
-                                    ? "max-w-[min(92vw,52vh)]"
+                                    ? "max-w-[clamp(7rem,calc(100dvh-25rem),82vw)]"
                                     : "max-w-[min(40vw,calc(100vh-20rem))]",
                             )}
                             style={{
@@ -629,22 +630,19 @@ export function OverlayPlayer() {
                                 opacity: 1 - Math.abs(swipeOffset) / 200,
                             }}
                         >
-                            <div
-                                className={cn(
-                                    "overlay-player-artwork-glow absolute inset-0 rounded-2xl blur-2xl opacity-50",
-                                    vibeMode
-                                        ? "bg-gradient-to-br from-brand/30 via-transparent to-ai/30"
-                                        : "bg-gradient-to-br from-brand-hover/20 via-transparent to-ai/20",
-                                )}
-                            />
+                            <div className="overlay-player-artwork-glow absolute inset-0 rounded-[14px] bg-brand/15 opacity-20 blur-2xl" />
                             <motion.div
                                 layoutId={artworkLayoutId}
-                                transition={{
-                                    type: "spring",
-                                    stiffness: 320,
-                                    damping: 34,
-                                }}
-                                className="overlay-player-artwork relative h-full w-full overflow-hidden rounded-2xl bg-surface-hover"
+                                transition={
+                                    shouldReduceMotion
+                                        ? { duration: 0 }
+                                        : {
+                                              type: "spring",
+                                              stiffness: 320,
+                                              damping: 34,
+                                          }
+                                }
+                                className="overlay-player-artwork relative h-full w-full overflow-hidden rounded-[14px] bg-surface-hover"
                             >
                                 {coverUrl ? (
                                     <CachedImage
@@ -659,7 +657,7 @@ export function OverlayPlayer() {
                                     />
                                 ) : (
                                     <div className="flex h-full w-full items-center justify-center">
-                                        <MusicIcon className="h-24 w-24 text-gray-400" />
+                                        <MusicIcon className="h-24 w-24 text-content-muted" />
                                     </div>
                                 )}
                             </motion.div>
@@ -688,7 +686,7 @@ export function OverlayPlayer() {
                             className={cn(
                                 "overlay-player-metadata mx-auto w-full",
                                 isMobileOrTablet
-                                    ? "mt-3 p-3"
+                                    ? "mt-3 px-1 py-2"
                                     : "mt-5 max-w-[420px] p-4 landscape:max-w-none",
                             )}
                         >
@@ -706,12 +704,12 @@ export function OverlayPlayer() {
                                             onClick={returnToPreviousMode}
                                             className="min-w-0 hover:underline"
                                         >
-                                            <h1 className="truncate text-xl font-bold text-white">
+                                            <h1 className="line-clamp-2 text-xl font-semibold leading-6 text-content">
                                                 {title}
                                             </h1>
                                         </Link>
                                     ) : (
-                                        <h1 className="truncate text-xl font-bold text-white">
+                                        <h1 className="line-clamp-2 text-xl font-semibold leading-6 text-content">
                                             {title}
                                         </h1>
                                     )}
@@ -723,12 +721,12 @@ export function OverlayPlayer() {
                                         onClick={returnToPreviousMode}
                                         className="block hover:underline"
                                     >
-                                        <p className="mt-1 truncate text-base text-gray-400">
+                                        <p className="mt-1 truncate text-base text-content-muted">
                                             {subtitle}
                                         </p>
                                     </Link>
                                 ) : (
-                                    <p className="mt-1 truncate text-base text-gray-400">
+                                    <p className="mt-1 truncate text-base text-content-muted">
                                         {subtitle}
                                     </p>
                                 )}
@@ -755,7 +753,7 @@ export function OverlayPlayer() {
                                             showHandle={false}
                                             className="mb-2"
                                         />
-                                        <div className="flex justify-between text-xs font-medium tabular-nums text-gray-400">
+                                        <div className="flex justify-between text-xs font-medium tabular-nums text-content-muted">
                                             <span>
                                                 {formatTime(displayTime)}
                                             </span>
@@ -776,28 +774,7 @@ export function OverlayPlayer() {
 
                                     {canSkip ? (
                                         <>
-                                            {isTrackMode && (
-                                                <div className="mb-3 flex items-center justify-center gap-3">
-                                                    <CurrentTrackPreferenceButtons
-                                                        trackId={
-                                                            preferenceTrackId
-                                                        }
-                                                        mode="both"
-                                                        buttonSizeClassName="h-11 w-11"
-                                                        iconSizeClassName="h-6 w-6"
-                                                        betweenActions={
-                                                            trackRadioAction
-                                                        }
-                                                        metadata={buildPreferenceMetadata(
-                                                            currentTrack,
-                                                        )}
-                                                    />
-                                                    {hasUnsupportedTrackPreferences &&
-                                                        trackRadioAction}
-                                                </div>
-                                            )}
-
-                                            <div className="overlay-player-transport mb-3 flex items-center justify-center gap-2 min-[375px]:gap-4">
+                                            <div className="overlay-player-transport mb-3 flex items-center justify-center gap-[8px] min-[375px]:gap-[16px]">
                                                 {!isLongForm && (
                                                     <button
                                                         onClick={toggleShuffle}
@@ -805,7 +782,7 @@ export function OverlayPlayer() {
                                                             "player-control transition-colors",
                                                             isShuffle
                                                                 ? "text-brand-hover"
-                                                                : "text-gray-400 hover:text-white",
+                                                                : "text-content-muted hover:text-white",
                                                         )}
                                                         title={
                                                             ru.player.shuffle
@@ -853,13 +830,13 @@ export function OverlayPlayer() {
                                                 <button
                                                     onClick={handlePlayPause}
                                                     className={cn(
-                                                        "overlay-player-primary player-control-primary flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full shadow-xl transition-all",
+                                                        "overlay-player-primary player-control-primary flex h-[64px] w-[64px] flex-shrink-0 items-center justify-center rounded-[10px] transition-colors motion-reduce:transition-none",
                                                         audioError
-                                                            ? "bg-red-500 text-white hover:bg-red-400"
+                                                            ? "bg-error text-content hover:brightness-110"
                                                             : isBuffering &&
                                                                 !isPlaying
                                                               ? "bg-white/80 text-black"
-                                                              : "bg-white text-black hover:scale-[1.04]",
+                                                              : "bg-content text-surface hover:bg-content/90",
                                                     )}
                                                     disabled={
                                                         isBuffering &&
@@ -889,7 +866,7 @@ export function OverlayPlayer() {
                                                         <RefreshCw className="h-7 w-7" />
                                                     ) : isBuffering &&
                                                       !isPlaying ? (
-                                                        <Loader2 className="h-7 w-7 animate-spin" />
+                                                        <Loader2 className="h-7 w-7 animate-spin motion-reduce:animate-none" />
                                                     ) : isPlaying ? (
                                                         <Pause className="h-7 w-7" />
                                                     ) : (
@@ -933,7 +910,7 @@ export function OverlayPlayer() {
                                                             "player-control transition-colors",
                                                             repeatMode !== "off"
                                                                 ? "text-brand-hover"
-                                                                : "text-gray-400 hover:text-white",
+                                                                : "text-content-muted hover:text-white",
                                                         )}
                                                         title={
                                                             repeatMode === "one"
@@ -974,19 +951,39 @@ export function OverlayPlayer() {
                                                     </button>
                                                 )}
                                             </div>
+                                            {isTrackMode && (
+                                                <div className="mb-3 flex items-center justify-center gap-3">
+                                                    <CurrentTrackPreferenceButtons
+                                                        trackId={
+                                                            preferenceTrackId
+                                                        }
+                                                        mode="both"
+                                                        buttonSizeClassName="h-[44px] w-[44px]"
+                                                        iconSizeClassName="h-6 w-6"
+                                                        betweenActions={
+                                                            trackRadioAction
+                                                        }
+                                                        metadata={buildPreferenceMetadata(
+                                                            currentTrack,
+                                                        )}
+                                                    />
+                                                    {hasUnsupportedTrackPreferences &&
+                                                        trackRadioAction}
+                                                </div>
+                                            )}
                                         </>
                                     ) : (
                                         <div className="mb-3 flex items-center justify-center">
                                             <button
                                                 onClick={handlePlayPause}
                                                 className={cn(
-                                                    "flex h-16 w-16 items-center justify-center rounded-full shadow-xl transition-all",
+                                                    "flex h-[64px] w-[64px] items-center justify-center rounded-[10px] transition-colors motion-reduce:transition-none",
                                                     audioError
-                                                        ? "bg-red-500 text-white hover:bg-red-400"
+                                                        ? "bg-error text-content hover:brightness-110"
                                                         : isBuffering &&
                                                             !isPlaying
                                                           ? "bg-white/80 text-black"
-                                                          : "bg-white text-black hover:scale-105",
+                                                          : "bg-content text-surface hover:bg-content/90",
                                                 )}
                                                 disabled={
                                                     isBuffering && !isPlaying
@@ -1006,7 +1003,7 @@ export function OverlayPlayer() {
                                                     <RefreshCw className="h-7 w-7" />
                                                 ) : isBuffering &&
                                                   !isPlaying ? (
-                                                    <Loader2 className="h-7 w-7 animate-spin" />
+                                                    <Loader2 className="h-7 w-7 animate-spin motion-reduce:animate-none" />
                                                 ) : isPlaying ? (
                                                     <Pause className="h-7 w-7" />
                                                 ) : (
@@ -1030,14 +1027,14 @@ export function OverlayPlayer() {
                             "calc(env(safe-area-inset-bottom) + 10px)",
                     }}
                 >
-                    <div className="mx-auto flex w-full max-w-sm items-center justify-center gap-8 text-sm">
+                    <div className="mx-auto flex w-full max-w-sm items-center justify-center gap-[24px] text-sm">
                         <button
                             onClick={() => handleDrawerTabToggle("queue")}
                             className={cn(
-                                "border-b pb-0.5 font-medium transition-colors",
+                                "inline-flex min-h-11 min-w-11 items-center justify-center border-b px-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none",
                                 activeTab === "queue"
                                     ? "border-brand-hover text-brand-hover"
-                                    : "border-transparent text-gray-400 hover:text-white",
+                                    : "border-transparent text-content-muted hover:text-white",
                             )}
                         >
                             {ru.player.upNext}
@@ -1045,10 +1042,10 @@ export function OverlayPlayer() {
                         <button
                             onClick={() => handleDrawerTabToggle("lyrics")}
                             className={cn(
-                                "border-b pb-0.5 font-medium transition-colors",
+                                "inline-flex min-h-11 min-w-11 items-center justify-center border-b px-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none",
                                 activeTab === "lyrics"
                                     ? "border-brand-hover text-brand-hover"
-                                    : "border-transparent text-gray-400 hover:text-white",
+                                    : "border-transparent text-content-muted hover:text-white",
                             )}
                         >
                             {ru.player.lyrics}
@@ -1056,10 +1053,10 @@ export function OverlayPlayer() {
                         <button
                             onClick={() => handleDrawerTabToggle("related")}
                             className={cn(
-                                "border-b pb-0.5 font-medium transition-colors",
+                                "inline-flex min-h-11 min-w-11 items-center justify-center border-b px-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none",
                                 activeTab === "related"
                                     ? "border-brand-hover text-brand-hover"
-                                    : "border-transparent text-gray-400 hover:text-white",
+                                    : "border-transparent text-content-muted hover:text-white",
                             )}
                         >
                             {ru.player.related}
@@ -1103,10 +1100,10 @@ export function OverlayPlayer() {
                                     : { duration: shouldReduceMotion ? 0 : 0.2 }
                             }
                             className={cn(
-                                "absolute z-20",
+                                "absolute",
                                 isMobileOrTablet
-                                    ? "overlay-player-sheet inset-0 border-t border-white/[0.12] backdrop-blur-xl"
-                                    : "inset-y-0 right-0 w-[50%] min-w-[340px] py-24 pr-6",
+                                    ? "overlay-player-sheet inset-0 z-40 border-t border-white/[0.12] backdrop-blur-xl"
+                                    : "inset-y-0 right-0 z-20 w-[50%] min-w-[340px] py-24 pr-6",
                             )}
                         >
                             <div
@@ -1154,7 +1151,7 @@ export function OverlayPlayer() {
                                                     />
                                                 ) : (
                                                     <div className="flex h-full w-full items-center justify-center">
-                                                        <MusicIcon className="h-4 w-4 text-gray-400" />
+                                                        <MusicIcon className="h-4 w-4 text-content-muted" />
                                                     </div>
                                                 )}
                                             </div>
@@ -1163,7 +1160,7 @@ export function OverlayPlayer() {
                                                     {title}
                                                 </p>
                                                 <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                                                    <p className="min-w-0 truncate text-xs text-gray-400">
+                                                    <p className="min-w-0 truncate text-xs text-content-muted">
                                                         {subtitle}
                                                     </p>
                                                     {currentTrackQualityBadge?.variant ===
@@ -1179,9 +1176,9 @@ export function OverlayPlayer() {
                                                     handlePlayPause();
                                                 }}
                                                 className={cn(
-                                                    "flex h-9 w-9 items-center justify-center rounded-full transition-colors",
+                                                    "flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[10px] transition-colors motion-reduce:transition-none",
                                                     audioError
-                                                        ? "bg-red-500 text-white hover:bg-red-400"
+                                                        ? "bg-error text-content hover:brightness-110"
                                                         : "bg-white text-black hover:bg-white/90",
                                                 )}
                                                 aria-label={
@@ -1203,7 +1200,7 @@ export function OverlayPlayer() {
                                                     <RefreshCw className="h-4 w-4" />
                                                 ) : isBuffering &&
                                                   !isPlaying ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
                                                 ) : isPlaying ? (
                                                     <Pause className="h-4 w-4" />
                                                 ) : (
@@ -1225,18 +1222,18 @@ export function OverlayPlayer() {
                                             style={{ touchAction: "none" }}
                                             aria-label={ru.player.swipeClose}
                                         >
-                                            <div className="h-2 w-24 rounded-full bg-white/70 shadow-[0_0_16px_rgba(255,255,255,0.22)]" />
+                                            <div className="h-1 w-12 rounded-full bg-content-muted/50" />
                                         </div>
-                                        <div className="mx-auto flex w-full max-w-xs items-center justify-center gap-6 text-sm">
+                                        <div className="mx-auto flex w-full max-w-xs items-center justify-center gap-[16px] text-sm">
                                             <button
                                                 onClick={() =>
                                                     setActiveTab("queue")
                                                 }
                                                 className={cn(
-                                                    "border-b pb-0.5 font-medium transition-colors",
+                                                    "inline-flex min-h-11 min-w-11 items-center justify-center border-b px-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none",
                                                     activeTab === "queue"
                                                         ? "border-brand-hover text-brand-hover"
-                                                        : "border-transparent text-gray-400 hover:text-white",
+                                                        : "border-transparent text-content-muted hover:text-white",
                                                 )}
                                             >
                                                 {ru.player.upNext}
@@ -1246,10 +1243,10 @@ export function OverlayPlayer() {
                                                     setActiveTab("lyrics")
                                                 }
                                                 className={cn(
-                                                    "border-b pb-0.5 font-medium transition-colors",
+                                                    "inline-flex min-h-11 min-w-11 items-center justify-center border-b px-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none",
                                                     activeTab === "lyrics"
                                                         ? "border-brand-hover text-brand-hover"
-                                                        : "border-transparent text-gray-400 hover:text-white",
+                                                        : "border-transparent text-content-muted hover:text-white",
                                                 )}
                                             >
                                                 {ru.player.lyrics}
@@ -1259,10 +1256,10 @@ export function OverlayPlayer() {
                                                     setActiveTab("related")
                                                 }
                                                 className={cn(
-                                                    "border-b pb-0.5 font-medium transition-colors",
+                                                    "inline-flex min-h-11 min-w-11 items-center justify-center border-b px-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none",
                                                     activeTab === "related"
                                                         ? "border-brand-hover text-brand-hover"
-                                                        : "border-transparent text-gray-400 hover:text-white",
+                                                        : "border-transparent text-content-muted hover:text-white",
                                                 )}
                                             >
                                                 {ru.player.related}
@@ -1276,10 +1273,10 @@ export function OverlayPlayer() {
                                                 setActiveTab("queue")
                                             }
                                             className={cn(
-                                                "border-b pb-0.5 transition-colors",
+                                                "inline-flex min-h-11 min-w-11 items-center justify-center border-b px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none",
                                                 activeTab === "queue"
                                                     ? "border-brand-hover text-brand-hover"
-                                                    : "border-transparent text-gray-400 hover:text-white",
+                                                    : "border-transparent text-content-muted hover:text-white",
                                             )}
                                         >
                                             {ru.player.upNext}
@@ -1289,10 +1286,10 @@ export function OverlayPlayer() {
                                                 setActiveTab("lyrics")
                                             }
                                             className={cn(
-                                                "border-b pb-0.5 transition-colors",
+                                                "inline-flex min-h-11 min-w-11 items-center justify-center border-b px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none",
                                                 activeTab === "lyrics"
                                                     ? "border-brand-hover text-brand-hover"
-                                                    : "border-transparent text-gray-400 hover:text-white",
+                                                    : "border-transparent text-content-muted hover:text-white",
                                             )}
                                         >
                                             {ru.player.lyrics}
@@ -1302,10 +1299,10 @@ export function OverlayPlayer() {
                                                 setActiveTab("related")
                                             }
                                             className={cn(
-                                                "border-b pb-0.5 transition-colors",
+                                                "inline-flex min-h-11 min-w-11 items-center justify-center border-b px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none",
                                                 activeTab === "related"
                                                     ? "border-brand-hover text-brand-hover"
-                                                    : "border-transparent text-gray-400 hover:text-white",
+                                                    : "border-transparent text-content-muted hover:text-white",
                                             )}
                                         >
                                             {ru.player.related}

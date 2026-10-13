@@ -1832,3 +1832,30 @@ test("fresh playNow records a replacement while queue navigation does not", asyn
     state.commit();
     assert.ok(getCollectionPlaybackGeneration() > before);
 });
+
+test("central resume and playAudiobook revoke pending manual progress before state commit", async () => {
+    const { captureAudiobookProgressWrite } =
+        await import("../../lib/audiobookProgressWrites");
+    const book = {
+        id: "metadata-resume",
+        title: "Book",
+        author: "Author",
+        coverUrl: null,
+        duration: 30,
+    };
+    const state = createDeferredAudioState({
+        currentAudiobook: book,
+        playbackType: "audiobook",
+    });
+    const playback = createPlaybackStub({ currentTime: 11 });
+    const controls = await renderControls({ state, playback });
+    const reset = captureAudiobookProgressWrite(book.id, true);
+    controls.resume();
+    assert.equal(reset.isCurrent(), false);
+    const nextReset = captureAudiobookProgressWrite(book.id, true);
+    controls.playAudiobook(book);
+    assert.equal(nextReset.isCurrent(), false);
+    state.commit();
+    assert.equal(state.currentAudiobook, book);
+    assert.equal(state.playbackType, "audiobook");
+});

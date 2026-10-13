@@ -18,22 +18,15 @@ export function EmptyState({ hasSearched, isLoading }: EmptyStateProps) {
         <section
             data-search-welcome="true"
             aria-labelledby="search-welcome-title"
-            className="relative isolate flex min-h-[52vh] items-center justify-center overflow-hidden rounded-[1.75rem] border border-white/[0.08] bg-white/[0.025] px-6 py-16 text-center sm:min-h-[58vh] sm:px-10"
+            className="relative flex min-h-72 items-center justify-center px-4 py-12 text-center sm:min-h-80 sm:px-6"
         >
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/10 blur-3xl"
-            />
             <div className="relative max-w-xl">
-                <span className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-white/[0.05] text-brand-light shadow-lg shadow-black/20">
+                <span className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-[14px] bg-surface-active text-content-secondary">
                     <SearchIcon className="h-6 w-6" aria-hidden="true" />
                 </span>
-                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-content-muted">
-                    {ru.search.sourceEyebrow}
-                </p>
                 <h1
                     id="search-welcome-title"
-                    className="text-balance text-3xl font-black tracking-[-0.045em] text-content sm:text-5xl"
+                    className="text-balance text-2xl font-bold tracking-[-0.03em] text-content sm:text-4xl"
                 >
                     {ru.search.welcomeTitle}
                 </h1>

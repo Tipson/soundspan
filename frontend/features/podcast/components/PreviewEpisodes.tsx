@@ -24,7 +24,7 @@ export function PreviewEpisodes({
 }: PreviewEpisodesProps) {
     return (
         <section>
-            <h2 className="text-xl font-bold mb-4">
+            <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
                 {podcastRu.detail.latestEpisodes}
             </h2>
 
@@ -38,21 +38,21 @@ export function PreviewEpisodes({
                                 (episode, index) => (
                                     <div
                                         key={`${episode.publishedAt}-${episode.title}`}
-                                        className="flex items-center gap-4 px-3 py-3 rounded-md opacity-60 cursor-not-allowed"
+                                        className="flex min-h-16 items-center gap-3 rounded-[10px] px-3 py-3 text-content-secondary"
                                     >
                                         {/* Number */}
                                         <div className="w-8 flex items-center justify-center shrink-0">
-                                            <span className="text-sm text-white/40">
+                                            <span className="text-sm text-content-muted">
                                                 {index + 1}
                                             </span>
                                         </div>
 
                                         {/* Episode Info */}
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="font-medium truncate text-sm text-white">
+                                            <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere]">
                                                 {episode.title}
                                             </h3>
-                                            <div className="flex items-center gap-2 text-xs text-white/50">
+                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-content-secondary">
                                                 <span>
                                                     {formatDate(
                                                         episode.publishedAt,
@@ -80,7 +80,7 @@ export function PreviewEpisodes({
                             <button
                                 onClick={onSubscribe}
                                 disabled={isSubscribing}
-                                className="flex items-center gap-2 pointer-events-auto h-12 px-6 rounded-full bg-brand-hover hover:bg-brand-light hover:scale-105 transition-all font-semibold text-black disabled:opacity-50 shadow-xl"
+                                className="pointer-events-auto flex min-h-12 max-w-full items-center gap-2 rounded-[10px] bg-brand px-4 py-3 text-sm font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 motion-reduce:transition-none"
                             >
                                 {isSubscribing ? (
                                     <>
@@ -101,14 +101,14 @@ export function PreviewEpisodes({
                         </div>
                     </>
                 ) : (
-                    <div className="bg-white/5 rounded-md p-6 text-center">
-                        <p className="text-white/50 mb-4">
+                    <div className="rounded-[14px] bg-surface-raised p-6 text-center">
+                        <p className="text-content-secondary mb-4">
                             {podcastRu.detail.previewEmpty}
                         </p>
                         <button
                             onClick={onSubscribe}
                             disabled={isSubscribing}
-                            className="flex items-center gap-2 mx-auto h-12 px-6 rounded-full bg-brand-hover hover:bg-brand-light hover:scale-105 transition-all font-semibold text-black disabled:opacity-50"
+                            className="mx-auto flex min-h-12 items-center gap-2 rounded-[10px] bg-brand px-5 py-3 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 motion-reduce:transition-none"
                         >
                             {isSubscribing ? (
                                 <>
@@ -129,12 +129,12 @@ export function PreviewEpisodes({
             {/* About Section */}
             {previewData.description && (
                 <div className="mt-8">
-                    <h2 className="text-xl font-bold mb-4">
+                    <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
                         {podcastRu.detail.about}
                     </h2>
-                    <div className="bg-white/5 rounded-md p-4">
+                    <div className="rounded-[14px] bg-surface-raised p-4 sm:p-5">
                         <div
-                            className="prose prose-invert prose-sm max-w-none text-white/70 [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline"
+                            className="prose prose-invert prose-sm max-w-[70ch] text-content-secondary [overflow-wrap:anywhere] [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline"
                             dangerouslySetInnerHTML={{
                                 __html: DOMPurify.sanitize(
                                     previewData.description || "",

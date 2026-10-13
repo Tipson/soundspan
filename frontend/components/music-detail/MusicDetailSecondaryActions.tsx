@@ -21,7 +21,7 @@ export function MusicDetailSecondaryActions({
                 aria-expanded={open}
                 aria-label="Ещё действия"
                 onClick={() => setOpen(true)}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full px-3 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[10px] px-4 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
             >
                 Ещё
             </button>
@@ -31,7 +31,7 @@ export function MusicDetailSecondaryActions({
                         isOpen
                         onClose={() => setOpen(false)}
                         title="Действия"
-                        contentClassName="flex flex-col gap-1 [&_button]:min-h-11 [&_button]:h-auto [&_button]:w-full [&_button]:justify-start [&_button]:rounded-xl [&_button]:px-3 [&_button]:py-3 [&_button]:gap-3 [&_button]:text-left [&_svg]:shrink-0"
+                        contentClassName="flex flex-col gap-1 [&_button]:min-h-11 [&_button]:h-auto [&_button]:w-full [&_button]:justify-start [&_button]:rounded-[10px] [&_button]:px-3 [&_button]:py-3 [&_button]:gap-3 [&_button]:text-left [&_svg]:shrink-0"
                     >
                         <div
                             data-detail-action-tier="secondary"

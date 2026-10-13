@@ -49,10 +49,10 @@ export function RadioStationCard({
         <button
             onClick={handlePlayClick}
             disabled={isLoading}
-            className="group min-h-11 w-full cursor-pointer rounded-xl p-1.5 text-left transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-50 motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
+            className="group min-h-11 w-full cursor-pointer rounded-[var(--music-radius-card)] p-1.5 text-left transition-colors duration-150 hover:bg-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-50 motion-reduce:transition-none sm:p-2"
         >
             {/* Square cover art */}
-            <div className="relative mb-3 aspect-square overflow-hidden rounded-xl bg-surface-highlight shadow-lg shadow-black/20">
+            <div className="relative mb-3 aspect-square overflow-hidden rounded-[var(--music-radius-card)] bg-surface-highlight">
                 <RadioStationMosaic
                     filter={station.filter}
                     className="absolute inset-0"
@@ -71,10 +71,10 @@ export function RadioStationCard({
                 )}
             </div>
             {/* Title + description below art */}
-            <h3 className="truncate text-sm font-semibold text-content">
+            <h3 className="line-clamp-2 break-words text-sm font-semibold text-content">
                 {station.name}
             </h3>
-            <p className="mt-0.5 truncate text-xs text-content-muted">
+            <p className="mt-0.5 line-clamp-2 text-xs text-content-muted">
                 {station.description}
             </p>
         </button>

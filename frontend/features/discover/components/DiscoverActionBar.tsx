@@ -1,5 +1,6 @@
 "use client";
 import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
+import { MusicDetailSecondaryActions } from "@/components/music-detail/MusicDetailSecondaryActions";
 
 import { RefreshCw, Settings, Plus, Shuffle, ListMusic } from "lucide-react";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
@@ -76,9 +77,8 @@ export function DiscoverActionBar({
     };
 
     return (
-        <div className="rounded-2xl border border-line bg-surface-elevated p-2 sm:p-3">
-            <div className="flex flex-wrap items-center gap-2">
-                {/* Play Button */}
+        <div className="mt-5 mb-2">
+            <div className="flex min-h-14 items-center gap-2">
                 {playlist && playlist.tracks.length > 0 && (
                     <CollectionPlaybackButton
                         onClick={handlePlayToggle}
@@ -87,8 +87,6 @@ export function DiscoverActionBar({
                         isPlaying={isPlaylistPlaying && isPlaying}
                     />
                 )}
-
-                {/* Shuffle Button */}
                 {playlist && playlist.tracks.length > 0 && onShuffle && (
                     <Button
                         variant="icon"
@@ -97,89 +95,131 @@ export function DiscoverActionBar({
                         title={discoverRu.action.shuffleAll}
                         aria-label={discoverRu.action.shuffleAll}
                     >
-                        <Shuffle className="size-5" />
+                        <Shuffle className="size-5" aria-hidden="true" />
                     </Button>
                 )}
-
-                {/* Add to Queue Button */}
-                {playlist && playlist.tracks.length > 0 && onAddAllToQueue && (
-                    <Button
-                        variant="icon"
-                        onClick={onAddAllToQueue}
-                        disabled={isGenerating}
-                        title={discoverRu.action.addAllToQueue}
-                        aria-label={discoverRu.action.addAllToQueue}
-                    >
-                        <ListMusic className="size-5" />
-                    </Button>
-                )}
-
-                {/* Add to Playlist Button */}
-                {playlist && playlist.tracks.length > 0 && onAddToPlaylist && (
-                    <Button
-                        variant="icon"
-                        onClick={onAddToPlaylist}
-                        title={discoverRu.action.addAllToPlaylist}
-                        aria-label={discoverRu.action.addAllToPlaylist}
-                    >
-                        <Plus className="size-5" />
-                    </Button>
-                )}
-
-                {/* Regenerate Button (icon only) */}
-                {!onlineWeekly && (
-                    <Button
-                        variant="icon"
-                        onClick={onGenerate}
-                        disabled={isGenerating || !config?.enabled}
-                        title={
-                            isGenerating
-                                ? getStatusText() ||
-                                  discoverRu.action.generating
-                                : playlist
-                                  ? discoverRu.action.regenerate
-                                  : discoverRu.action.generate
-                        }
-                        aria-label={
-                            isGenerating
-                                ? getStatusText() ||
-                                  discoverRu.action.generating
-                                : playlist
-                                  ? discoverRu.action.regenerate
-                                  : discoverRu.action.generate
-                        }
-                    >
-                        {isGenerating ? (
-                            <GradientSpinner size="sm" />
-                        ) : (
-                            <RefreshCw className="size-5" />
-                        )}
-                    </Button>
-                )}
-
-                {isGenerating && !onlineWeekly && (
-                    <span
-                        aria-live="polite"
-                        className="min-w-0 flex-1 truncate px-1 text-xs font-medium text-content-muted"
-                    >
-                        {getStatusText()}
-                    </span>
-                )}
-
-                {/* Settings Button (far right) */}
-                {!onlineWeekly && (
-                    <Button
-                        variant="icon"
-                        onClick={onToggleSettings}
-                        disabled={isGenerating}
-                        className="ml-auto"
-                        title={discoverRu.action.settings}
-                        aria-label={discoverRu.action.settings}
-                    >
-                        <Settings className="size-5" />
-                    </Button>
-                )}
+                <MusicDetailSecondaryActions>
+                    {(close) => (
+                        <>
+                            {playlist &&
+                                playlist.tracks.length > 0 &&
+                                onAddAllToQueue && (
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => {
+                                            close();
+                                            onAddAllToQueue();
+                                        }}
+                                        disabled={isGenerating}
+                                        title={discoverRu.action.addAllToQueue}
+                                        aria-label={
+                                            discoverRu.action.addAllToQueue
+                                        }
+                                    >
+                                        <ListMusic
+                                            className="size-5"
+                                            aria-hidden="true"
+                                        />
+                                        {discoverRu.action.addAllToQueue}
+                                    </Button>
+                                )}
+                            {playlist &&
+                                playlist.tracks.length > 0 &&
+                                onAddToPlaylist && (
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => {
+                                            close();
+                                            onAddToPlaylist();
+                                        }}
+                                        title={
+                                            discoverRu.action.addAllToPlaylist
+                                        }
+                                        aria-label={
+                                            discoverRu.action.addAllToPlaylist
+                                        }
+                                    >
+                                        <Plus
+                                            className="size-5"
+                                            aria-hidden="true"
+                                        />
+                                        {discoverRu.action.addAllToPlaylist}
+                                    </Button>
+                                )}
+                            {!onlineWeekly && (
+                                <>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => {
+                                            close();
+                                            onGenerate();
+                                        }}
+                                        disabled={
+                                            isGenerating || !config?.enabled
+                                        }
+                                        title={
+                                            isGenerating
+                                                ? getStatusText() ||
+                                                  discoverRu.action.generating
+                                                : playlist
+                                                  ? discoverRu.action.regenerate
+                                                  : discoverRu.action.generate
+                                        }
+                                        aria-label={
+                                            isGenerating
+                                                ? getStatusText() ||
+                                                  discoverRu.action.generating
+                                                : playlist
+                                                  ? discoverRu.action.regenerate
+                                                  : discoverRu.action.generate
+                                        }
+                                    >
+                                        {isGenerating ? (
+                                            <GradientSpinner size="sm" />
+                                        ) : (
+                                            <RefreshCw
+                                                className="size-5"
+                                                aria-hidden="true"
+                                            />
+                                        )}
+                                        {isGenerating
+                                            ? getStatusText() ||
+                                              discoverRu.action.generating
+                                            : playlist
+                                              ? discoverRu.action.regenerate
+                                              : discoverRu.action.generate}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => {
+                                            close();
+                                            onToggleSettings();
+                                        }}
+                                        disabled={isGenerating}
+                                        title={discoverRu.action.settings}
+                                        aria-label={discoverRu.action.settings}
+                                    >
+                                        <Settings
+                                            className="size-5"
+                                            aria-hidden="true"
+                                        />
+                                        {discoverRu.action.settings}
+                                    </Button>
+                                </>
+                            )}
+                        </>
+                    )}
+                </MusicDetailSecondaryActions>
             </div>
+            {isGenerating && !onlineWeekly && (
+                <p
+                    role="status"
+                    aria-live="polite"
+                    className="mt-3 text-sm text-content-secondary"
+                >
+                    {getStatusText()}
+                </p>
+            )}
         </div>
     );
 }

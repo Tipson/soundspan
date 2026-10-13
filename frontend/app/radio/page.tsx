@@ -59,7 +59,7 @@ function SectionHeader({
 }) {
     return (
         <div className="mb-5 max-w-2xl">
-            <h2 className="text-2xl font-black tracking-[-0.03em] text-content sm:text-3xl">
+            <h2 className="text-xl font-semibold text-content sm:text-2xl">
                 {title}
             </h2>
             {description && (
@@ -131,7 +131,7 @@ export default function RadioPage() {
     return (
         <div
             data-consumer-surface="radio"
-            className="relative min-h-screen bg-surface"
+            className="relative min-h-full bg-surface"
         >
             <div
                 aria-hidden="true"
@@ -147,11 +147,11 @@ export default function RadioPage() {
                     title={radioRu.title}
                     subtitle={radioRu.subtitle}
                     icon={AudioLines}
-                    className="mb-8"
+                    className="mb-6"
                 />
 
                 {/* Quick Start Section */}
-                <section className="mb-12 border-t border-line pt-7">
+                <section className="mb-8 border-t border-line pt-6">
                     <SectionHeader
                         title={radioRu.quickStart}
                         description={radioRu.quickStartDescription}
@@ -165,7 +165,7 @@ export default function RadioPage() {
 
                 {/* Genres Section */}
                 {(isLoading || genreStations.length > 0) && (
-                    <section className="mb-12 border-t border-line pt-7">
+                    <section className="mb-8 border-t border-line pt-6">
                         <SectionHeader
                             title={radioRu.byGenre}
                             description={radioRu.byGenreDescription}
@@ -184,7 +184,7 @@ export default function RadioPage() {
 
                 {/* Decades Section - Only show if there are decade stations */}
                 {(isLoading || decadeStations.length > 0) && (
-                    <section className="mb-12 border-t border-line pt-7">
+                    <section className="mb-8 border-t border-line pt-6">
                         <SectionHeader
                             title={radioRu.byDecade}
                             description={radioRu.byDecadeDescription}

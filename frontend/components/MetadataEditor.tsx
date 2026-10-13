@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Edit, X, Save } from "lucide-react";
+import { useId, useState } from "react";
+import { Edit, Save } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { GradientSpinner } from "./ui/GradientSpinner";
@@ -9,6 +9,7 @@ import { MusicBrainzLookup } from "./ui/MusicBrainzLookup";
 import Image from "next/image";
 import { userFacingError } from "@/lib/i18n/ru";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface MetadataEditorProps {
@@ -87,6 +88,7 @@ export function MetadataEditor({
     artistName,
     onSave,
 }: MetadataEditorProps) {
+    const fieldId = useId();
     const [isOpen, setIsOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
@@ -108,6 +110,7 @@ export function MetadataEditor({
     };
 
     const handleClose = () => {
+        setShowResetConfirm(false);
         setIsOpen(false);
         setFormData(currentData);
         setFormError(null);
@@ -272,371 +275,372 @@ export function MetadataEditor({
             {/* Pencil Icon Button */}
             <button
                 onClick={handleOpen}
-                className="p-2 rounded-full bg-black/40 hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
+                type="button"
+                aria-label="Редактировать метаданные"
+                className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-line bg-surface-elevated text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 title="Редактировать метаданные"
             >
                 <Edit className="w-4 h-4 text-white" />
             </button>
 
-            {/* Modal */}
-            {isOpen && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-                    <div className="bg-surface-sunken rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                        {/* Header */}
-                        <div className="flex items-center justify-between p-6 border-b border-white/10">
-                            <h2 className="text-2xl font-bold text-white">
-                                Редактирование:{" "}
-                                {type === "artist"
-                                    ? "исполнитель"
-                                    : type === "album"
-                                      ? "альбом"
-                                      : "трек"}
-                            </h2>
+            <Modal
+                isOpen={isOpen}
+                onClose={handleClose}
+                title={`Редактирование: ${type === "artist" ? "исполнитель" : type === "album" ? "альбом" : "трек"}`}
+                className="max-w-2xl"
+                footerClassName="flex-col sm:flex-row sm:flex-wrap"
+                footer={
+                    <>
+                        {hasOverrides && (
                             <button
-                                onClick={handleClose}
-                                className="p-2 hover:bg-white/10 rounded-full transition-all"
+                                onClick={() => setShowResetConfirm(true)}
+                                disabled={isSaving || isResetting}
+                                className="min-h-11 px-4 py-2 rounded-[10px] bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold transition-all border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <X className="w-6 h-6 text-white" />
+                                {isResetting
+                                    ? "Восстанавливаем…"
+                                    : "Вернуть исходные"}
                             </button>
+                        )}
+                        <button
+                            onClick={handleClose}
+                            className="min-h-11 px-4 py-2 rounded-[10px] bg-white/10 hover:bg-white/20 text-white font-bold transition-all"
+                            disabled={isSaving}
+                        >
+                            Отмена
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="min-h-11 px-4 py-2 rounded-[10px] bg-brand-hover hover:bg-brand text-black font-bold transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isSaving ? (
+                                <>
+                                    <GradientSpinner size="sm" />
+                                    Сохраняем…
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="w-4 h-4" />
+                                    Сохранить изменения
+                                </>
+                            )}
+                        </button>
+                    </>
+                }
+            >
+                {/* Content */}
+                <div className="space-y-4">
+                    {formError && (
+                        <div
+                            role="alert"
+                            className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300"
+                        >
+                            {formError}
                         </div>
+                    )}
 
-                        {/* Content */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                            {formError && (
-                                <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
-                                    {formError}
-                                </div>
+                    {/* Name/Title */}
+                    <div>
+                        <label
+                            htmlFor={fieldId + "-name"}
+                            className="block text-sm font-bold text-white mb-2"
+                        >
+                            {type === "artist"
+                                ? "Имя исполнителя"
+                                : type === "album"
+                                  ? "Название альбома"
+                                  : "Название трека"}
+                        </label>
+                        <input
+                            id={fieldId + "-name"}
+                            type="text"
+                            value={formData.name || formData.title || ""}
+                            onChange={(e) =>
+                                handleChange(
+                                    type === "artist" ? "name" : "title",
+                                    e.target.value,
+                                )
+                            }
+                            className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none"
+                        />
+                        {type === "artist" &&
+                            currentData._originalName &&
+                            currentData._originalName !==
+                                (formData.name || "") && (
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Исходное значение:{" "}
+                                    {currentData._originalName}
+                                </p>
                             )}
+                        {type !== "artist" &&
+                            currentData._originalTitle &&
+                            currentData._originalTitle !==
+                                (formData.title || "") && (
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Исходное значение:{" "}
+                                    {currentData._originalTitle}
+                                </p>
+                            )}
+                    </div>
 
-                            {/* Name/Title */}
-                            <div>
-                                <label className="block text-sm font-bold text-white mb-2">
-                                    {type === "artist"
-                                        ? "Имя исполнителя"
-                                        : type === "album"
-                                          ? "Название альбома"
-                                          : "Название трека"}
-                                </label>
-                                <input
-                                    type="text"
-                                    value={
-                                        formData.name || formData.title || ""
-                                    }
-                                    onChange={(e) =>
-                                        handleChange(
-                                            type === "artist"
-                                                ? "name"
-                                                : "title",
-                                            e.target.value,
-                                        )
-                                    }
-                                    className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none"
-                                />
-                                {type === "artist" &&
-                                    currentData._originalName &&
-                                    currentData._originalName !==
-                                        (formData.name || "") && (
-                                        <p className="mt-1 text-xs text-gray-400">
-                                            Исходное значение:{" "}
-                                            {currentData._originalName}
-                                        </p>
-                                    )}
-                                {type !== "artist" &&
-                                    currentData._originalTitle &&
-                                    currentData._originalTitle !==
-                                        (formData.title || "") && (
-                                        <p className="mt-1 text-xs text-gray-400">
-                                            Исходное значение:{" "}
-                                            {currentData._originalTitle}
-                                        </p>
-                                    )}
-                            </div>
-
-                            {/* Bio (Artist only) */}
-                            {type === "artist" && (
-                                <div>
-                                    <label className="block text-sm font-bold text-white mb-2">
-                                        Биография
-                                    </label>
-                                    <textarea
-                                        value={formData.bio || ""}
-                                        onChange={(e) =>
-                                            handleChange("bio", e.target.value)
-                                        }
-                                        rows={6}
-                                        className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none resize-none"
-                                    />
-                                    {currentData._originalBio &&
-                                        currentData._originalBio !==
-                                            (formData.bio || "") && (
-                                            <p className="mt-1 text-xs text-gray-400">
-                                                Исходное значение:{" "}
-                                                {currentData._originalBio.substring(
-                                                    0,
-                                                    100,
-                                                )}
-                                                ...
-                                            </p>
+                    {/* Bio (Artist only) */}
+                    {type === "artist" && (
+                        <div>
+                            <label
+                                htmlFor={fieldId + "-bio"}
+                                className="block text-sm font-bold text-white mb-2"
+                            >
+                                Биография
+                            </label>
+                            <textarea
+                                id={fieldId + "-bio"}
+                                value={formData.bio || ""}
+                                onChange={(e) =>
+                                    handleChange("bio", e.target.value)
+                                }
+                                rows={6}
+                                className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none resize-none"
+                            />
+                            {currentData._originalBio &&
+                                currentData._originalBio !==
+                                    (formData.bio || "") && (
+                                    <p className="mt-1 text-xs text-gray-400">
+                                        Исходное значение:{" "}
+                                        {currentData._originalBio.substring(
+                                            0,
+                                            100,
                                         )}
-                                </div>
-                            )}
-
-                            {/* Year (Album only) */}
-                            {type === "album" && (
-                                <div>
-                                    <label className="block text-sm font-bold text-white mb-2">
-                                        Год выпуска
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={formData.year || ""}
-                                        onChange={(e) =>
-                                            handleChange(
-                                                "year",
-                                                parseInt(e.target.value),
-                                            )
-                                        }
-                                        className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none"
-                                    />
-                                    {currentData._originalYear &&
-                                        currentData._originalYear !==
-                                            (formData.year || null) && (
-                                            <p className="mt-1 text-xs text-gray-400">
-                                                Исходное значение:{" "}
-                                                {currentData._originalYear}
-                                            </p>
-                                        )}
-                                </div>
-                            )}
-
-                            {/* Genres */}
-                            <div>
-                                <label className="block text-sm font-bold text-white mb-2">
-                                    Жанры
-                                    <span className="text-xs text-gray-400 ml-2">
-                                        (через запятую)
-                                    </span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.genres?.join(", ") || ""}
-                                    onChange={(e) =>
-                                        handleChange(
-                                            "genres",
-                                            e.target.value
-                                                .split(",")
-                                                .map((g) => g.trim())
-                                                .filter(Boolean),
-                                        )
-                                    }
-                                    placeholder="Рок, альтернатива, инди"
-                                    className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none"
-                                />
-                                {currentData._originalGenres &&
-                                    currentData._originalGenres.length > 0 &&
-                                    JSON.stringify(
-                                        currentData._originalGenres.sort(),
-                                    ) !==
-                                        JSON.stringify(
-                                            (formData.genres || []).sort(),
-                                        ) && (
-                                        <p className="mt-1 text-xs text-gray-400">
-                                            Исходное значение:{" "}
-                                            {currentData._originalGenres.join(
-                                                ", ",
-                                            )}
-                                        </p>
-                                    )}
-                            </div>
-
-                            {/* MusicBrainz ID */}
-                            <div>
-                                <label className="block text-sm font-bold text-white mb-2">
-                                    {type === "album"
-                                        ? "MBID группы релизов"
-                                        : "MusicBrainz ID"}
-                                    <span className="text-xs text-gray-400 ml-2">
-                                        (оставьте пустым для автопоиска)
-                                    </span>
-                                </label>
-                                {type === "track" ? (
-                                    <input
-                                        type="text"
-                                        value={formData.mbid || ""}
-                                        onChange={(e) =>
-                                            handleChange("mbid", e.target.value)
-                                        }
-                                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                                        className={`w-full px-4 py-2 bg-surface-elevated border rounded text-white focus:outline-none font-mono text-sm ${
-                                            mbidFieldError
-                                                ? "border-red-500/60 focus:border-red-500"
-                                                : "border-white/10 focus:border-white/30"
-                                        }`}
-                                    />
-                                ) : (
-                                    <div
-                                        className={
-                                            mbidFieldError
-                                                ? "rounded border border-red-500/40 bg-red-500/5 p-3"
-                                                : undefined
-                                        }
-                                    >
-                                        <MusicBrainzLookup
-                                            type={
-                                                type === "album"
-                                                    ? "album"
-                                                    : "artist"
-                                            }
-                                            currentValue={
-                                                type === "artist"
-                                                    ? formData.mbid || ""
-                                                    : formData.rgMbid || ""
-                                            }
-                                            currentName={
-                                                formData.name || formData.title
-                                            }
-                                            artistName={artistName}
-                                            onSelect={(mbid) =>
-                                                handleChange(
-                                                    type === "artist"
-                                                        ? "mbid"
-                                                        : "rgMbid",
-                                                    mbid,
-                                                )
-                                            }
-                                        />
-                                    </div>
-                                )}
-                                {mbidFieldError && (
-                                    <p className="mt-2 text-xs text-red-300">
-                                        {mbidFieldError}
+                                        ...
                                     </p>
                                 )}
-                            </div>
+                        </div>
+                    )}
 
-                            {/* Image URL */}
-                            <div>
-                                <label className="block text-sm font-bold text-white mb-2">
-                                    {type === "artist"
-                                        ? "Ссылка на изображение исполнителя"
-                                        : "Ссылка на обложку"}
-                                    <span className="text-xs text-gray-400 ml-2">
-                                        (оставьте пустым для автопоиска)
-                                    </span>
-                                </label>
-                                <input
-                                    type="url"
-                                    value={
+                    {/* Year (Album only) */}
+                    {type === "album" && (
+                        <div>
+                            <label
+                                htmlFor={fieldId + "-year"}
+                                className="block text-sm font-bold text-white mb-2"
+                            >
+                                Год выпуска
+                            </label>
+                            <input
+                                id={fieldId + "-year"}
+                                type="number"
+                                value={formData.year || ""}
+                                onChange={(e) =>
+                                    handleChange(
+                                        "year",
+                                        parseInt(e.target.value),
+                                    )
+                                }
+                                className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none"
+                            />
+                            {currentData._originalYear &&
+                                currentData._originalYear !==
+                                    (formData.year || null) && (
+                                    <p className="mt-1 text-xs text-gray-400">
+                                        Исходное значение:{" "}
+                                        {currentData._originalYear}
+                                    </p>
+                                )}
+                        </div>
+                    )}
+
+                    {/* Genres */}
+                    <div>
+                        <label
+                            htmlFor={fieldId + "-genres"}
+                            className="block text-sm font-bold text-white mb-2"
+                        >
+                            Жанры
+                            <span className="text-xs text-gray-400 ml-2">
+                                (через запятую)
+                            </span>
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.genres?.join(", ") || ""}
+                            onChange={(e) =>
+                                handleChange(
+                                    "genres",
+                                    e.target.value
+                                        .split(",")
+                                        .map((g) => g.trim())
+                                        .filter(Boolean),
+                                )
+                            }
+                            id={fieldId + "-genres"}
+                            placeholder="Рок, альтернатива, инди"
+                            className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none"
+                        />
+                        {currentData._originalGenres &&
+                            currentData._originalGenres.length > 0 &&
+                            JSON.stringify(
+                                [...currentData._originalGenres].sort(),
+                            ) !==
+                                JSON.stringify(
+                                    [...(formData.genres || [])].sort(),
+                                ) && (
+                                <p className="mt-1 text-xs text-gray-400">
+                                    Исходное значение:{" "}
+                                    {currentData._originalGenres.join(", ")}
+                                </p>
+                            )}
+                    </div>
+
+                    {/* MusicBrainz ID */}
+                    <div>
+                        <label
+                            htmlFor={fieldId + "-mbid"}
+                            className="block text-sm font-bold text-white mb-2"
+                        >
+                            {type === "album"
+                                ? "MBID группы релизов"
+                                : "MusicBrainz ID"}
+                            <span className="text-xs text-gray-400 ml-2">
+                                (оставьте пустым для автопоиска)
+                            </span>
+                        </label>
+                        {type === "track" ? (
+                            <input
+                                type="text"
+                                value={formData.mbid || ""}
+                                onChange={(e) =>
+                                    handleChange("mbid", e.target.value)
+                                }
+                                id={fieldId + "-mbid"}
+                                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                className={`w-full px-4 py-2 bg-surface-elevated border rounded text-white focus:outline-none font-mono text-sm ${
+                                    mbidFieldError
+                                        ? "border-red-500/60 focus:border-red-500"
+                                        : "border-white/10 focus:border-white/30"
+                                }`}
+                            />
+                        ) : (
+                            <div
+                                className={
+                                    mbidFieldError
+                                        ? "rounded border border-red-500/40 bg-red-500/5 p-3"
+                                        : undefined
+                                }
+                            >
+                                <MusicBrainzLookup
+                                    inputId={fieldId + "-mbid"}
+                                    type={type === "album" ? "album" : "artist"}
+                                    currentValue={
                                         type === "artist"
-                                            ? formData.heroUrl || ""
-                                            : formData.coverUrl || ""
+                                            ? formData.mbid || ""
+                                            : formData.rgMbid || ""
                                     }
-                                    onChange={(e) =>
+                                    currentName={
+                                        formData.name || formData.title
+                                    }
+                                    artistName={artistName}
+                                    onSelect={(mbid) =>
                                         handleChange(
                                             type === "artist"
-                                                ? "heroUrl"
-                                                : "coverUrl",
-                                            e.target.value,
+                                                ? "mbid"
+                                                : "rgMbid",
+                                            mbid,
                                         )
                                     }
-                                    placeholder="https://..."
-                                    className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none text-sm"
                                 />
-                                {type === "artist" &&
-                                    currentData._originalHeroUrl &&
-                                    currentData._originalHeroUrl !==
-                                        (formData.heroUrl || "") && (
-                                        <p className="mt-1 text-xs text-gray-400 truncate">
-                                            Исходное значение:{" "}
-                                            {currentData._originalHeroUrl}
-                                        </p>
-                                    )}
-                                {type === "album" &&
-                                    currentData._originalCoverUrl &&
-                                    currentData._originalCoverUrl !==
-                                        (formData.coverUrl || "") && (
-                                        <p className="mt-1 text-xs text-gray-400 truncate">
-                                            Исходное значение:{" "}
-                                            {currentData._originalCoverUrl}
-                                        </p>
-                                    )}
-                                {/* Image Preview */}
-                                {previewImageUrl && (
-                                    <div className="mt-2">
-                                        <Image
-                                            src={previewImageUrl}
-                                            alt="Предпросмотр изображения"
-                                            width={128}
-                                            height={128}
-                                            sizes="128px"
-                                            className="w-32 h-32 object-cover rounded"
-                                            unoptimized
-                                        />
-                                    </div>
-                                )}
                             </div>
+                        )}
+                        {mbidFieldError && (
+                            <p className="mt-2 text-xs text-red-300">
+                                {mbidFieldError}
+                            </p>
+                        )}
+                    </div>
 
-                            {/* Manual Override Warning */}
-                            <div className="bg-yellow-600/10 border border-yellow-600/20 rounded p-4">
-                                <p className="text-sm text-yellow-400">
-                                    <strong>Важно:</strong> Изменённые вручную
-                                    метаданные не будут перезаписаны при
-                                    автоматическом дополнении.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Footer */}
-                        <div className="flex items-center justify-end gap-3 p-6 border-t border-white/10">
-                            {hasOverrides && (
-                                <button
-                                    onClick={() => setShowResetConfirm(true)}
-                                    disabled={isSaving || isResetting}
-                                    className="px-6 py-2 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold transition-all border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isResetting
-                                        ? "Восстанавливаем…"
-                                        : "Вернуть исходные"}
-                                </button>
-                            )}
-                            <button
-                                onClick={handleClose}
-                                className="px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all"
-                                disabled={isSaving}
-                            >
-                                Отмена
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={isSaving}
-                                className="px-6 py-2 rounded-full bg-brand-hover hover:bg-brand text-black font-bold transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isSaving ? (
-                                    <>
-                                        <GradientSpinner size="sm" />
-                                        Сохраняем…
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-4 h-4" />
-                                        Сохранить изменения
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                        <ConfirmDialog
-                            isOpen={showResetConfirm}
-                            onClose={() => setShowResetConfirm(false)}
-                            onConfirm={confirmReset}
-                            title="Восстановить метаданные?"
-                            message="Вернуть все исходные значения? Это действие нельзя отменить."
-                            confirmText="Восстановить"
-                            cancelText="Отмена"
-                            variant="danger"
+                    {/* Image URL */}
+                    <div>
+                        <label
+                            htmlFor={fieldId + "-image"}
+                            className="block text-sm font-bold text-white mb-2"
+                        >
+                            {type === "artist"
+                                ? "Ссылка на изображение исполнителя"
+                                : "Ссылка на обложку"}
+                            <span className="text-xs text-gray-400 ml-2">
+                                (оставьте пустым для автопоиска)
+                            </span>
+                        </label>
+                        <input
+                            id={fieldId + "-image"}
+                            type="url"
+                            value={
+                                type === "artist"
+                                    ? formData.heroUrl || ""
+                                    : formData.coverUrl || ""
+                            }
+                            onChange={(e) =>
+                                handleChange(
+                                    type === "artist" ? "heroUrl" : "coverUrl",
+                                    e.target.value,
+                                )
+                            }
+                            placeholder="https://..."
+                            className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none text-sm"
                         />
+                        {type === "artist" &&
+                            currentData._originalHeroUrl &&
+                            currentData._originalHeroUrl !==
+                                (formData.heroUrl || "") && (
+                                <p className="mt-1 text-xs text-gray-400 truncate">
+                                    Исходное значение:{" "}
+                                    {currentData._originalHeroUrl}
+                                </p>
+                            )}
+                        {type === "album" &&
+                            currentData._originalCoverUrl &&
+                            currentData._originalCoverUrl !==
+                                (formData.coverUrl || "") && (
+                                <p className="mt-1 text-xs text-gray-400 truncate">
+                                    Исходное значение:{" "}
+                                    {currentData._originalCoverUrl}
+                                </p>
+                            )}
+                        {/* Image Preview */}
+                        {previewImageUrl && (
+                            <div className="mt-2">
+                                <Image
+                                    src={previewImageUrl}
+                                    alt="Предпросмотр изображения"
+                                    width={128}
+                                    height={128}
+                                    sizes="128px"
+                                    className="w-32 h-32 object-cover rounded"
+                                    unoptimized
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Manual Override Warning */}
+                    <div className="bg-yellow-600/10 border border-yellow-600/20 rounded p-4">
+                        <p className="text-sm text-yellow-400">
+                            <strong>Важно:</strong> Изменённые вручную
+                            метаданные не будут перезаписаны при автоматическом
+                            дополнении.
+                        </p>
                     </div>
                 </div>
-            )}
+            </Modal>
+            <ConfirmDialog
+                isOpen={showResetConfirm}
+                onClose={() => setShowResetConfirm(false)}
+                onConfirm={confirmReset}
+                title="Восстановить метаданные?"
+                message="Вернуть все исходные значения? Это действие нельзя отменить."
+                confirmText="Восстановить"
+                cancelText="Отмена"
+                variant="danger"
+            />
         </>
     );
 }

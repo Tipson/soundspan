@@ -41,12 +41,12 @@ export function AudiobookActionBar({
     };
 
     return (
-        <div className="flex items-center gap-4">
-            {/* Play/Pause Button - Yellow like other pages */}
+        <div className="flex min-h-14 flex-wrap items-center gap-3">
+            {/* Primary playback action */}
             {onPlayPause && (
                 <button
                     onClick={handlePlayPauseClick}
-                    className="w-14 h-14 rounded-full bg-brand-hover hover:bg-brand-light hover:scale-105 transition-all flex items-center justify-center shadow-lg"
+                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand text-surface shadow-[0_8px_24px_rgb(0_0_0/0.2)] transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none"
                     title={
                         showingPause
                             ? "Пауза"
@@ -56,14 +56,11 @@ export function AudiobookActionBar({
                     }
                 >
                     {showSpinner ? (
-                        <Loader2 className="w-6 h-6 text-black animate-spin" />
+                        <Loader2 className="h-6 w-6 animate-spin" />
                     ) : showingPause ? (
-                        <Pause className="w-6 h-6 text-black" />
+                        <Pause className="h-6 w-6" />
                     ) : (
-                        <Play
-                            className="w-6 h-6 text-black ml-1"
-                            fill="black"
-                        />
+                        <Play className="ml-1 h-6 w-6" fill="currentColor" />
                     )}
                 </button>
             )}
@@ -72,19 +69,19 @@ export function AudiobookActionBar({
             {hasProgress && !isFinished && (
                 <div className="hidden sm:flex items-center gap-3">
                     <div className="text-sm">
-                        <span className="text-white/60">
+                        <span className="text-content-secondary">
                             {formatTime(
                                 isThisBookPlaying
                                     ? currentTime
                                     : (progress?.currentTime ?? 0),
                             )}
                         </span>
-                        <span className="text-white/40 mx-1">/</span>
-                        <span className="text-white/60">
+                        <span className="mx-1 text-content-muted">/</span>
+                        <span className="text-content-secondary">
                             {formatTime(audiobook.duration)}
                         </span>
                     </div>
-                    <div className="w-24 h-1 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-1 w-24 overflow-hidden rounded-full bg-surface-highlight">
                         <div
                             className="h-full bg-brand rounded-full transition-all"
                             style={{
@@ -104,14 +101,14 @@ export function AudiobookActionBar({
                     <>
                         <button
                             onClick={onResetProgress}
-                            className="p-2.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-all"
+                            className="flex h-11 w-11 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                             title="Сбросить прогресс"
                         >
                             <RotateCcw className="w-5 h-5" />
                         </button>
                         <button
                             onClick={onMarkAsCompleted}
-                            className="p-2.5 rounded-full text-green-400/80 hover:text-green-400 hover:bg-green-500/10 transition-all"
+                            className="flex h-11 w-11 items-center justify-center rounded-[10px] text-success transition-colors hover:bg-success/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                             title="Отметить как прослушанную"
                         >
                             <CheckCircle className="w-5 h-5" />
@@ -122,7 +119,7 @@ export function AudiobookActionBar({
                 {isFinished && (
                     <button
                         onClick={onResetProgress}
-                        className="px-4 py-2 rounded-full text-sm font-medium bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all flex items-center gap-2"
+                        className="flex min-h-11 items-center gap-2 rounded-[10px] bg-surface-raised px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                         title="Слушать снова"
                     >
                         <RotateCcw className="w-4 h-4" />

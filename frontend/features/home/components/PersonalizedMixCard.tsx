@@ -22,9 +22,9 @@ interface PersonalizedMixCardProps {
 }
 
 const toneClasses: Record<PersonalizedMixCardProps["tone"], string> = {
-    violet: "from-brand/45 via-ai/20 to-surface-highlight",
-    blue: "from-info/40 via-brand/15 to-surface-highlight",
-    amber: "from-warning/35 via-brand/10 to-surface-highlight",
+    violet: "from-brand/20 to-surface-highlight",
+    blue: "from-info/15 to-surface-highlight",
+    amber: "from-warning/15 to-surface-highlight",
 };
 
 /** A playable, account-specific collection card backed by a real feed shelf. */
@@ -81,10 +81,10 @@ export function PersonalizedMixCard({
             aria-label={`${ru.common.play}: ${title}`}
             data-tv-card
             data-tv-card-index={index}
-            className="group block w-full min-w-0 rounded-[1.125rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
+            className="group block w-full min-w-0 rounded-[14px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
         >
             <span
-                className={`relative mb-3 grid aspect-square overflow-hidden rounded-[1.125rem] bg-gradient-to-br ${toneClasses[tone]} shadow-lg shadow-black/25`}
+                className={`relative mb-2 grid aspect-square overflow-hidden rounded-[14px] bg-gradient-to-br ${toneClasses[tone]}`}
             >
                 {coverTracks.length > 0 ? (
                     <span className="absolute inset-0 grid grid-cols-2 grid-rows-2">
@@ -126,10 +126,10 @@ export function PersonalizedMixCard({
                     />
                 </span>
             </span>
-            <span className="block truncate text-sm font-bold text-content sm:text-[0.9375rem]">
+            <span className="block line-clamp-2 text-sm font-semibold leading-5 text-content sm:text-[0.9375rem]">
                 {title}
             </span>
-            <span className="mt-1 block text-xs leading-5 text-content-muted">
+            <span className="mt-1 block line-clamp-2 text-xs leading-5 text-content-muted">
                 {tracks.length}{" "}
                 {pluralRu(tracks.length, ["трек", "трека", "треков"])} ·{" "}
                 {description}

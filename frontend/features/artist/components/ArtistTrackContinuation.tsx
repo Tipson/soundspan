@@ -50,7 +50,7 @@ export function ArtistTrackContinuation({
                     if (provider) void provider.loadMore();
                 }}
                 disabled={isFetching}
-                className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition duration-200 hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
+                className="min-h-11 rounded-[10px] border border-line bg-surface-elevated px-5 text-sm font-semibold text-white transition duration-200 hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
             >
                 {isFetching ? artistRu.loadingTracks : "Показать ещё треки"}
             </button>

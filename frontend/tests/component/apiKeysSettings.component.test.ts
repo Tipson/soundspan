@@ -167,6 +167,21 @@ test("lists API-key expiry dates with expired and expiring-soon states", async (
     assert.match(text, new RegExp(formatDate(expiringSoon)));
 });
 
+test("closing the API key dialog returns keyboard focus to its create action", async (t) => {
+    const harness = await mountApiKeysSection();
+    t.after(harness.unmount);
+    const opener = findButton("Создать ключ API");
+    await React.act(async () => opener.focus());
+    await click(opener);
+    assert.ok(document.querySelector('[role="dialog"]'));
+    await click(findButton("Отмена"));
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    assert.ok(
+        document.activeElement === opener,
+        "Create action must regain focus after closing its dialog",
+    );
+});
+
 test("shows the interactive-session message when API-key creation is forbidden", async (t) => {
     createFailure = new Error("Interactive session authentication required");
     const harness = await mountApiKeysSection();

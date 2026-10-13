@@ -51,9 +51,9 @@ export function YouTubeMusicAdminSection({
             title="YouTube Music"
             description={adminActivityRu.admin.youtubeMusic.adminDescription}
         >
-            <div className="mx-4 mt-3 mb-1 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+            <div className="mt-3 mb-3 flex items-start gap-3 rounded-[10px] border border-warning/25 bg-warning/10 p-4">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-200/80">
+                <p className="text-sm leading-5 text-content-secondary">
                     {adminActivityRu.admin.youtubeMusic.legal}
                 </p>
             </div>
@@ -70,10 +70,12 @@ export function YouTubeMusicAdminSection({
             </SettingsRow>
 
             {settings.ytMusicEnabled && (
-                <div className="mx-4 mb-2">
+                <div className="mb-2">
                     <button
                         onClick={() => setOauthExpanded(!oauthExpanded)}
-                        className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-200 transition-colors py-2"
+                        aria-expanded={oauthExpanded}
+                        aria-controls="youtube-account-linking-fields"
+                        className="flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                     >
                         {oauthExpanded ? (
                             <ChevronDown className="w-4 h-4" />
@@ -84,14 +86,14 @@ export function YouTubeMusicAdminSection({
                             {adminActivityRu.admin.youtubeMusic.accountLinking}
                         </span>
                     </button>
-                    <p className="text-xs text-gray-400 ml-6 mb-2">
+                    <p className="text-sm leading-5 text-content-muted mb-2">
                         {
                             adminActivityRu.admin.youtubeMusic
                                 .accountLinkingDescription
                         }
                     </p>
                     {oauthExpanded && (
-                        <>
+                        <div id="youtube-account-linking-fields">
                             <SettingsRow
                                 label="Идентификатор клиента"
                                 description={
@@ -125,7 +127,7 @@ export function YouTubeMusicAdminSection({
                                         adminActivityRu.admin.youtubeMusic
                                             .clientIdPlaceholder
                                     }
-                                    className="w-64"
+                                    className="w-full sm:w-64"
                                 />
                             </SettingsRow>
 
@@ -146,10 +148,10 @@ export function YouTubeMusicAdminSection({
                                         adminActivityRu.admin.youtubeMusic
                                             .clientSecretPlaceholder
                                     }
-                                    className="w-64"
+                                    className="w-full sm:w-64"
                                 />
                             </SettingsRow>
-                        </>
+                        </div>
                     )}
                 </div>
             )}

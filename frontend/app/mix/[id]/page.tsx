@@ -92,13 +92,13 @@ export default function MixPage() {
 
     if (!autoPlaylists) {
         return (
-            <main className="flex min-h-screen items-center justify-center bg-surface px-4">
+            <div className="flex min-h-screen items-center justify-center bg-surface px-4">
                 <EmptyState
                     icon={<Music className="h-7 w-7" aria-hidden="true" />}
                     title={mixRu.unavailable}
                     description={mixRu.disabled}
                 />
-            </main>
+            </div>
         );
     }
 
@@ -210,7 +210,7 @@ function MixPageContent() {
 
     if (!mix) {
         return (
-            <main
+            <div
                 role="alert"
                 className="flex min-h-screen items-center justify-center bg-surface px-4"
             >
@@ -224,7 +224,7 @@ function MixPageContent() {
                         variant: "secondary",
                     }}
                 />
-            </main>
+            </div>
         );
     }
 
@@ -316,7 +316,7 @@ function MixPageContent() {
                 }
             />
 
-            <main className="mx-auto max-w-[1800px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+            <div className="mx-auto max-w-[1800px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
                 {tracks.length > 0 ? (
                     <MusicDetailTrackSurface label={`${mix.name}: треки`}>
                         <TrackList<MixTrack>
@@ -355,7 +355,7 @@ function MixPageContent() {
                         description={mixRu.empty}
                     />
                 )}
-            </main>
+            </div>
         </div>
     );
 }

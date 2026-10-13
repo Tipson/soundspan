@@ -27,10 +27,10 @@ export function SettingsSection({
             id={id}
             data-settings-section="true"
             aria-labelledby={titleId}
-            className="settings-section-card scroll-mt-40 border border-line bg-surface-raised/45 shadow-xl shadow-black/10"
+            className="settings-section-card min-w-0 scroll-mt-40 rounded-[14px] border border-line bg-surface-raised"
         >
             <div className="mb-5 md:mb-6">
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <h2
                         id={titleId}
                         className="text-lg font-semibold tracking-[-0.02em] text-content md:text-xl"
@@ -48,9 +48,7 @@ export function SettingsSection({
 
             <div className="space-y-1">{children}</div>
 
-            {showSeparator && (
-                <div className="mt-6 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent md:hidden" />
-            )}
+            {showSeparator && <div className="mt-5 h-px bg-line md:hidden" />}
         </section>
     );
 }

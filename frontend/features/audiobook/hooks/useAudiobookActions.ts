@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo, useRef, useLayoutEffect } from "react";
 import {
     useAudioControls,
     useAudioState,
@@ -11,6 +11,15 @@ import { useToast } from "@/lib/toast-context";
 import { api } from "@/lib/api";
 import type { Audiobook } from "../types";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+
+import {
+    captureAudiobookProgressWrite,
+    type AudiobookProgressWrite,
+} from "@/lib/audiobookProgressWrites";
+import {
+    getAuthRuntimeGeneration,
+    isCurrentAuthRuntime,
+} from "@/lib/auth-runtime-generation";
 
 /**
  * Executes useAudiobookActions.
@@ -28,6 +37,41 @@ export function useAudiobookActions(
         useAudioControls();
     const { setCurrentAudiobook, setPlaybackType } = useAudioState();
     const { toast } = useToast();
+    const authGeneration = getAuthRuntimeGeneration();
+    const owner = useMemo(
+        () => ({
+            audiobookId,
+            id: currentAudiobook?.id,
+            playbackType,
+            authGeneration,
+        }),
+        [audiobookId, currentAudiobook?.id, playbackType, authGeneration],
+    );
+    const currentOwner = useRef<object | null>(owner);
+    useLayoutEffect(() => {
+        currentOwner.current = owner;
+        return () => {
+            if (currentOwner.current === owner) currentOwner.current = null;
+        };
+    }, [owner]);
+
+    const pendingResetCleanup = useRef<AudiobookProgressWrite | null>(null);
+    useLayoutEffect(() => {
+        const intent = pendingResetCleanup.current;
+        if (!intent) return;
+        pendingResetCleanup.current = null;
+        // Observe the committed selection before clearing its type or clock.
+        // Another selection may have been queued before the reset response.
+        if (
+            intent.isCurrent() &&
+            !currentAudiobook &&
+            playbackType === "audiobook" &&
+            !isPlaying
+        ) {
+            setPlaybackType(null);
+            updateCurrentTime(0);
+        }
+    });
 
     const isThisBookPlaying =
         currentAudiobook?.id === audiobookId && playbackType === "audiobook";
@@ -56,7 +100,13 @@ export function useAudiobookActions(
     ]);
 
     const handleMarkAsCompleted = useCallback(async () => {
-        if (!audiobook) return;
+        if (
+            !audiobook ||
+            !isCurrentAuthRuntime(authGeneration) ||
+            currentOwner.current !== owner
+        )
+            return;
+        const intent = captureAudiobookProgressWrite(audiobookId, true);
 
         try {
             const isCurrentlyPlaying =
@@ -67,30 +117,48 @@ export function useAudiobookActions(
                 pause();
             }
 
-            await api.updateAudiobookProgress(
-                audiobookId,
-                audiobook.duration || 0,
-                audiobook.duration || 0,
-                true,
+            const saved = await intent.run(() =>
+                api.updateAudiobookProgress(
+                    audiobookId,
+                    audiobook.duration || 0,
+                    audiobook.duration || 0,
+                    true,
+                ),
             );
+            if (!saved || !intent.isCurrent() || currentOwner.current !== owner)
+                return;
 
             if (currentAudiobook?.id === audiobookId) {
                 const finalDuration =
                     audiobook.duration || currentAudiobook.duration || 0;
-                setCurrentAudiobook({
-                    ...currentAudiobook,
-                    progress: {
-                        currentTime: finalDuration,
-                        progress: finalDuration > 0 ? 100 : 0,
-                        isFinished: true,
-                        lastPlayedAt: new Date(),
-                    },
+                setCurrentAudiobook((previous) => {
+                    if (
+                        !intent.isCurrent() ||
+                        currentOwner.current !== owner ||
+                        previous?.id !== audiobookId
+                    )
+                        return previous;
+                    return {
+                        ...previous,
+                        progress: {
+                            currentTime: finalDuration,
+                            progress: finalDuration > 0 ? 100 : 0,
+                            isFinished: true,
+                            lastPlayedAt: new Date(),
+                        },
+                    };
                 });
             }
 
             toast.success("Отмечено как прослушанное");
             refetch();
         } catch (error) {
+            if (
+                !intent.isCurrent() ||
+                !isCurrentAuthRuntime(authGeneration) ||
+                currentOwner.current !== owner
+            )
+                return;
             sharedFrontendLogger.error("Failed to mark as completed:", error);
             toast.error("Не удалось отметить как прослушанное");
         }
@@ -104,9 +172,17 @@ export function useAudiobookActions(
         setCurrentAudiobook,
         toast,
         refetch,
+        owner,
+        authGeneration,
     ]);
 
     const handleResetProgress = useCallback(async () => {
+        if (
+            !isCurrentAuthRuntime(authGeneration) ||
+            currentOwner.current !== owner
+        )
+            return;
+        const intent = captureAudiobookProgressWrite(audiobookId, true);
         try {
             const isCurrentlyPlaying =
                 currentAudiobook?.id === audiobookId &&
@@ -116,17 +192,32 @@ export function useAudiobookActions(
                 pause();
             }
 
-            await api.deleteAudiobookProgress(audiobookId);
+            const saved = await intent.run(() =>
+                api.deleteAudiobookProgress(audiobookId),
+            );
+            if (!saved || !intent.isCurrent() || currentOwner.current !== owner)
+                return;
 
             if (currentAudiobook?.id === audiobookId) {
-                setCurrentAudiobook(null);
-                setPlaybackType(null);
-                updateCurrentTime(0);
+                pendingResetCleanup.current = intent;
+                setCurrentAudiobook((previous) =>
+                    intent.isCurrent() &&
+                    currentOwner.current === owner &&
+                    previous?.id === audiobookId
+                        ? null
+                        : previous,
+                );
             }
 
             toast.success("Прогресс сброшен");
             refetch();
         } catch (error) {
+            if (
+                !intent.isCurrent() ||
+                !isCurrentAuthRuntime(authGeneration) ||
+                currentOwner.current !== owner
+            )
+                return;
             sharedFrontendLogger.error("Failed to reset progress:", error);
             toast.error("Не удалось сбросить прогресс");
         }
@@ -137,10 +228,10 @@ export function useAudiobookActions(
         isPlaying,
         pause,
         setCurrentAudiobook,
-        setPlaybackType,
-        updateCurrentTime,
         toast,
         refetch,
+        owner,
+        authGeneration,
     ]);
 
     const seekToChapter = useCallback(

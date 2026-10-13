@@ -51,7 +51,7 @@ export function LibraryTabs({ activeTab }: LibraryTabsProps) {
             data-tv-section="library-tabs"
             data-library-tabs="collection"
             data-overflow-cue="horizontal"
-            className="relative border-y border-white/[0.08]"
+            className="relative border-b border-line"
         >
             <span className="sr-only">{ru.library.sectionsHint}</span>
             <div
@@ -87,10 +87,10 @@ export function LibraryTabs({ activeTab }: LibraryTabsProps) {
                             data-library-tab={tab.id}
                             aria-current={active ? "page" : undefined}
                             className={cn(
-                                "relative inline-flex min-h-11 shrink-0 snap-start items-center px-4 py-2 text-sm font-semibold transition-colors active:scale-[0.98]",
+                                "relative inline-flex min-h-12 shrink-0 snap-start items-center px-4 py-2 text-sm font-semibold transition-colors",
                                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                                 active
-                                    ? "text-content after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-brand-light"
+                                    ? "text-content after:absolute after:inset-x-4 after:bottom-0 after:h-0.5 after:rounded-full after:bg-brand"
                                     : "text-content-secondary hover:bg-white/[0.05] hover:text-content",
                             )}
                         >

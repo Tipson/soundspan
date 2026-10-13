@@ -411,7 +411,7 @@ test("Home Made For You expands and collapses every collection inline on one sur
         '[data-home-mixes-surface="unified"]',
     );
     assert.ok(surface);
-    assert.ok(surface.classList.contains("bg-surface"));
+    assert.equal(surface.getAttribute("aria-label"), "Миксы для вас");
     assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 11);
     assert.equal(
         surface.querySelectorAll("[data-home-made-card].lg\\:hidden").length,

@@ -44,7 +44,7 @@ async function render(props: Record<string, unknown>) {
 test("renders validated section navigation without a chapter-count heuristic", async () => {
     const html = await render({});
 
-    assert.match(html, />Chapters</);
+    assert.match(html, />Главы</);
     assert.match(html, /Section 51/);
     assert.match(html, /3000s/);
 });
@@ -55,7 +55,7 @@ test("labels file-derived navigation as parts", async () => {
         sections: sections.slice(0, 2),
     });
 
-    assert.match(html, />Parts</);
+    assert.match(html, />Части</);
     assert.match(html, /Section 2/);
 });
 

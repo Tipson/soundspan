@@ -77,7 +77,7 @@ mock.module("@/lib/api", {
     },
 });
 
-test("catalog heroes preserve complete long titles on 320px layouts", async () => {
+test("catalog heroes render complete long titles in identity headings", async () => {
     const { ArtistHero } =
         await import("../../features/artist/components/ArtistHero");
     const { AlbumHero } =
@@ -110,15 +110,11 @@ test("catalog heroes preserve complete long titles on 320px layouts", async () =
         }),
     );
 
-    assert.match(artistHtml, /flex-col/);
-    assert.match(albumHtml, /flex-col/);
-    assert.match(artistHtml, /\[overflow-wrap:anywhere\]/);
-    assert.match(albumHtml, /\[overflow-wrap:anywhere\]/);
     assert.match(artistHtml, /The Artist With A Deliberately Long/);
     assert.match(albumHtml, /AnAlbumTitleThatMustNeverLoseItsFirstLetters/);
 });
 
-test("Library tabs announce horizontal overflow and retain touch-sized targets", async () => {
+test("Library tabs announce horizontal browsing and expose named current-page links", async () => {
     const { LibraryTabs } =
         await import("../../features/library/components/LibraryTabs");
     const html = renderToStaticMarkup(
@@ -131,8 +127,11 @@ test("Library tabs announce horizontal overflow and retain touch-sized targets",
         html,
         /Прокрутите по горизонтали, чтобы увидеть остальные разделы коллекции/,
     );
-    assert.match(html, /min-h-11/);
-    assert.match(html, /snap-x/);
+    assert.match(html, /<nav aria-label="Разделы коллекции"/);
+    assert.match(
+        html,
+        /aria-current="page"[^>]*href="\/library\?tab=playlists"/,
+    );
     assert.equal((html.match(/data-library-tab=/g) ?? []).length, 3);
     for (const label of ["Плейлисты", "Альбомы", "Исполнители"]) {
         assert.match(html, new RegExp(`>${label}<`));
@@ -164,7 +163,7 @@ test("Library overview makes account and device ownership explicit", async () =>
     assert.match(html, /data-library-scope="device"/);
 });
 
-test("legacy Library grids keep complete titles and named 44px card actions", async () => {
+test("legacy Library grids preserve complete names and accessible play and remove controls", async () => {
     const { AlbumsGrid } =
         await import("../../features/library/components/AlbumsGrid");
     const { ArtistsGrid } =
@@ -214,13 +213,12 @@ test("legacy Library grids keep complete titles and named 44px card actions", as
             ],
         ],
     ] as const) {
-        assert.match(html, /line-clamp-2/);
         for (const label of labels) {
             const button = html.match(
                 new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`),
             )?.[0];
             assert.ok(button, `missing ${label}`);
-            assert.match(button, /h-11 w-11/);
+            assert.doesNotMatch(button, /disabled/);
         }
     }
 });

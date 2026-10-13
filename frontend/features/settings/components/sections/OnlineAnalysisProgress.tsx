@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { OnlineAnalysisStage } from "@/lib/api/onlineAnalysis";
 import { queryKeys } from "@/lib/queryKeys";
+import { SETTINGS_SECONDARY_BUTTON } from "../ui/settingsFieldStyles";
 
 function Coverage({
     label,
@@ -30,11 +31,11 @@ function Coverage({
                 className="h-1.5 bg-white/10 rounded-full overflow-hidden"
             >
                 <div
-                    className="h-full bg-brand transition-all"
+                    className="h-full bg-brand transition-[width] duration-200 motion-reduce:transition-none"
                     style={{ width: `${percentage}%` }}
                 />
             </div>
-            <p className="text-xs text-white/50 leading-relaxed">
+            <p className="text-sm text-content-muted leading-5">
                 {`Без готового результата: ${stage.remaining} · из них с ошибкой: ${stage.failed} · за 24 часа: +${stage.completedLast24h}`}
             </p>
         </div>
@@ -55,13 +56,13 @@ export function OnlineAnalysisProgress() {
     return (
         <section
             aria-label="Онлайн-аудиоанализ"
-            className="mb-6 p-4 space-y-4 bg-white/5 rounded-lg border border-white/10"
+            className="mb-6 space-y-4 border-b border-line pb-6"
         >
             <div>
                 <h3 className="text-sm font-medium text-white">
                     Онлайн-аудиоанализ
                 </h3>
-                <p className="mt-1 text-xs leading-relaxed text-white/50">
+                <p className="mt-1 text-sm leading-6 text-content-muted">
                     Общий каталог рекомендаций: одна запись считается один раз
                     для всех аккаунтов и источников. Локальные файлы показаны
                     отдельно ниже.
@@ -83,7 +84,7 @@ export function OnlineAnalysisProgress() {
                     <button
                         type="button"
                         onClick={() => void refetch()}
-                        className="px-3 py-2 rounded-full border border-white/20 text-white/80"
+                        className={SETTINGS_SECONDARY_BUTTON}
                     >
                         Повторить
                     </button>
@@ -122,7 +123,7 @@ export function OnlineAnalysisProgress() {
                             )}
                         </>
                     )}
-                    <div className="pt-3 border-t border-white/10 text-xs leading-relaxed text-white/50 space-y-1">
+                    <div className="pt-3 border-t border-line text-sm leading-6 text-content-muted space-y-2">
                         <p>{`Активных заданий с аудио: ${data.activeAssets} · суточная квота: ${data.budget.dailyLimit} записей · параллельность онлайн-обработчика: ${data.budget.concurrency}`}</p>
                         {data.budget.checkedToday === null ? (
                             <p>Использование квоты временно недоступно.</p>

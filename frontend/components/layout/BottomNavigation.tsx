@@ -104,7 +104,7 @@ export function BottomNavigation() {
                             <span
                                 aria-hidden="true"
                                 className={cn(
-                                    "absolute top-1 h-0.5 w-5 rounded-full bg-gradient-to-r from-brand via-ai to-brand-hover transition-opacity",
+                                    "absolute top-1 h-0.5 w-4 rounded-full bg-brand transition-opacity",
                                     isActive ? "opacity-100" : "opacity-0",
                                 )}
                             />
@@ -112,7 +112,7 @@ export function BottomNavigation() {
                                 className={cn(
                                     "flex h-7 min-w-10 items-center justify-center rounded-full px-2 transition-colors",
                                     isActive
-                                        ? "bg-white/[0.1] text-white"
+                                        ? "bg-brand/12 text-brand-light"
                                         : "group-active:bg-white/[0.05]",
                                 )}
                             >
@@ -123,7 +123,7 @@ export function BottomNavigation() {
                             </span>
                             <span
                                 className={cn(
-                                    "text-[10px] leading-none tracking-wide",
+                                    "text-[11px] leading-none",
                                     isActive ? "font-semibold" : "font-medium",
                                 )}
                             >
@@ -144,7 +144,7 @@ export function BottomNavigation() {
                     >
                         <HardDriveDownload className="h-5 w-5" />
                     </span>
-                    <span className="text-[10px] leading-none tracking-wide">
+                    <span className="text-[11px] leading-none">
                         Загруженное
                     </span>
                 </button>

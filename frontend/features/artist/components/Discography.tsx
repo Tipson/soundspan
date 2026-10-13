@@ -35,7 +35,7 @@ export function Discography({
     return (
         <section>
             <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-                <h2 className="text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                <h2 className="text-xl font-semibold tracking-[-0.02em] sm:text-2xl">
                     {title}
                 </h2>
                 {/* Sort Dropdown */}
@@ -45,7 +45,7 @@ export function Discography({
                     onChange={(e) =>
                         onSortChange(e.target.value as "year" | "dateAdded")
                     }
-                    className="min-h-11 rounded-full border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light [&>option]:bg-surface-hover [&>option]:text-white"
+                    className="min-h-11 w-full min-w-0 max-w-full rounded-[10px] border border-line bg-surface-elevated px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light sm:w-auto [&>option]:bg-surface-hover [&>option]:text-white"
                 >
                     <option value="year">{ru.catalog.yearNewest}</option>
                     <option value="dateAdded">

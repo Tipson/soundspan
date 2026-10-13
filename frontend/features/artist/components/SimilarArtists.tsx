@@ -25,7 +25,7 @@ export function SimilarArtists({
 
     return (
         <section>
-            <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+            <h2 className="mb-4 text-xl font-semibold tracking-[-0.02em] sm:text-2xl">
                 {ru.catalog.similarArtists}
             </h2>
             <div
@@ -60,10 +60,10 @@ export function SimilarArtists({
                             data-tv-card-index={index}
                             onClick={() => onNavigate(navigationId)}
                             aria-label={`Открыть исполнителя ${artist.name}`}
-                            className="group min-h-11 min-w-0 rounded-xl p-1.5 text-left transition duration-200 hover:-translate-y-0.5 hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
+                            className="group min-h-11 min-w-0 rounded-[14px] p-1.5 text-left transition-colors duration-200 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
                         >
                             {/* Circular Artist Image */}
-                            <div className="w-full aspect-square bg-surface-highlight rounded-full mb-2.5 overflow-hidden relative shadow-lg">
+                            <div className="w-full aspect-square bg-surface-highlight rounded-full mb-3 overflow-hidden relative">
                                 {imageUrl ? (
                                     <CachedImage
                                         src={imageUrl}
@@ -92,7 +92,7 @@ export function SimilarArtists({
                             </div>
 
                             {/* Artist Name */}
-                            <h3 className="text-sm font-semibold text-white truncate mb-0.5">
+                            <h3 className="mb-1 min-h-10 line-clamp-2 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                                 {artist.name}
                             </h3>
 

@@ -76,7 +76,7 @@ export function PersonalPlaylistGrid({
                 {leadingCards}
                 {Array.from({ length: 6 }).map((_, index) => (
                     <div key={index} className="space-y-3 p-2">
-                        <div className="aspect-square animate-pulse rounded-2xl bg-white/[0.06]" />
+                        <div className="aspect-square animate-pulse rounded-[14px] bg-white/[0.06]" />
                         <div className="h-4 w-3/4 animate-pulse rounded bg-white/[0.06]" />
                     </div>
                 ))}
@@ -90,14 +90,14 @@ export function PersonalPlaylistGrid({
                 {leadingCards}
                 <div
                     role="alert"
-                    className="col-span-full flex flex-col items-center rounded-2xl border border-warning/20 bg-warning/10 px-5 py-8 text-center text-sm text-content-body"
+                    className="col-span-full flex flex-col items-center rounded-[14px] border border-warning/20 bg-warning/10 px-5 py-8 text-center text-sm text-content-body"
                 >
                     <p>{ru.library.loadPlaylistsFailed}</p>
                     {onRetry && (
                         <button
                             type="button"
                             onClick={onRetry}
-                            className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
+                            className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
                         >
                             <RotateCcw className="h-4 w-4" aria-hidden="true" />
                             {ru.common.retry}
@@ -110,7 +110,7 @@ export function PersonalPlaylistGrid({
 
     if (playlists.length === 0 && !leadingCards) {
         return (
-            <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-6 text-center">
+            <div className="flex min-h-64 flex-col items-center justify-center rounded-[14px] border border-dashed border-white/10 px-6 text-center">
                 <ListMusic className="mb-4 h-10 w-10 text-content-muted" />
                 <h2 className="text-lg font-semibold text-content">
                     {ru.library.emptyPlaylists}
@@ -120,7 +120,7 @@ export function PersonalPlaylistGrid({
                 </p>
                 <Link
                     href="/import"
-                    className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                    className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-brand px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                 >
                     <Upload className="h-4 w-4" aria-hidden="true" />
                     {ru.nav.importPlaylist}
@@ -136,12 +136,12 @@ export function PersonalPlaylistGrid({
                 <Link
                     key={playlist.id}
                     href={`/playlist/${encodeURIComponent(playlist.id)}`}
-                    className="group min-w-0 rounded-[20px] border border-transparent p-2 transition-[transform,background-color,border-color] hover:-translate-y-0.5 hover:border-white/[0.08] hover:bg-white/[0.045] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none"
+                    className="group min-w-0 rounded-[14px] p-2 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none"
                 >
-                    <div className="mb-3 aspect-square overflow-hidden rounded-[18px] bg-surface-highlight shadow-[0_16px_42px_rgb(0_0_0/0.2)] ring-1 ring-white/[0.06]">
+                    <div className="mb-3 aspect-square overflow-hidden rounded-[14px] bg-surface-highlight">
                         <PlaylistCover playlist={playlist} />
                     </div>
-                    <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
+                    <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                         {playlist.name}
                     </h3>
                     <p className="mt-1 truncate text-xs text-content-muted">

@@ -4,6 +4,7 @@ import { Play, Pause, Loader2 } from "lucide-react";
 import { Podcast, Episode } from "../types";
 import { formatPodcastDurationRu, podcastRu } from "@/lib/i18n/podcastRu";
 import { formatDate } from "../utils";
+import { ru } from "@/lib/i18n/ru";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 
 interface ContinueListeningProps {
@@ -60,58 +61,55 @@ export function ContinueListening({
 
     return (
         <section>
-            <h2 className="text-xl font-bold mb-4">
+            <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
                 {podcastRu.detail.continueListening}
             </h2>
             <div className="space-y-2">
                 {/* Previous Episode - Faded */}
                 {previousEpisode && (
-                    <div
-                        className="flex items-center gap-3 p-3 rounded-md hover:bg-white/5 transition-all cursor-pointer opacity-50 hover:opacity-70"
+                    <button
+                        type="button"
+                        className="flex min-h-16 w-full items-center gap-3 rounded-[10px] p-3 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                         onClick={() => onPlayEpisode(previousEpisode)}
                     >
-                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                            <Play className="w-3 h-3 text-white/70" />
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-surface-raised">
+                            <Play className="h-4 w-4 text-content-secondary" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-white/80 truncate text-sm">
+                            <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere]">
                                 {previousEpisode.title}
                             </h3>
-                            <p className="text-xs text-white/40">
+                            <p className="mt-1 text-xs text-content-secondary">
                                 {podcastRu.detail.previousEpisode}
                             </p>
                         </div>
-                    </div>
+                    </button>
                 )}
 
                 {/* Current Episode - Prominent */}
-                <div
-                    className="flex items-center gap-4 p-4 rounded-lg bg-white/5 border border-brand/30 hover:border-brand/50 transition-all cursor-pointer"
-                    onClick={() => onPlayPause(recentEpisode)}
+                <button
+                    type="button"
+                    aria-label={`${isCurrentPlaying && isPlaying ? ru.common.pause : ru.common.play}: ${recentEpisode.title}`}
+                    className="flex min-h-20 w-full items-center gap-3 rounded-[14px] bg-surface-active p-4 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
+                    onClick={handleCurrentEpisodePlayPause}
                 >
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleCurrentEpisodePlayPause();
-                        }}
-                        className="w-12 h-12 rounded-full bg-brand-hover hover:bg-brand-light hover:scale-105 transition-all flex items-center justify-center shrink-0"
-                    >
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand text-surface">
                         {showSpinner ? (
-                            <Loader2 className="w-5 h-5 text-black animate-spin" />
+                            <Loader2 className="h-5 w-5 animate-spin" />
                         ) : isCurrentPlaying && isPlaying ? (
-                            <Pause className="w-5 h-5 text-black" />
+                            <Pause className="h-5 w-5" />
                         ) : (
                             <Play
-                                className="w-5 h-5 text-black ml-0.5"
-                                fill="black"
+                                className="ml-0.5 h-5 w-5"
+                                fill="currentColor"
                             />
                         )}
-                    </button>
+                    </span>
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-white truncate">
+                        <h3 className="line-clamp-2 font-semibold leading-6 text-content [overflow-wrap:anywhere]">
                             {recentEpisode.title}
                         </h3>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-white/50">
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-content-secondary">
                             <span>
                                 {formatPodcastDurationRu(
                                     recentEpisode.duration,
@@ -124,7 +122,7 @@ export function ContinueListening({
                         {recentEpisode.progress && (
                             <div className="mt-2">
                                 <div className="flex items-center gap-2">
-                                    <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                                    <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-highlight">
                                         <div
                                             className="h-full bg-brand rounded-full transition-all"
                                             style={{
@@ -142,26 +140,27 @@ export function ContinueListening({
                             </div>
                         )}
                     </div>
-                </div>
+                </button>
 
                 {/* Next Episode - Faded */}
                 {nextEpisode && (
-                    <div
-                        className="flex items-center gap-3 p-3 rounded-md hover:bg-white/5 transition-all cursor-pointer opacity-50 hover:opacity-70"
+                    <button
+                        type="button"
+                        className="flex min-h-16 w-full items-center gap-3 rounded-[10px] p-3 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                         onClick={() => onPlayEpisode(nextEpisode)}
                     >
-                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                            <Play className="w-3 h-3 text-white/70" />
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-surface-raised">
+                            <Play className="h-4 w-4 text-content-secondary" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-white/80 truncate text-sm">
+                            <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere]">
                                 {nextEpisode.title}
                             </h3>
-                            <p className="text-xs text-white/40">
+                            <p className="mt-1 text-xs text-content-secondary">
                                 {podcastRu.detail.nextEpisode}
                             </p>
                         </div>
-                    </div>
+                    </button>
                 )}
             </div>
         </section>

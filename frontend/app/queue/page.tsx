@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Virtuoso } from "react-virtuoso";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAudioState, useAudioControls } from "@/lib/audio-context";
@@ -655,64 +657,42 @@ export default function QueuePage() {
             </div>
 
             {/* Save as Playlist Dialog */}
-            {showSaveDialog && canSavePlaylist && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <button
-                        type="button"
-                        aria-label="Закрыть диалог сохранения плейлиста"
-                        className="absolute inset-0 cursor-default bg-black/75"
-                        onClick={() => setShowSaveDialog(false)}
-                    />
-                    <div
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="queue-save-dialog-title"
-                        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface-overlay shadow-2xl"
-                    >
-                        <div className="p-6">
-                            <h2
-                                id="queue-save-dialog-title"
-                                className="mb-1 text-lg font-bold text-content"
-                            >
-                                {queueRu.saveDialogTitle}
-                            </h2>
-                            <p className="mb-4 text-sm text-content-muted">
-                                {formatQueueSaveDescription(
-                                    playlistTracks.length,
-                                )}
-                            </p>
-                            <input
-                                type="text"
-                                value={playlistName}
-                                onChange={(e) =>
-                                    setPlaylistName(e.target.value)
-                                }
-                                onKeyDown={(e) =>
-                                    e.key === "Enter" && handleSaveAsPlaylist()
-                                }
-                                placeholder={`${queueRu.title} — ${new Date().toLocaleDateString("ru-RU")}`}
-                                className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-4 py-2.5 text-content outline-none transition-colors placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
-                                autoFocus
-                            />
-                        </div>
-                        <div className="flex gap-3 p-6 pt-0">
-                            <button
-                                onClick={() => setShowSaveDialog(false)}
-                                className="min-h-11 flex-1 rounded-xl border border-line bg-surface-elevated px-4 py-2.5 font-medium text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                            >
-                                {queueRu.cancel}
-                            </button>
-                            <button
-                                onClick={handleSaveAsPlaylist}
-                                disabled={isSaving}
-                                className="min-h-11 flex-1 rounded-xl bg-brand px-4 py-2.5 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
-                            >
-                                {isSaving ? queueRu.saving : queueRu.save}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <Modal
+                isOpen={showSaveDialog && canSavePlaylist}
+                onClose={() => setShowSaveDialog(false)}
+                title={queueRu.saveDialogTitle}
+                footer={
+                    <>
+                        <button
+                            onClick={() => setShowSaveDialog(false)}
+                            className="min-h-11 flex-1 rounded-[10px] border border-line bg-surface-elevated px-4 py-2.5 font-medium text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        >
+                            {queueRu.cancel}
+                        </button>
+                        <button
+                            onClick={handleSaveAsPlaylist}
+                            disabled={isSaving}
+                            className="min-h-11 flex-1 rounded-[10px] bg-brand px-4 py-2.5 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50 motion-reduce:transition-none"
+                        >
+                            {isSaving ? queueRu.saving : queueRu.save}
+                        </button>
+                    </>
+                }
+            >
+                <p className="mb-4 text-sm text-content-muted">
+                    {formatQueueSaveDescription(playlistTracks.length)}
+                </p>
+                <Input
+                    label="Название плейлиста"
+                    type="text"
+                    value={playlistName}
+                    onChange={(e) => setPlaylistName(e.target.value)}
+                    onKeyDown={(e) =>
+                        e.key === "Enter" && handleSaveAsPlaylist()
+                    }
+                    placeholder={`${queueRu.title} — ${new Date().toLocaleDateString("ru-RU")}`}
+                />
+            </Modal>
         </div>
     );
 }

@@ -8,6 +8,11 @@ import type { ExternalIdentity } from "@/lib/api/auth";
 import { createFrontendLogger } from "@/lib/logger";
 import { formatDate } from "@/utils/formatTime";
 import { ru, userFacingError } from "@/lib/i18n/ru";
+import {
+    SETTINGS_DANGER_BUTTON,
+    SETTINGS_PRIMARY_BUTTON,
+    SETTINGS_SECONDARY_BUTTON,
+} from "../ui/settingsFieldStyles";
 
 const logger = createFrontendLogger("Settings.LinkedIdentitiesPanel");
 
@@ -19,10 +24,10 @@ interface IdentityCardProps {
 
 function IdentityCard({ identity, providerName, onUnlink }: IdentityCardProps) {
     return (
-        <div className="flex items-start justify-between gap-4 rounded-lg border border-white/5 bg-white/[0.03] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line py-4 last:border-0">
             <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-white">
+                <div className="flex flex-wrap items-center gap-2">
+                    <p className="break-words text-sm font-medium text-content">
                         {identity.displayName || identity.email || providerName}
                     </p>
                     <Badge variant="info" title={identity.provider}>
@@ -30,7 +35,7 @@ function IdentityCard({ identity, providerName, onUnlink }: IdentityCardProps) {
                     </Badge>
                 </div>
                 {identity.email && (
-                    <p className="truncate text-xs text-gray-400">
+                    <p className="break-all text-sm text-content-muted">
                         {identity.email}
                     </p>
                 )}
@@ -42,7 +47,7 @@ function IdentityCard({ identity, providerName, onUnlink }: IdentityCardProps) {
             <button
                 type="button"
                 onClick={() => onUnlink(identity)}
-                className="text-sm text-red-400 transition-colors hover:text-red-300"
+                className={`${SETTINGS_SECONDARY_BUTTON} text-red-300 hover:text-red-200`}
             >
                 Отвязать
             </button>
@@ -80,11 +85,11 @@ function UnlinkIdentityModal({
                         {error}
                     </p>
                 )}
-                <div className="flex justify-end gap-3">
+                <div className="flex flex-wrap justify-end gap-3">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-sm text-gray-400 hover:text-white"
+                        className={SETTINGS_SECONDARY_BUTTON}
                     >
                         {ru.common.cancel}
                     </button>
@@ -92,7 +97,7 @@ function UnlinkIdentityModal({
                         type="button"
                         onClick={onConfirm}
                         disabled={unlinking}
-                        className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                        className={SETTINGS_DANGER_BUTTON}
                     >
                         {unlinking ? "Отключаем…" : "Отвязать"}
                     </button>
@@ -226,12 +231,12 @@ export function LinkedIdentitiesPanel({
 
     return (
         <div className="space-y-3">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                 <div>
                     <h3 className="text-sm font-medium text-white">
                         Связанные аккаунты
                     </h3>
-                    <p className="mt-0.5 text-xs text-gray-400">
+                    <p className="mt-1 text-sm leading-5 text-content-muted">
                         Аккаунты SSO, с помощью которых можно войти в ваш
                         профиль.
                     </p>
@@ -240,7 +245,7 @@ export function LinkedIdentitiesPanel({
                     type="button"
                     onClick={() => void link.link()}
                     disabled={link.linking}
-                    className="rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-transform hover:scale-105 disabled:opacity-50"
+                    className={`${SETTINGS_PRIMARY_BUTTON} shrink-0`}
                 >
                     {link.linking
                         ? "Открываем SSO…"

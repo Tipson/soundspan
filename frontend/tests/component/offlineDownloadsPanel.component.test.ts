@@ -70,8 +70,11 @@ test("downloads open locally from home and search with a live player, even when 
                 4,
             );
             await React.act(async () => downloadButton.click());
-            assert.ok(parent.querySelector('[role="dialog"]'));
-            assert.match(parent.textContent ?? "", /local-files:owner-a/);
+            assert.ok(document.querySelector('[role="dialog"]'));
+            assert.match(
+                document.body.textContent ?? "",
+                /local-files:owner-a/,
+            );
             assert.equal(parent.querySelector("audio"), audio);
             assert.equal(
                 window.location.pathname + window.location.search,
@@ -86,7 +89,7 @@ test("downloads open locally from home and search with a live player, even when 
                     }),
                 ),
             );
-            assert.equal(parent.querySelector('[role="dialog"]'), null);
+            assert.equal(document.querySelector('[role="dialog"]'), null);
             await new Promise((resolve) => setTimeout(resolve, 5));
         }
 
@@ -95,7 +98,7 @@ test("downloads open locally from home and search with a live player, even when 
             window.history.back();
             await new Promise((resolve) => setTimeout(resolve, 5));
         });
-        assert.equal(parent.querySelector('[role="dialog"]'), null);
+        assert.equal(document.querySelector('[role="dialog"]'), null);
         assert.equal(window.location.pathname, "/search");
 
         await React.act(async () => openOfflineDownloads());
@@ -105,14 +108,17 @@ test("downloads open locally from home and search with a live player, even when 
                 React.createElement(OfflineDownloadsPanel, { key: ownerId }),
             ),
         );
-        assert.equal(parent.querySelector('[role="dialog"]'), null);
+        assert.equal(document.querySelector('[role="dialog"]'), null);
         await new Promise((resolve) => setTimeout(resolve, 5));
         await React.act(async () => openOfflineDownloads());
-        assert.match(parent.textContent ?? "", /local-files:owner-b/);
-        assert.doesNotMatch(parent.textContent ?? "", /local-files:owner-a/);
+        assert.match(document.body.textContent ?? "", /local-files:owner-b/);
+        assert.doesNotMatch(
+            document.body.textContent ?? "",
+            /local-files:owner-a/,
+        );
         await React.act(async () => root.render(null));
         await React.act(async () => openOfflineDownloads());
-        assert.equal(parent.querySelector('[role="dialog"]'), null);
+        assert.equal(document.querySelector('[role="dialog"]'), null);
     } finally {
         await React.act(async () => root.unmount());
         mock.restoreAll();

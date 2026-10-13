@@ -159,7 +159,7 @@ export default function GenrePage() {
                             type="button"
                             aria-label="Назад к подкастам"
                             onClick={() => router.push("/podcasts")}
-                            className="flex min-h-11 items-center gap-2 rounded-xl border border-line bg-surface-elevated px-4 text-sm font-semibold text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            className="flex min-h-11 items-center gap-2 rounded-[10px] border border-line bg-surface-elevated px-4 text-sm font-semibold text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
                             <ArrowLeft className="h-5 w-5" />
                             <span className="hidden sm:inline">
@@ -176,16 +176,16 @@ export default function GenrePage() {
                             type="button"
                             key={podcast.id}
                             onClick={() => handlePodcastClick(podcast)}
-                            className="group w-full rounded-xl p-1.5 text-left transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
+                            className="group min-w-0 w-full rounded-[14px] p-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
-                            <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-full bg-surface-elevated shadow-lg shadow-black/20">
+                            <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-[14px] bg-surface-highlight">
                                 {podcast.coverUrl ? (
                                     <Image
                                         src={podcast.coverUrl}
                                         alt={podcast.title}
                                         fill
                                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                                        className="object-cover transition-transform duration-200 group-hover:scale-105 motion-reduce:transform-none motion-reduce:transition-none"
+                                        className="object-cover"
                                         unoptimized
                                     />
                                 ) : (
@@ -194,10 +194,10 @@ export default function GenrePage() {
                                     </div>
                                 )}
                             </div>
-                            <h3 className="truncate text-sm font-bold text-content">
+                            <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content [overflow-wrap:anywhere] sm:text-base">
                                 {podcast.title}
                             </h3>
-                            <p className="truncate text-xs text-content-muted">
+                            <p className="truncate text-sm text-content-secondary">
                                 {podcast.author}
                             </p>
                         </button>

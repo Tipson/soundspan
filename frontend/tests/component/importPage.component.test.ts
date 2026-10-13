@@ -270,7 +270,7 @@ test("imports a public Spotify playlist link without an OAuth connection", async
 
 test("preview list treats retired provider rows as unresolved", async () => {
     const { PreviewTrackResolutionList } =
-        await import("../../app/import/page");
+        await import("../../features/playlist-import/importPresentation");
 
     const html = renderToStaticMarkup(
         React.createElement(PreviewTrackResolutionList, {
@@ -315,7 +315,8 @@ test("preview list treats retired provider rows as unresolved", async () => {
 });
 
 test("execute import action sends previewData instead of URL", async () => {
-    const { executeImportAction } = await import("../../app/import/page");
+    const { executeImportAction } =
+        await import("../../features/playlist-import/importPresentation");
 
     const previewData = {
         playlistName: "Test Playlist",
@@ -394,7 +395,8 @@ test("keeps M3U preview and invalidates personalized home after import", async (
 });
 
 test("isSupportedPlaylistUrl accepts Spotify intl playlist URLs", async () => {
-    const { isSupportedPlaylistUrl } = await import("../../app/import/page");
+    const { isSupportedPlaylistUrl } =
+        await import("../../features/playlist-import/importPresentation");
     const intlSpotifyUrl =
         "https://open.spotify.com/intl-en/playlist/37i9dQZF1DXcBWIGoYBM5M";
 
@@ -402,7 +404,8 @@ test("isSupportedPlaylistUrl accepts Spotify intl playlist URLs", async () => {
 });
 
 test("accepts both Yandex playlist links and rejects unsafe hosts and paths", async () => {
-    const { isSupportedPlaylistUrl } = await import("../../app/import/page");
+    const { isSupportedPlaylistUrl } =
+        await import("../../features/playlist-import/importPresentation");
     for (const url of [
         "https://music.yandex.ru/users/fan/playlists/123?utm_source=share",
         "music.yandex.com/users/music.fan/playlists/123/",
@@ -445,7 +448,8 @@ test("submits a Yandex URL to the existing background import and names the sourc
 });
 
 test("isSupportedPlaylistUrl rejects arbitrary text containing provider host fragments", async () => {
-    const { isSupportedPlaylistUrl } = await import("../../app/import/page");
+    const { isSupportedPlaylistUrl } =
+        await import("../../features/playlist-import/importPresentation");
     const malformedValue =
         "not-a-url open.spotify.com/playlist/ definitely-not-valid";
 
@@ -453,7 +457,8 @@ test("isSupportedPlaylistUrl rejects arbitrary text containing provider host fra
 });
 
 test("isSupportedPlaylistUrl rejects non-HTTP executable URL schemes", async () => {
-    const { isSupportedPlaylistUrl } = await import("../../app/import/page");
+    const { isSupportedPlaylistUrl } =
+        await import("../../features/playlist-import/importPresentation");
     const unsafeUrls = [
         "javascript://open.spotify.com/playlist/playlist123",
         "data://open.spotify.com/playlist/playlist123",

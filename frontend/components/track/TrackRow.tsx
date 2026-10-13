@@ -14,7 +14,7 @@ import type { DeviceOfflineTrack } from "@/features/device-offline/types";
 import type { TrackRowProps } from "./types";
 import { CurrentTrackPlaybackIndicator } from "./TrackPlaybackIndicator";
 
-const DEFAULT_ACCENT = "#3b82f6";
+const DEFAULT_ACCENT = "var(--music-action)";
 const INTERACTIVE_DESCENDANT_SELECTOR = [
     "a",
     "button",
@@ -127,9 +127,9 @@ export function TrackRow({
                 }
             }}
             className={cn(
-                "grid items-center gap-2 px-1 md:gap-4 md:px-4 py-3 rounded-md hover:bg-white/5 transition-colors group cursor-pointer",
+                "group grid min-h-16 cursor-pointer items-center gap-2 rounded-[10px] px-2 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light md:gap-4 md:px-4 motion-reduce:transition-none",
                 className,
-                isPlaying && "bg-white/5",
+                isPlaying && "bg-surface-active",
                 isInQueue && !isPlaying && "bg-brand/[0.06]",
                 rowClassName,
                 item.isPlayable === false && "cursor-not-allowed opacity-50",
@@ -156,13 +156,13 @@ export function TrackRow({
             {/* Cover art + Title/Artist */}
             <div className="flex items-center gap-3 min-w-0">
                 {showCoverArt && (
-                    <div className="relative w-10 h-10 bg-surface-highlight rounded flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-surface-highlight">
                         {item.coverArtUrl ? (
                             <CachedImage
                                 src={item.coverArtUrl}
                                 alt={item.displayTitle ?? item.title}
                                 fill
-                                sizes="40px"
+                                sizes="44px"
                                 className="object-cover"
                             />
                         ) : (
@@ -173,13 +173,13 @@ export function TrackRow({
                 <div className="min-w-0">
                     <h3
                         className={cn(
-                            "text-sm md:text-base font-medium flex items-center gap-2 min-w-0",
-                            !isPlaying && "text-white",
+                            "flex min-w-0 items-center gap-2 text-sm font-semibold leading-5 md:text-base md:leading-6",
+                            !isPlaying && "text-content",
                         )}
                         style={isPlaying ? { color: accentColor } : undefined}
                     >
                         {isPlaying && <CurrentTrackPlaybackIndicator />}
-                        <span className="truncate">
+                        <span className="line-clamp-2 min-w-0 [overflow-wrap:anywhere] md:line-clamp-1">
                             {item.displayTitle ?? item.title}
                         </span>
                         {isDownloaded && (
@@ -208,7 +208,7 @@ export function TrackRow({
                     {artistContent !== undefined ? (
                         artistContent
                     ) : (
-                        <p className="text-xs md:text-sm text-gray-400 truncate">
+                        <p className="mt-0.5 truncate text-xs text-content-muted md:text-sm">
                             {item.artistName}
                         </p>
                     )}
@@ -224,14 +224,14 @@ export function TrackRow({
                 trailingActions
             ) : (
                 <div className="flex items-center gap-1">
-                    <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
+                    <span className="hidden w-10 text-right text-xs tabular-nums text-content-muted sm:block">
                         {formatTime(item.duration)}
                     </span>
                     {preferenceMode && (
                         <TrackPreferenceButtons
                             trackId={item.id}
                             mode={preferenceMode}
-                            buttonSizeClassName="h-8 w-8"
+                            buttonSizeClassName="h-11 w-11"
                             iconSizeClassName="h-4 w-4"
                             metadata={buildPreferenceMetadata({
                                 id: item.id,

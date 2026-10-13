@@ -8,6 +8,11 @@ GlobalRegistrator.register();
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+let saveError: Error | null = null;
+const updateArtistMetadata = mock.fn(async (..._args: unknown[]) => {
+    if (saveError) throw saveError;
+    return { name: "Name" };
+});
 const resetArtistMetadata = mock.fn(async () => ({
     message: "ok",
     artist: {},
@@ -19,7 +24,7 @@ mock.module("@/lib/api", {
             resetArtistMetadata,
             resetAlbumMetadata: async () => ({}),
             resetTrackMetadata: async () => ({}),
-            updateArtistMetadata: async () => ({}),
+            updateArtistMetadata,
             updateAlbumMetadata: async () => ({}),
             updateTrackMetadata: async () => ({}),
         },
@@ -58,6 +63,8 @@ after(() => {
 
 beforeEach(() => {
     resetArtistMetadata.mock.resetCalls();
+    updateArtistMetadata.mock.resetCalls();
+    saveError = null;
     document.body.replaceChildren();
 });
 
@@ -84,7 +91,7 @@ function findLastExactButton(text: string): HTMLButtonElement {
     return button;
 }
 
-async function mountEditor() {
+async function mountEditor(genres: string[] = []) {
     const { MetadataEditor } = await import("../../components/MetadataEditor");
     const { createRoot } = await import("react-dom/client");
     const onSave = mock.fn();
@@ -99,6 +106,8 @@ async function mountEditor() {
                 id: "artist-1",
                 currentData: {
                     name: "Name",
+                    genres,
+                    _originalGenres: genres,
                     _hasUserOverrides: true,
                 },
                 onSave,
@@ -107,6 +116,8 @@ async function mountEditor() {
     });
 
     return {
+        container,
+        onSave,
         unmount: async () => {
             await React.act(async () => root.unmount());
             container.remove();
@@ -154,4 +165,96 @@ test("cancelling reset confirmation does not reset artist metadata", async (t) =
     await click(findLastExactButton("Отмена"));
 
     assert.equal(resetArtistMetadata.mock.callCount(), 0);
+});
+
+test("editor escapes clipped ancestor, closes by Escape and restores focus/scroll", async (t) => {
+    const h = await mountEditor();
+    t.after(h.unmount);
+    h.container.style.overflow = "hidden";
+    const opener = h.container.querySelector("button")!;
+    opener.focus();
+    await click(opener);
+    const dialog = document.querySelector("[role=dialog]");
+    assert.ok(dialog);
+    assert.equal(h.container.contains(dialog), false);
+    assert.equal(document.body.style.overflow, "hidden");
+    await React.act(async () => {
+        document.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+    });
+    assert.equal(document.querySelector("[role=dialog]"), null);
+    assert.notEqual(document.body.style.overflow, "hidden");
+    assert.equal(document.activeElement, opener);
+    assert.equal(updateArtistMetadata.mock.callCount(), 0);
+});
+
+test("nested reset Escape preserves editor then Cancel discards without API", async (t) => {
+    const h = await mountEditor();
+    t.after(h.unmount);
+    await openResetConfirmation();
+    assert.equal(
+        document.querySelectorAll("[role=dialog],[role=alertdialog]").length,
+        2,
+    );
+    await React.act(async () => {
+        document.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+    });
+    assert.equal(
+        document.querySelectorAll("[role=dialog],[role=alertdialog]").length,
+        1,
+    );
+    assert.equal(document.body.style.overflow, "hidden");
+    await click(findLastExactButton("Отмена"));
+    assert.equal(document.querySelector("[role=dialog]"), null);
+    assert.equal(resetArtistMetadata.mock.callCount(), 0);
+    assert.equal(updateArtistMetadata.mock.callCount(), 0);
+});
+
+test("labels bind fields, save failure stays announced and retry preserves API payload", async (t) => {
+    const h = await mountEditor(["Рок", "Джаз"]);
+    t.after(h.unmount);
+    await click(h.container.querySelector("button")!);
+    for (const caption of [
+        "Имя исполнителя",
+        "Биография",
+        "Жанры",
+        "Ссылка на изображение исполнителя",
+    ]) {
+        const label = Array.from(document.querySelectorAll("label")).find((x) =>
+            x.textContent?.includes(caption),
+        );
+        assert.ok(label);
+        assert.ok(label.htmlFor);
+        assert.ok(document.getElementById(label.htmlFor));
+    }
+    saveError = Error("failure");
+    await click(findButton("Сохранить изменения"));
+    assert.ok(document.querySelector("[role=alert]"));
+    assert.ok(document.querySelector("[role=dialog]"));
+    saveError = null;
+    await click(findButton("Сохранить изменения"));
+    assert.equal(updateArtistMetadata.mock.callCount(), 2);
+    assert.equal(updateArtistMetadata.mock.calls[1].arguments[0], "artist-1");
+    assert.deepEqual(
+        (
+            updateArtistMetadata.mock.calls[1].arguments[1] as {
+                genres: string[];
+            }
+        ).genres,
+        ["Рок", "Джаз"],
+    );
+    assert.equal(h.onSave.mock.callCount(), 1);
+    assert.equal(document.querySelector("[role=dialog]"), null);
+});
+
+test("opening and cancelling does not reorder original genre arrays", async (t) => {
+    const genres = ["Рок", "Джаз"];
+    const h = await mountEditor(genres);
+    t.after(h.unmount);
+    await click(h.container.querySelector("button")!);
+    await click(findLastExactButton("Отмена"));
+    assert.deepEqual(genres, ["Рок", "Джаз"]);
 });

@@ -28,13 +28,13 @@ export function PodcastActionBar({
     onShowDeleteConfirm,
 }: PodcastActionBarProps) {
     return (
-        <div className="flex items-center gap-4">
-            {/* Subscribe Button - Yellow primary action */}
+        <div className="flex min-h-14 flex-wrap items-center gap-3">
+            {/* Primary subscription action */}
             {!isSubscribed && (
                 <button
                     onClick={onSubscribe}
                     disabled={isSubscribing}
-                    className="h-12 px-6 rounded-full bg-brand-hover hover:bg-brand-light hover:scale-105 transition-all flex items-center gap-2 font-semibold text-black disabled:opacity-50"
+                    className="flex min-h-12 items-center gap-2 rounded-[10px] bg-brand px-5 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 motion-reduce:transition-none"
                 >
                     {isSubscribing ? (
                         <>
@@ -56,7 +56,7 @@ export function PodcastActionBar({
                     href={feedUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-all"
+                    className="flex h-11 w-11 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                     title={podcastRu.detail.rssFeed}
                 >
                     <ExternalLink className="w-5 h-5" />
@@ -72,7 +72,8 @@ export function PodcastActionBar({
                     {!showDeleteConfirm ? (
                         <button
                             onClick={() => onShowDeleteConfirm(true)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-full text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm"
+                            aria-label={`${podcastRu.detail.remove} ${podcastRu.detail.type.toLowerCase()}`}
+                            className="flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-sm text-error transition-colors hover:bg-error/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                         >
                             <Trash2 className="w-4 h-4" />
                             <span className="hidden md:inline">
@@ -80,19 +81,19 @@ export function PodcastActionBar({
                             </span>
                         </button>
                     ) : (
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-white/50 hidden md:inline">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="hidden text-sm text-content-secondary md:inline">
                                 {podcastRu.detail.removeQuestion}
                             </span>
                             <button
                                 onClick={onRemove}
-                                className="px-4 py-2 rounded-full text-sm font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all"
+                                className="min-h-11 rounded-[10px] bg-error/15 px-4 py-2 text-sm font-medium text-error transition-colors hover:bg-error/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                             >
                                 {podcastRu.detail.confirm}
                             </button>
                             <button
                                 onClick={() => onShowDeleteConfirm(false)}
-                                className="px-4 py-2 rounded-full text-sm font-medium bg-white/5 text-white/70 hover:bg-white/10 transition-all"
+                                className="min-h-11 rounded-[10px] bg-surface-raised px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                             >
                                 {podcastRu.detail.cancel}
                             </button>

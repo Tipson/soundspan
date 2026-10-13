@@ -144,7 +144,7 @@ export function LibraryTracksList({
                             <Play className="w-4 h-4 text-brand ml-0.5" />
                         ) : (
                             <>
-                                <span className="text-sm text-gray-400 group-hover:hidden">
+                                <span className="text-sm tabular-nums text-content-muted group-hover:hidden">
                                     {index + 1}
                                 </span>
                                 <Play className="w-4 h-4 text-white hidden group-hover:block ml-0.5" />
@@ -178,7 +178,7 @@ export function LibraryTracksList({
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                     >
-                        <span className="text-sm text-gray-400">
+                        <span className="hidden text-sm tabular-nums text-content-muted sm:inline">
                             {formatTime(track.duration)}
                         </span>
                         <TrackPreferenceButtons

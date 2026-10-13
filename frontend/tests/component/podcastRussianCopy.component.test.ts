@@ -21,6 +21,7 @@ mock.module("lucide-react", {
         Play: Icon,
         Plus: Icon,
         Trash2: Icon,
+        X: Icon,
     },
 });
 

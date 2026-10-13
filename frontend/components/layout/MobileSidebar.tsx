@@ -3,7 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
@@ -48,6 +49,9 @@ const personalLinks = [
  */
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     useDismissibleLayer(isOpen, onClose, 5);
+    const dialogRef = useRef<HTMLElement>(null);
+    const previouslyFocusedRef = useRef<HTMLElement>(null);
+    useDialogFocus(isOpen, dialogRef, previouslyFocusedRef);
     const pathname = usePathname();
     const libraryTab = useSearchParams().get("tab");
     const standalone = useMediaQuery("(display-mode: standalone)");
@@ -95,8 +99,10 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
             />
 
             <aside
+                ref={dialogRef}
+                tabIndex={-1}
                 data-shell-drawer="account"
-                className="mobile-sidebar-sheet fixed inset-y-0 left-0 z-[60] flex w-[min(86vw,304px)] flex-col overflow-hidden rounded-r-[1.75rem] shadow-[24px_0_80px_rgba(0,0,0,0.48)]"
+                className="mobile-sidebar-sheet fixed inset-y-0 left-0 z-[60] flex w-[min(86vw,304px)] flex-col overflow-hidden rounded-r-[var(--music-radius-card)] shadow-[24px_0_80px_rgba(0,0,0,0.48)] outline-none"
                 style={{
                     paddingTop: "var(--safe-area-top)",
                     paddingBottom: "var(--safe-area-bottom)",
@@ -137,7 +143,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     className="flex-1 overflow-y-auto px-3 py-4"
                     aria-label={ru.nav.mobileMenu}
                 >
-                    <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
+                    <p className="mb-2 px-3 text-xs font-medium text-content-muted">
                         Ваша музыка
                     </p>
                     <div className="space-y-1">
@@ -165,7 +171,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     </div>
 
                     <div className="my-4 border-t border-white/[0.07]" />
-                    <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
+                    <p className="mb-2 px-3 text-xs font-medium text-content-muted">
                         Аккаунт
                     </p>
                     <button
@@ -242,7 +248,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     <button
                         type="button"
                         onClick={handleLogout}
-                        className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                        className="flex min-h-12 w-full items-center gap-3 rounded-[var(--music-radius-control)] px-3 text-left text-error transition-colors hover:bg-error/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error"
                     >
                         <LogOut className="h-5 w-5" />
                         <span className="text-[15px] font-medium">

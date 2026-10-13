@@ -54,7 +54,7 @@ export default function AudiobookDetailPage() {
     if (!audiobook) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <p className="text-gray-400">Аудиокнига не найдена</p>
+                <p className="text-content-secondary">Аудиокнига не найдена</p>
             </div>
         );
     }
@@ -104,7 +104,7 @@ export default function AudiobookDetailPage() {
                     }}
                 />
 
-                <div className="relative px-4 md:px-8 py-8 space-y-6">
+                <div className="relative mx-auto max-w-[1800px] space-y-7 px-4 py-7 sm:px-6 lg:px-8">
                     <ChapterList
                         kind={audiobook.sectionKind}
                         sections={audiobook.sections}
@@ -115,10 +115,12 @@ export default function AudiobookDetailPage() {
 
                     {/* Description / About */}
                     {showDescription && (
-                        <section className="hidden md:block">
-                            <h2 className="text-xl font-bold mb-4">Описание</h2>
-                            <div className="bg-white/5 rounded-md p-4">
-                                <p className="text-sm text-white/70 leading-relaxed">
+                        <section>
+                            <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
+                                Описание
+                            </h2>
+                            <div className="rounded-[14px] bg-surface-raised p-4 sm:p-5">
+                                <p className="max-w-[70ch] text-sm leading-7 text-content-secondary [overflow-wrap:anywhere]">
                                     {cleanDescription}
                                 </p>
                             </div>
@@ -128,24 +130,20 @@ export default function AudiobookDetailPage() {
                     {/* Series info */}
                     {audiobook.series && (
                         <section>
-                            <h2 className="text-xl font-bold mb-4">Серия</h2>
-                            <div className="flex items-center gap-3 text-sm">
+                            <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
+                                Серия
+                            </h2>
+                            <div className="flex flex-wrap items-center gap-3 text-sm">
                                 <span className="text-brand font-medium">
                                     {audiobook.series.name}
                                 </span>
-                                <span className="text-white/40">•</span>
-                                <span className="text-white/70">
+                                <span className="text-content-muted">•</span>
+                                <span className="text-content-secondary">
                                     Книга {audiobook.series.sequence}
                                 </span>
                             </div>
                         </section>
                     )}
-
-                    {/* Playback hint - more subtle */}
-                    <p className="text-xs text-white/40 pt-4">
-                        В нижней панели можно изменить скорость, перейти к
-                        нужному месту и настроить громкость.
-                    </p>
                 </div>
             </div>
         </div>

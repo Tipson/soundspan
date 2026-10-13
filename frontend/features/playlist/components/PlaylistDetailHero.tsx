@@ -60,7 +60,7 @@ export function PlaylistDetailHero({
             onKeyDown={onRenameKeyDown}
             disabled={isSavingName}
             maxLength={200}
-            className="w-full min-w-0 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-[clamp(2rem,8vw,4.75rem)] font-black leading-none tracking-[-0.05em] text-white outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/30"
+            className="w-full min-w-0 rounded-[10px] border border-line-muted bg-surface/70 px-3 py-2 text-3xl font-bold leading-tight tracking-[-0.03em] text-content sm:text-5xl lg:text-6xl outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/30"
         />
     ) : (
         name

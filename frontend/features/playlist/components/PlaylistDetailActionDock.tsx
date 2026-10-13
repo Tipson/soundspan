@@ -71,7 +71,7 @@ function SecondaryAction({
             title={label}
             aria-label={label}
             className={cn(
-                "flex min-h-11 w-full items-center justify-start gap-3 rounded-xl px-3 text-content-secondary transition-colors hover:bg-white/10 hover:text-content active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none",
+                "flex min-h-11 w-full items-center justify-start gap-3 rounded-[10px] px-3 text-content-secondary transition-colors hover:bg-white/10 hover:text-content active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none",
                 className,
             )}
         >
@@ -132,7 +132,7 @@ export function PlaylistDetailActionDock({
                     <button
                         type="button"
                         onClick={onShuffle}
-                        className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        className="flex h-11 w-11 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-white/10 hover:text-content active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         title={ru.playlist.shufflePlay}
                         aria-label={ru.playlist.shufflePlay}
                     >
@@ -180,7 +180,7 @@ export function PlaylistDetailActionDock({
                             tracks={playableTracks}
                             collectionId={`playlist:${playlistId}`}
                             collectionLabel={playlistName}
-                            className="min-h-11 w-full justify-start rounded-xl border-0 px-3 [&>span]:whitespace-normal [&>span]:text-left"
+                            className="min-h-11 w-full justify-start rounded-[10px] border-0 px-3 [&>span]:whitespace-normal [&>span]:text-left"
                         />
                         {trackItemCount > 0 && (
                             <SecondaryAction
@@ -192,7 +192,7 @@ export function PlaylistDetailActionDock({
                                 }}
                             />
                         )}
-                        <div className="contents [&_button]:min-h-11 [&_button]:w-full [&_button]:justify-start [&_button]:rounded-xl">
+                        <div className="contents [&_button]:min-h-11 [&_button]:w-full [&_button]:justify-start [&_button]:rounded-[10px]">
                             {radioActions}
                         </div>
 

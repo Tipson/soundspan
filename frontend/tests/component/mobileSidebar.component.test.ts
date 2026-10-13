@@ -10,6 +10,67 @@ GlobalRegistrator.register();
 ).IS_REACT_ACT_ENVIRONMENT = true;
 after(() => GlobalRegistrator.unregister());
 
+test("mobile drawer keeps keyboard focus inside and restores its opener", async () => {
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
+    const { createRoot } = await import("react-dom/client");
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+        await React.act(async () =>
+            root.render(
+                React.createElement(MobileSidebar, {
+                    isOpen: true,
+                    onClose: () => undefined,
+                    hasActiveSessions: false,
+                }),
+            ),
+        );
+        const dialog = container.querySelector<HTMLElement>('[role="dialog"]');
+        assert.ok(dialog);
+        assert.ok(
+            dialog.contains(document.activeElement),
+            "focus must move inside the drawer",
+        );
+        const items = dialog.querySelectorAll<HTMLElement>(
+            "a,button:not([disabled])",
+        );
+        const last = items[items.length - 1];
+        last.focus();
+        await React.act(async () =>
+            last.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "Tab",
+                    bubbles: true,
+                    cancelable: true,
+                }),
+            ),
+        );
+        assert.ok(
+            document.activeElement === items[0],
+            "Tab at the last action must wrap inside the drawer",
+        );
+        await React.act(async () =>
+            root.render(
+                React.createElement(MobileSidebar, {
+                    isOpen: false,
+                    onClose: () => undefined,
+                    hasActiveSessions: false,
+                }),
+            ),
+        );
+        assert.ok(document.activeElement === opener);
+    } finally {
+        await React.act(async () => root.unmount());
+        opener.remove();
+        container.remove();
+    }
+});
+
 test("mobile install action closes the drawer and requests the existing installation UI", async () => {
     const { MobileSidebar } =
         await import("../../components/layout/MobileSidebar");
@@ -52,12 +113,14 @@ const state: {
     query: string;
     standalone: boolean;
     hasActiveSessions: boolean;
+    logoutError: Error | null;
     user: { id: string; role: string } | undefined;
 } = {
     pathname: "/discover",
     query: "",
     standalone: false,
     hasActiveSessions: false,
+    logoutError: null,
     user: undefined,
 };
 
@@ -128,17 +191,26 @@ mock.module("@/lib/auth-context", {
     namedExports: {
         useAuth: () => ({
             user: state.user,
-            logout: async () => undefined,
+            logout: async () => {
+                if (state.logoutError) throw state.logoutError;
+            },
         }),
     },
 });
+
+mock.module("@/lib/logger", {
+    namedExports: { frontendLogger: { error: () => undefined } },
+});
+
+const toastMessages = { success: [] as string[], error: [] as string[] };
 
 mock.module("@/lib/toast-context", {
     namedExports: {
         useToast: () => ({
             toast: {
-                error: () => undefined,
-                success: () => undefined,
+                error: (message: string) => toastMessages.error.push(message),
+                success: (message: string) =>
+                    toastMessages.success.push(message),
             },
         }),
     },
@@ -155,7 +227,10 @@ beforeEach(() => {
     state.query = "";
     state.standalone = false;
     state.hasActiveSessions = false;
+    state.logoutError = null;
     state.user = undefined;
+    toastMessages.success.length = 0;
+    toastMessages.error.length = 0;
 });
 
 test("returns null when closed", async () => {
@@ -326,5 +401,159 @@ test("changing only the Library tab closes the mobile drawer", async () => {
     } finally {
         await React.act(async () => root.unmount());
         container.remove();
+    }
+});
+
+test("closing the mobile drawer through its backdrop restores the opener", async () => {
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
+    const { ru } = await import("../../lib/i18n/ru");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    let closes = 0;
+    function Harness() {
+        const [open, setOpen] = React.useState(false);
+        return React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+                "button",
+                { onClick: () => setOpen(true) },
+                "Open drawer",
+            ),
+            React.createElement(MobileSidebar, {
+                isOpen: open,
+                hasActiveSessions: false,
+                onClose: () => {
+                    closes++;
+                    setOpen(false);
+                },
+            }),
+        );
+    }
+    try {
+        await React.act(async () => root.render(React.createElement(Harness)));
+        closes = 0;
+        const opener = container.querySelector<HTMLButtonElement>("button");
+        assert.ok(opener);
+        opener.focus();
+        await React.act(async () => opener.click());
+        assert.ok(container.querySelector('[role="dialog"]'));
+        const backdrop = [...container.querySelectorAll("button")].find(
+            (button) =>
+                button.getAttribute("aria-label") === ru.nav.closeMenuBackdrop,
+        );
+        assert.ok(backdrop, "a named backdrop action must remain available");
+        await React.act(async () => backdrop.click());
+        assert.equal(closes, 1);
+        assert.equal(container.querySelector('[role="dialog"]'), null);
+        assert.ok(
+            document.activeElement === opener,
+            "dismissal must return keyboard focus to the opener",
+        );
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+});
+
+async function mountControlledDrawer() {
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const events: string[] = [];
+    function Harness() {
+        const [open, setOpen] = React.useState(false);
+        return React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+                "button",
+                { onClick: () => setOpen(true) },
+                "Open drawer",
+            ),
+            React.createElement(MobileSidebar, {
+                isOpen: open,
+                hasActiveSessions: false,
+                onClose: () => {
+                    events.push("close");
+                    setOpen(false);
+                },
+            }),
+        );
+    }
+    await React.act(async () => root.render(React.createElement(Harness)));
+    const opener = container.querySelector<HTMLButtonElement>("button");
+    assert.ok(opener);
+    opener.focus();
+    await React.act(async () => opener.click());
+    events.length = 0;
+    return {
+        container,
+        opener,
+        events,
+        unmount: async () => {
+            await React.act(async () => root.unmount());
+            container.remove();
+        },
+    };
+}
+
+test("notifications dismiss the drawer before requesting the activity panel", async () => {
+    const { ru } = await import("../../lib/i18n/ru");
+    const mounted = await mountControlledDrawer();
+    const onOpenActivity = () => mounted.events.push("activity");
+    window.addEventListener("open-activity-panel", onOpenActivity);
+    try {
+        const notifications =
+            mounted.container.querySelector<HTMLButtonElement>(
+                'button[aria-label="' + ru.nav.openNotifications + '"]',
+            );
+        assert.ok(notifications);
+        await React.act(async () => notifications.click());
+        assert.deepEqual(mounted.events, ["close", "activity"]);
+        assert.equal(mounted.container.querySelector('[role="dialog"]'), null);
+        assert.ok(document.activeElement === mounted.opener);
+    } finally {
+        window.removeEventListener("open-activity-panel", onOpenActivity);
+        await mounted.unmount();
+    }
+});
+
+test("logout failure keeps the drawer open until a successful retry", async () => {
+    const { ru } = await import("../../lib/i18n/ru");
+    const mounted = await mountControlledDrawer();
+    try {
+        const logout = [...mounted.container.querySelectorAll("button")].find(
+            (button) => button.textContent?.includes(ru.nav.logout),
+        );
+        assert.ok(logout);
+        state.logoutError = new Error("fixture logout failure");
+        await React.act(async () => {
+            logout.click();
+            await Promise.resolve();
+        });
+        assert.deepEqual(mounted.events, []);
+        assert.ok(mounted.container.querySelector('[role="dialog"]'));
+        assert.deepEqual(toastMessages.error, [ru.nav.logoutFailed]);
+        assert.deepEqual(toastMessages.success, []);
+
+        state.logoutError = null;
+        await React.act(async () => {
+            logout.click();
+            await Promise.resolve();
+        });
+        assert.deepEqual(mounted.events, ["close"]);
+        assert.equal(mounted.container.querySelector('[role="dialog"]'), null);
+        assert.deepEqual(toastMessages.success, [ru.nav.logoutSuccess]);
+        assert.ok(document.activeElement === mounted.opener);
+    } finally {
+        state.logoutError = null;
+        await mounted.unmount();
     }
 });

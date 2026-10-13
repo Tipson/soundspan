@@ -29,6 +29,12 @@ const stubState: {
 };
 
 const media = { isMobile: false, isTablet: false };
+let reducedMotion = false;
+const transitions: Array<{
+    initial?: unknown;
+    exit?: unknown;
+    transition?: { duration?: number };
+}> = [];
 
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
@@ -113,9 +119,20 @@ mock.module("framer-motion", {
             React.createElement(React.Fragment, null, children),
         LayoutGroup: ({ children }: { children?: React.ReactNode }) =>
             React.createElement(React.Fragment, null, children),
+        useReducedMotion: () => reducedMotion,
         motion: {
-            div: ({ children }: { children?: React.ReactNode }) =>
-                React.createElement("div", null, children),
+            div: ({
+                children,
+                ...props
+            }: {
+                children?: React.ReactNode;
+                initial?: unknown;
+                exit?: unknown;
+                transition?: { duration?: number };
+            }) => {
+                transitions.push(props);
+                return React.createElement("div", null, children);
+            },
         },
     },
 });
@@ -130,6 +147,8 @@ beforeEach(() => {
     stubState.currentPodcast = null;
     media.isMobile = false;
     media.isTablet = false;
+    reducedMotion = false;
+    transitions.length = 0;
 });
 
 test("desktop: renders via useAudioState and never calls the ticking clock hooks", async () => {
@@ -169,4 +188,33 @@ test("mobile overlay: drives playerMode + currentTrack from state, still no cloc
     assert.ok(calls.useAudioState >= 1);
     assert.equal(calls.useAudio, 0);
     assert.equal(calls.useAudioPlayback, 0);
+});
+
+test("reduced motion: mobile mini and overlay transitions have no animated displacement or fade", async () => {
+    media.isMobile = true;
+    reducedMotion = true;
+    stubState.currentTrack = { id: "track-1" };
+    const { UniversalPlayer } =
+        await import("../../components/player/UniversalPlayer");
+    for (const mode of ["mini", "overlay"]) {
+        transitions.length = 0;
+        stubState.playerMode = mode;
+        const html = renderToStaticMarkup(React.createElement(UniversalPlayer));
+        assert.match(
+            html,
+            mode === "overlay" ? /overlay-player-stub/ : /mini-player-stub/,
+        );
+        assert.equal(transitions.length, 1);
+        assert.equal(transitions[0].transition?.duration, 0);
+        assert.deepEqual(transitions[0].initial, {
+            opacity: 1,
+            y: 0,
+            ...(mode === "overlay" ? { scale: 1 } : {}),
+        });
+        assert.deepEqual(transitions[0].exit, {
+            opacity: 1,
+            y: 0,
+            ...(mode === "overlay" ? { scale: 1 } : {}),
+        });
+    }
 });

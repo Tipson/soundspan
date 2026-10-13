@@ -191,7 +191,7 @@ export function TasteGenrePicker({
                 <section
                     id={id}
                     aria-label="Все жанры"
-                    className="absolute inset-x-0 top-full z-20 mt-3 max-h-[min(55dvh,32rem)] overflow-y-auto overscroll-contain rounded-3xl border border-white/10 bg-surface-raised p-5 shadow-2xl sm:p-6"
+                    className="absolute inset-x-0 top-full z-20 mt-3 max-h-[min(55dvh,32rem)] overflow-y-auto overscroll-contain rounded-[var(--music-radius-card)] border border-line bg-surface-overlay p-5 shadow-2xl sm:p-6"
                 >
                     <div className="mb-5 flex items-center justify-between gap-3">
                         <h3 className="text-lg font-semibold">Жанры</h3>

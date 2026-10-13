@@ -43,7 +43,7 @@ function buildGroups(items: SidebarItem[]): SettingsGroup[] {
 }
 
 const navigationButtonClassName =
-    "inline-flex min-h-11 min-w-max touch-manipulation items-center justify-center rounded-xl px-3.5 py-2 text-sm font-semibold transition-[transform,background-color,color] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none";
+    "inline-flex min-h-11 min-w-max touch-manipulation items-center justify-center rounded-[10px] px-3.5 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none";
 
 /** Renders a two-level group and section navigator for Settings. */
 export function SettingsSidebar({
@@ -62,7 +62,7 @@ export function SettingsSidebar({
         groups.find((group) => group.id === activeGroupId) ?? groups[0];
 
     return (
-        <div className="sticky top-0 z-20 -mx-4 mb-5 border-y border-line bg-surface/92 px-4 py-2.5 backdrop-blur-xl md:mx-0 md:mb-7 md:rounded-2xl md:border md:px-3">
+        <div className="sticky top-0 z-20 -mx-4 mb-5 border-y border-line bg-surface/95 px-4 py-2.5 backdrop-blur-xl md:mx-0 md:mb-7 md:rounded-[14px] md:border md:px-3">
             <nav
                 data-settings-navigation-level="groups"
                 aria-label="Группы настроек"
@@ -82,7 +82,7 @@ export function SettingsSidebar({
                                 className={`${navigationButtonClassName} ${
                                     active
                                         ? "bg-brand text-black"
-                                        : "text-content-secondary hover:bg-white/[0.06] hover:text-content"
+                                        : "text-content-secondary hover:bg-surface-hover hover:text-content"
                                 }`}
                             >
                                 {group.label}
@@ -109,8 +109,8 @@ export function SettingsSidebar({
                                 data-state={active ? "active" : "inactive"}
                                 className={`${navigationButtonClassName} ${
                                     active
-                                        ? "bg-white/[0.08] text-content"
-                                        : "text-content-muted hover:bg-white/[0.05] hover:text-content-secondary"
+                                        ? "bg-surface-highlight text-content"
+                                        : "text-content-muted hover:bg-surface-hover hover:text-content-secondary"
                                 }`}
                             >
                                 {item.label}

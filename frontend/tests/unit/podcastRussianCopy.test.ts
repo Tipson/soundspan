@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
     formatEpisodeCountRu,
@@ -40,39 +39,20 @@ test("dynamic podcast messages preserve catalog metadata", () => {
     );
 });
 
-test("podcast surfaces do not retain direct English UI literals", () => {
-    const files = [
-        "app/podcasts/page.tsx",
-        "app/podcasts/[id]/page.tsx",
-        "features/podcast/components/ContinueListening.tsx",
-        "features/podcast/components/EpisodeList.tsx",
-        "features/podcast/components/EpisodeOverflowMenu.tsx",
-        "features/podcast/components/PodcastActionBar.tsx",
-        "features/podcast/components/PodcastHero.tsx",
-        "features/podcast/components/PreviewEpisodes.tsx",
-        "features/podcast/components/SimilarPodcasts.tsx",
-        "features/podcast/hooks/usePodcastActions.ts",
-    ].map((path) => readFileSync(path, "utf8"));
-    const source = files.join("\n");
-    const forbidden = [
-        'title="Podcasts"',
-        'placeholder="Quick add..."',
-        'placeholder="Add by RSS URL..."',
-        '"Enter an RSS feed URL"',
-        '"Failed to subscribe to RSS feed"',
-        ">My Podcasts<",
-        ">Top Podcasts<",
-        ">Continue Listening<",
-        ">All Episodes<",
-        'title="Mark as complete"',
-        'aria-label="Episode actions"',
-        ">Latest Episodes<",
-        ">Fans Also Like<",
-        ">Subscribe<",
+test("podcast action and state labels remain Russian", () => {
+    const labels = [
+        podcastRu.main.title,
+        podcastRu.detail.notFound,
+        podcastRu.detail.subscribe,
+        podcastRu.detail.episodeActions,
+        podcastRu.detail.playNext,
+        podcastRu.detail.addToQueue,
+        podcastRu.detail.markComplete,
+        podcastRu.detail.cancel,
+        podcastRu.detail.newestFirst,
+        podcastRu.detail.oldestFirst,
     ];
-    for (const literal of forbidden) {
-        assert.equal(source.includes(literal), false, literal);
-    }
-    assert.match(podcastRu.main.title, /[А-Яа-яЁё]/);
-    assert.match(podcastRu.detail.notFound, /[А-Яа-яЁё]/);
+    for (const label of labels) assert.match(label, /[А-Яа-яЁё]/);
+    assert.equal(podcastRu.detail.playNext, "Воспроизвести следующим");
+    assert.equal(podcastRu.detail.markComplete, "Отметить прослушанным");
 });

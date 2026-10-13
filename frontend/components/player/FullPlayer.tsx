@@ -263,19 +263,19 @@ export function FullPlayer() {
                             alt=""
                             fill
                             sizes="100vw"
-                            className="scale-125 object-cover opacity-[0.5] blur-3xl saturate-150"
+                            className="scale-125 object-cover opacity-20 blur-3xl"
                             priority
                             unoptimized
                         />
                     </div>
                 ) : null}
                 <div
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-warning/30 via-ai/15 to-brand/25"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-brand/5 to-transparent"
                     aria-hidden="true"
                     data-player-spectral-glow
                 />
                 <div
-                    className="pointer-events-none absolute inset-0 bg-black/55 backdrop-blur-2xl"
+                    className="pointer-events-none absolute inset-0 bg-surface-raised/85 backdrop-blur-2xl"
                     aria-hidden="true"
                     data-player-scrim
                 />
@@ -348,12 +348,12 @@ export function FullPlayer() {
                                     prefetch={false}
                                     className="block min-w-0 hover:underline"
                                 >
-                                    <h4 className="truncate text-base font-semibold leading-6 text-content">
+                                    <h4 className="line-clamp-2 text-base font-semibold leading-5 text-content">
                                         {title}
                                     </h4>
                                 </Link>
                             ) : (
-                                <h4 className="truncate text-base font-semibold leading-6 text-content">
+                                <h4 className="line-clamp-2 text-base font-semibold leading-5 text-content">
                                     {title}
                                 </h4>
                             )}
@@ -452,11 +452,11 @@ export function FullPlayer() {
                             <button
                                 onClick={handlePlayPauseClick}
                                 className={cn(
-                                    "player-control-primary group relative flex h-12 w-12 items-center justify-center rounded-full",
+                                    "player-control-primary group relative flex h-12 w-12 items-center justify-center rounded-[10px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
                                     audioError
-                                        ? "bg-error text-content hover:scale-[1.04] hover:brightness-110"
+                                        ? "bg-error text-content hover:brightness-110"
                                         : hasMedia && !isBuffering
-                                          ? "bg-content text-surface hover:scale-[1.04] shadow-lg shadow-black/25"
+                                          ? "bg-content text-surface hover:bg-content/90"
                                           : isBuffering
                                             ? "bg-content/80 text-surface"
                                             : "cursor-not-allowed bg-surface-active text-content-disabled",
@@ -483,13 +483,10 @@ export function FullPlayer() {
                                             : ru.common.play
                                 }
                             >
-                                {hasMedia && !isBuffering && !audioError && (
-                                    <div className="absolute inset-0 rounded-full bg-content blur-md opacity-0 transition-opacity duration-200 group-hover:opacity-30" />
-                                )}
                                 {audioError ? (
                                     <RefreshCw className="w-6 h-6 relative z-10" />
                                 ) : isBuffering && !isPlaying ? (
-                                    <Loader2 className="w-6 h-6 animate-spin relative z-10" />
+                                    <Loader2 className="w-6 h-6 animate-spin motion-reduce:animate-none relative z-10" />
                                 ) : isPlaying ? (
                                     <Pause className="w-6 h-6 relative z-10" />
                                 ) : (
@@ -592,7 +589,7 @@ export function FullPlayer() {
                                 <CurrentTrackPreferenceButtons
                                     trackId={preferenceTrackId}
                                     mode="both"
-                                    buttonSizeClassName="h-10 w-10"
+                                    buttonSizeClassName="h-11 w-11"
                                     iconSizeClassName="h-[18px] w-[18px]"
                                     metadata={buildPreferenceMetadata(
                                         currentTrack,
@@ -604,7 +601,7 @@ export function FullPlayer() {
                                 <TrackOverflowMenu
                                     track={currentTrack}
                                     showPlayNext={false}
-                                    triggerClassName="!flex !h-10 !w-10 !items-center !justify-center !p-0 !opacity-100 text-content-muted hover:text-content"
+                                    triggerClassName="!flex !h-11 !w-11 !items-center !justify-center !p-0 !opacity-100 text-content-muted hover:text-content"
                                     menuClassName="bottom-full top-auto mb-1 mt-0 z-[10001]"
                                     extraItemsAfter={
                                         <>
@@ -655,7 +652,7 @@ export function FullPlayer() {
 
                                 <div
                                     className={cn(
-                                        "absolute bottom-full right-0 mb-2 w-44 rounded-xl border border-white/10 bg-surface-hover p-3 shadow-xl transition-all duration-200",
+                                        "absolute bottom-full right-0 mb-2 w-44 rounded-[14px] border border-white/10 bg-surface-hover p-3 shadow-xl transition-all duration-200 motion-reduce:transition-none motion-reduce:transform-none",
                                         showVolumePopup
                                             ? "opacity-100 scale-100 pointer-events-auto"
                                             : "opacity-0 scale-95 pointer-events-none",

@@ -174,6 +174,17 @@ function findButton(text: string): HTMLButtonElement {
     return button;
 }
 
+function findUserEditor(username: string): HTMLButtonElement {
+    const button = document.querySelector(
+        `button[aria-label="Изменить пользователя ${username}"]`,
+    );
+    assert.ok(
+        button instanceof HTMLButtonElement,
+        `Missing ${username} editor`,
+    );
+    return button;
+}
+
 test("shows SSO badges and labels password setup for SSO-only users", async (t) => {
     const harness = await mountUserManagementSection();
     t.after(harness.unmount);
@@ -185,15 +196,7 @@ test("shows SSO badges and labels password setup for SSO-only users", async (t) 
     assert.ok(badges.includes("SSO"));
     assert.ok(badges.includes("только SSO"));
 
-    const ssoUserLabel = Array.from(
-        harness.container.querySelectorAll("div"),
-    ).find(
-        (element) =>
-            element.textContent?.includes("sso-user") &&
-            element.querySelector("div") === null,
-    );
-    assert.ok(ssoUserLabel, "Missing SSO-only user row");
-    await click(ssoUserLabel);
+    await click(findUserEditor("sso-user"));
 
     assert.match(
         document.querySelector('[role="dialog"]')?.textContent ?? "",
@@ -215,13 +218,7 @@ test("shows SSO badges and labels password setup for SSO-only users", async (t) 
 test("sends an edited role for any user", async (t) => {
     const harness = await mountUserManagementSection();
     t.after(harness.unmount);
-    const userRow = Array.from(harness.container.querySelectorAll("div")).find(
-        (element) =>
-            element.textContent?.includes("local-linked-user") &&
-            element.querySelector("div") === null,
-    );
-    assert.ok(userRow, "Missing local user row");
-    await click(userRow);
+    await click(findUserEditor("local-linked-user"));
 
     const roleSelect = document.querySelector(
         '[role="dialog"] select#edit-user-role',
@@ -239,15 +236,7 @@ test("sends an edited role for any user", async (t) => {
 test("shows the OIDC role overwrite warning only for linked users", async (t) => {
     const harness = await mountUserManagementSection();
     t.after(harness.unmount);
-    const linkedUserRow = Array.from(
-        harness.container.querySelectorAll("div"),
-    ).find(
-        (element) =>
-            element.textContent?.includes("local-linked-user") &&
-            element.querySelector("div") === null,
-    );
-    assert.ok(linkedUserRow, "Missing linked user row");
-    await click(linkedUserRow);
+    await click(findUserEditor("local-linked-user"));
 
     const warning =
         "Управление ролями OIDC (если оно включено) заменит ручное изменение роли при следующем входе этого пользователя через SSO.";
@@ -257,15 +246,7 @@ test("shows the OIDC role overwrite warning only for linked users", async (t) =>
     );
 
     await click(findButton("Отмена"));
-    const localUserRow = Array.from(
-        harness.container.querySelectorAll("div"),
-    ).find(
-        (element) =>
-            element.textContent?.includes("admin-target-user") &&
-            element.querySelector("div") === null,
-    );
-    assert.ok(localUserRow, "Missing unlinked user row");
-    await click(localUserRow);
+    await click(findUserEditor("admin-target-user"));
 
     assert.doesNotMatch(
         document.querySelector('[role="dialog"]')?.textContent ?? "",
@@ -279,13 +260,7 @@ test("renders the backend last-admin rejection", async (t) => {
     });
     const harness = await mountUserManagementSection();
     t.after(harness.unmount);
-    const userRow = Array.from(harness.container.querySelectorAll("div")).find(
-        (element) =>
-            element.textContent?.includes("admin-target-user") &&
-            element.querySelector("div") === null,
-    );
-    assert.ok(userRow, "Missing admin user row");
-    await click(userRow);
+    await click(findUserEditor("admin-target-user"));
 
     const roleSelect = document.querySelector(
         '[role="dialog"] select#edit-user-role',

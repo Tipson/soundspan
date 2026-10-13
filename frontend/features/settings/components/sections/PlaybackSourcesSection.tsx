@@ -71,6 +71,7 @@ export function PlaybackSourcesSection({
                     value={stored}
                     onChange={(v) => onUpdate({ playbackSourceOrder: v })}
                     options={resolveOrderOptions(stored)}
+                    wrapValue
                 />
             </SettingsRow>
             <ServerMusicSources />

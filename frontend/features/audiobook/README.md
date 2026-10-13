@@ -38,3 +38,21 @@ multi-file parts seek within the concatenated audiobook stream.
 ## Update Rule
 
 - When adding/removing significant files or changing behavior in this domain, update or verify this README and keep the targeted commands below accurate in the same change set.
+
+## Progress write ordering
+
+Manual finish/reset captures a terminal metadata intent before the existing pause.
+`lib/audiobookProgressWrites.ts` serializes writes per book and auth generation,
+so a pending autosave finishes before the manual write and pause autosaves cannot
+undo it. Responses update player metadata only while the book activation and
+intent still match. Explicit resume/replay opens a new progress session; failed
+writes can be retried. Playback commands and podcast persistence are unchanged.
+This is in-tab ordering, not server-side versioning across devices or requests
+that commit after a client-side network failure.
+
+Behavioral coverage: `tests/component/audiobookProgressIntent.component.test.ts`
+uses the actual hooks and audiobook API request bodies with held responses.
+
+The shared audio controls open the progress session synchronously in `resume`
+and `playAudiobook`, before React commits playback state. The persistence layout
+effect only resets deduplication; it must not revoke a newer manual intent.

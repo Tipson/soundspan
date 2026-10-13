@@ -6,6 +6,16 @@
 
 ## Unreleased
 
+- Keep artist and album metadata editors visible on touch screens and above sticky content. Make fields accessible by their labels, keep nested reset confirmation and mobile footer actions reachable, and preserve genre order when opening or cancelling the editor.
+
+- Open newly created playlists after the dialog history entry has closed, preventing a native Back event from canceling the destination. Consume creation links on Cancel, Escape and Back after the real history guard closes, while preserving an open lower player.
+
+- Keep manual audiobook finish and reset authoritative over pause autosaves. Serialize progress metadata per authenticated book session, preserve newer selections and their clocks, and allow explicit replay and safe retries without changing playback commands.
+
+- Refresh Home, Wave, player, music collections, search, user settings and administration with shared surfaces, readable titles and consistent touch controls. Preserve existing playback, recommendations and access rules.
+
+- Keep dialogs above clipped content, restore keyboard focus when they close, and keep player controls, save actions and error dialogs reachable on narrow or short screens and with enlarged text. Accept formatted two-factor and recovery codes without truncating them before normalization.
+
 - Keep track action menus visible outside clipped and virtualized lists, including single-track favorites and playlists. Anchor menus within the viewport, allow long menus to scroll, and dismiss them when their list scrolls or the viewport changes.
 
 - Import public Yandex Music playlists from legacy owner links and UUID share links. Read complete track lists anonymously in bounded batches, preserve source order and recording versions, and use the existing background import with progress, cancellation and safe failure messages.

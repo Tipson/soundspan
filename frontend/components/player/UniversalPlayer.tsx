@@ -8,7 +8,12 @@ import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { MiniPlayer } from "./MiniPlayer";
 import { FullPlayer } from "./FullPlayer";
 import { OverlayPlayer } from "./OverlayPlayer";
-import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import {
+    AnimatePresence,
+    LayoutGroup,
+    motion,
+    useReducedMotion,
+} from "framer-motion";
 
 /**
  * UniversalPlayer - Manages player UI rendering based on mode and device
@@ -32,6 +37,7 @@ export function UniversalPlayer() {
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
+    const shouldReduceMotion = useReducedMotion();
 
     const hasMedia = !!(currentTrack || currentAudiobook || currentPodcast);
     const { returnToPreviousMode } = useAudioControls();
@@ -53,13 +59,22 @@ export function UniversalPlayer() {
                             <motion.div
                                 key="overlay-player"
                                 data-player-transition="overlay"
-                                initial={{ opacity: 0, y: 14, scale: 0.995 }}
+                                className="fixed inset-0 z-[9998]"
+                                initial={
+                                    shouldReduceMotion
+                                        ? { opacity: 1, y: 0, scale: 1 }
+                                        : { opacity: 0, y: 14, scale: 0.995 }
+                                }
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 52, scale: 0.992 }}
+                                exit={
+                                    shouldReduceMotion
+                                        ? { opacity: 1, y: 0, scale: 1 }
+                                        : { opacity: 0, y: 52, scale: 0.992 }
+                                }
                                 transition={{
                                     type: "spring",
                                     bounce: 0,
-                                    duration: 0.32,
+                                    duration: shouldReduceMotion ? 0 : 0.32,
                                 }}
                             >
                                 <OverlayPlayer />
@@ -69,13 +84,21 @@ export function UniversalPlayer() {
                             <motion.div
                                 key="mini-player"
                                 data-player-transition="mini"
-                                initial={{ opacity: 0, y: 12 }}
+                                initial={
+                                    shouldReduceMotion
+                                        ? { opacity: 1, y: 0 }
+                                        : { opacity: 0, y: 12 }
+                                }
                                 animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 12 }}
+                                exit={
+                                    shouldReduceMotion
+                                        ? { opacity: 1, y: 0 }
+                                        : { opacity: 0, y: 12 }
+                                }
                                 transition={{
                                     type: "spring",
                                     bounce: 0,
-                                    duration: 0.28,
+                                    duration: shouldReduceMotion ? 0 : 0.28,
                                 }}
                             >
                                 <MiniPlayer />
@@ -92,13 +115,21 @@ export function UniversalPlayer() {
                             <motion.div
                                 key="desktop-overlay-player"
                                 data-player-transition="overlay"
-                                initial={{ opacity: 0, y: 18, scale: 0.995 }}
+                                initial={
+                                    shouldReduceMotion
+                                        ? { opacity: 1, y: 0, scale: 1 }
+                                        : { opacity: 0, y: 18, scale: 0.995 }
+                                }
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 22, scale: 0.998 }}
+                                exit={
+                                    shouldReduceMotion
+                                        ? { opacity: 1, y: 0, scale: 1 }
+                                        : { opacity: 0, y: 22, scale: 0.998 }
+                                }
                                 transition={{
                                     type: "spring",
                                     bounce: 0,
-                                    duration: 0.34,
+                                    duration: shouldReduceMotion ? 0 : 0.34,
                                 }}
                             >
                                 <OverlayPlayer />

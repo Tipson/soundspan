@@ -358,7 +358,7 @@ export default function AudiobooksPage() {
                             href="https://github.com/advplyr/audiobookshelf"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                            className="inline-flex min-h-11 items-center rounded-[10px] px-3 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         >
                             Открыть документацию
                         </a>
@@ -382,7 +382,7 @@ export default function AudiobooksPage() {
                 />
 
                 {/* Filter and Sort Controls - Mobile Optimized */}
-                <div className="mb-10 space-y-3 border-y border-line py-5">
+                <div className="mb-7 space-y-3 border-y border-line py-4">
                     {/* First Row: Filter Pills and Shuffle */}
                     <div
                         role="group"
@@ -395,7 +395,7 @@ export default function AudiobooksPage() {
                                 setCurrentPage(1);
                             }}
                             aria-pressed={filter === "all"}
-                            className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                            className={`min-h-11 rounded-[10px] px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                 filter === "all"
                                     ? "bg-brand text-surface"
                                     : "border border-line bg-surface-elevated text-content-muted hover:bg-surface-hover hover:text-content"
@@ -409,7 +409,7 @@ export default function AudiobooksPage() {
                                 setCurrentPage(1);
                             }}
                             aria-pressed={filter === "finished"}
-                            className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                            className={`min-h-11 rounded-[10px] px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                 filter === "finished"
                                     ? "bg-brand text-surface"
                                     : "border border-line bg-surface-elevated text-content-muted hover:bg-surface-hover hover:text-content"
@@ -421,12 +421,10 @@ export default function AudiobooksPage() {
                         {/* Shuffle Button */}
                         <button
                             onClick={handleShuffleAudiobooks}
-                            className="flex min-h-11 items-center gap-2 rounded-xl bg-brand px-4 py-2 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            className="flex min-h-11 items-center gap-2 rounded-[10px] bg-brand px-4 py-2 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
                             <Shuffle className="w-4 h-4" />
-                            <span className="hidden sm:inline">
-                                Случайная книга
-                            </span>
+                            <span>Случайная книга</span>
                         </button>
 
                         {/* Results Count - Desktop only */}
@@ -449,7 +447,7 @@ export default function AudiobooksPage() {
                                 setCurrentPage(1);
                             }}
                             aria-label="Сортировка аудиокниг"
-                            className="min-h-11 rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none transition-colors focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
+                            className="min-h-11 rounded-[10px] border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none transition-colors focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
                         >
                             <option value="title">По названию</option>
                             <option value="author">По автору</option>
@@ -463,7 +461,7 @@ export default function AudiobooksPage() {
                                 setCurrentPage(1);
                             }}
                             aria-pressed={groupBySeries}
-                            className={`flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                            className={`flex min-h-11 items-center gap-2 rounded-[10px] px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                 groupBySeries
                                     ? "bg-brand text-surface"
                                     : "border border-line bg-surface-elevated text-content-muted hover:bg-surface-hover hover:text-content"
@@ -482,7 +480,7 @@ export default function AudiobooksPage() {
                                     setCurrentPage(1);
                                 }}
                                 aria-label="Жанр аудиокниг"
-                                className="min-h-11 min-w-0 flex-1 truncate rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none transition-colors focus:border-brand/60 focus:ring-2 focus:ring-brand/20 md:min-w-[140px] md:flex-initial [&>option]:bg-surface-elevated [&>option]:text-content"
+                                className="min-h-11 min-w-0 flex-1 truncate rounded-[10px] border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none transition-colors focus:border-brand/60 focus:ring-2 focus:ring-brand/20 md:min-w-[140px] md:flex-initial [&>option]:bg-surface-elevated [&>option]:text-content"
                             >
                                 <option value="">Все жанры</option>
                                 {allGenres.map((genre) => (
@@ -501,7 +499,7 @@ export default function AudiobooksPage() {
                                 setCurrentPage(1);
                             }}
                             aria-label="Аудиокниг на странице"
-                            className="min-h-11 rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
+                            className="min-h-11 rounded-[10px] border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
                         >
                             <option value={25}>25 на странице</option>
                             <option value={50}>50 на странице</option>
@@ -527,7 +525,7 @@ export default function AudiobooksPage() {
                         filter === "all" &&
                         !groupBySeries && (
                             <section>
-                                <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+                                <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
                                     Продолжить слушать
                                 </h2>
                                 <div
@@ -559,7 +557,7 @@ export default function AudiobooksPage() {
                                 {/* Series Cards */}
                                 {series.length > 0 && (
                                     <section>
-                                        <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+                                        <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
                                             Серии
                                         </h2>
                                         <div
@@ -602,7 +600,7 @@ export default function AudiobooksPage() {
                                 {/* Standalone Books */}
                                 {standalone.length > 0 && (
                                     <section>
-                                        <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+                                        <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
                                             Отдельные книги
                                         </h2>
                                         <div
@@ -673,7 +671,7 @@ export default function AudiobooksPage() {
                             <button
                                 onClick={() => setCurrentPage(1)}
                                 disabled={currentPage === 1}
-                                className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+                                className="min-h-11 rounded-[10px] px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Первая
                             </button>
@@ -682,7 +680,7 @@ export default function AudiobooksPage() {
                                     setCurrentPage((p) => Math.max(1, p - 1))
                                 }
                                 disabled={currentPage === 1}
-                                className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+                                className="min-h-11 rounded-[10px] px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Назад
                             </button>
@@ -696,14 +694,14 @@ export default function AudiobooksPage() {
                                     )
                                 }
                                 disabled={currentPage === totalPages}
-                                className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+                                className="min-h-11 rounded-[10px] px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Далее
                             </button>
                             <button
                                 onClick={() => setCurrentPage(totalPages)}
                                 disabled={currentPage === totalPages}
-                                className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+                                className="min-h-11 rounded-[10px] px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Последняя
                             </button>

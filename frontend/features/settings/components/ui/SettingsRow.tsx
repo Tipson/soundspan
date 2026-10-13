@@ -38,12 +38,12 @@ export function SettingsRow({
     return (
         <SettingsFieldContext.Provider value={{ labelId, fieldName }}>
             <div
-                className={`settings-row flex min-h-16 flex-col justify-between gap-3 py-3.5 sm:flex-row sm:gap-5 ${
-                    align === "start" ? "items-start" : "items-center"
+                className={`settings-row flex min-h-16 flex-col items-start justify-between gap-3 py-4 sm:flex-row sm:gap-6 ${
+                    align === "start" ? "sm:items-start" : "sm:items-center"
                 }`}
             >
                 <div className="min-w-0 flex-1 sm:pr-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                         {htmlFor ? (
                             <label
                                 id={labelId}
@@ -60,12 +60,14 @@ export function SettingsRow({
                         {labelExtra}
                     </div>
                     {description && (
-                        <p className="mt-1 max-w-2xl text-xs leading-5 text-content-muted">
+                        <p className="mt-1 max-w-2xl text-sm leading-5 text-content-muted">
                             {description}
                         </p>
                     )}
                 </div>
-                <div className="w-full shrink-0 sm:w-auto">{children}</div>
+                <div className="min-w-0 w-full sm:w-auto sm:max-w-[50%]">
+                    {children}
+                </div>
             </div>
         </SettingsFieldContext.Provider>
     );

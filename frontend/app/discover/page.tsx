@@ -57,7 +57,7 @@ export default function DiscoverWeeklyPage() {
                         subtitle={discoverRu.description}
                         icon={Sparkles}
                     />
-                    <div className="rounded-3xl border border-line bg-surface-elevated">
+                    <div className="rounded-[14px] border border-line bg-surface-elevated">
                         <EmptyState
                             icon={
                                 <Music2 className="size-7" aria-hidden="true" />
@@ -216,7 +216,7 @@ function DiscoverWeeklyPageContent() {
                     <div
                         role="status"
                         aria-live="polite"
-                        className="mt-4 flex min-h-64 flex-col items-center justify-center gap-4 rounded-3xl border border-line bg-surface-elevated text-content-muted"
+                        className="mt-4 flex min-h-64 flex-col items-center justify-center gap-4 rounded-[14px] border border-line bg-surface-elevated text-content-muted"
                     >
                         <GradientSpinner size="md" />
                         <p className="text-sm font-medium">
@@ -318,7 +318,7 @@ function DiscoverWeeklyPageContent() {
                         <div
                             role="status"
                             aria-live="polite"
-                            className="flex flex-col items-center justify-center rounded-3xl border border-line bg-surface-elevated px-5 py-16 text-center"
+                            className="flex flex-col items-center justify-center rounded-[14px] border border-line bg-surface-elevated px-5 py-16 text-center"
                         >
                             <GradientSpinner size="md" />
                             <h3 className="mt-4 text-lg font-semibold text-content">
@@ -329,7 +329,7 @@ function DiscoverWeeklyPageContent() {
                             </p>
                         </div>
                     ) : (
-                        <div className="rounded-3xl border border-line bg-surface-elevated">
+                        <div className="rounded-[14px] border border-line bg-surface-elevated">
                             <EmptyState
                                 icon={
                                     <Music2

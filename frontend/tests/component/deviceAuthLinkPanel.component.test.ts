@@ -54,3 +54,19 @@ test("DeviceAuthLinkPanel omits expiry when no countdown is available", async ()
 
     assert.doesNotMatch(html, /Истекает через/);
 });
+
+test("DeviceAuthLinkPanel confirms copying only after successful copy feedback", async () => {
+    const { DeviceAuthLinkPanel } =
+        await import("../../features/settings/components/ui/DeviceAuthLinkPanel");
+    const waiting = renderToStaticMarkup(
+        React.createElement(DeviceAuthLinkPanel, baseProps),
+    );
+    assert.doesNotMatch(waiting, /код уже скопирован/);
+    const copied = renderToStaticMarkup(
+        React.createElement(DeviceAuthLinkPanel, {
+            ...baseProps,
+            copied: true,
+        }),
+    );
+    assert.match(copied, /код уже скопирован/);
+});

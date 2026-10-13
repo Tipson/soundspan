@@ -6,6 +6,12 @@ import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 import { Badge, type BadgeProps } from "@/components/ui/Badge";
 import { SettingsSection } from "../ui";
 import { formatDate } from "@/utils/formatTime";
+import {
+    SETTINGS_DANGER_BUTTON,
+    SETTINGS_PRIMARY_BUTTON,
+    SETTINGS_SECONDARY_BUTTON,
+    SETTINGS_FIELD_FOCUS_RING,
+} from "../ui/settingsFieldStyles";
 
 const EXPIRING_SOON_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -31,6 +37,7 @@ function ApiKeyExpiry({ expiresAt }: { expiresAt: string }) {
     );
 }
 
+/** Manages personal API keys with expiry feedback and explicit revoke confirmation. */
 export const APIKeysSection: React.FC = () => {
     const {
         apiKeys,
@@ -116,23 +123,23 @@ export const APIKeysSection: React.FC = () => {
         >
             {/* Generated Key Display */}
             {generatedApiKey && (
-                <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-4 space-y-3">
+                <div className="rounded-[10px] border border-warning/25 bg-warning/10 p-4 space-y-3">
                     <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                        <div className="min-w-0 flex-1">
                             <h3 className="text-sm font-medium text-yellow-200 mb-2">
                                 Новый ключ API
                             </h3>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <input
                                     type="text"
                                     readOnly
                                     value={generatedApiKey}
-                                    className="flex-1 bg-black/50 border border-yellow-700/50 rounded px-3 py-2 text-sm text-white font-mono"
+                                    aria-label="Созданный ключ API"
+                                    className={`min-h-11 min-w-0 flex-1 rounded-[10px] border border-line bg-surface-elevated px-3 py-2 text-base text-content font-mono ${SETTINGS_FIELD_FOCUS_RING}`}
                                 />
                                 <button
                                     onClick={handleCopyKey}
-                                    className="shrink-0 inline-flex items-center gap-1.5 px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
-                    hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className={SETTINGS_SECONDARY_BUTTON}
                                 >
                                     <Copy className="w-4 h-4" />
                                     {copied ? "Скопировано" : "Копировать"}
@@ -147,7 +154,7 @@ export const APIKeysSection: React.FC = () => {
                     <div className="flex justify-end">
                         <button
                             onClick={handleDismissKey}
-                            className="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+                            className={SETTINGS_SECONDARY_BUTTON}
                         >
                             Скрыть
                         </button>
@@ -159,17 +166,16 @@ export const APIKeysSection: React.FC = () => {
             <div>
                 <button
                     onClick={() => setShowCreateApiKeyDialog(true)}
-                    className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
-            hover:scale-105 transition-transform"
+                    className={SETTINGS_PRIMARY_BUTTON}
                 >
                     Создать ключ API
                 </button>
             </div>
 
             {/* API Keys Table */}
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
+            <div className="min-w-0 overflow-x-auto">
+                <table className="block w-full md:table">
+                    <thead className="hidden md:table-header-group">
                         <tr className="border-b border-surface-active">
                             <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">
                                 Название устройства
@@ -191,7 +197,7 @@ export const APIKeysSection: React.FC = () => {
                             </th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="block md:table-row-group">
                         {loadingApiKeys ? (
                             <tr>
                                 <td
@@ -214,33 +220,48 @@ export const APIKeysSection: React.FC = () => {
                             apiKeys.map((key) => (
                                 <tr
                                     key={key.id}
-                                    className="border-b border-surface-active hover:bg-surface"
+                                    className="grid grid-cols-2 gap-3 border-b border-line py-4 md:table-row md:py-0 md:hover:bg-surface-hover"
                                 >
-                                    <td className="py-3 px-4 text-sm text-white">
+                                    <td
+                                        data-label="Название устройства"
+                                        className="col-span-2 break-words text-sm text-content before:mb-1 before:block before:text-xs before:text-content-muted before:content-[attr(data-label)] md:px-3 md:py-3 md:before:hidden"
+                                    >
                                         {key.name}
                                     </td>
-                                    <td className="py-3 px-4 text-sm text-gray-400 font-mono">
+                                    <td
+                                        data-label="Фрагмент ключа"
+                                        className="col-span-2 break-all text-sm font-mono text-content-muted before:mb-1 before:block before:font-sans before:text-xs before:content-[attr(data-label)] md:px-3 md:py-3 md:before:hidden"
+                                    >
                                         {key.keyPreview}
                                     </td>
-                                    <td className="py-3 px-4 text-sm text-gray-400">
+                                    <td
+                                        data-label="Создан"
+                                        className="text-sm tabular-nums text-content-muted before:mb-1 before:block before:text-xs before:content-[attr(data-label)] md:px-3 md:py-3 md:before:hidden"
+                                    >
                                         {formatDate(key.createdAt)}
                                     </td>
-                                    <td className="py-3 px-4 text-sm text-gray-400">
+                                    <td
+                                        data-label="Использован"
+                                        className="text-sm tabular-nums text-content-muted before:mb-1 before:block before:text-xs before:content-[attr(data-label)] md:px-3 md:py-3 md:before:hidden"
+                                    >
                                         {key.lastUsedAt
                                             ? formatDate(key.lastUsedAt)
                                             : "Никогда"}
                                     </td>
-                                    <td className="py-3 px-4 text-sm text-gray-400">
+                                    <td
+                                        data-label="Истекает"
+                                        className="col-span-2 text-sm tabular-nums text-content-muted before:mb-1 before:block before:text-xs before:content-[attr(data-label)] md:px-3 md:py-3 md:before:hidden"
+                                    >
                                         <ApiKeyExpiry
                                             expiresAt={key.expiresAt}
                                         />
                                     </td>
-                                    <td className="py-3 px-4 text-sm">
+                                    <td className="col-span-2 text-sm md:px-3 md:py-3">
                                         <button
                                             onClick={() =>
                                                 setConfirmRevoke(key.id)
                                             }
-                                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-colors"
+                                            className={`${SETTINGS_SECONDARY_BUTTON} text-red-300 hover:text-red-200`}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                             Отозвать
@@ -266,21 +287,24 @@ export const APIKeysSection: React.FC = () => {
                 >
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                            <label
+                                htmlFor="api-key-device-name"
+                                className="block text-sm font-medium text-content mb-2"
+                            >
                                 Название устройства
                             </label>
                             <input
+                                id="api-key-device-name"
                                 type="text"
                                 value={newApiKeyName}
                                 onChange={(e) =>
                                     setNewApiKeyName(e.target.value)
                                 }
                                 placeholder="Например, ноутбук или домашний сервер"
-                                className="w-full bg-surface border border-surface-active rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                autoFocus
+                                className={`min-h-11 w-full rounded-[10px] border border-line bg-surface-elevated px-3 py-2 text-base text-content placeholder:text-content-muted ${SETTINGS_FIELD_FOCUS_RING}`}
                             />
                         </div>
-                        <div className="flex justify-end items-center gap-3">
+                        <div className="flex flex-wrap justify-end items-center gap-3">
                             <InlineStatus
                                 status={createStatus}
                                 message={createMessage}
@@ -293,15 +317,14 @@ export const APIKeysSection: React.FC = () => {
                                     setCreateStatus("idle");
                                 }}
                                 disabled={creating}
-                                className="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                                className={SETTINGS_SECONDARY_BUTTON}
                             >
                                 Отмена
                             </button>
                             <button
                                 onClick={handleCreateApiKey}
                                 disabled={!newApiKeyName.trim() || creating}
-                                className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
-                  hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                                className={SETTINGS_PRIMARY_BUTTON}
                             >
                                 {creating ? "Создаём…" : "Создать"}
                             </button>
@@ -325,7 +348,7 @@ export const APIKeysSection: React.FC = () => {
                             Отозвать этот ключ API? Это действие нельзя
                             отменить.
                         </p>
-                        <div className="flex justify-end items-center gap-3">
+                        <div className="flex flex-wrap justify-end items-center gap-3">
                             <InlineStatus
                                 status={revokeStatus}
                                 message={revokeMessage}
@@ -336,14 +359,13 @@ export const APIKeysSection: React.FC = () => {
                                     setConfirmRevoke(null);
                                     setRevokeStatus("idle");
                                 }}
-                                className="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+                                className={SETTINGS_SECONDARY_BUTTON}
                             >
                                 Отмена
                             </button>
                             <button
                                 onClick={handleRevokeApiKey}
-                                className="px-4 py-1.5 text-sm bg-red-600 text-white font-medium rounded-full
-                  hover:bg-red-700 transition-colors"
+                                className={SETTINGS_DANGER_BUTTON}
                             >
                                 Отозвать
                             </button>

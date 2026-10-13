@@ -61,16 +61,12 @@ test("ConfirmDialog renders its content and actions in a dialog", async () => {
         () => undefined,
         () => undefined,
     );
-    assert.ok(mounted.container.querySelector('[role="dialog"]'));
-    assert.match(mounted.container.textContent, /Delete playlist\?/);
-    assert.match(
-        mounted.container.textContent,
-        /This action cannot be undone\./,
-    );
+    assert.ok(document.querySelector('[role="dialog"]'));
+    assert.match(document.body.textContent, /Delete playlist\?/);
+    assert.match(document.body.textContent, /This action cannot be undone\./);
 
-    const labels = Array.from(
-        mounted.container.querySelectorAll("button"),
-        (button) => button.textContent?.trim(),
+    const labels = Array.from(document.querySelectorAll("button"), (button) =>
+        button.textContent?.trim(),
     );
     assert.ok(labels.includes("Keep playlist"));
     assert.ok(labels.includes("Delete"));
@@ -88,9 +84,9 @@ test("ConfirmDialog confirms once and closes once", async () => {
             closeCalls += 1;
         },
     );
-    const confirmButton = Array.from(
-        mounted.container.querySelectorAll("button"),
-    ).find((button) => button.textContent?.trim() === "Delete");
+    const confirmButton = Array.from(document.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === "Delete",
+    );
     assert.ok(confirmButton, "expected the confirm button");
 
     await React.act(async () => {

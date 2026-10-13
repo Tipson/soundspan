@@ -201,7 +201,7 @@ export function TopBar({
                                     autoCapitalize="none"
                                     autoCorrect="off"
                                     tabIndex={0}
-                                    className="shell-search-field h-11 w-full min-w-0 rounded-xl pl-10 pr-3 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/15"
+                                    className="shell-search-field h-11 w-full min-w-0 rounded-[var(--music-radius-control)] pl-10 pr-3 text-base text-content outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/15"
                                 />
                             </div>
                         </form>
@@ -261,7 +261,7 @@ export function TopBar({
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
-                                className="shell-search-field h-11 w-full rounded-2xl pl-12 pr-14 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/20"
+                                className="shell-search-field h-12 w-full rounded-[var(--music-radius-control)] pl-12 pr-14 text-sm text-content outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/20"
                             />
                             <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-semibold text-content-muted">
                                 /
@@ -281,7 +281,7 @@ export function TopBar({
             <span
                 data-shell-spectral-seam="true"
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-brand/40 to-transparent"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-line/40"
             />
         </header>
     );

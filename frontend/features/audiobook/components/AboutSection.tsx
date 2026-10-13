@@ -18,10 +18,12 @@ export function AboutSection({ description }: AboutSectionProps) {
 
     return (
         <section>
-            <h2 className="text-2xl md:text-3xl font-bold mb-6">О книге</h2>
-            <Card className="p-6">
+            <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
+                О книге
+            </h2>
+            <Card className="rounded-[14px] p-4 sm:p-5">
                 <div
-                    className="text-gray-300 text-sm leading-relaxed prose prose-invert prose-sm max-w-none"
+                    className="prose prose-invert prose-sm max-w-[70ch] text-sm leading-7 text-content-secondary [overflow-wrap:anywhere]"
                     dangerouslySetInnerHTML={{
                         __html: DOMPurify.sanitize(description || ""),
                     }}

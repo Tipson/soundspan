@@ -292,11 +292,8 @@ export default function MyHistoryPage() {
     }
 
     return (
-        <div
-            data-consumer-surface="history"
-            className="min-h-screen bg-surface"
-        >
-            <div className="mx-auto max-w-5xl space-y-10 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div data-consumer-surface="history" className="min-h-full bg-surface">
+            <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
                 <PageHeader
                     title="История прослушиваний"
                     subtitle={`${history.length} ${pluralRu(history.length, [
@@ -305,7 +302,7 @@ export default function MyHistoryPage() {
                         "прослушанных треков",
                     ])}`}
                     icon={History}
-                    className="mb-8"
+                    className="mb-6"
                     actions={
                         <Button
                             variant="secondary"
@@ -354,7 +351,7 @@ export default function MyHistoryPage() {
 
                 {!error && history.length > 0 && (
                     <section className="border-t border-line pt-6">
-                        <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
+                        <h2 className="mb-4 text-xl font-semibold text-content">
                             Недавно слушали ({history.length})
                         </h2>
 
@@ -365,7 +362,7 @@ export default function MyHistoryPage() {
                                 onPlay={handlePlayFromHistory}
                                 rowSlots={historyRowSlots}
                                 rowOverflow={historyRowOverflow}
-                                rowClassName="grid-cols-[minmax(0,1fr)_auto] px-3 py-4 hover:bg-surface-elevated/70 sm:px-4"
+                                rowClassName="grid-cols-[minmax(0,1fr)_auto] px-3 py-3 hover:bg-surface-elevated/70 sm:px-4"
                                 preferenceMode="up-only"
                                 className="divide-y divide-line"
                             />

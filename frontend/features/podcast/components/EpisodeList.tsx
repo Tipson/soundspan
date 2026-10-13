@@ -10,6 +10,7 @@ import {
     podcastRu,
 } from "@/lib/i18n/podcastRu";
 import { formatDate } from "../utils";
+import { ru } from "@/lib/i18n/ru";
 import { EpisodeOverflowMenu } from "./EpisodeOverflowMenu";
 
 interface EpisodeListProps {
@@ -40,8 +41,8 @@ export function EpisodeList({
 }: EpisodeListProps) {
     return (
         <section>
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-white">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-xl font-semibold text-content sm:text-2xl">
                     {podcastRu.detail.allEpisodes}
                 </h2>
                 <button
@@ -50,7 +51,7 @@ export function EpisodeList({
                             sortOrder === "newest" ? "oldest" : "newest",
                         )
                     }
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-sm text-white/70 hover:text-white transition-all"
+                    className="flex min-h-11 items-center gap-2 rounded-[10px] bg-surface-raised px-3 py-2 text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                 >
                     <ArrowUpDown className="w-4 h-4" />
                     {sortOrder === "newest"
@@ -71,10 +72,10 @@ export function EpisodeList({
                         <div
                             key={episode.id}
                             className={cn(
-                                "group relative rounded-md transition-all",
+                                "group relative rounded-[10px] transition-colors motion-reduce:transition-none",
                                 isCurrentEpisode
-                                    ? "bg-white/10"
-                                    : "hover:bg-white/5",
+                                    ? "bg-surface-active"
+                                    : "hover:bg-surface-hover",
                             )}
                         >
                             {/* Progress bar at the bottom */}
@@ -91,72 +92,70 @@ export function EpisodeList({
                                 )}
 
                             <div
-                                onClick={() => {
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`${ru.common.play}: ${episode.title}`}
+                                onKeyDown={(event) => {
+                                    if (
+                                        event.target !== event.currentTarget ||
+                                        (event.key !== "Enter" &&
+                                            event.key !== " ")
+                                    )
+                                        return;
+                                    event.preventDefault();
+                                    if (!isCurrentEpisode) onPlay(episode);
+                                }}
+                                onClick={(event) => {
+                                    // Portaled actions belong to this row in React,
+                                    // but closing their dialog must not start playback.
+                                    if (
+                                        !event.currentTarget.contains(
+                                            event.target as Node,
+                                        )
+                                    )
+                                        return;
                                     if (!isCurrentEpisode) {
                                         onPlay(episode);
                                     }
                                 }}
-                                className="flex items-center gap-4 px-3 py-3 cursor-pointer"
+                                className="flex min-h-16 cursor-pointer items-center gap-2 px-2 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-brand sm:gap-3 sm:px-3"
                             >
-                                {/* Number / Play/Pause Icon */}
-                                <div className="w-8 flex items-center justify-center shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onPlayPause(episode);
+                                    }}
+                                    aria-label={`${isCurrentEpisode && isPlaying ? ru.common.pause : ru.common.play}: ${episode.title}`}
+                                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-content-secondary transition-colors hover:bg-surface-active hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
+                                >
                                     {episode.progress?.isFinished ? (
-                                        <Check className="w-4 h-4 text-green-400" />
+                                        <Check className="h-4 w-4 text-success" />
+                                    ) : isCurrentEpisode && isPlaying ? (
+                                        <Pause className="h-4 w-4 text-brand" />
                                     ) : (
                                         <>
-                                            <span
-                                                className={cn(
-                                                    "text-sm",
-                                                    isCurrentEpisode &&
-                                                        isPlaying
-                                                        ? "hidden"
-                                                        : "group-hover:hidden",
-                                                    isCurrentEpisode
-                                                        ? "text-brand font-bold"
-                                                        : "text-white/40",
-                                                )}
-                                            >
+                                            <span className="hidden text-sm tabular-nums group-hover:hidden group-focus-within:hidden sm:inline">
                                                 {index + 1}
                                             </span>
-                                            {isCurrentEpisode && isPlaying ? (
-                                                <Pause
-                                                    className="w-4 h-4 text-brand cursor-pointer"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onPlayPause(episode);
-                                                    }}
-                                                />
-                                            ) : (
-                                                <Play
-                                                    className={cn(
-                                                        "w-4 h-4 cursor-pointer",
-                                                        isCurrentEpisode
-                                                            ? "text-brand"
-                                                            : "text-white hidden group-hover:block",
-                                                    )}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onPlayPause(episode);
-                                                    }}
-                                                />
-                                            )}
+                                            <Play className="h-4 w-4 sm:hidden sm:group-hover:block sm:group-focus-within:block" />
                                         </>
                                     )}
-                                </div>
+                                </button>
 
                                 {/* Episode Info */}
                                 <div className="flex-1 min-w-0">
                                     <h3
                                         className={cn(
-                                            "font-medium truncate text-sm",
+                                            "line-clamp-2 text-sm font-semibold leading-5 [overflow-wrap:anywhere] sm:text-base",
                                             isCurrentEpisode
                                                 ? "text-brand"
-                                                : "text-white",
+                                                : "text-content",
                                         )}
                                     >
                                         {episode.title}
                                     </h3>
-                                    <div className="flex items-center gap-2 text-xs text-white/50 mt-0.5">
+                                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-content-secondary">
                                         <span>
                                             {formatDate(episode.publishedAt)}
                                         </span>
@@ -183,7 +182,7 @@ export function EpisodeList({
                                         {episode.progress?.isFinished && (
                                             <>
                                                 <span>•</span>
-                                                <span className="text-green-400">
+                                                <span className="text-success">
                                                     {podcastRu.detail.finished}
                                                 </span>
                                             </>
@@ -204,12 +203,12 @@ export function EpisodeList({
                                 </div>
 
                                 {/* Duration */}
-                                <span className="text-xs text-white/40 shrink-0">
+                                <span className="hidden shrink-0 text-xs tabular-nums text-content-muted sm:inline">
                                     {formatPodcastDurationRu(episode.duration)}
                                 </span>
 
                                 {/* Queue actions */}
-                                <div onClick={(e) => e.stopPropagation()}>
+                                <div>
                                     <EpisodeOverflowMenu
                                         episode={episode}
                                         podcast={{
@@ -231,12 +230,12 @@ export function EpisodeList({
                                                     episode.duration,
                                                 );
                                             }}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-1.5 rounded-full hover:bg-white/10"
+                                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-content-secondary opacity-100 transition-colors hover:bg-surface-active hover:text-success focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 motion-reduce:transition-none"
                                             title={
                                                 podcastRu.detail.markComplete
                                             }
                                         >
-                                            <CheckCircle className="w-4 h-4 text-white/60 hover:text-green-400" />
+                                            <CheckCircle className="h-4 w-4" />
                                         </button>
                                     )}
                             </div>

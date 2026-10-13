@@ -24,6 +24,7 @@ Start-here index for domain modules under `frontend/features`.
 | `library-health` | `frontend/features/library-health/README.md` | `frontend/app/admin/page.tsx`                                                                                             |
 | `podcast`   | `frontend/features/podcast/README.md`   | `frontend/app/podcasts/page.tsx`                                                                                               |
 | `playlist`  | `frontend/features/playlist/README.md`  | `frontend/app/playlist/[id]/page.tsx`<br>`frontend/app/playlist/my-liked/page.tsx`                                             |
+| `playlist-import` | `frontend/features/playlist-import/README.md` | `frontend/app/import/page.tsx`<br>`frontend/app/import/spotify/page.tsx` |
 | `search`    | `frontend/features/search/README.md`    | `frontend/app/playlists/page.tsx`<br>`frontend/app/search/page.tsx`                                                            |
 | `social`    | `frontend/features/social/README.md`    | `frontend/app/page.tsx`<br>`frontend/app/peer-playlists/[peerId]/[remoteId]/page.tsx`                                          |
 | `settings`  | `frontend/features/settings/README.md`  | `frontend/app/device/page.tsx`<br>`frontend/app/settings/page.tsx`                                                             |

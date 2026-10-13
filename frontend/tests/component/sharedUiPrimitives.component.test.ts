@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Search } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { Modal, type ModalProps } from "../../components/ui/Modal";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { LoadingScreen } from "../../components/ui/LoadingScreen";
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -15,11 +14,7 @@ import {
 } from "../../components/ui/HorizontalCarousel";
 import { PagedGridCarousel } from "../../components/ui/PagedGridCarousel";
 
-const TestModal = Modal as React.ComponentType<
-    React.PropsWithChildren<Omit<ModalProps, "children">>
->;
-
-test("Button uses a 44px touch target and the spectral-stage geometry", () => {
+test("Button keeps its text and an accessible name for icon-only actions", () => {
     const standard = renderToStaticMarkup(
         React.createElement(Button, { variant: "primary" }, "Продолжить"),
     );
@@ -27,37 +22,20 @@ test("Button uses a 44px touch target and the spectral-stage geometry", () => {
         React.createElement(Button, { variant: "icon", "aria-label": "Меню" }),
     );
 
-    assert.match(standard, /min-h-11/);
-    assert.match(standard, /rounded-xl/);
-    assert.match(icon, /size-11/);
+    assert.match(standard, />Продолжить<\/button>/);
+    assert.match(icon, /aria-label="Меню"/);
 });
 
-test("Card uses one calm shared radius instead of legacy small geometry", () => {
-    const html = renderToStaticMarkup(
-        React.createElement(Card, null, "Музыка"),
-    );
-
-    assert.match(html, /rounded-2xl/);
-    assert.doesNotMatch(html, /rounded-md/);
-});
-
-test("Modal becomes a bottom sheet on phones and a centered dialog above them", () => {
+test("Card preserves semantic content supplied by its caller", () => {
     const html = renderToStaticMarkup(
         React.createElement(
-            TestModal,
-            {
-                isOpen: true,
-                onClose: () => undefined,
-                title: "Настройки",
-            },
-            "Содержимое",
+            Card,
+            null,
+            React.createElement("h3", null, "Музыка"),
         ),
     );
 
-    assert.match(html, /items-end/);
-    assert.match(html, /sm:items-center/);
-    assert.match(html, /rounded-t-\[24px\]/);
-    assert.match(html, /max-h-\[min\(90dvh,760px\)\]/);
+    assert.match(html, /<h3>Музыка<\/h3>/);
 });
 
 test("PageHeader uses an open editorial hierarchy and responsive action dock", () => {

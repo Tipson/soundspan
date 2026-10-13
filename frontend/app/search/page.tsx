@@ -329,7 +329,7 @@ export default function SearchPage() {
                                         isFetchingNextLibraryTracks ||
                                         isDiscoverSearching
                                     }
-                                    className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition duration-200 hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
+                                    className="min-h-11 rounded-[10px] border border-line bg-surface-elevated px-5 text-sm font-semibold text-white transition duration-200 hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
                                 >
                                     {isFetchingNextLibraryTracks ||
                                     isDiscoverSearching
@@ -385,8 +385,8 @@ export default function SearchPage() {
                 data-search-ambient-clip="true"
                 className="pointer-events-none absolute inset-0 overflow-hidden"
             >
-                <div className="absolute -right-48 -top-64 h-[38rem] w-[38rem] rounded-full bg-brand/[0.075] blur-3xl" />
-                <div className="absolute -left-56 top-72 h-[30rem] w-[30rem] rounded-full bg-violet-500/[0.045] blur-3xl" />
+                <div className="absolute -right-48 -top-64 h-[38rem] w-[38rem] rounded-full bg-brand/[0.025] blur-3xl" />
+                <div className="absolute -left-56 top-72 h-[30rem] w-[30rem] rounded-full bg-brand/[0.015] blur-3xl" />
             </div>
             <TVSearchInput
                 key={query}
@@ -403,7 +403,7 @@ export default function SearchPage() {
                         {ru.search.title}
                     </p>
                     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-                        <h1 className="min-w-0 text-balance text-3xl font-black tracking-[-0.045em] text-content sm:text-5xl">
+                        <h1 className="min-w-0 text-balance text-2xl font-bold tracking-[-0.03em] [overflow-wrap:anywhere] text-content sm:text-4xl">
                             {ru.search.resultsFor}{" "}
                             <span className="text-content-secondary">
                                 “{query.trim()}”
@@ -422,7 +422,7 @@ export default function SearchPage() {
                 hasSearched={hasSearched}
             />
 
-            <div className="relative space-y-8 sm:space-y-10">
+            <div className="relative space-y-7 sm:space-y-9">
                 {hasSearched && aliasInfo ? (
                     <AliasResolutionBanner aliasInfo={aliasInfo} />
                 ) : null}

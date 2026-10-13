@@ -41,7 +41,7 @@ export function SearchFilters({
         <nav
             aria-label={ru.search.resultTypeAria}
             data-overflow-cue="horizontal"
-            className="sticky top-2 z-30 -mx-1 mb-8 snap-x snap-mandatory overflow-x-auto border-y border-white/[0.08] bg-surface/85 px-1 py-2 backdrop-blur-xl scrollbar-hide sm:mb-10"
+            className="sticky top-0 z-30 -mx-1 mb-6 snap-x snap-mandatory overflow-x-auto border-b border-line bg-surface/95 px-1 py-2 backdrop-blur-xl scrollbar-hide sm:mb-8"
             data-tv-section="search-filters"
         >
             <div className="flex min-w-max gap-2">

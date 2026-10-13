@@ -150,7 +150,7 @@ export function UserAvatarMenu() {
                     setIsOpen(true);
                 }}
                 className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center overflow-hidden transition-all ring-2",
+                    "h-11 w-11 rounded-full flex items-center justify-center overflow-hidden transition-colors ring-2",
                     isOpen
                         ? "ring-white/40"
                         : "ring-transparent hover:ring-white/20",
@@ -285,7 +285,7 @@ export function UserAvatarMenu() {
                         onClick={handleLogout}
                         className={cn(
                             itemClass,
-                            "mt-1 border-t border-line text-red-400 hover:bg-red-500/10 hover:text-red-300",
+                            "mt-1 border-t border-line text-error hover:bg-error/10 hover:text-error",
                         )}
                     >
                         <LogOut className="w-4 h-4" />

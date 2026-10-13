@@ -6,6 +6,29 @@ import { toMusicSourcePlaybackTrack } from "../../lib/audio/musicSourcePlayback"
 import type { Track } from "../../lib/audio-state-context";
 
 let current: Track;
+let reduceMotion = false;
+let artworkTransition: unknown;
+mock.module("framer-motion", {
+    namedExports: {
+        useReducedMotion: () => reduceMotion,
+        AnimatePresence: ({ children }: { children: React.ReactNode }) =>
+            children,
+        motion: {
+            div: ({
+                children,
+                layoutId,
+                transition,
+                initial: _initial,
+                animate: _animate,
+                exit: _exit,
+                ...props
+            }: Record<string, unknown> & { children: React.ReactNode }) => {
+                if (layoutId) artworkTransition = transition;
+                return React.createElement("div", props, children);
+            },
+        },
+    },
+});
 mock.module("@/components/player/hooks/useOverlayPlayerAudio", {
     namedExports: {
         useOverlayPlayerAudio: () => ({
@@ -46,7 +69,14 @@ mock.module("@/components/player/CurrentTrackPreferenceButtons", {
             betweenActions,
         }: {
             betweenActions: React.ReactNode;
-        }) => React.createElement("div", null, betweenActions),
+        }) =>
+            React.createElement(
+                "div",
+                null,
+                React.createElement("button", { "aria-label": "Нравится" }),
+                betweenActions,
+                React.createElement("button", { "aria-label": "Не нравится" }),
+            ),
     },
 });
 mock.module("@/components/ui/TrackOverflowMenu", {
@@ -73,10 +103,25 @@ for (const provider of ["vk", "yandex"] as const) {
         const { OverlayPlayer } =
             await import("../../components/player/OverlayPlayer");
         assert.equal(current.artist.id, undefined);
-        assert.match(
-            renderToStaticMarkup(React.createElement(OverlayPlayer)),
-            /aria-label="Включить радио исполнителя"/,
+        const html = renderToStaticMarkup(React.createElement(OverlayPlayer));
+        assert.match(html, /aria-label="Включить радио исполнителя"/);
+        const playIndex = html.indexOf('aria-label="Воспроизвести"');
+        const likeIndex = html.indexOf('aria-label="Нравится"');
+        const radioIndex = html.indexOf(
+            'aria-label="Включить радио исполнителя"',
         );
+        const dislikeIndex = html.indexOf('aria-label="Не нравится"');
+        assert.ok(playIndex >= 0 && likeIndex >= 0 && dislikeIndex >= 0);
+        assert.ok(
+            playIndex < likeIndex &&
+                likeIndex < radioIndex &&
+                radioIndex < dislikeIndex,
+            "mobile playback precedes the like, radio, dislike group",
+        );
+        reduceMotion = true;
+        renderToStaticMarkup(React.createElement(OverlayPlayer));
+        assert.deepEqual(artworkTransition, { duration: 0 });
+        reduceMotion = false;
         current = { ...current, title: "Conflicting metadata" };
         assert.doesNotMatch(
             renderToStaticMarkup(React.createElement(OverlayPlayer)),

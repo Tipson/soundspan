@@ -33,7 +33,7 @@ const devices: Record<string, string> = {
     multiple: "Несколько устройств",
 };
 const buttonClass =
-    "inline-flex min-h-11 items-center justify-center rounded-xl border border-line px-4 py-2 text-sm font-semibold text-content hover:bg-surface-elevated disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+    "inline-flex min-h-11 items-center justify-center rounded-[10px] border border-line px-4 py-2 text-sm font-semibold text-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none";
 
 /** Administrator queue backed by persisted applications and single-use invitations. */
 export function TestApplicationsSection() {
@@ -152,15 +152,15 @@ export function TestApplicationsSection() {
                     return (
                         <article
                             key={item.id}
-                            className="rounded-2xl border border-line p-4"
+                            className="min-w-0 border-b border-line py-4 last:border-0"
                         >
                             <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
+                                <div className="min-w-0">
                                     <a
                                         href={`https://t.me/${encodeURIComponent(item.telegram)}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex min-h-11 items-center font-semibold text-brand-light"
+                                        className="inline-flex min-h-11 items-center break-all rounded-[10px] font-semibold text-brand-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                                     >
                                         @{item.telegram} ↗
                                     </a>
@@ -198,7 +198,7 @@ export function TestApplicationsSection() {
                                         onFocus={(event) =>
                                             event.currentTarget.select()
                                         }
-                                        className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-sm text-content"
+                                        className="min-h-11 min-w-0 flex-1 rounded-[10px] border border-line bg-surface-elevated px-3 text-base text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:text-sm"
                                     />
                                     <button
                                         type="button"
@@ -218,7 +218,7 @@ export function TestApplicationsSection() {
                     );
                 })}
             </div>
-            <div className="mt-4 flex gap-3">
+            <div className="mt-4 flex flex-wrap gap-3">
                 {cursor && (
                     <button
                         className={buttonClass}

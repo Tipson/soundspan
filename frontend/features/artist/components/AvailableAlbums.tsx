@@ -260,7 +260,7 @@ export function AvailableAlbums({
             {/* Studio Albums Section */}
             {studioAlbums.length > 0 && (
                 <section>
-                    <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                    <h2 className="mb-4 text-xl font-semibold tracking-[-0.02em] sm:text-2xl">
                         {ru.catalog.availableAlbums}
                     </h2>
                     <div data-tv-section="available-albums">
@@ -281,7 +281,7 @@ export function AvailableAlbums({
             {/* EPs, Singles & Demos Section */}
             {epsAndSingles.length > 0 && (
                 <section>
-                    <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                    <h2 className="mb-4 text-xl font-semibold tracking-[-0.02em] sm:text-2xl">
                         {ru.catalog.singles}
                     </h2>
                     <div data-tv-section="available-eps-singles">

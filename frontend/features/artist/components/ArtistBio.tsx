@@ -34,7 +34,7 @@ export function ArtistBio({ bio }: ArtistBioProps) {
 
     return (
         <section className="max-w-4xl border-t border-white/[0.08] pt-7">
-            <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+            <h2 className="mb-4 text-xl font-semibold tracking-[-0.02em] sm:text-2xl">
                 {ru.catalog.about}
             </h2>
             <div>
@@ -54,7 +54,7 @@ export function ArtistBio({ bio }: ArtistBioProps) {
                     <button
                         type="button"
                         onClick={() => setExpandedBio(safeBio)}
-                        className="mt-2 min-h-11 rounded-lg px-2 text-sm font-semibold text-brand transition-colors hover:bg-white/5 hover:text-brand-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        className="mt-2 min-h-11 rounded-[10px] px-3 text-sm font-semibold text-brand transition-colors hover:bg-white/5 hover:text-brand-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                     >
                         {ru.catalog.more}
                     </button>

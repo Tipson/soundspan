@@ -60,7 +60,7 @@ test("pristine user settings have no save button and successful saves retain fee
     await React.act(async () => root.unmount());
 });
 
-test("settings save status and action stay above player chrome without overlapping", async () => {
+test("settings save feedback shares a responsive panel and save action stays callable", async () => {
     const { createRoot } = await import("react-dom/client");
     const container = document.createElement("div");
     document.body.append(container);
@@ -95,20 +95,33 @@ test("settings save status and action stay above player chrome without overlappi
     assert.ok(panel);
     assert.ok(status);
     assert.ok(save);
-    assert.match(dock.className, /app-mini-player-height/);
-    assert.match(dock.className, /app-bottom-nav-height/);
+    assert.ok(panel.contains(status));
+    assert.ok(panel.contains(save));
     assert.match(
-        dock.className,
-        /md:bottom-\[calc\(var\(--app-player-height-desktop\)/,
+        status.textContent ?? "",
+        /Не удалось сохранить настройки профиля/,
     );
-    assert.match(panel.className, /grid-cols-1/);
-    assert.match(panel.className, /min-\[420px\]:grid-cols-/);
-    assert.match(status.className, /min-w-0/);
-    assert.match(save.className, /w-full/);
-    assert.match(save.className, /whitespace-nowrap/);
+    assert.equal(save.textContent, "Сохранить");
+    assert.equal(save.disabled, false);
 
     await React.act(async () => save.click());
     assert.equal(saveCalls, 1);
+    await React.act(async () =>
+        root.render(
+            React.createElement(SettingsSaveDock, {
+                isSaving: true,
+                status: "idle",
+                onSave: () => {
+                    saveCalls += 1;
+                },
+            }),
+        ),
+    );
+    const savingButton = container.querySelector<HTMLButtonElement>("button");
+    assert.ok(savingButton?.disabled);
+    assert.equal(savingButton.getAttribute("aria-busy"), "true");
+    await React.act(async () => savingButton.click());
+    assert.equal(saveCalls, 1, "Saving must prevent a repeat submission");
 
     await React.act(async () => root.unmount());
     container.remove();

@@ -9,7 +9,7 @@ import { ru } from "@/lib/i18n/ru";
 import { AuthPanel, AuthStage } from "@/features/auth/components/AuthStage";
 
 const inputClassName =
-    "min-h-12 w-full rounded-2xl border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm";
+    "min-h-12 w-full rounded-[var(--music-radius-control)] border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20";
 const labelClassName = "mb-1.5 block text-sm font-medium text-content";
 
 function InviteCodePrefill({
@@ -130,7 +130,7 @@ export default function RegisterPage() {
                         {error && (
                             <div
                                 role="alert"
-                                className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm leading-5 text-red-200"
+                                className="rounded-[var(--music-radius-card)] border border-error/25 bg-error/10 p-4 text-sm leading-5 text-error"
                             >
                                 {error}
                             </div>
@@ -197,7 +197,7 @@ export default function RegisterPage() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand px-5 py-3 text-sm font-black text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+                            className="inline-flex min-h-12 w-full items-center justify-center rounded-[var(--music-radius-control)] bg-brand px-5 py-3 text-base font-semibold text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                         >
                             <span className="flex items-center justify-center gap-2">
                                 {isLoading ? (

@@ -1,5 +1,7 @@
 import { Sparkles } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { MusicDetailHero } from "@/components/music-detail";
+import { CoverMosaic } from "@/components/ui/CoverMosaic";
+import { api } from "@/lib/api";
 import { DiscoverPlaylist, DiscoverConfig } from "../types";
 import {
     discoverRu,
@@ -13,59 +15,71 @@ interface DiscoverHeroProps {
     config: DiscoverConfig | null;
 }
 
-/**
- * Renders the DiscoverHero component.
- */
+/** Weekly discovery identity uses artwork and metadata from its actual tracks. */
 export function DiscoverHero({ playlist, config }: DiscoverHeroProps) {
-    // Calculate total duration
     const totalDuration =
         playlist?.tracks?.reduce((sum, t) => sum + (t.duration || 0), 0) || 0;
+    const coverUrls = (playlist?.tracks ?? [])
+        .flatMap((track) =>
+            track.coverUrl ? [api.getCoverArtUrl(track.coverUrl, 400)] : [],
+        )
+        .slice(0, 4);
 
     return (
-        <div>
-            <PageHeader
-                title={discoverRu.name}
-                subtitle={discoverRu.description}
-                icon={Sparkles}
-                iconClassName="text-ai-hover"
-                className="mb-4"
-                badge={
-                    <span className="rounded-full border border-ai/25 bg-ai/10 px-3 py-1 text-xs font-semibold text-ai-hover">
-                        {discoverRu.type}
-                    </span>
-                }
-            />
-            <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-content-muted">
-                {playlist ? (
-                    <>
-                        <span>
-                            {discoverRu.weekOf}{" "}
-                            {formatDiscoverDate(playlist.weekStart, true)}
-                        </span>
-                        <span aria-hidden="true">•</span>
-                        <span>{discoverTrackCount(playlist.totalCount)}</span>
-                        {totalDuration > 0 && (
-                            <>
-                                <span aria-hidden="true">•</span>
-                                <span>
-                                    {formatDiscoverDuration(totalDuration)}
-                                </span>
-                            </>
-                        )}
-                    </>
-                ) : (
-                    <span>Еженедельный персональный подбор</span>
-                )}
-                {config?.lastGeneratedAt && (
-                    <>
-                        <span aria-hidden="true">•</span>
-                        <span>
-                            {discoverRu.updated}{" "}
-                            {formatDiscoverDate(config.lastGeneratedAt)}
-                        </span>
-                    </>
-                )}
-            </div>
-        </div>
+        <MusicDetailHero
+            eyebrow={discoverRu.type}
+            title={discoverRu.name}
+            artworkShape="square"
+            className="-mx-4 md:-mx-8"
+            backgroundImage={coverUrls[0] ?? null}
+            artwork={
+                <CoverMosaic
+                    coverUrls={coverUrls}
+                    imageSizes="(max-width: 640px) 160px, (max-width: 1024px) 192px, 224px"
+                    emptyState={
+                        <Sparkles
+                            className="h-14 w-14 text-brand-light"
+                            aria-hidden="true"
+                        />
+                    }
+                />
+            }
+            description={<p>{discoverRu.description}</p>}
+            metadata={
+                <>
+                    {playlist ? (
+                        <>
+                            <span>
+                                {discoverRu.weekOf}{" "}
+                                {formatDiscoverDate(playlist.weekStart, true)}
+                            </span>
+                            <span aria-hidden="true">•</span>
+                            <span>
+                                {discoverTrackCount(playlist.totalCount)}
+                            </span>
+                            {totalDuration > 0 && (
+                                <>
+                                    <span aria-hidden="true">•</span>
+                                    <span>
+                                        {formatDiscoverDuration(totalDuration)}
+                                    </span>
+                                </>
+                            )}
+                        </>
+                    ) : (
+                        <span>Еженедельный персональный подбор</span>
+                    )}
+                    {config?.lastGeneratedAt && (
+                        <>
+                            <span aria-hidden="true">•</span>
+                            <span>
+                                {discoverRu.updated}{" "}
+                                {formatDiscoverDate(config.lastGeneratedAt)}
+                            </span>
+                        </>
+                    )}
+                </>
+            }
+        />
     );
 }

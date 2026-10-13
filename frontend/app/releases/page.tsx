@@ -146,7 +146,7 @@ export default function ReleasesPage() {
     };
 
     return (
-        <main
+        <div
             data-utility-page="releases"
             className="min-h-screen px-4 py-6 md:px-8"
         >
@@ -341,7 +341,7 @@ export default function ReleasesPage() {
                     </div>
                 )}
             </div>
-        </main>
+        </div>
     );
 }
 

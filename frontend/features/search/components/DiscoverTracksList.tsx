@@ -241,7 +241,7 @@ export function DiscoverTracksList({
                                 handleRowClick(track, key);
                             }
                         }}
-                        className="group flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-transparent px-2.5 py-2 transition-colors hover:border-white/[0.06] hover:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:gap-4 sm:px-3"
+                        className="group flex min-h-16 cursor-pointer items-center gap-3 rounded-[10px] px-2.5 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:gap-4 sm:px-3"
                         aria-label={
                             isPlayable
                                 ? formatPlaySearchTrackAria(
@@ -251,13 +251,13 @@ export function DiscoverTracksList({
                                 : formatGoToSearchArtistAria(track.artist)
                         }
                     >
-                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-elevated">
+                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-surface-elevated">
                             {imageUrl ? (
                                 <CachedImage
                                     src={imageUrl}
                                     alt={track.name}
                                     fill
-                                    sizes="40px"
+                                    sizes="44px"
                                     className="object-cover"
                                     fallback={
                                         <Music className="h-5 w-5 text-content-muted" />
@@ -273,8 +273,10 @@ export function DiscoverTracksList({
                             )}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="flex truncate text-sm font-semibold text-content items-center gap-1.5">
-                                <span className="truncate">{track.name}</span>
+                            <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold leading-5 text-content">
+                                <span className="line-clamp-2 min-w-0 [overflow-wrap:anywhere] sm:line-clamp-1">
+                                    {track.name}
+                                </span>
                                 {match?.source === "youtube" && (
                                     <YouTubeBadge />
                                 )}
@@ -287,7 +289,7 @@ export function DiscoverTracksList({
                                     </span>
                                 ) : null}
                             </p>
-                            <p className="truncate text-xs text-content-secondary">
+                            <p className="mt-0.5 truncate text-xs text-content-secondary">
                                 {track.artist}
                                 {track.album ? ` — ${track.album}` : ""}
                             </p>

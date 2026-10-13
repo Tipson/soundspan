@@ -31,6 +31,7 @@ import {
     openOfflineDownloads,
 } from "./offlineLibraryNavigation";
 import { MobileSidebar } from "./MobileSidebar";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { SIDEBAR_NAVIGATION } from "./socialNavigation";
 
 const sidebarNavigationIcons = {
@@ -58,18 +59,16 @@ export function Sidebar() {
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    useBodyScrollLock(isMobileMenuOpen);
 
     useEffect(() => {
+        if (!isMobileMenuOpen) return;
         const handleEscape = (event: KeyboardEvent) => {
             if (event.key === "Escape") setIsMobileMenuOpen(false);
         };
-        if (isMobileMenuOpen) {
-            document.addEventListener("keydown", handleEscape);
-            document.body.style.overflow = "hidden";
-        }
+        document.addEventListener("keydown", handleEscape);
         return () => {
             document.removeEventListener("keydown", handleEscape);
-            document.body.style.overflow = "unset";
         };
     }, [isMobileMenuOpen]);
 
@@ -143,7 +142,7 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
         >
             <Link
                 href="/"
-                className="group flex h-[88px] shrink-0 items-center gap-2.5 px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light"
+                className="group flex h-[var(--app-topbar-height-desktop)] shrink-0 items-center gap-2.5 px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light"
                 aria-label={`${BRAND_NAME} — ${ru.nav.home}`}
             >
                 <Image
@@ -210,7 +209,7 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
                                         "h-[19px] w-[19px] shrink-0",
                                         item.accent === "vibe" &&
                                             !isActive &&
-                                            "text-ai-hover",
+                                            "text-content-muted",
                                     )}
                                     strokeWidth={isActive ? 2.35 : 1.9}
                                     aria-hidden="true"
@@ -226,7 +225,7 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
                 data-shell-library-shortcuts="compact"
                 className="mx-4 mt-5 flex min-h-0 flex-1 flex-col border-t border-white/[0.08] pt-5"
             >
-                <p className="mb-2 shrink-0 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-content-muted">
+                <p className="mb-2 shrink-0 px-2 text-xs font-medium text-content-muted">
                     Библиотека
                 </p>
                 <div className="flex min-h-0 flex-1 flex-col gap-1">
@@ -237,7 +236,7 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
                         className="group flex min-h-12 shrink-0 items-center gap-3 rounded-xl px-3 text-left text-content-secondary transition-colors duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                     >
                         <HardDriveDownload
-                            className="h-[18px] w-[18px] shrink-0 text-ai-hover"
+                            className="h-[18px] w-[18px] shrink-0 text-content-muted"
                             aria-hidden="true"
                         />
                         <span className="text-sm font-semibold">
@@ -254,7 +253,7 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
                         )}
                     >
                         <Heart
-                            className="h-[18px] w-[18px] shrink-0 text-ai-hover"
+                            className="h-[18px] w-[18px] shrink-0 text-content-muted"
                             aria-hidden="true"
                         />
                         <span className="min-w-0">
@@ -288,7 +287,7 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
                                     onClick={() => {
                                         void playlistsQuery.refetch();
                                     }}
-                                    className="mt-1.5 inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
+                                    className="mt-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
                                 >
                                     <RotateCcw
                                         className="h-3.5 w-3.5"

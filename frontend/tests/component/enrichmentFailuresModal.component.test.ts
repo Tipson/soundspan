@@ -9,10 +9,11 @@ GlobalRegistrator.register();
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const retryFailedAudioAnalysis = mock.fn(async () => ({
-    message: "reset",
-    reset: 7226,
-}));
+let retryFails = false;
+const retryFailedAudioAnalysis = mock.fn(async () => {
+    if (retryFails) throw new Error("fixture retry unavailable");
+    return { message: "reset", reset: 7226 };
+});
 const retryVibeEmbeddings = mock.fn(async () => ({
     message: "reset",
     reset: 1204,
@@ -69,6 +70,7 @@ beforeEach(() => {
     retryVibeEmbeddings.mock.resetCalls();
     reconcileFailures.mock.resetCalls();
     failureRows = [];
+    retryFails = false;
     document.body.replaceChildren();
 });
 
@@ -205,4 +207,114 @@ test("renders sanitized summaries and accurate missing-detail fallbacks", async 
         /Подробности ошибки не сохранены/,
     );
     assert.doesNotMatch(document.body.textContent ?? "", /Unknown error/);
+});
+
+async function mountInteractiveModal() {
+    const { EnrichmentFailuresModal } =
+        await import("../../components/EnrichmentFailuresModal");
+    const { createRoot } = await import("react-dom/client");
+    const client = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false },
+            mutations: { retry: false },
+        },
+    });
+    client.setQueryData(["enrichment-failure-counts"], {
+        artist: 0,
+        track: 0,
+        audio: 7226,
+        vibe: 1204,
+        total: 8430,
+    });
+    const container = document.createElement("div");
+    container.style.overflow = "hidden";
+    document.body.appendChild(container);
+    function Interactive() {
+        const [open, setOpen] = React.useState(false);
+        return React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+                "button",
+                { onClick: () => setOpen(true) },
+                "Открыть ошибки",
+            ),
+            React.createElement(EnrichmentFailuresModal, {
+                isOpen: open,
+                onClose: () => setOpen(false),
+            }),
+        );
+    }
+    const root = createRoot(container);
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                QueryClientProvider,
+                { client },
+                React.createElement(Interactive),
+            ),
+        );
+    });
+    const opener = buttonWithText("Открыть ошибки");
+    opener.focus();
+    await click(opener);
+    return {
+        container,
+        opener,
+        unmount: async () => React.act(async () => root.unmount()),
+    };
+}
+async function escape() {
+    await React.act(async () => {
+        document.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+        await Promise.resolve();
+    });
+}
+test("failure dialog escapes clipped content and Escape restores the opener", async (t) => {
+    const h = await mountInteractiveModal();
+    t.after(h.unmount);
+    const panel = document.querySelector('[role="dialog"]');
+    assert.ok(
+        panel instanceof HTMLElement,
+        "failure list has dialog semantics",
+    );
+    assert.equal(
+        h.container.contains(panel),
+        false,
+        "failure list is outside clipped content",
+    );
+    assert.equal(panel.getAttribute("aria-modal"), "true");
+    await escape();
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    assert.ok(
+        document.activeElement === h.opener,
+        "Escape restores the failure-list opener",
+    );
+});
+test("Escape dismisses only the retry confirmation and retry errors stay visible", async (t) => {
+    const h = await mountInteractiveModal();
+    t.after(h.unmount);
+    await click(buttonWithText("Анализ аудио (7226)"));
+    const retryOpener = buttonWithText("Повторить все (7226)");
+    retryOpener.focus();
+    await click(retryOpener);
+    assert.equal(document.querySelectorAll('[role="dialog"]').length, 2);
+    await escape();
+    assert.equal(document.querySelectorAll('[role="dialog"]').length, 1);
+    assert.ok(
+        document.activeElement === retryOpener,
+        "nested cancellation restores retry action",
+    );
+    assert.equal(retryFailedAudioAnalysis.mock.callCount(), 0);
+    retryFails = true;
+    await click(retryOpener);
+    await click(buttonWithText("Повторить всё"));
+    assert.equal(retryFailedAudioAnalysis.mock.callCount(), 1);
+    assert.match(
+        document.querySelector('[role="alert"]')?.textContent ?? "",
+        /Не удалось запустить повтор/,
+    );
+    assert.equal(document.querySelectorAll('[role="dialog"]').length, 1);
 });

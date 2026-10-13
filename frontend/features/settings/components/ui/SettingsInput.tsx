@@ -75,24 +75,25 @@ export function SettingsInput({
                 disabled={disabled}
                 className={`
                     min-h-11 w-full bg-surface-elevated text-content text-base sm:text-sm
-                    px-3.5 py-2.5 rounded-xl
+                    px-3.5 py-2.5 rounded-[10px]
                     border border-line outline-none
                     ${SETTINGS_FIELD_FOCUS_RING}
                     placeholder:text-content-muted
-                    transition-colors
+                    transition-colors motion-reduce:transition-none
                     hover:border-line-muted hover:bg-surface-highlight focus:border-brand/60 focus:bg-surface-highlight
-                    ${isPassword ? "pr-10" : ""}
+                    ${isPassword ? "pr-12" : ""}
                     ${disabled ? "opacity-50 cursor-not-allowed" : ""}
                 `}
             />
             {isPassword && (
                 <button
                     type="button"
+                    disabled={disabled}
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={
                         showPassword ? "Скрыть пароль" : "Показать пароль"
                     }
-                    className="absolute right-0 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover"
+                    className="absolute right-0 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-[10px] text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                 >
                     {showPassword ? (
                         <EyeOff className="w-4 h-4" />

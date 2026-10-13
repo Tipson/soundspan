@@ -190,9 +190,9 @@ function GeneratedMixCard({ mix }: { mix: Mix }) {
     return (
         <Link
             href={`/mix/${mix.id}`}
-            className="group block min-w-0 rounded-[1.125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
+            className="group block min-w-0 rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
         >
-            <span className="relative mb-3 block aspect-square overflow-hidden rounded-[1.125rem] bg-surface-highlight shadow-lg shadow-black/25">
+            <span className="relative mb-2 block aspect-square overflow-hidden rounded-[14px] bg-surface-highlight">
                 <CoverMosaic
                     coverUrls={covers}
                     hoverScale
@@ -201,7 +201,7 @@ function GeneratedMixCard({ mix }: { mix: Mix }) {
                 />
                 <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
             </span>
-            <span className="block truncate text-sm font-bold text-content sm:text-[0.9375rem]">
+            <span className="block line-clamp-2 text-sm font-semibold leading-5 text-content sm:text-[0.9375rem]">
                 {mix.name}
             </span>
             <span className="mt-1 line-clamp-2 block text-xs leading-5 text-content-muted">
@@ -248,7 +248,7 @@ export function HomeMadeForYou({
             data-home-rail="mixes"
             data-home-mixes-surface="unified"
             aria-label={ru.home.madeForYou}
-            className="relative isolate rounded-[1.5rem] bg-surface px-4 pb-5 pt-2 sm:px-5"
+            className="relative isolate min-w-0"
         >
             <SectionHeader
                 title={ru.home.madeForYou}
@@ -262,7 +262,7 @@ export function HomeMadeForYou({
                                 onClick={() =>
                                     setShowAllMixes((current) => !current)
                                 }
-                                className="hidden lg:inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                className="hidden lg:inline-flex min-h-11 items-center rounded-[10px] px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             >
                                 {showAllMixes ? "Свернуть" : "Показать все"}
                             </button>
@@ -277,7 +277,7 @@ export function HomeMadeForYou({
                                         ? ru.home.refreshing
                                         : ru.home.refresh
                                 }
-                                className="grid min-h-11 min-w-11 place-items-center rounded-full text-content-muted transition duration-200 hover:bg-white/[0.07] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-45 motion-reduce:transition-none"
+                                className="grid min-h-11 min-w-11 place-items-center rounded-[10px] text-content-muted transition duration-200 hover:bg-white/[0.07] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-45 motion-reduce:transition-none"
                             >
                                 <RefreshCw
                                     className={`h-4 w-4 ${isRefreshingMixes ? "animate-spin motion-reduce:animate-none" : ""}`}
@@ -290,7 +290,7 @@ export function HomeMadeForYou({
             />
             <div
                 id="home-all-mixes"
-                className="scrollbar-hide grid touch-auto snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible"
+                className="scrollbar-hide grid touch-auto snap-x snap-proximity grid-flow-col auto-cols-[minmax(8.5rem,44vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible"
             >
                 {playableDiscoverWeekly && (
                     <div

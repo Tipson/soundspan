@@ -33,7 +33,7 @@ export function PlayControls({
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
                 <Button
                     variant="primary"
-                    className="h-16 px-8 rounded-full shadow-lg hover:scale-105 transition-transform"
+                    className="min-h-12 rounded-[10px] px-6 motion-reduce:transition-none"
                     onClick={onPlayPause}
                 >
                     {isThisBookPlaying && isPlaying ? (
@@ -55,10 +55,10 @@ export function PlayControls({
 
                 {hasProgress && !isFinished && (
                     <div className="text-center sm:text-left">
-                        <div className="text-sm text-gray-400">
+                        <div className="text-sm text-content-secondary">
                             Продолжить прослушивание
                         </div>
-                        <div className="text-white font-medium">
+                        <div className="text-content font-medium">
                             {formatTime(
                                 isThisBookPlaying
                                     ? currentTime
@@ -68,7 +68,7 @@ export function PlayControls({
                         </div>
                         <div className="w-48 h-1 bg-surface-elevated rounded-full mt-2">
                             <div
-                                className="h-full bg-ai rounded-full transition-all duration-300"
+                                className="h-full bg-brand rounded-full transition-all duration-300"
                                 style={{
                                     width: `${
                                         isThisBookPlaying
@@ -84,17 +84,12 @@ export function PlayControls({
                 )}
 
                 {isFinished && (
-                    <div className="flex items-center gap-2 text-green-500">
+                    <div className="flex items-center gap-2 text-success">
                         <Book className="w-5 h-5" />
                         <span className="font-medium">Прослушано</span>
                     </div>
                 )}
             </div>
-
-            <p className="text-center text-sm text-gray-400 mt-4">
-                Скорость, позицию и громкость можно изменить в боковом или
-                нижнем плеере.
-            </p>
         </section>
     );
 }

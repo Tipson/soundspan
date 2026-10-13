@@ -11,6 +11,9 @@ interface SettingsSaveDockProps {
     message?: string;
     onStatusClear?: () => void;
     onSave: () => void;
+    saveLabel?: string;
+    savingLabel?: string;
+    idleMessage?: string;
 }
 
 /** Keeps the settings save result and action clear of fixed player controls. */
@@ -22,6 +25,9 @@ export function SettingsSaveDock({
     message,
     onStatusClear,
     onSave,
+    saveLabel = "Сохранить",
+    savingLabel = ru.settings.saving,
+    idleMessage = "Изменения не сохранены",
 }: SettingsSaveDockProps) {
     if (!hasChanges && !isSaving) {
         return status === "idle" ? null : (
@@ -40,32 +46,41 @@ export function SettingsSaveDock({
             className={
                 placement === "inline"
                     ? "pt-5"
-                    : "sticky bottom-[calc(var(--app-mini-player-height)+var(--app-bottom-nav-height)+var(--safe-area-bottom)+0.75rem)] z-20 pt-4 md:bottom-[calc(var(--app-player-height-desktop)+var(--safe-area-bottom)+1rem)] md:pt-6"
+                    : "sticky bottom-[calc(var(--app-mini-player-inset)+var(--app-bottom-nav-height)+var(--safe-area-bottom)+0.75rem)] z-20 pt-4 md:bottom-3 md:pt-6"
             }
         >
             <div
                 data-testid="settings-save-panel"
-                className="grid grid-cols-1 gap-2 rounded-2xl border border-white/[0.1] bg-surface-overlay/90 p-2.5 shadow-2xl shadow-black/30 backdrop-blur-xl min-[420px]:grid-cols-[minmax(0,1fr)_auto] min-[420px]:items-center md:grid-cols-[minmax(0,28rem)_auto] md:justify-end"
+                className="grid grid-cols-1 gap-2 rounded-[14px] border border-line bg-surface-overlay/95 p-3 backdrop-blur-xl min-[420px]:grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] min-[420px]:items-center md:grid-cols-[minmax(0,1fr)_minmax(0,auto)]"
             >
                 <div
                     data-testid="settings-save-status"
                     className="min-h-5 min-w-0 px-2"
                 >
-                    <InlineStatus
-                        status={status}
-                        message={message}
-                        onClear={onStatusClear}
-                        className="max-w-full break-words"
-                    />
+                    {status === "idle" ? (
+                        <p
+                            role="status"
+                            className="break-words text-sm text-content-secondary"
+                        >
+                            {idleMessage}
+                        </p>
+                    ) : (
+                        <InlineStatus
+                            status={status}
+                            message={message}
+                            onClear={onStatusClear}
+                            className="max-w-full break-words"
+                        />
+                    )}
                 </div>
                 <button
                     type="button"
                     onClick={onSave}
                     disabled={isSaving}
                     aria-busy={isSaving}
-                    className="min-h-11 w-full whitespace-nowrap rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-brand/15 transition hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-brand min-[420px]:w-auto motion-reduce:transition-none"
+                    className="min-h-11 min-w-0 max-w-full w-full whitespace-normal break-words rounded-[10px] bg-brand px-[min(1.25rem,16px)] py-2.5 text-sm font-semibold leading-tight text-black transition-colors hover:bg-brand-hover active:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-overlay disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-brand min-[420px]:w-auto motion-reduce:transition-none"
                 >
-                    {isSaving ? ru.settings.saving : ru.settings.saveChanges}
+                    {isSaving ? savingLabel : saveLabel}
                 </button>
             </div>
         </div>

@@ -9,6 +9,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { formatTime } from "@/utils/formatTime";
+import { SETTINGS_SECONDARY_BUTTON } from "./settingsFieldStyles";
 
 /** Content and controls displayed by the shared device-code linking panel. */
 export interface DeviceAuthLinkPanelProps {
@@ -62,15 +63,17 @@ function CodeStep({
 >) {
     return (
         <NumberedStep number={1}>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
                 <p className="text-sm text-content-secondary">
                     {pasteInstruction}
-                    <span className="ml-1 text-xs text-content-muted">
-                        (код уже скопирован)
-                    </span>
+                    {copied && (
+                        <span className="ml-1 text-xs text-content-muted">
+                            (код уже скопирован)
+                        </span>
+                    )}
                 </p>
-                <div className="flex items-center gap-3">
-                    <code className="select-all rounded-xl border border-line bg-surface-highlight px-4 py-2 font-mono text-lg font-bold tracking-wider text-content">
+                <div className="flex flex-wrap items-center gap-3">
+                    <code className="select-all break-all rounded-[10px] border border-line bg-surface-highlight px-4 py-2 font-mono text-lg font-bold tracking-wider text-content">
                         {userCode}
                     </code>
                     <button
@@ -79,7 +82,7 @@ function CodeStep({
                         aria-label={
                             copied ? "Код скопирован" : "Скопировать код"
                         }
-                        className="grid min-h-11 min-w-11 place-items-center rounded-xl text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        className="grid min-h-11 min-w-11 place-items-center rounded-[10px] text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         title="Скопировать код"
                     >
                         {copied ? (
@@ -101,9 +104,12 @@ function WaitingRow({
     timeLeftSeconds,
 }: Pick<DeviceAuthLinkPanelProps, "timeLeftSeconds">) {
     return (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm text-content-muted">
-                <PanelIcon icon={Loader2} className="w-3 h-3 animate-spin" />
+                <PanelIcon
+                    icon={Loader2}
+                    className="w-3 h-3 animate-spin motion-reduce:animate-none"
+                />
                 <span>Ожидаем завершения входа…</span>
             </div>
             {timeLeftSeconds !== null && (
@@ -124,7 +130,7 @@ function WaitingRow({
 /** Renders reusable instructions and controls for a device-code authentication session. */
 export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
     return (
-        <div className="space-y-4 rounded-2xl border border-line bg-surface-elevated p-4">
+        <div className="min-w-0 space-y-4 border-t border-line pt-4">
             <div className="space-y-3">
                 <p className="text-sm text-content-secondary">
                     {props.introText}
@@ -146,7 +152,7 @@ export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
                     href={props.verificationUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 py-2 text-sm font-semibold text-brand-light transition-colors hover:bg-brand/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                    className={SETTINGS_SECONDARY_BUTTON}
                 >
                     <PanelIcon icon={ExternalLink} className="w-4 h-4" />
                     {props.openLinkLabel}
@@ -156,7 +162,7 @@ export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
             <button
                 type="button"
                 onClick={props.onCancel}
-                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.05] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                className={SETTINGS_SECONDARY_BUTTON}
             >
                 Отмена
             </button>

@@ -14,7 +14,7 @@ export function SsoButton({ providerName, onClick }: SsoButtonProps) {
         <button
             type="button"
             onClick={onClick}
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-full border border-line-muted bg-white/[0.03] px-5 py-3 text-sm font-bold text-content transition-colors hover:border-white/25 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-[var(--music-radius-control)] border border-line-muted bg-surface-elevated px-5 py-3 text-base font-semibold text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
         >
             {ru.auth.signInWith} {providerName}
         </button>

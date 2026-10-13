@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HardDriveDownload, Heart, Plus, Upload } from "lucide-react";
 import { useLikedPlaylistQuery, usePlaylistsQuery } from "@/hooks/useQueries";
@@ -24,6 +24,7 @@ import { CreatePlaylistDialog } from "@/features/playlist/components/CreatePlayl
 import { shouldOpenCreatePlaylist } from "@/features/playlist/createPlaylistRoute";
 import { ru } from "@/lib/i18n/ru";
 import { useNetworkOnline } from "@/hooks/useNetworkOnline";
+import { navigateWhenLayersDismissed } from "@/hooks/useDismissibleLayer";
 
 type LibraryView = LibraryTab | "downloads";
 
@@ -92,7 +93,7 @@ function SectionHeading({
         <div className="mb-4">
             <h2
                 id={id}
-                className="text-xl font-black tracking-tight text-content sm:text-2xl"
+                className="text-xl font-semibold tracking-tight text-content sm:text-2xl"
             >
                 {title}
             </h2>
@@ -116,9 +117,32 @@ export default function LibraryPage() {
     const deviceOffline = useOptionalDeviceOffline();
     const [isCreateDialogOpenManually, setIsCreateDialogOpenManually] =
         useState(false);
+    const pendingCreateQueryCleanup = useRef<{ url: string } | null>(null);
+    const createQuery = searchParams.get("create");
+    const [createDialogQuery, setCreateDialogQuery] = useState({
+        query: createQuery,
+        dismissed: false,
+    });
+    if (createDialogQuery.query !== createQuery) {
+        // A fresh URL intent may reopen the dialog after its previous close.
+        setCreateDialogQuery({ query: createQuery, dismissed: false });
+    }
     const isCreateDialogOpen =
         isCreateDialogOpenManually ||
-        shouldOpenCreatePlaylist(searchParams.get("create"));
+        (shouldOpenCreatePlaylist(createQuery) && !createDialogQuery.dismissed);
+
+    useEffect(() => {
+        if (isCreateDialogOpen) return;
+        const intent = pendingCreateQueryCleanup.current;
+        pendingCreateQueryCleanup.current = null;
+        if (!intent || window.location.href !== intent.url) return;
+        // Child layer cleanup has committed. Preserve any lower player layer
+        // and wait for its dismissal before replacing the real base entry.
+        navigateWhenLayersDismissed(() => {
+            if (window.location.href !== intent.url) return;
+            router.replace("/library?tab=playlists", { scroll: false });
+        });
+    }, [isCreateDialogOpen, router]);
 
     const playlists = useMemo(
         () =>
@@ -147,7 +171,7 @@ export default function LibraryPage() {
         <div className="relative min-h-screen bg-surface">
             <LibraryHeader />
 
-            <main className="relative mx-auto max-w-[1800px] space-y-5 px-4 pt-4 sm:space-y-10 sm:px-6 sm:pt-10 lg:px-8">
+            <div className="relative mx-auto max-w-[1800px] space-y-5 px-4 pt-4 sm:space-y-7 sm:px-6 sm:pt-6 lg:px-8">
                 <LibraryTabs
                     activeTab={activeView === "downloads" ? null : activeView}
                 />
@@ -179,7 +203,7 @@ export default function LibraryPage() {
                                     onClick={() =>
                                         setIsCreateDialogOpenManually(true)
                                     }
-                                    className="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    className="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] bg-brand px-4 py-2 text-sm font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                 >
                                     <Plus
                                         className="h-4 w-4"
@@ -193,7 +217,7 @@ export default function LibraryPage() {
                                 <Link
                                     href="/import"
                                     aria-label="Импортировать плейлист"
-                                    className="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-bold text-content transition-colors hover:border-white/25 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    className="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-line bg-surface-elevated px-4 py-2 text-sm font-semibold text-content transition-colors hover:border-white/25 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                 >
                                     <Upload
                                         className="h-4 w-4"
@@ -290,20 +314,33 @@ export default function LibraryPage() {
                         />
                     </section>
                 )}
-            </main>
+            </div>
             <CreatePlaylistDialog
                 isOpen={isCreateDialogOpen}
-                onClose={() => {
+                onClose={(reason) => {
+                    pendingCreateQueryCleanup.current =
+                        reason !== "created" &&
+                        shouldOpenCreatePlaylist(createQuery)
+                            ? { url: window.location.href }
+                            : null;
                     setIsCreateDialogOpenManually(false);
-                    if (shouldOpenCreatePlaylist(searchParams.get("create"))) {
-                        router.replace("/library?tab=playlists", {
-                            scroll: false,
-                        });
-                    }
+                    setCreateDialogQuery({
+                        query: createQuery,
+                        dismissed: true,
+                    });
                 }}
-                onCreated={(playlist) =>
-                    router.push(`/playlist/${encodeURIComponent(playlist.id)}`)
-                }
+                onCreated={(playlist) => {
+                    if (shouldOpenCreatePlaylist(searchParams.get("create"))) {
+                        // The layer guard is already consumed. Clean only the
+                        // real base entry, keeping its current Next snapshot.
+                        window.history.replaceState(
+                            window.history.state,
+                            "",
+                            "/library?tab=playlists",
+                        );
+                    }
+                    router.push(`/playlist/${encodeURIComponent(playlist.id)}`);
+                }}
             />
         </div>
     );

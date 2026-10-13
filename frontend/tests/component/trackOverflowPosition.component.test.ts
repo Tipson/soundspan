@@ -70,7 +70,10 @@ let anchor = {
 const originalBounds = HTMLElement.prototype.getBoundingClientRect;
 beforeEach(() => {
     queued.length = 0;
-    Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
+    Object.defineProperty(window, "visualViewport", {
+        configurable: true,
+        value: undefined,
+    });
     anchor = {
         left: 318,
         top: 120,
@@ -210,7 +213,15 @@ test("a last-row popup flips upward and becomes scrollable on a short narrow scr
 });
 
 test("pinch zoom also caps the minimum menu width to the visual viewport", async (t) => {
-    Object.defineProperty(window, "visualViewport", { configurable: true, value: Object.assign(new EventTarget(), { width: 180, height: 300, offsetLeft: 0, offsetTop: 0 }) });
+    Object.defineProperty(window, "visualViewport", {
+        configurable: true,
+        value: Object.assign(new EventTarget(), {
+            width: 180,
+            height: 300,
+            offsetLeft: 0,
+            offsetTop: 0,
+        }),
+    });
     const { menu } = await renderMenu(t);
     assert.equal(Number.parseFloat(menu.style.maxWidth), 164);
     assert.equal(Number.parseFloat(menu.style.minWidth), 164);

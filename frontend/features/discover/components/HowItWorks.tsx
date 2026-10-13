@@ -9,7 +9,7 @@ import { discoverRu } from "@/lib/i18n/discoverRu";
  */
 export function HowItWorks() {
     return (
-        <Card className="rounded-2xl border-line bg-surface-elevated p-5 sm:p-6">
+        <Card className="rounded-[14px] border-line bg-surface-elevated p-4 sm:p-5">
             <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-content">
                 <Sparkles className="size-5 text-ai-hover" aria-hidden="true" />
                 {discoverRu.howItWorks.title}

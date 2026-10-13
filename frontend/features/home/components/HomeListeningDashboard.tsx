@@ -95,25 +95,26 @@ export function HomeListeningDashboard({
         <div
             ref={impressionRef}
             data-home-region="listening-dashboard"
-            className="relative z-10 grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_18rem]"
+            className="relative z-10 grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]"
         >
-            <div className="min-w-0 space-y-9">
+            <div className="min-w-0 space-y-6">
+                {children}
                 <section
                     data-home-region="continue-listening"
                     aria-labelledby="home-continue-title"
                     className="min-w-0"
                 >
-                    <div className="mb-4 flex items-center justify-between gap-4">
+                    <div className="mb-3 flex items-center justify-between gap-4">
                         <h2
                             id="home-continue-title"
-                            className="text-xl font-bold tracking-[-0.025em] text-content"
+                            className="text-lg font-semibold tracking-[-0.025em] text-content sm:text-xl"
                         >
                             Продолжить слушать
                         </h2>
                     </div>
                     <div
                         role="list"
-                        className="scrollbar-hide grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(210px,72vw)] gap-4 overflow-x-auto overscroll-x-contain pb-1 md:auto-cols-[minmax(220px,1fr)] xl:grid-flow-row xl:grid-cols-[repeat(auto-fit,minmax(180px,1fr))] xl:overflow-visible"
+                        className="scrollbar-hide grid touch-auto snap-x snap-proximity grid-flow-col auto-cols-[minmax(9rem,46vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 md:auto-cols-[minmax(180px,1fr)] xl:grid-flow-row xl:grid-cols-[repeat(auto-fit,minmax(180px,1fr))] xl:overflow-visible"
                     >
                         {continuation.map((track, index) => (
                             <article
@@ -127,9 +128,9 @@ export function HomeListeningDashboard({
                                     type="button"
                                     onClick={() => playAt(index)}
                                     aria-label={`Воспроизвести «${track.title}», исполнитель ${track.artist.name}`}
-                                    className="block w-full rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
+                                    className="block w-full rounded-[14px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
                                 >
-                                    <span className="relative block aspect-[1.08/1] overflow-hidden rounded-2xl border border-white/[0.09] bg-white/[0.04] shadow-[0_18px_48px_rgba(0,0,0,0.22)]">
+                                    <span className="relative block aspect-square overflow-hidden rounded-[14px] bg-surface-highlight">
                                         {coverUrl(track, 520) ? (
                                             <CachedImage
                                                 src={coverUrl(track, 520)}
@@ -159,7 +160,7 @@ export function HomeListeningDashboard({
                                             />
                                         </span>
                                     </span>
-                                    <span className="mt-2.5 block truncate text-sm font-semibold text-content">
+                                    <span className="mt-2 block line-clamp-2 text-sm font-semibold leading-5 text-content">
                                         {track.title}
                                     </span>
                                     <span className="mt-0.5 block truncate text-xs text-content-muted">
@@ -170,7 +171,6 @@ export function HomeListeningDashboard({
                         ))}
                     </div>
                 </section>
-                {children}
             </div>
 
             {recent.length > 0 && (

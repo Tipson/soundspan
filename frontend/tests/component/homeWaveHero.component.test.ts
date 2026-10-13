@@ -233,6 +233,11 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     assert.ok(container.querySelector("[data-wave-ambient]"));
     assert.equal(container.querySelectorAll("h1").length, 1);
     assert.equal(
+        (container.textContent ?? "").match(/Моя волна/g)?.length,
+        1,
+        "the compact Wave entry should introduce the radio once",
+    );
+    assert.equal(
         container.querySelectorAll("[data-wave-focus-cover]").length,
         1,
     );

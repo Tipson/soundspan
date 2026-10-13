@@ -29,6 +29,7 @@ interface MusicBrainzReleaseGroup {
 }
 
 interface MusicBrainzLookupProps {
+    inputId?: string;
     type: "artist" | "album";
     currentValue: string;
     currentName?: string;
@@ -40,6 +41,7 @@ interface MusicBrainzLookupProps {
  * Renders the MusicBrainzLookup component.
  */
 export function MusicBrainzLookup({
+    inputId,
     type,
     currentValue,
     currentName,
@@ -175,6 +177,7 @@ export function MusicBrainzLookup({
                 <div className="flex gap-2">
                     <input
                         type="text"
+                        id={inputId}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={handleKeyDown}
@@ -183,7 +186,7 @@ export function MusicBrainzLookup({
                                 ? "Введите имя исполнителя…"
                                 : "Введите название альбома…"
                         }
-                        className="flex-1 rounded border border-white/10 bg-surface-elevated px-4 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
+                        className="min-w-0 flex-1 rounded border border-white/10 bg-surface-elevated px-4 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
                     />
                     <button
                         type="button"
@@ -299,7 +302,7 @@ export function MusicBrainzLookup({
                             value={manualMbid}
                             onChange={(e) => setManualMbid(e.target.value)}
                             placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                            className="flex-1 rounded border border-white/10 bg-surface-elevated px-4 py-2 font-mono text-xs text-white focus:border-white/30 focus:outline-none"
+                            className="min-w-0 flex-1 rounded border border-white/10 bg-surface-elevated px-4 py-2 font-mono text-xs text-white focus:border-white/30 focus:outline-none"
                         />
                         <button
                             type="button"

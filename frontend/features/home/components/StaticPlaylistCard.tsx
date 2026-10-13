@@ -38,10 +38,10 @@ export const StaticPlaylistCard = memo(function StaticPlaylistCard({
             data-tv-card
             data-tv-card-index={index}
             tabIndex={0}
-            className="group block min-w-0 rounded-[1.125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
+            className="group block min-w-0 rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
         >
             <div>
-                <div className="relative mb-3 aspect-square overflow-hidden rounded-[1.125rem] bg-surface-highlight shadow-lg shadow-black/25">
+                <div className="relative mb-2 aspect-square overflow-hidden rounded-[14px] bg-surface-highlight">
                     {coverUrl ? (
                         <CachedImage
                             src={coverUrl}
@@ -61,7 +61,7 @@ export const StaticPlaylistCard = memo(function StaticPlaylistCard({
                         </div>
                     )}
                 </div>
-                <h3 className="truncate text-sm font-bold text-content sm:text-[0.9375rem]">
+                <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-content sm:text-[0.9375rem]">
                     {title}
                 </h3>
                 <p className="mt-1 line-clamp-2 text-xs leading-5 text-content-muted">

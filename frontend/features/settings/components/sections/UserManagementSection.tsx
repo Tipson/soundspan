@@ -18,6 +18,11 @@ import {
 } from "@/lib/i18n/adminManagementRu";
 import { pluralRu } from "@/lib/i18n/ru";
 import type { User } from "../../types";
+import {
+    SETTINGS_DANGER_BUTTON,
+    SETTINGS_PRIMARY_BUTTON,
+    SETTINGS_SECONDARY_BUTTON,
+} from "../ui/settingsFieldStyles";
 
 const logger = createFrontendLogger("Settings.UserManagementSection");
 
@@ -99,9 +104,10 @@ export function UserManagementSection() {
     }, []);
 
     useEffect(() => {
+        if (!isAdmin) return;
         loadUsers();
         loadInviteCodes();
-    }, [loadInviteCodes]);
+    }, [isAdmin, loadInviteCodes]);
 
     const loadUsers = async () => {
         try {
@@ -279,12 +285,12 @@ export function UserManagementSection() {
                 showSeparator={false}
             >
                 {/* Create User Form */}
-                <div className="py-4 px-4 bg-surface-hover rounded-lg mb-4">
-                    <h3 className="text-sm font-medium text-white mb-3">
+                <div className="mb-6 border-b border-line pb-6">
+                    <h3 className="mb-3 text-sm font-semibold text-content">
                         {adminManagementRu.users.createTitle}
                     </h3>
                     <div className="space-y-3">
-                        <div className="flex gap-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
                             <SettingsInput
                                 value={newUsername}
                                 onChange={setNewUsername}
@@ -299,8 +305,9 @@ export function UserManagementSection() {
                                 className="flex-1"
                             />
                         </div>
-                        <div className="inline-flex gap-3 items-center">
+                        <div className="flex flex-wrap items-center gap-3">
                             <SettingsSelect
+                                aria-label={adminManagementRu.users.role}
                                 value={newRole}
                                 onChange={(v) =>
                                     setNewRole(v as "user" | "admin")
@@ -323,8 +330,7 @@ export function UserManagementSection() {
                                     !newUsername.trim() ||
                                     newPassword.length < 6
                                 }
-                                className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
-                                    hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                                className={SETTINGS_PRIMARY_BUTTON}
                             >
                                 {creating
                                     ? adminManagementRu.users.creating
@@ -340,13 +346,14 @@ export function UserManagementSection() {
                 </div>
 
                 {/* Invite Codes */}
-                <div className="py-4 px-4 bg-surface-hover rounded-lg mb-4">
-                    <h3 className="text-sm font-medium text-white mb-3">
+                <div className="mb-6 border-b border-line pb-6">
+                    <h3 className="mb-3 text-sm font-semibold text-content">
                         {adminManagementRu.users.invites}
                     </h3>
                     <div className="space-y-3">
                         <div className="flex gap-3 items-center flex-wrap">
                             <SettingsSelect
+                                aria-label="Срок действия приглашения"
                                 value={inviteTtl}
                                 onChange={setInviteTtl}
                                 options={[
@@ -389,8 +396,7 @@ export function UserManagementSection() {
                             <button
                                 onClick={handleGenerateInvite}
                                 disabled={generatingInvite}
-                                className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
-                                    hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                                className={SETTINGS_PRIMARY_BUTTON}
                             >
                                 {generatingInvite
                                     ? adminManagementRu.users.generating
@@ -408,9 +414,9 @@ export function UserManagementSection() {
                                 {inviteCodes.map((code) => (
                                     <div
                                         key={code.id}
-                                        className="flex items-center justify-between px-3 py-2 rounded-md bg-white/[0.03] border border-white/5"
+                                        className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-3"
                                     >
-                                        <div className="flex items-center gap-3 min-w-0">
+                                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
                                             <code className="text-sm font-mono text-white tracking-wider">
                                                 {code.code}
                                             </code>
@@ -419,11 +425,11 @@ export function UserManagementSection() {
                                             >
                                                 {inviteStatusLabel(code.status)}
                                             </span>
-                                            <span className="text-xs text-white/40">
+                                            <span className="text-xs tabular-nums text-content-muted">
                                                 {code.useCount}/{code.maxUses}{" "}
                                                 {adminManagementRu.users.uses}
                                             </span>
-                                            <span className="text-xs text-white/40">
+                                            <span className="text-xs text-content-muted">
                                                 {formatInviteExpiry(
                                                     code.expiresAt,
                                                 )}
@@ -439,7 +445,12 @@ export function UserManagementSection() {
                                                                 code.id,
                                                             )
                                                         }
-                                                        className="p-1.5 text-gray-400 hover:text-white transition-colors"
+                                                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
+                                                        aria-label={
+                                                            adminManagementRu
+                                                                .users
+                                                                .copyInvite
+                                                        }
                                                         title={
                                                             adminManagementRu
                                                                 .users
@@ -459,7 +470,12 @@ export function UserManagementSection() {
                                                                 code.id,
                                                             )
                                                         }
-                                                        className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"
+                                                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] text-content-muted transition-colors hover:bg-red-500/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
+                                                        aria-label={
+                                                            adminManagementRu
+                                                                .users
+                                                                .revokeInvite
+                                                        }
                                                         title={
                                                             adminManagementRu
                                                                 .users
@@ -479,13 +495,13 @@ export function UserManagementSection() {
                 </div>
 
                 {/* Connected Users */}
-                <div className="mb-4 rounded-xl border border-line bg-surface-elevated px-4 py-4">
-                    <div className="flex items-center justify-between mb-3">
+                <div className="mb-6 border-b border-line pb-6">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-medium text-white">
                             {adminManagementRu.users.connectedNow}
                         </h3>
                         <span className="text-xs text-green-400 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                             {connectedUsers.length}{" "}
                             {pluralRu(connectedUsers.length, [
                                 "пользователь",
@@ -509,10 +525,10 @@ export function UserManagementSection() {
                             {connectedUsers.map((connectedUser) => (
                                 <div
                                     key={connectedUser.id}
-                                    className="flex items-center justify-between px-2 py-2 rounded-md bg-white/[0.03]"
+                                    className="flex min-w-0 items-center justify-between gap-3 py-2"
                                 >
                                     <div className="min-w-0">
-                                        <p className="text-sm text-white truncate">
+                                        <p className="break-words text-sm text-content">
                                             {connectedUser.displayName}
                                             {currentUser?.id ===
                                                 connectedUser.id && (
@@ -521,11 +537,11 @@ export function UserManagementSection() {
                                                 </span>
                                             )}
                                         </p>
-                                        <p className="text-xs text-gray-400 truncate">
+                                        <p className="break-all text-xs text-content-muted">
                                             @{connectedUser.username}
                                         </p>
                                     </div>
-                                    <span className="text-[11px] text-white/40 capitalize">
+                                    <span className="shrink-0 text-xs text-content-muted">
                                         {connectedUser.role === "admin"
                                             ? adminManagementRu.users.admin
                                             : adminManagementRu.users.user}
@@ -550,15 +566,19 @@ export function UserManagementSection() {
                         users.map((user) => (
                             <div
                                 key={user.id}
-                                className="flex items-center justify-between py-3 px-3 rounded-md hover:bg-white/5 cursor-pointer"
-                                onClick={() => openEditModal(user)}
+                                className="flex min-w-0 items-center gap-2 border-b border-line py-2 last:border-0"
                             >
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-line-strong flex items-center justify-center text-sm text-white">
+                                <button
+                                    type="button"
+                                    onClick={() => openEditModal(user)}
+                                    aria-label={`Изменить пользователя ${user.username}`}
+                                    className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-[10px] p-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
+                                >
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-highlight text-sm text-content">
                                         {user.username[0].toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <div className="text-sm text-white">
+                                    </span>
+                                    <span className="min-w-0">
+                                        <span className="block break-words text-sm text-content">
                                             {user.username}
                                             <UserSsoBadge user={user} />
                                             {currentUser?.id === user.id && (
@@ -566,19 +586,19 @@ export function UserManagementSection() {
                                                     {`(${adminManagementRu.users.you})`}
                                                 </span>
                                             )}
-                                        </div>
-                                        <div className="text-xs text-gray-400">
+                                        </span>
+                                        <span className="block text-xs text-content-muted">
                                             {user.role === "admin"
                                                 ? adminManagementRu.users.admin
                                                 : adminManagementRu.users.user}
                                             {user.email && (
-                                                <span className="ml-2">
+                                                <span className="mt-0.5 block break-all sm:ml-2 sm:inline">
                                                     {user.email}
                                                 </span>
                                             )}
-                                        </div>
-                                    </div>
-                                </div>
+                                        </span>
+                                    </span>
+                                </button>
 
                                 {currentUser?.id !== user.id && (
                                     <button
@@ -586,7 +606,7 @@ export function UserManagementSection() {
                                             e.stopPropagation();
                                             setConfirmDelete(user.id);
                                         }}
-                                        className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                                        className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[10px] text-content-muted transition-colors hover:bg-red-500/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                                         title={adminManagementRu.users.delete}
                                         aria-label={
                                             adminManagementRu.users.delete
@@ -639,20 +659,29 @@ export function UserManagementSection() {
                         ) : null}
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-white/90 mb-1.5">
+                        <label
+                            htmlFor="edit-user-name"
+                            className="block text-sm font-medium text-content mb-1.5"
+                        >
                             {adminManagementRu.users.username}
                         </label>
                         <SettingsInput
+                            id="edit-user-name"
                             value={editUsername}
                             onChange={setEditUsername}
                             placeholder={adminManagementRu.users.username}
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-white/90 mb-1.5">
+                        <label
+                            htmlFor="edit-user-email"
+                            className="block text-sm font-medium text-content mb-1.5"
+                        >
                             {adminManagementRu.users.email}
                         </label>
                         <SettingsInput
+                            id="edit-user-email"
+                            aria-label={adminManagementRu.users.email}
                             type="email"
                             value={editEmail}
                             onChange={setEditEmail}
@@ -660,12 +689,16 @@ export function UserManagementSection() {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-white/90 mb-1.5">
+                        <label
+                            htmlFor="edit-user-password"
+                            className="block text-sm font-medium text-content mb-1.5"
+                        >
                             {editingUser?.hasPassword
                                 ? adminManagementRu.users.newPassword
                                 : adminManagementRu.users.setPassword}
                         </label>
                         <SettingsInput
+                            id="edit-user-password"
                             type="password"
                             value={editPassword}
                             onChange={setEditPassword}
@@ -676,7 +709,7 @@ export function UserManagementSection() {
                             }
                         />
                     </div>
-                    <div className="flex gap-2 justify-end items-center">
+                    <div className="flex flex-wrap gap-2 justify-end items-center">
                         <InlineStatus
                             status={editStatus}
                             message={editMessage}
@@ -684,15 +717,14 @@ export function UserManagementSection() {
                         />
                         <button
                             onClick={closeEditModal}
-                            className="px-4 py-2 text-sm text-gray-400 hover:text-white"
+                            className={SETTINGS_SECONDARY_BUTTON}
                         >
                             {adminManagementRu.users.cancel}
                         </button>
                         <button
                             onClick={handleEditUser}
                             disabled={savingEdit}
-                            className="px-4 py-2 text-sm bg-white text-black font-medium rounded-full
-                                hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                            className={SETTINGS_PRIMARY_BUTTON}
                         >
                             {savingEdit
                                 ? adminManagementRu.users.saving
@@ -712,7 +744,7 @@ export function UserManagementSection() {
                     <p className="text-sm text-gray-300">
                         {adminManagementRu.users.deleteQuestion}
                     </p>
-                    <div className="flex gap-2 justify-end items-center">
+                    <div className="flex flex-wrap gap-2 justify-end items-center">
                         <InlineStatus
                             status={deleteStatus}
                             message={deleteMessage}
@@ -720,7 +752,7 @@ export function UserManagementSection() {
                         />
                         <button
                             onClick={() => setConfirmDelete(null)}
-                            className="px-4 py-2 text-sm text-gray-400 hover:text-white"
+                            className={SETTINGS_SECONDARY_BUTTON}
                         >
                             {adminManagementRu.users.cancel}
                         </button>
@@ -728,7 +760,7 @@ export function UserManagementSection() {
                             onClick={() =>
                                 confirmDelete && handleDelete(confirmDelete)
                             }
-                            className="px-4 py-2 text-sm bg-red-500 text-white rounded-full hover:bg-red-600"
+                            className={SETTINGS_DANGER_BUTTON}
                         >
                             {adminManagementRu.users.delete}
                         </button>

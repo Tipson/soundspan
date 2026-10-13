@@ -159,9 +159,14 @@ test("Discover bulk playlist excludes native-only recordings but keeps supported
         rows = [direct];
         adds.length = notices.length = 0;
         await React.act(async () => root.render(React.createElement(Page)));
+        await React.act(async () =>
+            node
+                .querySelector<HTMLButtonElement>('[aria-label="Ещё действия"]')
+                ?.click(),
+        );
         assert.equal(
             Boolean(
-                node.querySelector(
+                document.querySelector(
                     'button[aria-label="Добавить всё в плейлист"]',
                 ),
             ),
@@ -169,10 +174,22 @@ test("Discover bulk playlist excludes native-only recordings but keeps supported
         );
         await React.act(async () => selectPlaylist("playlist"));
         assert.deepEqual(adds, []);
+        await React.act(async () =>
+            window.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape" }),
+            ),
+        );
         rows = [direct, local];
         await React.act(async () => root.render(React.createElement(Page)));
+        await React.act(async () =>
+            node
+                .querySelector<HTMLButtonElement>('[aria-label="Ещё действия"]')
+                ?.click(),
+        );
         assert.ok(
-            node.querySelector('button[aria-label="Добавить всё в плейлист"]'),
+            document.querySelector(
+                'button[aria-label="Добавить всё в плейлист"]',
+            ),
         );
         await React.act(async () => selectPlaylist("playlist"));
         assert.deepEqual(adds, [{ trackId: "local" }]);

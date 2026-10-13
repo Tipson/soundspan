@@ -1,4 +1,5 @@
 "use client";
+import { resumeAudiobookProgressWrites } from "./audiobookProgressWrites";
 
 import {
     createContext,
@@ -778,6 +779,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             }
 
             const playbackState = getPlaybackView();
+            resumeAudiobookProgressWrites(audiobook.id);
             recordPlaybackReplacement();
             state.setPlaybackType("audiobook");
             state.setCurrentAudiobook(audiobook);
@@ -1095,6 +1097,9 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
+            if (state.playbackType === "audiobook" && state.currentAudiobook) {
+                resumeAudiobookProgressWrites(state.currentAudiobook.id);
+            }
             recordExplicitPlaybackResume();
             playbackState.setIsPlaying(true);
         },

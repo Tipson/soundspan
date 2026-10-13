@@ -21,11 +21,11 @@ const Button = memo(
             ref,
         ) => {
             const baseStyles =
-                "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl font-semibold transition-[color,background-color,border-color,box-shadow,transform] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-45 enabled:active:scale-[0.98]";
+                "inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--music-radius-control)] font-semibold transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-45 enabled:active:scale-[0.98]";
 
             const variantStyles = {
                 primary:
-                    "bg-brand px-5 py-2.5 text-surface shadow-lg shadow-brand/10 hover:bg-brand-hover",
+                    "bg-brand px-5 py-2.5 text-surface hover:bg-brand-hover",
                 secondary:
                     "border border-line bg-surface-elevated px-5 py-2.5 text-content hover:border-line-muted hover:bg-surface-hover",
                 ghost: "px-4 py-2.5 text-content-muted hover:bg-surface-hover hover:text-content",

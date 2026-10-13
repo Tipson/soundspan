@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { api } from "@/lib/api";
 import { userFacingError } from "@/lib/i18n/ru";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { navigateAfterDismissedLayers } from "@/hooks/useDismissibleLayer";
 
 export interface CreatedPlaylist {
     id: string;
@@ -16,7 +17,12 @@ export interface CreatedPlaylist {
 
 interface CreatePlaylistDialogProps {
     isOpen: boolean;
-    onClose: () => void;
+    /**
+     * Close the dialog. The created reason is emitted only when successful
+     * creation delegates navigation to onCreated; the caller must not start a
+     * competing close-route navigation. Cancel, Back and Escape omit the reason.
+     */
+    onClose: (reason?: "created") => void;
     onCreated?: (playlist: CreatedPlaylist) => void;
 }
 
@@ -47,6 +53,7 @@ export function CreatePlaylistDialog({
     onClose,
     onCreated,
 }: CreatePlaylistDialogProps) {
+    const createdNavigationClose = useRef(false);
     const [name, setName] = useState("");
     const [isPublic, setIsPublic] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -56,7 +63,9 @@ export function CreatePlaylistDialog({
         setName("");
         setIsPublic(false);
         setError(null);
-        onClose();
+        const reason = createdNavigationClose.current ? "created" : undefined;
+        createdNavigationClose.current = false;
+        onClose(reason);
     };
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -73,8 +82,16 @@ export function CreatePlaylistDialog({
             window.dispatchEvent(
                 new CustomEvent("playlist-created", { detail: playlist }),
             );
-            closeDialog();
-            onCreated?.(playlist);
+            if (onCreated) {
+                createdNavigationClose.current = true;
+                try {
+                    navigateAfterDismissedLayers(() => onCreated(playlist));
+                } finally {
+                    createdNavigationClose.current = false;
+                }
+            } else {
+                closeDialog();
+            }
         } catch (caught) {
             sharedFrontendLogger.error("Failed to create playlist", caught);
             setError(
@@ -111,11 +128,11 @@ export function CreatePlaylistDialog({
                         autoComplete="off"
                         maxLength={200}
                         placeholder="Например, В дорогу"
-                        className="min-h-12 w-full rounded-xl border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-[border-color,box-shadow] placeholder:text-content-muted focus:border-brand focus:ring-2 focus:ring-brand/25"
+                        className="min-h-12 w-full rounded-[10px] border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-[border-color,box-shadow] placeholder:text-content-muted focus:border-brand focus:ring-2 focus:ring-brand/25"
                     />
                 </div>
 
-                <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-line px-4 py-3 text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content">
+                <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-[10px] border border-line px-4 py-3 text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content">
                     <input
                         type="checkbox"
                         checked={isPublic}

@@ -95,7 +95,7 @@ test("editor shows load failures, retries, preserves a failed save and reopens p
     try {
         await React.act(async () => render());
         assert.match(
-            container.textContent ?? "",
+            document.body.textContent ?? "",
             /Загружаем музыкальные вкусы/,
         );
         await React.act(async () => rejectLoad(new Error("offline")));
@@ -103,29 +103,29 @@ test("editor shows load failures, retries, preserves a failed save and reopens p
         await React.act(async () => rejectLoad(new Error("offline")));
         await flush();
         assert.match(
-            container.querySelector('[role="alert"]')?.textContent ?? "",
+            document.querySelector('[role="alert"]')?.textContent ?? "",
             /Не удалось загрузить/,
         );
         failLoad = false;
         await React.act(async () =>
-            button(container, "Повторить загрузку").click(),
+            button(document.body, "Повторить загрузку").click(),
         );
         await flush();
-        await React.act(async () => button(container, "Рок").click());
-        await React.act(async () => button(container, "Queen").click());
+        await React.act(async () => button(document.body, "Рок").click());
+        await React.act(async () => button(document.body, "Queen").click());
         await React.act(async () =>
-            button(container, "Сохранить вкусы").click(),
+            button(document.body, "Сохранить вкусы").click(),
         );
         await flush();
         assert.equal(open, true);
         assert.match(
-            container.querySelector('[role="alert"]')?.textContent ?? "",
+            document.querySelector('[role="alert"]')?.textContent ?? "",
             /Не удалось сохранить/,
         );
-        assert.ok(button(container, "Убрать артиста: Queen"));
+        assert.ok(button(document.body, "Убрать артиста: Queen"));
         failSave = false;
         await React.act(async () =>
-            button(container, "Сохранить вкусы").click(),
+            button(document.body, "Сохранить вкусы").click(),
         );
         await flush();
         assert.equal(open, false);
@@ -135,10 +135,10 @@ test("editor shows load failures, retries, preserves a failed save and reopens p
         open = true;
         await React.act(async () => render());
         await flush();
-        assert.ok(button(container, "Убрать артиста: Queen"));
-        assert.ok(button(container, "Убрать жанр: Рок"));
+        assert.ok(button(document.body, "Убрать артиста: Queen"));
+        assert.ok(button(document.body, "Убрать жанр: Рок"));
         await React.act(async () =>
-            button(container, "Закрыть настройку вкусов").click(),
+            button(document.body, "Закрыть настройку вкусов").click(),
         );
         assert.equal(open, false);
     } finally {

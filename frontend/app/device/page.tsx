@@ -187,7 +187,7 @@ export default function DeviceLinkPage() {
     }
 
     return (
-        <div data-consumer-surface="device" className="min-h-screen bg-surface">
+        <div data-consumer-surface="device" className="min-h-full bg-surface">
             <div className="relative mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
                 <PageHeader
                     title={deviceRu.title}
@@ -195,10 +195,10 @@ export default function DeviceLinkPage() {
                     icon={Smartphone}
                 />
 
-                <div className="grid gap-10 md:grid-cols-2">
+                <div className="grid gap-6 md:grid-cols-2">
                     {/* QR Code Section */}
                     <section className="border-y border-line py-6">
-                        <h2 className="mb-4 flex items-center gap-2 text-2xl font-black tracking-[-0.03em] text-content">
+                        <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold text-content">
                             <Smartphone className="w-5 h-5" />
                             {deviceRu.linkCodeTitle}
                         </h2>
@@ -342,7 +342,7 @@ export default function DeviceLinkPage() {
 
                     {/* Linked Devices Section */}
                     <section className="border-y border-line py-6">
-                        <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
+                        <h2 className="mb-4 text-xl font-semibold text-content">
                             {deviceRu.linkedDevices}
                         </h2>
 
@@ -373,12 +373,12 @@ export default function DeviceLinkPage() {
                                         key={device.id}
                                         className="flex items-center justify-between gap-3 px-1 py-3 transition-colors hover:bg-surface-elevated/60 motion-reduce:transition-none"
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand/15">
+                                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--music-radius-control)] bg-surface-elevated">
                                                 <Smartphone className="h-5 w-5 text-brand-light" />
                                             </div>
-                                            <div>
-                                                <p className="font-medium text-content">
+                                            <div className="min-w-0">
+                                                <p className="break-words font-medium text-content">
                                                     {device.name}
                                                 </p>
                                                 <p className="text-sm text-content-muted">
@@ -395,7 +395,7 @@ export default function DeviceLinkPage() {
                                             onClick={() =>
                                                 revokeDevice(device.id)
                                             }
-                                            className="flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error motion-reduce:transition-none"
+                                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--music-radius-control)] text-content-muted transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error motion-reduce:transition-none"
                                             title={deviceRu.revokeDevice}
                                             aria-label={deviceRu.revokeDevice}
                                         >
@@ -410,7 +410,7 @@ export default function DeviceLinkPage() {
 
                 {/* Instructions */}
                 <section className="mt-10 border-t border-line pt-7">
-                    <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
+                    <h2 className="mb-4 text-xl font-semibold text-content">
                         {deviceRu.instructionsTitle}
                     </h2>
                     <ol className="max-w-3xl space-y-3 text-content-muted">

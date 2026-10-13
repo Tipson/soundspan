@@ -139,14 +139,14 @@ export default function SeriesDetailPage() {
                 />
 
                 <section className="mb-10 flex flex-col gap-6 border-y border-line py-6 sm:flex-row sm:items-center">
-                    <div className="relative aspect-square w-40 flex-shrink-0 overflow-hidden rounded-xl bg-surface-elevated shadow-2xl shadow-black/20 sm:w-52">
+                    <div className="relative aspect-[3/4] w-36 shrink-0 overflow-hidden rounded-[14px] bg-surface-highlight shadow-[0_12px_28px_rgb(0_0_0/0.25)] sm:w-44">
                         {firstBook.coverUrl &&
                         getCoverUrl(firstBook.coverUrl, 500) ? (
                             <Image
                                 src={getCoverUrl(firstBook.coverUrl, 500)!}
                                 alt={seriesName}
                                 fill
-                                sizes="(max-width: 640px) 160px, 208px"
+                                sizes="(max-width: 640px) 144px, 176px"
                                 className="object-cover"
                                 unoptimized
                             />
@@ -157,7 +157,7 @@ export default function SeriesDetailPage() {
                         )}
                     </div>
                     <div className="min-w-0 flex-1">
-                        <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-content-muted">
+                        <p className="mb-3 text-sm font-medium text-content-secondary">
                             Цикл аудиокниг
                         </p>
                         {genres.length > 0 && (
@@ -172,7 +172,7 @@ export default function SeriesDetailPage() {
                     </div>
                 </section>
 
-                <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+                <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
                     Книги цикла
                 </h2>
 
@@ -210,7 +210,7 @@ export default function SeriesDetailPage() {
 
                                     {/* Book Cover (small) */}
                                     <Link href={`/audiobooks/${book.id}`}>
-                                        <div className="relative w-12 h-12 rounded overflow-hidden bg-surface-elevated flex-shrink-0 cursor-pointer">
+                                        <div className="relative w-12 h-16 rounded-[8px] overflow-hidden bg-surface-elevated flex-shrink-0 cursor-pointer">
                                             {book.coverUrl &&
                                             getCoverUrl(book.coverUrl, 100) ? (
                                                 <Image
@@ -239,7 +239,7 @@ export default function SeriesDetailPage() {
                                         href={`/audiobooks/${book.id}`}
                                         className="flex-1 min-w-0 cursor-pointer"
                                     >
-                                        <h3 className="truncate font-medium text-content hover:underline">
+                                        <h3 className="line-clamp-2 font-semibold leading-6 text-content [overflow-wrap:anywhere] hover:underline">
                                             {book.title}
                                         </h3>
                                         <p className="truncate text-sm text-content-muted">
@@ -252,7 +252,7 @@ export default function SeriesDetailPage() {
                                         <CheckCircle className="h-5 w-5 flex-shrink-0 text-success" />
                                     ) : book.progress &&
                                       book.progress.progress > 0 ? (
-                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                        <div className="hidden shrink-0 items-center gap-2 sm:flex">
                                             <div className="h-1 w-24 overflow-hidden rounded-full bg-surface-elevated">
                                                 <div
                                                     className="h-full bg-brand"

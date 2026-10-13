@@ -31,7 +31,7 @@ export function CollectionPlaybackButton({
             aria-label={accessibleLabel}
             title={title ?? accessibleLabel}
             aria-busy={isLoading || undefined}
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand text-white shadow-lg transition-transform hover:scale-105 hover:bg-brand-hover active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand text-surface shadow-[0_8px_24px_rgb(0_0_0/0.2)] transition-[background-color,transform] hover:scale-[1.03] hover:bg-brand-hover active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none motion-reduce:transition-none"
         >
             {isLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />

@@ -24,7 +24,7 @@ import { TasteProfileOnboardingGate } from "@/features/taste-profile";
 import { MainScrollRestoration } from "./MainScrollRestoration";
 import { OfflineDownloadsPanel } from "./OfflineDownloadsPanel";
 
-const publicPaths = ["/login", "/register", "/onboarding", "/sync"];
+const publicPaths = ["/login", "/register", "/onboarding", "/sync", "/setup"];
 const publicPrefixes = ["/share/"];
 
 /**
@@ -177,7 +177,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                                     className="mobile-stage-content"
                                     style={{
                                         paddingBottom:
-                                            "calc(var(--app-mini-player-height) + var(--app-bottom-nav-height) + var(--safe-area-bottom) + 12px)",
+                                            "calc(var(--app-mini-player-inset) + var(--app-bottom-nav-height) + var(--safe-area-bottom) + 12px)",
                                     }}
                                 >
                                     {children}

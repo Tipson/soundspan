@@ -18,7 +18,7 @@ export function MusicDetailTrackSurface({
             aria-label={label}
             data-music-detail="tracks"
             className={cn(
-                "overflow-hidden rounded-[20px] border border-white/[0.08] bg-surface-raised/80 shadow-[0_24px_72px_rgb(0_0_0/0.16)]",
+                "overflow-hidden rounded-[14px] bg-surface-raised/60 p-1 sm:p-2",
                 className,
             )}
         >

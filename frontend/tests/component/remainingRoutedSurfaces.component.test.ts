@@ -285,6 +285,9 @@ mock.module("@/components/ui/InlineStatus", {
         InlineStatus: () => null,
         useInlineStatus: () => ({
             props: {},
+            status: "idle",
+            message: "",
+            reset: () => undefined,
             setError: () => undefined,
             setLoading: () => undefined,
             setSuccess: () => undefined,
@@ -340,8 +343,9 @@ test("admin keeps its save action and states inside the routed stage", async () 
 
     assert.match(html, /data-routed-surface="admin"/);
     assert.match(html, /data-settings-layout="true"/);
-    assert.match(html, /data-admin-save="true"[^>]*min-h-12/);
-    assert.match(html, /data-admin-save="true"[^>]*bg-brand/);
+    assert.match(html, /data-testid="settings-save-dock"/);
+    assert.match(html, /Настройки сервера/);
+    assert.match(html, /<button[^>]*>Сохранить<\/button>/);
 });
 
 test("podcast genre route has shared header, empty state and a touch-safe back action", async () => {

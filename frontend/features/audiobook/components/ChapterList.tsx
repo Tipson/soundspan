@@ -25,31 +25,33 @@ export function ChapterList({
         return null;
     }
 
-    const heading = kind === "parts" ? "Parts" : "Chapters";
+    const heading = kind === "parts" ? "Части" : "Главы";
 
     return (
         <section>
-            <h2 className="text-2xl md:text-3xl font-bold mb-6">{heading}</h2>
-            <Card className="p-6">
-                <div className="space-y-2">
+            <h2 className="mb-4 text-xl font-semibold text-content sm:text-2xl">
+                {heading}
+            </h2>
+            <Card className="rounded-[14px] p-2">
+                <div className="space-y-1">
                     {sections.map((section) => (
                         <button
                             key={section.index}
                             onClick={() =>
                                 onSeekToSection(section.startSeconds)
                             }
-                            className="w-full text-left p-3 rounded-md hover:bg-surface-hover transition-colors group"
+                            className="group min-h-11 w-full rounded-[10px] p-3 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                         >
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <span className="text-sm text-gray-400 mr-2">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                    <span className="text-sm text-content-muted mr-2">
                                         {section.index + 1}.
                                     </span>
-                                    <span className="text-sm text-white group-hover:text-ai-hover">
+                                    <span className="text-sm font-medium text-content [overflow-wrap:anywhere]">
                                         {section.title}
                                     </span>
                                 </div>
-                                <span className="text-xs text-gray-400">
+                                <span className="shrink-0 text-xs tabular-nums text-content-muted">
                                     {formatTime(section.startSeconds)}
                                 </span>
                             </div>

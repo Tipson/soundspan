@@ -53,14 +53,14 @@ export default function HomePage() {
     const online = useNetworkOnline();
     if (!online) {
         return (
-            <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">
+            <div className="mx-auto max-w-5xl space-y-4 px-4 py-6">
                 <h1 className="text-2xl font-bold">Загруженное</h1>
                 <p role="status" className="text-sm text-content-muted">
                     Нет подключения к интернету. Слушайте музыку, сохранённую на
                     этом устройстве.
                 </p>
                 <DownloadsList />
-            </main>
+            </div>
         );
     }
     return <OnlineHomePage />;
@@ -97,8 +97,8 @@ function OnlineHomePage() {
             data-home-layout="personal-dashboard"
             className="relative min-h-full overflow-x-clip bg-transparent"
         >
-            <div className="relative mx-auto w-full max-w-[1660px] px-4 pb-10 pt-4 sm:px-7 sm:pt-6 lg:px-10 xl:px-12 2xl:px-14">
-                <div className="space-y-8 lg:space-y-10">
+            <div className="relative mx-auto w-full max-w-[1660px] px-4 pb-8 pt-4 sm:px-7 sm:pt-6 lg:px-10 xl:px-12 2xl:px-14">
+                <div className="space-y-5 sm:space-y-6">
                     <div data-home-region="wave">
                         <HomeWaveHero
                             personalizedFeed={personalizedFeed}

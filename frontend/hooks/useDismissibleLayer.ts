@@ -50,3 +50,13 @@ export function useDismissibleLayer(
         return getManager().add(() => close.current(), priority);
     }, [open, priority]);
 }
+
+/** Navigate after visible layers close and their native Back guard is consumed. */
+export function navigateAfterDismissedLayers(callback: () => void): void {
+    getManager().navigateAfterDismiss(callback);
+}
+
+/** Wait to update a route until remaining layers close, preserving lower layers. */
+export function navigateWhenLayersDismissed(callback: () => void): void {
+    getManager().navigateWhenLayersDismissed(callback);
+}

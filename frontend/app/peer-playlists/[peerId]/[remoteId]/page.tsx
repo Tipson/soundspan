@@ -191,7 +191,7 @@ export default function PeerPlaylistDetailPage() {
 
     if (!detail) {
         return (
-            <main
+            <div
                 role="alert"
                 className="flex min-h-screen items-center justify-center bg-surface px-4"
             >
@@ -200,7 +200,7 @@ export default function PeerPlaylistDetailPage() {
                     title="Плейлист сейчас недоступен"
                     description="Удалённый сервер может быть не в сети, либо владелец закрыл доступ. Попробуйте позже."
                 />
-            </main>
+            </div>
         );
     }
 
@@ -301,7 +301,7 @@ export default function PeerPlaylistDetailPage() {
                                         await invalidate();
                                     })
                                 }
-                                className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+                                className="inline-flex min-h-11 items-center gap-2 rounded-[10px] px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                             >
                                 <Heart className="h-4 w-4" />
                                 <span>
@@ -326,7 +326,7 @@ export default function PeerPlaylistDetailPage() {
                                         await invalidate();
                                     })
                                 }
-                                className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+                                className="inline-flex min-h-11 items-center gap-2 rounded-[10px] px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                             >
                                 <Copy className="h-4 w-4" />
                                 <span>Сохранить копию</span>
@@ -336,7 +336,7 @@ export default function PeerPlaylistDetailPage() {
                 }
             />
 
-            <main className="mx-auto max-w-[1800px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+            <div className="mx-auto max-w-[1800px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
                 {rows.length > 0 ? (
                     <MusicDetailTrackSurface label={`${playlist.name}: треки`}>
                         <TrackList<PeerPlaylistTrack>
@@ -365,7 +365,7 @@ export default function PeerPlaylistDetailPage() {
                         description="Когда владелец добавит музыку, она появится здесь после синхронизации."
                     />
                 )}
-            </main>
+            </div>
         </div>
     );
 }

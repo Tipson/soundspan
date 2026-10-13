@@ -52,14 +52,13 @@ function SecondFactorField({
                     )
                 }
                 placeholder={useRecoveryCode ? "ABCD1234" : "000000"}
-                maxLength={useRecoveryCode ? 8 : 6}
                 required
                 autoFocus
                 autoCapitalize="none"
                 autoCorrect="off"
                 inputMode={useRecoveryCode ? "text" : "numeric"}
                 autoComplete="one-time-code"
-                className="min-h-12 w-full rounded-2xl border border-brand/30 bg-surface-elevated px-4 py-3 text-center text-2xl tracking-widest text-content outline-none transition-colors placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/25"
+                className="min-h-12 w-full rounded-[var(--music-radius-control)] border border-brand/30 bg-surface-elevated px-4 py-3 text-center text-2xl tracking-widest text-content outline-none transition-colors placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/25"
             />
             <p className="mt-2 text-xs text-content-muted">
                 {useRecoveryCode

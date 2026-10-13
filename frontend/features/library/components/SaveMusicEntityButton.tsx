@@ -43,11 +43,11 @@ export function SaveMusicEntityButton({
             disabled={busy || isError}
             onClick={() => void toggle()}
             className={cn(
-                "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors",
+                "inline-flex min-h-11 items-center gap-2 rounded-[10px] border px-4 py-2 text-sm font-semibold transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                 isSaved
                     ? "border-brand/35 bg-brand/15 text-brand-light hover:bg-brand/20"
-                    : "border-white/15 bg-white/[0.07] text-content hover:border-white/25 hover:bg-white/10",
+                    : "border-line bg-surface-elevated text-content hover:border-line-muted hover:bg-surface-hover",
                 (busy || isError) && "cursor-not-allowed opacity-60",
                 className,
             )}

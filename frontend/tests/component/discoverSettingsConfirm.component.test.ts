@@ -105,12 +105,12 @@ test("clears the discovery playlist only after dialog confirmation", async (t) =
     await click(findButton(harness.container, "Удалить плейлист"));
 
     assert.match(
-        harness.container.textContent ?? "",
+        document.body.textContent ?? "",
         /Очистить «Открытия недели»\?|Отменить действие нельзя/,
     );
     assert.equal(clearDiscoverPlaylist.mock.callCount(), 0);
 
-    await click(findButton(harness.container, "Очистить"));
+    await click(findButton(document.body, "Очистить"));
 
     assert.equal(clearDiscoverPlaylist.mock.callCount(), 1);
     assert.equal(onPlaylistCleared.mock.callCount(), 1);
@@ -122,7 +122,7 @@ test("cancelling the clear-playlist dialog leaves the playlist unchanged", async
     t.after(harness.unmount);
 
     await click(findButton(harness.container, "Удалить плейлист"));
-    await click(findButton(harness.container, "Отмена"));
+    await click(findButton(document.body, "Отмена"));
 
     assert.equal(clearDiscoverPlaylist.mock.callCount(), 0);
     assert.equal(onPlaylistCleared.mock.callCount(), 0);

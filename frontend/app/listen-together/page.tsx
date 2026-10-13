@@ -1007,7 +1007,7 @@ export default function ListenTogetherPage() {
     if (!isAuthenticated) return null;
 
     return (
-        <main
+        <div
             data-utility-page="listen-together"
             className="min-h-screen px-4 py-6 md:px-8"
         >
@@ -1039,6 +1039,6 @@ export default function ListenTogetherPage() {
                     )}
                 </AnimatePresence>
             </div>
-        </main>
+        </div>
     );
 }

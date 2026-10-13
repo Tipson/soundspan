@@ -11,6 +11,7 @@ GlobalRegistrator.register({ url: "https://soundspan.test/" });
 after(() => GlobalRegistrator.unregister());
 
 const state = {
+    pathname: "/",
     isMobile: false,
     isTablet: false,
     ownerId: "listener-1",
@@ -22,7 +23,7 @@ const Marker = ({ name }: { name: string }) =>
 
 mock.module("next/navigation", {
     namedExports: {
-        usePathname: () => "/",
+        usePathname: () => state.pathname,
         useSearchParams: () => new URLSearchParams(),
     },
 });
@@ -126,6 +127,7 @@ mock.module("@/components/ui/PullToRefresh", {
 });
 
 beforeEach(() => {
+    state.pathname = "/";
     state.isMobile = false;
     state.isTablet = false;
     state.ownerId = "listener-1";
@@ -152,18 +154,21 @@ test("the shell retains its player while downloads open and closes them on accou
         await render();
         const player = parent.querySelector('[data-marker="player"]');
         await React.act(async () => openOfflineDownloads());
-        assert.match(parent.textContent ?? "", /files:listener-1/);
+        assert.match(document.body.textContent ?? "", /files:listener-1/);
         assert.equal(parent.querySelector('[data-marker="player"]'), player);
         state.ownerId = "listener-2";
         await render();
-        assert.equal(parent.querySelector('[role="dialog"]'), null);
+        assert.equal(document.querySelector('[role="dialog"]'), null);
         await React.act(async () => openOfflineDownloads());
-        assert.match(parent.textContent ?? "", /files:listener-2/);
-        assert.doesNotMatch(parent.textContent ?? "", /files:listener-1/);
+        assert.match(document.body.textContent ?? "", /files:listener-2/);
+        assert.doesNotMatch(
+            document.body.textContent ?? "",
+            /files:listener-1/,
+        );
         state.isAuthenticated = false;
         await render();
         await React.act(async () => openOfflineDownloads());
-        assert.equal(parent.querySelector('[role="dialog"]'), null);
+        assert.equal(document.querySelector('[role="dialog"]'), null);
     } finally {
         await React.act(async () => root.unmount());
         parent.remove();
@@ -237,7 +242,7 @@ test("mobile shell keeps safe chrome around an unframed content canvas", async (
     assert.ok(contentInset);
     assert.match(
         contentInset,
-        /padding-bottom:calc\(var\(--app-mini-player-height\) \+ var\(--app-bottom-nav-height\) \+ var\(--safe-area-bottom\) \+ 12px\)/,
+        /padding-bottom:calc\(var\(--app-mini-player-inset\) \+ var\(--app-bottom-nav-height\) \+ var\(--safe-area-bottom\) \+ 12px\)/,
     );
 });
 
@@ -257,6 +262,16 @@ test("tablet shell reuses the single mobile bottom inset owner", async () => {
     );
     assert.match(
         html,
-        /padding-bottom:calc\(var\(--app-mini-player-height\) \+ var\(--app-bottom-nav-height\) \+ var\(--safe-area-bottom\) \+ 12px\)/,
+        /padding-bottom:calc\(var\(--app-mini-player-inset\) \+ var\(--app-bottom-nav-height\) \+ var\(--safe-area-bottom\) \+ 12px\)/,
     );
+});
+
+test("legacy setup redirect stays outside private audio shell for an authenticated user", async () => {
+    state.pathname = "/setup";
+    const { AuthenticatedLayout } =
+        await import("../../components/layout/AuthenticatedLayout");
+    const html = renderToStaticMarkup(
+        React.createElement(AuthenticatedLayout, null, "redirect-child"),
+    );
+    assert.equal(html, "redirect-child");
 });

@@ -1,15 +1,14 @@
 "use client";
 
-import { ReactNode, useEffect, useId, useRef } from "react";
+import { ReactNode, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { Button } from "./Button";
-import { nextFocusIndex } from "./focusTrapMath";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { ru } from "@/lib/i18n/ru";
 import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
-
-const FOCUSABLE_SELECTOR =
-    "a:not([tabindex='-1']), button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex='-1'])";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export interface ModalProps {
     isOpen: boolean;
@@ -25,62 +24,7 @@ export interface ModalProps {
 
 function useEscapeAndScrollLock(isOpen: boolean, onClose: () => void) {
     useDismissibleLayer(isOpen, onClose);
-    useEffect(() => {
-        const previousOverflow = document.body.style.overflow;
-        if (isOpen) {
-            document.body.style.overflow = "hidden";
-        }
-
-        return () => {
-            if (isOpen) document.body.style.overflow = previousOverflow;
-        };
-    }, [isOpen]);
-}
-
-function useDialogFocus(
-    isOpen: boolean,
-    dialogRef: React.RefObject<HTMLDivElement | null>,
-    previouslyFocusedRef: React.RefObject<HTMLElement | null>,
-) {
-    useEffect(() => {
-        if (!isOpen) return;
-        const dialog = dialogRef.current;
-        if (!dialog) return;
-
-        previouslyFocusedRef.current =
-            document.activeElement instanceof HTMLElement
-                ? document.activeElement
-                : null;
-        const handleTab = (event: KeyboardEvent) => {
-            if (event.key !== "Tab") return;
-            const elements = Array.from(
-                dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-            );
-            const currentIndex = elements.indexOf(
-                document.activeElement as HTMLElement,
-            );
-            const nextIndex = nextFocusIndex(
-                elements.length,
-                currentIndex,
-                event.shiftKey,
-            );
-            event.preventDefault();
-            if (nextIndex === -1) {
-                dialog.focus();
-                return;
-            }
-            elements[nextIndex]?.focus();
-        };
-
-        dialog.addEventListener("keydown", handleTab);
-        dialog.focus();
-        return () => {
-            dialog.removeEventListener("keydown", handleTab);
-            const previouslyFocused = previouslyFocusedRef.current;
-            previouslyFocusedRef.current = null;
-            if (previouslyFocused?.isConnected) previouslyFocused.focus();
-        };
-    }, [dialogRef, isOpen, previouslyFocusedRef]);
+    useBodyScrollLock(isOpen);
 }
 
 /**
@@ -103,9 +47,9 @@ export function Modal({
     useEscapeAndScrollLock(isOpen, onClose);
     useDialogFocus(isOpen, dialogRef, previouslyFocusedRef);
 
-    if (!isOpen) return null;
+    if (!isOpen || typeof document === "undefined") return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[10010] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-5">
             <div
                 ref={dialogRef}
@@ -114,20 +58,20 @@ export function Modal({
                 aria-labelledby={titleId}
                 tabIndex={-1}
                 className={cn(
-                    "max-h-[min(90dvh,760px)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[24px] border border-line bg-surface-overlay p-5 shadow-2xl after:block after:h-[env(safe-area-inset-bottom)] after:shrink-0 after:content-[''] sm:rounded-[24px] sm:p-6 sm:after:hidden",
+                    "max-h-[min(90dvh,760px)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[20px] bg-surface-overlay p-5 shadow-2xl outline-none after:block after:h-[env(safe-area-inset-bottom)] after:shrink-0 after:content-[''] sm:rounded-[16px] sm:p-6 sm:after:hidden",
                     className,
                 )}
             >
                 {/* Header */}
                 <div
                     className={cn(
-                        "mb-5 flex items-center justify-between gap-4 border-b border-line pb-4",
+                        "sticky -top-5 z-10 -mx-5 -mt-5 mb-5 flex items-center justify-between gap-4 bg-surface-overlay px-5 pt-4 pb-3 sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6",
                         headerClassName,
                     )}
                 >
                     <h2
                         id={titleId}
-                        className="text-xl font-semibold text-content"
+                        className="min-w-0 break-words text-xl font-semibold text-content"
                     >
                         {title}
                     </h2>
@@ -158,6 +102,7 @@ export function Modal({
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

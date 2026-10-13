@@ -1,11 +1,26 @@
-import { useCallback, useEffect, type MutableRefObject } from "react";
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    type MutableRefObject,
+} from "react";
 import { api } from "@/lib/api";
 import type { Audiobook, Podcast } from "@/lib/audio-state-context";
 import { dispatchQueryEvent } from "@/lib/query-events";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 
+import { captureAudiobookProgressWrite } from "@/lib/audiobookProgressWrites";
+import {
+    getAuthRuntimeGeneration,
+    isCurrentAuthRuntime,
+} from "@/lib/auth-runtime-generation";
+
 interface UseProgressSaveCallbacksOptions {
+    isPlaying: boolean;
+    playbackType: "track" | "audiobook" | "podcast" | null;
     currentAudiobook: Audiobook | null;
     currentPodcast: Podcast | null;
     isBuffering: boolean;
@@ -21,6 +36,8 @@ interface UseProgressSaveCallbacksOptions {
 /** Returns the existing audiobook and podcast progress writers. */
 export function useProgressSaveCallbacks({
     currentAudiobook,
+    isPlaying,
+    playbackType,
     currentPodcast,
     isBuffering,
     setCurrentAudiobook,
@@ -29,10 +46,45 @@ export function useProgressSaveCallbacks({
     saveAudiobookProgress: (isFinished?: boolean) => Promise<void>;
     savePodcastProgress: (isFinished?: boolean) => Promise<void>;
 } {
+    const authGeneration = getAuthRuntimeGeneration();
+    const owner = useMemo(
+        () => ({ id: currentAudiobook?.id, playbackType, authGeneration }),
+        [currentAudiobook?.id, playbackType, authGeneration],
+    );
+    const currentOwner = useRef<object | null>(owner);
+    useLayoutEffect(() => {
+        currentOwner.current = owner;
+        return () => {
+            if (currentOwner.current === owner) currentOwner.current = null;
+        };
+    }, [owner]);
+    const audiobookId = currentAudiobook?.id;
+    useLayoutEffect(() => {
+        if (audiobookId && playbackType === "audiobook" && isPlaying) {
+            lastProgressSaveRef.current = Number.NaN;
+        }
+    }, [
+        audiobookId,
+        playbackType,
+        isPlaying,
+        authGeneration,
+        lastProgressSaveRef,
+    ]);
+
     // Save audiobook progress
     const saveAudiobookProgress = useCallback(
         async (isFinished: boolean = false) => {
-            if (!currentAudiobook) return;
+            if (
+                !currentAudiobook ||
+                currentOwner.current !== owner ||
+                !isCurrentAuthRuntime(authGeneration)
+            )
+                return;
+            const intent = captureAudiobookProgressWrite(
+                currentAudiobook.id,
+                isFinished,
+            );
+            if (!intent.isCurrent()) return;
 
             const currentTime = audioEngine.getCurrentTime();
             const duration =
@@ -40,29 +92,45 @@ export function useProgressSaveCallbacks({
 
             if (currentTime === lastProgressSaveRef.current && !isFinished)
                 return;
-            lastProgressSaveRef.current = currentTime;
 
             try {
-                await api.updateAudiobookProgress(
-                    currentAudiobook.id,
-                    isFinished ? duration : currentTime,
-                    duration,
-                    isFinished,
-                );
-
-                setCurrentAudiobook({
-                    ...currentAudiobook,
-                    progress: {
-                        currentTime: isFinished ? duration : currentTime,
-                        progress:
-                            duration > 0
-                                ? ((isFinished ? duration : currentTime) /
-                                      duration) *
-                                  100
-                                : 0,
+                const saved = await intent.run(() =>
+                    api.updateAudiobookProgress(
+                        currentAudiobook.id,
+                        isFinished ? duration : currentTime,
+                        duration,
                         isFinished,
-                        lastPlayedAt: new Date(),
-                    },
+                    ),
+                );
+                if (
+                    !saved ||
+                    !intent.isCurrent() ||
+                    currentOwner.current !== owner
+                )
+                    return;
+                lastProgressSaveRef.current = currentTime;
+
+                setCurrentAudiobook((previous) => {
+                    if (
+                        !intent.isCurrent() ||
+                        currentOwner.current !== owner ||
+                        previous?.id !== currentAudiobook.id
+                    )
+                        return previous;
+                    return {
+                        ...previous,
+                        progress: {
+                            currentTime: isFinished ? duration : currentTime,
+                            progress:
+                                duration > 0
+                                    ? ((isFinished ? duration : currentTime) /
+                                          duration) *
+                                      100
+                                    : 0,
+                            isFinished,
+                            lastPlayedAt: new Date(),
+                        },
+                    };
                 });
 
                 dispatchQueryEvent("audiobook-progress-updated");
@@ -74,7 +142,7 @@ export function useProgressSaveCallbacks({
             }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.
-        [currentAudiobook, setCurrentAudiobook],
+        [currentAudiobook, setCurrentAudiobook, owner, authGeneration],
     );
 
     // Save podcast progress

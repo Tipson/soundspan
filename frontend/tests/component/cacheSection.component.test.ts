@@ -198,3 +198,17 @@ test("empty local analysis is not presented as completed online analysis", async
     assert.doesNotMatch(audio, /text-success|0%|0 \/ 0/);
     assert.match(html, /Онлайн-треки анализируются отдельным конвейером/);
 });
+
+test("cache and processing sliders expose distinct accessible names", async () => {
+    const html = await renderCacheSection();
+    const sliders = html.match(/<input[^>]*type="range"[^>]*>/g) ?? [];
+    assert.equal(sliders.length, 4);
+    const names = sliders.map(
+        (slider) => slider.match(/aria-label="([^"]+)"/)?.[1],
+    );
+    assert.ok(
+        names.every(Boolean),
+        "Every settings slider needs its own accessible name",
+    );
+    assert.equal(new Set(names).size, sliders.length);
+});

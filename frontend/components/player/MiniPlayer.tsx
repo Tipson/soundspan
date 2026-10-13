@@ -8,8 +8,9 @@ import {
 import { usePlaybackProgress } from "@/lib/audio-playback-context";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
+import { useMobilePlayerInset } from "@/hooks/useMobilePlayerInset";
 import { CachedImage } from "@/components/ui/CachedImage";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
     Play,
     Pause,
@@ -43,6 +44,8 @@ export function MiniPlayer() {
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
+    const shouldReduceMotion = useReducedMotion();
+    const dockRef = useMobilePlayerInset();
 
     const { title, subtitle, coverUrl, hasMedia } = useMediaInfo(100);
     const currentMediaId =
@@ -83,6 +86,7 @@ export function MiniPlayer() {
 
     return (
         <div
+            ref={dockRef}
             data-mobile-player="dock"
             className="mobile-player-dock pointer-events-none fixed z-50"
         >
@@ -116,12 +120,16 @@ export function MiniPlayer() {
                 >
                     <motion.div
                         layoutId={artworkLayoutId}
-                        transition={{
-                            type: "spring",
-                            stiffness: 320,
-                            damping: 34,
-                        }}
-                        className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-black/30 ring-1 ring-white/10"
+                        transition={
+                            shouldReduceMotion
+                                ? { duration: 0 }
+                                : {
+                                      type: "spring",
+                                      stiffness: 320,
+                                      damping: 34,
+                                  }
+                        }
+                        className="relative h-[44px] w-[44px] flex-shrink-0 overflow-hidden rounded-[10px] bg-surface-highlight"
                     >
                         {coverUrl ? (
                             <CachedImage
@@ -174,7 +182,7 @@ export function MiniPlayer() {
                                 <CurrentTrackPreferenceButtons
                                     trackId={currentTrack.id}
                                     mode="both"
-                                    buttonSizeClassName="h-11 w-11"
+                                    buttonSizeClassName="h-[44px] w-[44px]"
                                     iconSizeClassName="h-4 w-4"
                                     metadata={buildPreferenceMetadata(
                                         currentTrack,
@@ -204,12 +212,12 @@ export function MiniPlayer() {
                                 }
                             }}
                             className={cn(
-                                "h-11 w-11 rounded-full transition shadow-md flex items-center justify-center",
+                                "h-[44px] w-[44px] rounded-[10px] transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                                 audioError
                                     ? "bg-error text-content hover:brightness-110"
                                     : isBuffering && !isPlaying
                                       ? "bg-content/80 text-surface"
-                                      : "bg-content text-surface hover:scale-105",
+                                      : "bg-content text-surface hover:bg-content/90",
                             )}
                             aria-label={
                                 audioError
@@ -233,7 +241,7 @@ export function MiniPlayer() {
                             {audioError ? (
                                 <RefreshCw className="h-5 w-5" />
                             ) : isBuffering && !isPlaying ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
+                                <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" />
                             ) : isPlaying ? (
                                 <Pause className="h-5 w-5" />
                             ) : (

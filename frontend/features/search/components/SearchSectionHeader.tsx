@@ -11,9 +11,9 @@ export function SearchSectionHeader({
     status,
 }: SearchSectionHeaderProps) {
     return (
-        <div className="mb-4 flex min-h-11 flex-wrap items-end justify-between gap-x-4 gap-y-2 sm:mb-5">
+        <div className="mb-3 flex min-h-11 flex-wrap items-end justify-between gap-x-4 gap-y-2 sm:mb-4">
             <div className="min-w-0">
-                <h2 className="text-xl font-black tracking-[-0.025em] text-content sm:text-2xl">
+                <h2 className="text-xl font-semibold tracking-[-0.02em] text-content sm:text-2xl">
                     {title}
                 </h2>
                 {description ? (

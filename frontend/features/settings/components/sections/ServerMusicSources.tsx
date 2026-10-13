@@ -14,7 +14,7 @@ const providers: Array<{ id: MusicSourceProvider; name: string }> = [
     { id: "vk", name: "VK Музыка" },
 ];
 const control =
-    "min-h-11 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-content disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
+    "min-h-11 min-w-0 rounded-[10px] border border-line bg-surface-elevated px-4 py-2 text-base text-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:text-sm motion-reduce:transition-none";
 const failureLabels: Record<string, string> = {
     rate_limit: "Лимит запросов источника",
     provider_challenge: "Источник запросил дополнительную проверку",
@@ -143,7 +143,7 @@ export function ServerMusicSources() {
         }
     }
     return (
-        <div className="mt-6 space-y-5 border-t border-white/10 pt-6">
+        <div className="mt-6 space-y-5 border-t border-line pt-6">
             <div>
                 <h3 className="font-semibold text-content">
                     Общие музыкальные источники
@@ -179,7 +179,7 @@ export function ServerMusicSources() {
                 return (
                     <fieldset
                         key={id}
-                        className="space-y-3 rounded-2xl border border-white/10 p-4"
+                        className="min-w-0 space-y-3 rounded-[14px] border border-line p-4"
                         disabled={busy}
                     >
                         <legend className="px-2 font-medium text-content">
@@ -205,7 +205,7 @@ export function ServerMusicSources() {
                             </p>
                         ) : null}
                         {usage ? (
-                            <dl className="grid grid-cols-2 gap-3 text-xs text-content-secondary">
+                            <dl className="grid grid-cols-2 gap-4 text-sm text-content-secondary">
                                 <div>
                                     <dt>Выбран для воспроизведения</dt>
                                     <dd className="mt-1 text-base text-content">
@@ -336,9 +336,9 @@ export function ServerMusicSources() {
                     {tracks.map((track) => (
                         <li
                             key={`${track.provider}:${track.id}`}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/5 p-3"
+                            className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-3"
                         >
-                            <span className="min-w-0 text-sm text-content">
+                            <span className="min-w-0 break-words text-sm text-content">
                                 {track.artists.join(", ")} — {track.title}
                             </span>
                             <button

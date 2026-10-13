@@ -174,3 +174,45 @@ test("listening dashboard renders no empty sections", async () => {
     assert.equal(mounted.container.innerHTML, "");
     await mounted.unmount();
 });
+
+test("personal mixes precede continuation cards while both queues remain playable", async () => {
+    const { HomeListeningDashboard } =
+        await import("../../features/home/components/HomeListeningDashboard");
+    const mounted = await mount(
+        React.createElement(
+            HomeListeningDashboard,
+            { tracks: [makeTrack("a"), makeTrack("b")] },
+            React.createElement("section", {
+                "data-home-region": "made-for-you",
+                "aria-label": "Для вас",
+            }),
+        ),
+    );
+    try {
+        const regions = Array.from(
+            mounted.container.querySelectorAll("section[data-home-region]"),
+        ).map((region) => region.getAttribute("data-home-region"));
+        assert.deepEqual(regions, [
+            "made-for-you",
+            "continue-listening",
+            "recently-played",
+        ]);
+        const first = mounted.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Воспроизвести «Track a», исполнитель Artist a"]',
+        );
+        const recent = mounted.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Воспроизвести «Track b», исполнитель Artist b"]',
+        );
+        assert.ok(first);
+        assert.ok(recent);
+        await React.act(async () => first.click());
+        await React.act(async () => recent.click());
+        assert.deepEqual(
+            state.played.map((call) => call.index),
+            [0, 1],
+        );
+        assert.ok(state.played.every((call) => call.tracks.length === 2));
+    } finally {
+        await mounted.unmount();
+    }
+});

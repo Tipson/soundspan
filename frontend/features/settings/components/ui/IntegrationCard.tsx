@@ -55,7 +55,7 @@ export function IntegrationCard({
 
     return (
         <div
-            className={`overflow-hidden rounded-2xl border border-line bg-surface-elevated/65 transition-opacity ${
+            className={`min-w-0 overflow-hidden rounded-[14px] border border-line bg-surface-elevated transition-opacity motion-reduce:transition-none ${
                 disabled ? "opacity-50" : ""
             }`}
         >
@@ -72,9 +72,9 @@ export function IntegrationCard({
                         <div className="text-sm font-semibold text-content">
                             {title}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-start gap-1.5 mt-1">
                             {statusIcon}
-                            <span className="text-xs text-content-muted">
+                            <span className="text-sm leading-5 text-content-muted">
                                 {disabled && disabledReason
                                     ? disabledReason
                                     : statusText}
@@ -92,7 +92,7 @@ export function IntegrationCard({
                               onClick={connected ? onDisconnect : onConnect}
                               disabled={isLoading}
                               className={`
-                                inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-colors
+                                inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[10px] px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none
                                 ${isLoading ? "opacity-50 cursor-not-allowed" : ""}
                                 ${
                                     connected
@@ -115,7 +115,7 @@ export function IntegrationCard({
 
             {/* Collapsible body */}
             <div
-                className="grid transition-[grid-template-rows] duration-300 ease-in-out motion-reduce:transition-none"
+                className="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
                 style={{
                     gridTemplateRows: expanded && !disabled ? "1fr" : "0fr",
                 }}

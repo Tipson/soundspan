@@ -310,6 +310,8 @@ export const AudioPlaybackOrchestrator = memo(
         const { saveAudiobookProgress, savePodcastProgress } =
             H.useProgressSaveCallbacks({
                 currentAudiobook,
+                isPlaying,
+                playbackType,
                 currentPodcast,
                 isBuffering,
                 setCurrentAudiobook,

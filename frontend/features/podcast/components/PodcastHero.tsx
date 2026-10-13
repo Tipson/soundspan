@@ -3,6 +3,7 @@
 import { Mic2 } from "lucide-react";
 import Image from "next/image";
 import { ReactNode } from "react";
+import { MusicDetailHero } from "@/components/music-detail";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import {
     formatEpisodeCountRu,
@@ -52,119 +53,66 @@ export function PodcastHero({
     children,
 }: PodcastHeroProps) {
     return (
-        <div className="relative">
-            {/* Background with VibrantJS gradient */}
-            {heroImage ? (
-                <div className="absolute inset-0 overflow-hidden">
-                    <div className="absolute inset-0 scale-110 blur-md opacity-50">
-                        <Image
-                            src={heroImage}
-                            alt={title}
-                            fill
-                            sizes="100vw"
-                            className="object-cover"
-                            priority
-                            unoptimized
-                        />
-                    </div>
-                    <div
-                        className="absolute inset-0"
-                        style={{
-                            background: colors
-                                ? `linear-gradient(to bottom, ${colors.vibrant}30 0%, ${colors.darkVibrant}60 40%, ${colors.darkMuted}90 70%, #0a0a0a 100%)`
-                                : "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.7) 40%, #0a0a0a 100%)",
-                        }}
+        <MusicDetailHero
+            eyebrow={podcastRu.detail.type}
+            title={title}
+            artworkShape="square"
+            ambientColors={colors}
+            backgroundImage={heroImage}
+            artwork={
+                heroImage ? (
+                    <Image
+                        src={heroImage}
+                        alt={title}
+                        fill
+                        sizes="(max-width: 640px) 160px, (max-width: 1024px) 192px, 224px"
+                        className="object-cover"
+                        priority
+                        unoptimized
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
-                </div>
-            ) : (
-                <div
-                    className="absolute inset-0"
-                    style={{
-                        background: colors
-                            ? `linear-gradient(to bottom, ${colors.vibrant}40 0%, ${colors.darkVibrant}80 50%, #0a0a0a 100%)`
-                            : "linear-gradient(to bottom, #3d2a1e 0%, #1a1a1a 50%, #0a0a0a 100%)",
-                    }}
-                />
-            )}
-
-            {/* Compact Hero Content - Full Width */}
-            <div className="relative px-4 md:px-8 pt-16 pb-6">
-                <div className="flex items-end gap-6">
-                    {/* Cover Art - Circular for podcasts */}
-                    <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded-full shadow-2xl shrink-0 overflow-hidden relative">
-                        {heroImage ? (
-                            <Image
-                                src={heroImage}
-                                alt={title}
-                                fill
-                                sizes="(max-width: 768px) 140px, 192px"
-                                className="object-cover"
-                                priority
-                                unoptimized
-                            />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                                <Mic2 className="w-16 h-16 text-gray-400" />
-                            </div>
-                        )}
+                ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                        <Mic2 className="h-16 w-16 text-content-muted" />
                     </div>
-
-                    {/* Info - Bottom Aligned */}
-                    <div className="flex-1 min-w-0 pb-1">
-                        <p className="text-xs font-medium text-white/90 mb-1">
-                            {podcastRu.detail.type}
-                        </p>
-                        <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
-                            {title}
-                        </h1>
-
-                        {/* Description - truncated */}
-                        {description && (
-                            <p className="text-sm text-white/60 line-clamp-2 max-w-3xl mb-2 hidden md:block">
-                                {podcastDescriptionText(description)}
-                                ...
-                            </p>
-                        )}
-
-                        {/* Metadata row */}
-                        <div className="flex flex-wrap items-center gap-1.5 text-sm text-white/70">
-                            <span className="font-semibold text-white">
-                                {author}
+                )
+            }
+            metadata={
+                <>
+                    <span className="font-semibold text-content">{author}</span>
+                    <span aria-hidden="true">•</span>
+                    <span>{formatEpisodeCountRu(episodeCount)}</span>
+                    {inProgressCount > 0 && (
+                        <>
+                            <span aria-hidden="true">•</span>
+                            <span className="text-brand">
+                                {formatInProgressRu(inProgressCount)}
                             </span>
-                            <span className="mx-1">•</span>
-                            <span>{formatEpisodeCountRu(episodeCount)}</span>
-                            {inProgressCount > 0 && (
-                                <>
-                                    <span className="mx-1">•</span>
-                                    <span className="text-brand">
-                                        {formatInProgressRu(inProgressCount)}
-                                    </span>
-                                </>
-                            )}
+                        </>
+                    )}
+                </>
+            }
+            description={
+                <>
+                    {description && (
+                        <p className="line-clamp-2">
+                            {podcastDescriptionText(description)}...
+                        </p>
+                    )}
+                    {genres && genres.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                            {genres.slice(0, 4).map((genre) => (
+                                <span
+                                    key={genre}
+                                    className="rounded-full bg-surface-active px-2.5 py-1 text-xs text-content-secondary"
+                                >
+                                    {genre}
+                                </span>
+                            ))}
                         </div>
-
-                        {/* Genre tags - compact */}
-                        {genres && genres.length > 0 && (
-                            <div className="hidden md:flex flex-wrap gap-1.5 mt-3">
-                                {genres.slice(0, 4).map((genre: string) => (
-                                    <span
-                                        key={genre}
-                                        className="px-2.5 py-0.5 bg-white/10 rounded-full text-xs text-white/80"
-                                    >
-                                        {genre}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Action Bar - Full Width */}
-            {children && (
-                <div className="relative px-4 md:px-8 pb-4">{children}</div>
-            )}
-        </div>
+                    )}
+                </>
+            }
+            actions={children}
+        />
     );
 }

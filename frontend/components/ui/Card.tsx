@@ -19,7 +19,7 @@ const Card = memo(
             ref,
         ) => {
             const baseStyles =
-                "rounded-2xl p-4 transition-[background-color,border-color,transform] duration-200 ease-out";
+                "rounded-[var(--music-radius-card)] p-4 transition-[background-color,border-color,transform] duration-150 ease-out";
 
             const variantStyles = {
                 default: cn(
@@ -27,10 +27,10 @@ const Card = memo(
                     hover && "hover:bg-surface-elevated/70",
                 ),
                 ai: cn(
-                    "border border-ai/20 bg-gradient-to-br from-ai/8 to-surface-raised",
-                    hover && "hover:border-ai/40",
+                    "bg-surface-raised",
+                    hover && "hover:bg-surface-elevated",
                 ),
-                metric: "border border-line bg-surface-raised",
+                metric: "bg-surface-raised",
             };
 
             return (

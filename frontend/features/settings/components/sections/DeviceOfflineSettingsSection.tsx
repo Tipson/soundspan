@@ -107,7 +107,7 @@ export function DeviceOfflineSettingsSection() {
             {storageError && (
                 <div
                     role="alert"
-                    className="mb-4 flex flex-col gap-3 rounded-xl border border-warning/25 bg-warning/10 p-4 text-sm text-content-body sm:flex-row sm:items-center sm:justify-between"
+                    className="mb-4 flex flex-col gap-3 rounded-[10px] border border-warning/25 bg-warning/10 p-4 text-sm text-content-body sm:flex-row sm:items-center sm:justify-between"
                 >
                     <p>{storageError}</p>
                     <button
@@ -120,7 +120,7 @@ export function DeviceOfflineSettingsSection() {
                                 setIsSaving(false),
                             );
                         }}
-                        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
+                        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[10px] border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
                     >
                         Повторить
                     </button>
@@ -134,10 +134,7 @@ export function DeviceOfflineSettingsSection() {
                     Загружаем офлайн-настройки этого устройства…
                 </p>
             )}
-            <div
-                className="mb-4 rounded-xl border border-line-subtle bg-white/[0.03] p-4"
-                aria-live="polite"
-            >
+            <div className="mb-4 border-b border-line pb-4" aria-live="polite">
                 {storage.status === "ready" ? (
                     <>
                         <p className="text-sm font-semibold text-content-heading">
@@ -189,7 +186,7 @@ export function DeviceOfflineSettingsSection() {
                                 }
                                 disabled={isSaving}
                                 onClick={() => void chooseStorage()}
-                                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-brand/40 px-4 py-2 text-sm font-semibold text-brand transition-colors hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
+                                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[10px] border border-line px-4 py-2 text-sm font-semibold text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
                             >
                                 {isSaving
                                     ? "Открываем…"
@@ -215,7 +212,7 @@ export function DeviceOfflineSettingsSection() {
                     }
                 />
             </SettingsRow>
-            <div className="rounded-xl border border-line bg-surface-raised p-4">
+            <div className="py-4">
                 <p
                     className="text-sm leading-6 text-content-body"
                     role="status"
@@ -239,14 +236,14 @@ export function DeviceOfflineSettingsSection() {
                                 )
                                 .finally(() => setIsSaving(false));
                         }}
-                        className="mt-3 min-h-11 rounded-full border border-brand/40 px-4 text-sm font-semibold text-brand disabled:opacity-50"
+                        className="mt-3 min-h-11 rounded-[10px] border border-line px-4 text-sm font-semibold text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 motion-reduce:transition-none"
                     >
                         Повторить загрузку
                     </button>
                 )}
                 <Link
                     href="/library?tab=downloads"
-                    className="mt-3 block w-fit text-sm font-semibold text-brand underline underline-offset-4"
+                    className="mt-3 inline-flex min-h-11 w-fit items-center rounded-[10px] text-sm font-semibold text-brand-light underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                     Открыть загрузки
                 </Link>

@@ -90,14 +90,14 @@ export function UserSettingsLayout({
         <div className="settings-page min-h-full">
             <div className="mx-auto max-w-4xl px-4 py-6 sm:px-8 md:py-10">
                 <header className="mb-6">
-                    <h1 className="font-display text-3xl font-bold tracking-tight text-content md:text-4xl">
+                    <h1 className="text-3xl font-bold tracking-tight text-content md:text-4xl">
                         {ru.settings.title}
                     </h1>
                     <p className="mt-2 text-sm leading-6 text-content-muted">
                         Ваш профиль, звучание и музыка на этом устройстве.
                     </p>
                 </header>
-                <div className="mb-6 rounded-2xl border border-line bg-surface-raised p-2">
+                <div className="mb-6 rounded-[14px] border border-line bg-surface-raised p-2">
                     <label
                         className="block px-2 pb-1 text-xs text-content-muted sm:hidden"
                         htmlFor="user-settings-section"
@@ -113,7 +113,7 @@ export function UserSettingsLayout({
                             );
                             if (tab) navigate(tab.id);
                         }}
-                        className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-3 text-base text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:hidden"
+                        className="min-h-11 w-full rounded-[10px] border border-line bg-surface-elevated px-3 text-base text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:hidden"
                     >
                         {tabs.map((tab) => (
                             <option key={tab.id} value={tab.id}>
@@ -158,7 +158,7 @@ export function UserSettingsLayout({
                                         )
                                         [next]?.focus();
                                 }}
-                                className={`min-h-11 flex-1 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none ${active === tab.id ? "bg-brand text-black" : "text-content-muted hover:bg-surface-hover hover:text-content"}`}
+                                className={`min-h-11 flex-1 whitespace-nowrap rounded-[10px] px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none ${active === tab.id ? "bg-brand text-black" : "text-content-muted hover:bg-surface-hover hover:text-content"}`}
                             >
                                 {tab.label}
                             </button>

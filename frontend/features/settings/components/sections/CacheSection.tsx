@@ -30,6 +30,11 @@ import { EnrichmentFailuresModal } from "@/components/EnrichmentFailuresModal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { queryKeys } from "@/lib/queryKeys";
 import {
+    SETTINGS_DANGER_BUTTON,
+    SETTINGS_PRIMARY_BUTTON,
+    SETTINGS_SECONDARY_BUTTON,
+} from "../ui/settingsFieldStyles";
+import {
     cacheRu,
     formatBackgroundAnalysisLabel,
     formatEnrichmentState,
@@ -54,15 +59,15 @@ function ProgressBar({
     showPercentage?: boolean;
 }) {
     return (
-        <div className="flex items-center gap-2 flex-1">
+        <div className="flex min-w-0 items-center gap-2 flex-1">
             <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
-                    className={`h-full ${color} transition-all duration-500 ease-out`}
+                    className={`h-full ${color} transition-[width] duration-200 ease-out motion-reduce:transition-none`}
                     style={{ width: `${Math.min(100, progress)}%` }}
                 />
             </div>
             {showPercentage && (
-                <span className="text-xs text-white/50 w-10 text-right">
+                <span className="w-10 shrink-0 text-right text-xs tabular-nums text-content-muted">
                     {progress}%
                 </span>
             )}
@@ -136,11 +141,11 @@ function EnrichmentStage({
                 {isComplete ? (
                     <CheckCircle className="w-4 h-4 text-success" />
                 ) : hasActivity ? (
-                    <Loader2 className="w-4 h-4 text-brand animate-spin" />
+                    <Loader2 className="w-4 h-4 text-brand animate-spin motion-reduce:animate-none" />
                 ) : settledWithFailures ? (
                     <AlertTriangle className="w-4 h-4 text-warning" />
                 ) : (
-                    <Icon className="w-4 h-4 text-white/40" />
+                    <Icon className="w-4 h-4 text-content-muted" />
                 )}
             </div>
             <div className="flex-1 min-w-0">
@@ -149,12 +154,14 @@ function EnrichmentStage({
                         {label}
                     </span>
                     {isBackground && !isComplete && !isEmpty && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-content-muted">
                             {cacheRu.background}
                         </span>
                     )}
                 </div>
-                <p className="text-xs text-white/40 mt-0.5">{description}</p>
+                <p className="mt-1 text-sm leading-5 text-content-muted">
+                    {description}
+                </p>
                 {isEmpty ? (
                     <p className="mt-2 text-xs text-content-muted">
                         {emptyLabel}
@@ -176,7 +183,7 @@ function EnrichmentStage({
                     </div>
                 )}
                 {!isEmpty && (
-                    <div className="flex items-center gap-3 mt-1 text-[10px] text-white/30">
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs tabular-nums text-content-muted">
                         <span>
                             {completed} / {total}
                         </span>
@@ -644,34 +651,34 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 <OnlineAnalysisProgress />
                 {/* Enrichment Progress */}
                 {isProgressPending ? (
-                    <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-white/40" />
-                        <span className="text-sm text-white/40">
+                    <div className="mb-6 flex items-center gap-2 border-b border-line pb-5">
+                        <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none text-content-muted" />
+                        <span className="text-sm text-content-muted">
                             {cacheRu.loadingStatus}
                         </span>
                     </div>
                 ) : isProgressError && !enrichmentProgress ? (
-                    <div className="mb-6 p-4 bg-white/5 rounded-lg border border-red-500/20 flex items-center justify-between">
+                    <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-red-500/20 p-4">
                         <span className="text-sm text-error">
                             {cacheRu.loadStatusFailed}
                         </span>
                         <button
                             onClick={() => refetchProgress()}
-                            className="px-3 py-1 text-xs bg-white/10 text-white/70 rounded-full hover:bg-white/15 transition-colors"
+                            className={SETTINGS_SECONDARY_BUTTON}
                         >
                             {cacheRu.retry}
                         </button>
                     </div>
                 ) : enrichmentProgress ? (
-                    <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
-                        <div className="flex items-center justify-between mb-4">
+                    <div className="mb-6 border-b border-line pb-6">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                             <h3 className="text-sm font-medium text-white">
                                 {cacheRu.libraryEnrichment}
                             </h3>
                             {enrichmentProgress.coreComplete &&
                                 !enrichmentProgress.isFullyComplete && (
                                     <span className="text-xs text-brand flex items-center gap-1">
-                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" />
                                         {backgroundAnalysisLabel(
                                             enrichmentProgress,
                                         )}
@@ -687,8 +694,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
                         <div className="space-y-1">
                             {/* Artist Metadata with Re-run button */}
-                            <div className="flex items-start gap-2">
-                                <div className="flex-1">
+                            <div className="flex flex-col items-start gap-2 sm:flex-row">
+                                <div className="w-full min-w-0 flex-1">
                                     <EnrichmentStage
                                         icon={User}
                                         label={cacheRu.artistLabel}
@@ -714,8 +721,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         reEnriching ||
                                         isEnrichmentActive
                                     }
-                                    className="mt-1 px-2 py-1 text-[10px] bg-white/5 text-white/60 rounded-full
-                                        hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                                    className={`${SETTINGS_SECONDARY_BUTTON} mt-1 shrink-0`}
                                 >
                                     {resettingArtists
                                         ? cacheRu.resetting
@@ -724,8 +730,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             </div>
 
                             {/* Mood Tags with Re-run button */}
-                            <div className="flex items-start gap-2">
-                                <div className="flex-1">
+                            <div className="flex flex-col items-start gap-2 sm:flex-row">
+                                <div className="w-full min-w-0 flex-1">
                                     <EnrichmentStage
                                         icon={Heart}
                                         label={cacheRu.moodLabel}
@@ -752,8 +758,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         reEnriching ||
                                         isEnrichmentActive
                                     }
-                                    className="mt-1 px-2 py-1 text-[10px] bg-white/5 text-white/60 rounded-full
-                                        hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                                    className={`${SETTINGS_SECONDARY_BUTTON} mt-1 shrink-0`}
                                 >
                                     {resettingMoodTags
                                         ? cacheRu.resetting
@@ -766,8 +771,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 {cacheRu.localAnalysisScope}
                             </p>
                             {!featuresLoading && musicCNN ? (
-                                <div className="flex items-start gap-2">
-                                    <div className="flex-1">
+                                <div className="flex flex-col items-start gap-2 sm:flex-row">
+                                    <div className="w-full min-w-0 flex-1">
                                         <EnrichmentStage
                                             icon={Activity}
                                             label={cacheRu.audioLabel}
@@ -809,8 +814,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             reEnriching ||
                                             isEnrichmentActive
                                         }
-                                        className="mt-1 px-2 py-1 text-[10px] bg-white/5 text-white/60 rounded-full
-                                            hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                                        className={`${SETTINGS_SECONDARY_BUTTON} mt-1 shrink-0`}
                                     >
                                         {resettingAudio
                                             ? cacheRu.resetting
@@ -833,8 +837,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
                             {/* CLAP Embeddings (Vibe Similarity) with Re-run button */}
                             {!featuresLoading && vibeEmbeddings ? (
-                                <div className="flex items-start gap-2">
-                                    <div className="flex-1">
+                                <div className="flex flex-col items-start gap-2 sm:flex-row">
+                                    <div className="w-full min-w-0 flex-1">
                                         {enrichmentProgress.clapEmbeddings && (
                                             <EnrichmentStage
                                                 icon={Waves}
@@ -872,7 +876,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         )}
                                         <p
                                             role="status"
-                                            className="mt-1 text-xs text-white/50"
+                                            className="mt-1 text-xs text-content-muted"
                                         >
                                             {cacheRu.provider}{" "}
                                             {!vibe.provider.fresh
@@ -889,10 +893,10 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 }
                                                 className="mt-2 rounded-lg border border-white/10 bg-white/5 p-3"
                                             >
-                                                <p className="text-xs font-medium text-white/80">
+                                                <p className="text-xs font-medium text-content-secondary">
                                                     {cacheRu.migrationTitle}
                                                 </p>
-                                                <p className="mt-1 text-[11px] text-white/50">
+                                                <p className="mt-1 text-xs text-content-muted">
                                                     {cacheRu.targetSpaceFamily}{" "}
                                                     {vibe.migration.family}
                                                 </p>
@@ -906,7 +910,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                                 color="bg-ai"
                                                             />
                                                         </div>
-                                                        <p className="mt-1 text-[10px] text-white/40">
+                                                        <p className="mt-1 text-xs text-content-muted">
                                                             {
                                                                 migrationCoverage.embedded
                                                             }{" "}
@@ -933,13 +937,13 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                         </p>
                                                     </>
                                                 ) : (
-                                                    <p className="mt-2 text-[11px] text-white/40">
+                                                    <p className="mt-2 text-xs text-content-muted">
                                                         {
                                                             cacheRu.awaitingCoverage
                                                         }
                                                     </p>
                                                 )}
-                                                <p className="mt-1 text-[10px] text-white/40">
+                                                <p className="mt-1 text-xs text-content-muted">
                                                     {cacheRu.cutoverThreshold}{" "}
                                                     {Math.round(
                                                         vibe.migration
@@ -962,8 +966,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             reEnriching ||
                                             isEnrichmentActive
                                         }
-                                        className="mt-1 px-2 py-1 text-[10px] bg-white/5 text-white/60 rounded-full
-                                                hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                                        className={`${SETTINGS_SECONDARY_BUTTON} mt-1 shrink-0`}
                                     >
                                         {resettingVibe
                                             ? cacheRu.resetting
@@ -997,8 +1000,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         isEnrichmentActive
                                     }
                                     title={cacheRu.syncTitle}
-                                    className="px-3 py-1.5 text-xs bg-white text-black font-medium rounded-full
-                                    hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                                    className={SETTINGS_PRIMARY_BUTTON}
                                 >
                                     {syncing
                                         ? cacheRu.syncing
@@ -1012,8 +1014,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         isEnrichmentActive
                                     }
                                     title={cacheRu.fullEnrichTitle}
-                                    className="px-3 py-1.5 text-xs bg-white text-black font-medium rounded-full
-                                    hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                                    className={SETTINGS_SECONDARY_BUTTON}
                                 >
                                     {reEnriching
                                         ? cacheRu.starting
@@ -1027,8 +1028,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         "running" ? (
                                             <button
                                                 onClick={handlePause}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-warning text-black rounded-full
-                                                hover:opacity-85 transition-opacity"
+                                                className={
+                                                    SETTINGS_SECONDARY_BUTTON
+                                                }
                                             >
                                                 <Pause className="w-3 h-3" />
                                                 {cacheRu.pause}
@@ -1036,8 +1038,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         ) : (
                                             <button
                                                 onClick={handleResume}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-success text-black rounded-full
-                                                hover:opacity-85 transition-opacity"
+                                                className={
+                                                    SETTINGS_PRIMARY_BUTTON
+                                                }
                                             >
                                                 <Play className="w-3 h-3" />
                                                 {cacheRu.resume}
@@ -1045,8 +1048,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         )}
                                         <button
                                             onClick={handleStop}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-error text-white rounded-full
-                                            hover:opacity-85 transition-opacity"
+                                            className={SETTINGS_DANGER_BUTTON}
                                         >
                                             <StopCircle className="w-3 h-3" />
                                             {cacheRu.stop}
@@ -1060,8 +1062,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         onClick={() =>
                                             setShowFailuresModal(true)
                                         }
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-error/20 text-error border border-error/30 rounded-full
-                                        hover:bg-error/30 transition-colors ml-auto"
+                                        className={`${SETTINGS_SECONDARY_BUTTON} text-red-300`}
                                     >
                                         <AlertTriangle className="w-3 h-3" />
                                         {cacheRu.viewFailures} ({totalFailures})
@@ -1070,7 +1071,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             </div>
 
                             <div className="flex flex-col items-start gap-2">
-                                <label className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-white/70 bg-white/5 rounded-full border border-white/10">
+                                <label className="inline-flex min-h-11 items-start gap-3 py-2 text-sm leading-5 text-content-secondary">
                                     <input
                                         type="checkbox"
                                         checked={
@@ -1086,12 +1087,12 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             reEnriching ||
                                             isEnrichmentActive
                                         }
-                                        className="h-3.5 w-3.5 rounded border-white/30 bg-transparent accent-brand disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="mt-0.5 h-5 w-5 shrink-0 rounded border-line bg-transparent accent-brand disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                     {cacheRu.moodBackfillAfterFull}
                                 </label>
                                 {!featuresLoading && vibeEmbeddings && (
-                                    <label className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-white/70 bg-white/5 rounded-full border border-white/10">
+                                    <label className="inline-flex min-h-11 items-start gap-3 py-2 text-sm leading-5 text-content-secondary">
                                         <input
                                             type="checkbox"
                                             checked={
@@ -1107,7 +1108,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 reEnriching ||
                                                 isEnrichmentActive
                                             }
-                                            className="h-3.5 w-3.5 rounded border-white/30 bg-transparent accent-brand disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="mt-0.5 h-5 w-5 shrink-0 rounded border-line bg-transparent accent-brand disabled:opacity-50 disabled:cursor-not-allowed"
                                         />
                                         {cacheRu.rebuildClap}
                                     </label>
@@ -1122,7 +1123,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     <div className="flex items-center gap-2">
                                         {enrichmentState.status ===
                                             "running" && (
-                                            <Loader2 className="w-3 h-3 animate-spin text-brand" />
+                                            <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none text-brand" />
                                         )}
                                         {enrichmentState.status ===
                                             "paused" && (
@@ -1130,9 +1131,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         )}
                                         {enrichmentState.status ===
                                             "stopping" && (
-                                            <StopCircle className="w-3 h-3 text-error animate-pulse" />
+                                            <StopCircle className="w-3 h-3 text-error animate-pulse motion-reduce:animate-none" />
                                         )}
-                                        <span className="text-white/70">
+                                        <span className="text-content-secondary">
                                             {formatEnrichmentState({
                                                 status: enrichmentState.status,
                                                 phase: enrichmentState.currentPhase,
@@ -1146,7 +1147,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         enrichmentState.currentPhase ===
                                             "artists" &&
                                         enrichmentState.artists?.current && (
-                                            <div className="mt-1 text-white/50 truncate">
+                                            <div className="mt-1 text-content-muted truncate">
                                                 {cacheRu.current}{" "}
                                                 {
                                                     enrichmentState.artists
@@ -1158,7 +1159,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         enrichmentState.currentPhase ===
                                             "tracks" &&
                                         enrichmentState.tracks?.current && (
-                                            <div className="mt-1 text-white/50 truncate">
+                                            <div className="mt-1 text-content-muted truncate">
                                                 {cacheRu.current}{" "}
                                                 {enrichmentState.tracks.current}
                                             </div>
@@ -1176,6 +1177,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     <div className="flex items-center gap-3">
                         <input
                             type="range"
+                            aria-label={cacheRu.userCacheSize}
                             min={512}
                             max={20480}
                             step={512}
@@ -1185,9 +1187,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     maxCacheSizeMb: parseInt(e.target.value),
                                 })
                             }
-                            className="w-32 h-1 bg-line-muted rounded-lg appearance-none cursor-pointer
-                            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                            className="h-11 min-w-0 w-32 cursor-pointer accent-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
                         />
                         <span className="text-sm text-white w-16 text-right">
                             {(settings.maxCacheSizeMb / 1024).toFixed(1)} GB
@@ -1202,6 +1202,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     <div className="flex items-center gap-3">
                         <input
                             type="range"
+                            aria-label={cacheRu.transcodeCacheSize}
                             min={1}
                             max={50}
                             value={settings.transcodeCacheMaxGb}
@@ -1212,9 +1213,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     ),
                                 })
                             }
-                            className="w-32 h-1 bg-line-muted rounded-lg appearance-none cursor-pointer
-                            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                            className="h-11 min-w-0 w-32 cursor-pointer accent-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
                         />
                         <span className="text-sm text-white w-16 text-right">
                             {settings.transcodeCacheMaxGb} GB
@@ -1258,6 +1257,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         <div className="flex items-center gap-3">
                             <input
                                 type="range"
+                                aria-label={cacheRu.fetchSpeed}
                                 min={1}
                                 max={5}
                                 value={enrichmentSpeed}
@@ -1266,14 +1266,11 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     const newSpeed = parseInt(e.target.value);
                                     setConcurrencyMutation.mutate(newSpeed);
                                 }}
-                                className="w-32 h-1 bg-line-muted rounded-lg appearance-none cursor-pointer
-                                disabled:opacity-50 disabled:cursor-not-allowed
-                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                                className="h-11 min-w-0 w-32 cursor-pointer accent-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
                             />
                             <div className="flex flex-col items-end gap-0.5">
                                 {isConcurrencyLoading ? (
-                                    <span className="text-sm text-white/50 w-24 text-right">
+                                    <span className="text-sm text-content-muted w-24 text-right">
                                         {cacheRu.loading}
                                     </span>
                                 ) : (
@@ -1282,7 +1279,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             {formatFetchSpeed(enrichmentSpeed)}
                                         </span>
                                         {concurrencyConfig && (
-                                            <span className="text-xs text-white/50 w-24 text-right">
+                                            <span className="text-xs text-content-muted w-24 text-right">
                                                 ~
                                                 {
                                                     concurrencyConfig.artistsPerMin
@@ -1308,6 +1305,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             <div className="flex items-center gap-3">
                                 <input
                                     type="range"
+                                    aria-label={cacheRu.workerLabel}
                                     min={1}
                                     max={8}
                                     value={workersConfig?.workers ?? 2}
@@ -1320,14 +1318,11 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             newWorkers,
                                         );
                                     }}
-                                    className="w-32 h-1 bg-line-muted rounded-lg appearance-none cursor-pointer
-                                disabled:opacity-50 disabled:cursor-not-allowed
-                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                                    className="h-11 min-w-0 w-32 cursor-pointer accent-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                                 <div className="flex flex-col items-end gap-0.5">
                                     {isWorkersLoading ? (
-                                        <span className="text-sm text-white/50 w-24 text-right">
+                                        <span className="text-sm text-content-muted w-24 text-right">
                                             {cacheRu.loading}
                                         </span>
                                     ) : (
@@ -1337,7 +1332,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 {cacheRu.workers}
                                             </span>
                                             {workersConfig && (
-                                                <span className="text-xs text-white/50 w-24 text-right">
+                                                <span className="text-xs text-content-muted w-24 text-right">
                                                     {workersConfig.cpuCores}{" "}
                                                     {cacheRu.coresAvailable}
                                                 </span>
@@ -1354,8 +1349,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     <button
                         onClick={handleClearCaches}
                         disabled={clearingCaches}
-                        className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full w-fit
-                        hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                        className={`${SETTINGS_SECONDARY_BUTTON} w-fit`}
                     >
                         {clearingCaches
                             ? cacheRu.clearing
@@ -1364,8 +1358,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     <button
                         onClick={handleCleanupStaleJobs}
                         disabled={cleaningStaleJobs}
-                        className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full w-fit
-                        hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                        className={`${SETTINGS_SECONDARY_BUTTON} w-fit`}
                     >
                         {cleaningStaleJobs
                             ? cacheRu.cleaning
@@ -1375,8 +1368,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         <button
                             onClick={handleRetryFailedAnalysis}
                             disabled={retryingFailed || isEnrichmentActive}
-                            className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full w-fit
-                            hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                            className={`${SETTINGS_SECONDARY_BUTTON} w-fit`}
                         >
                             {retryingFailed
                                 ? cacheRu.retrying
@@ -1386,8 +1378,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     <button
                         onClick={handleBackfillMoodBuckets}
                         disabled={backfillingMoodBuckets || isEnrichmentActive}
-                        className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full w-fit
-                        hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
+                        className={`${SETTINGS_SECONDARY_BUTTON} w-fit`}
                     >
                         {backfillingMoodBuckets
                             ? cacheRu.backfilling
@@ -1420,7 +1411,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         </p>
                     )}
                     {cleanupResult && cleanupResult.totalCleaned === 0 && (
-                        <p className="text-sm text-white/50">
+                        <p className="text-sm text-content-muted">
                             {cacheRu.noStaleJobs}
                         </p>
                     )}

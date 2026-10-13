@@ -1,7 +1,34 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { after, mock, test } from "node:test";
 import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import type { ShareLinkModal as ShareLinkModalComponent } from "../../components/ui/ShareLinkModal";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+
+GlobalRegistrator.register();
+(
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+after(() => GlobalRegistrator.unregister());
+
+async function renderShare(
+    props: React.ComponentProps<typeof ShareLinkModalComponent>,
+): Promise<string> {
+    const { createRoot } = await import("react-dom/client");
+    const { ShareLinkModal } =
+        await import("../../components/ui/ShareLinkModal");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+        await React.act(async () =>
+            root.render(React.createElement(ShareLinkModal, props)),
+        );
+        return document.body.innerHTML;
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+}
 
 const icon = (name: string) => {
     const MockIcon = (props: Record<string, unknown> = {}) =>
@@ -57,18 +84,13 @@ mock.module("@/lib/logger", {
 });
 
 test("ShareLinkModal renders track share fields when open", async () => {
-    const { ShareLinkModal } =
-        await import("../../components/ui/ShareLinkModal");
-
-    const html = renderToStaticMarkup(
-        React.createElement(ShareLinkModal, {
-            isOpen: true,
-            onClose: () => undefined,
-            resourceType: "track",
-            resourceId: "track-1",
-            resourceName: "Track One",
-        }),
-    );
+    const html = await renderShare({
+        isOpen: true,
+        onClose: () => undefined,
+        resourceType: "track",
+        resourceId: "track-1",
+        resourceName: "Track One",
+    });
 
     assert.match(html, /Поделиться: трек/);
     assert.match(html, /Track One/);
@@ -80,18 +102,13 @@ test("ShareLinkModal renders track share fields when open", async () => {
 });
 
 test("ShareLinkModal renders album share title when sharing albums", async () => {
-    const { ShareLinkModal } =
-        await import("../../components/ui/ShareLinkModal");
-
-    const html = renderToStaticMarkup(
-        React.createElement(ShareLinkModal, {
-            isOpen: true,
-            onClose: () => undefined,
-            resourceType: "album",
-            resourceId: "album-1",
-            resourceName: "Album One",
-        }),
-    );
+    const html = await renderShare({
+        isOpen: true,
+        onClose: () => undefined,
+        resourceType: "album",
+        resourceId: "album-1",
+        resourceName: "Album One",
+    });
 
     assert.match(html, /Поделиться: альбом/);
     assert.match(html, /Album One/);

@@ -78,21 +78,44 @@ afterEach(() => {
     document.body.innerHTML = "";
 });
 
-test("renders like control without circular chrome", async () => {
+test("like-only control toggles the preference and exposes its selected state", async () => {
     const { TrackPreferenceButtons } =
         await import("../../components/player/TrackPreferenceButtons");
-    const html = renderToStaticMarkup(
-        React.createElement(TrackPreferenceButtons, { trackId: "track-1" }),
-    );
-
-    assert.match(html, /data-icon="heart-outline"/);
-    assert.doesNotMatch(html, /data-icon="thumbs-down-outline"/);
-    assert.match(html, /h-11 w-11/);
-    assert.match(html, /h-6 w-6/);
-    assert.match(html, /rounded-xl/);
-    assert.match(html, /focus-visible:ring-brand/);
-    assert.doesNotMatch(html, /rounded-full/);
-    assert.doesNotMatch(html, /\bborder\b/);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const render = () =>
+        act(async () => {
+            root.render(
+                React.createElement(TrackPreferenceButtons, {
+                    trackId: "track-1",
+                }),
+            );
+        });
+    try {
+        await render();
+        const like = container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Нравится"]',
+        );
+        assert.ok(like);
+        assert.equal(container.querySelectorAll("button").length, 1);
+        assert.equal(like.getAttribute("aria-pressed"), "false");
+        await act(async () => like.click());
+        assert.equal(state.toggleLikeCalls, 1);
+        state.signal = "thumbs_up";
+        await render();
+        assert.equal(like.getAttribute("aria-pressed"), "true");
+        assert.equal(
+            like.getAttribute("aria-label"),
+            "Убрать отметку «Нравится»",
+        );
+        assert.ok(like.querySelector('[data-icon="heart-filled"]'));
+        await act(async () => like.click());
+        assert.equal(state.toggleLikeCalls, 2);
+    } finally {
+        await act(async () => root.unmount());
+        container.remove();
+    }
 });
 
 test("active signal renders a filled heart icon", async () => {
