@@ -117,6 +117,38 @@ it("builds actual native daily mixes of20–40 tracks with no overlap, current f
     expect(native.getNeighbours).toHaveBeenCalledTimes(4);
     expect(deps.getRadio).not.toHaveBeenCalled();
 });
+it("rotates eligible native seeds across UTC days without changing same-day groups", async () => {
+    const tasteSeeds = Array.from({ length: 5 }, (_, index) =>
+        song(`-01_${index + 1}`),
+    );
+    const native = ports({
+        loadOwnedSignals: async () => ({
+            recent: [],
+            liked: tasteSeeds,
+            plays: [],
+            knownIds: new Set(tasteSeeds.map((track) => track.id)),
+        }),
+    });
+    let policyTime = new Date("2026-10-14T08:00:00Z");
+    const deps = dependencies(new PersonalNativeCandidateService(native));
+    deps.now = () => policyTime;
+    const service = new PersonalDailyMixService(deps);
+    const first = (await service.getMixes("owner")).mixes.map(
+        (mix) => mix.title,
+    );
+    const sameDay = (await service.getMixes("owner")).mixes.map(
+        (mix) => mix.title,
+    );
+    expect(first).toHaveLength(3);
+    expect(sameDay).toEqual(first);
+    policyTime = new Date("2026-10-15T08:00:00Z");
+    const second = (await service.getMixes("owner")).mixes.map(
+        (mix) => mix.title,
+    );
+    expect(second).toHaveLength(3);
+    expect(second).not.toEqual(first);
+    expect(new Set([...first, ...second]).size).toBeGreaterThan(3);
+});
 it("writes ordered native daily exposures without borrowing a YouTube ID", async () => {
     mockCreate.mockClear();
     const tracks = Array.from(
