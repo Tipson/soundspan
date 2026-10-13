@@ -7,6 +7,7 @@
 ## Unreleased
 
 - Refresh the upcoming Wave queue after three mixed early skips and confirmed dislikes. Keep provider failures neutral, preserve pause and queue ownership, rank new songs by negative artist feedback, and use mapped explicit dislikes as bounded negative audio anchors.
+- Rotate oversubscribed personal mix directions and eligible VK/Yandex seed artists by UTC day while keeping one familiar anchor. Give recent listening room alongside saved tastes, and prefer meaningful plays over older likes without changing the six-mix or long-track limits.
 
 - Keep track action menus visible outside clipped and virtualized lists, including single-track favorites and playlists. Anchor menus within the viewport, allow long menus to scroll, and dismiss them when their list scrolls or the viewport changes.
 

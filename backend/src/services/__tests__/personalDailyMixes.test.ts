@@ -4,6 +4,7 @@ jest.mock("../tasteProfile", () => ({ parseStoredTasteProfile: jest.fn() }));
 jest.mock("../../utils/db", () => ({
     prisma: {
         userSettings: { findUnique: jest.fn() },
+        likedRemoteTrack: { findMany: jest.fn() },
         play: { findMany: jest.fn() },
         dislikedEntity: { findMany: jest.fn() },
         trackYtMusic: { findMany: jest.fn() },
@@ -720,6 +721,25 @@ describe("PersonalDailyMixService", () => {
         ]);
     });
 
+    it("places meaningful recent listening before older likes in familiar directions", async () => {
+        jest.mocked(prisma.likedRemoteTrack.findMany).mockResolvedValueOnce([
+            { trackYtMusic: song("older-like", "Older Artist") },
+        ] as never);
+        jest.mocked(prisma.play.findMany).mockResolvedValueOnce([
+            { trackYtMusic: song("recent-play", "Current Artist") },
+        ] as never);
+        const liveDependencies = (
+            personalDailyMixService as unknown as {
+                dependencies: PersonalDailyMixDependencies;
+            }
+        ).dependencies;
+        expect(
+            (await liveDependencies.loadFamiliar("listener")).map(
+                (track) => track.videoId,
+            ),
+        ).toEqual(["recent-play", "older-like"]);
+    });
+
     it("offers up to six distinct directions when the account has varied tastes", async () => {
         const labels = ["Рок", "Джаз", "Соул", "Хаус", "Фолк", "Метал", "Поп"];
         const service = new PersonalDailyMixService(
@@ -739,10 +759,91 @@ describe("PersonalDailyMixService", () => {
 
         const result = await service.getMixes("user-1");
 
-        expect(result.mixes.map((mix) => mix.title)).toEqual(
-            labels.slice(0, 6).map((label) => `${label} для вас`),
-        );
+        const titles = result.mixes.map((mix) => mix.title);
+        expect(titles).toHaveLength(6);
+        expect(titles[0]).toBe("Рок для вас");
+        expect(new Set(titles).size).toBe(6);
+        expect(
+            titles.every((title) =>
+                labels.some((label) => title === `${label} для вас`),
+            ),
+        ).toBe(true);
         expect(result.mixes.every((mix) => mix.tracks.length >= 20)).toBe(true);
+    });
+
+    it("rotates oversubscribed selected directions across UTC days", async () => {
+        let now = new Date("2026-10-14T08:00:00Z");
+        const labels = ["Рок", "Джаз", "Соул", "Хаус", "Фолк", "Метал", "Поп"];
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () =>
+                    labels.map((label, index) => ({
+                        key: `genre:${index}`,
+                        label,
+                        query: `style${index} music`,
+                        kind: "genre" as const,
+                    })),
+                loadFamiliar: async () => [],
+                getRadio: async (videoId) =>
+                    radio(videoId.split("-")[0], videoId.split("-")[0]),
+                now: () => now,
+            }),
+        );
+        const first = (await service.getMixes("listener")).mixes.map(
+            (mix) => mix.title,
+        );
+        const sameDay = (await service.getMixes("listener")).mixes.map(
+            (mix) => mix.title,
+        );
+        expect(sameDay).toEqual(first);
+        now = new Date("2026-10-15T08:00:00Z");
+        const second = (await service.getMixes("listener")).mixes.map(
+            (mix) => mix.title,
+        );
+        expect(first).toHaveLength(6);
+        expect(second).toHaveLength(6);
+        expect(first[0]).toBe("Рок для вас");
+        expect(second[0]).toBe("Рок для вас");
+        expect(new Set(first).size).toBe(6);
+        expect(new Set(second).size).toBe(6);
+        expect(second).not.toEqual(first);
+        expect(new Set([...first, ...second]).size).toBe(7);
+    });
+
+    it("gives recent familiar artists a slot over stale selected directions", async () => {
+        let familiar = [song("recent-one", "Current Artist")];
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () =>
+                    Array.from({ length: 6 }, (_, index) => ({
+                        key: `genre:${index}`,
+                        label: `Style ${index}`,
+                        query: `style${index} music`,
+                        kind: "genre" as const,
+                    })),
+                loadFamiliar: async () => familiar,
+                searchSongs: async (_userId, query) => [
+                    song(
+                        `${query.split(" ")[0]}-seed`,
+                        query.endsWith(" songs")
+                            ? query.slice(0, -" songs".length)
+                            : `${query} Artist`,
+                    ),
+                ],
+                getRadio: async (videoId) =>
+                    radio(videoId.split("-")[0], videoId.split("-")[0]),
+            }),
+        );
+        const first = (await service.getMixes("listener")).mixes.map(
+            (mix) => mix.title,
+        );
+        expect(first).toContain("Current Artist и похожее");
+        familiar = [song("recent-two", "New Current Artist")];
+        const second = (await service.getMixes("listener")).mixes.map(
+            (mix) => mix.title,
+        );
+        expect(second).toContain("New Current Artist и похожее");
+        expect(second).not.toContain("Current Artist и похожее");
     });
 
     it("keeps provider searches at the former three-direction concurrency", async () => {
