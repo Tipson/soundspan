@@ -24,6 +24,8 @@ import {
 } from "../personalDailyMixes";
 import { prisma } from "../../utils/db";
 import { parseStoredTasteProfile } from "../tasteProfile";
+import { toNativeRecommendationCandidate } from "../recommendations/nativeCandidates";
+import type { NativePersonalProfile } from "../recommendations/personalNativeCandidates";
 
 const song = (id: string, artist: string) => ({
     videoId: id,
@@ -66,6 +68,88 @@ function dependencies(
 }
 
 describe("PersonalDailyMixService", () => {
+    it("renews a native mix from a static admitted pool while spacing its artists", async () => {
+        let now = new Date("2026-10-14T08:00:00Z");
+        const native = (id: string, artist: string) =>
+            toNativeRecommendationCandidate(
+                {
+                    provider: "yandex",
+                    id,
+                    title: `Song ${id}`,
+                    artists: [artist],
+                    duration: 180,
+                    preview: false,
+                    contentVersion: "unknown",
+                },
+                "test",
+            )!;
+        const seed = native("1", "Anchor Artist");
+        const pool = Array.from({ length: 80 }, (_, index) =>
+            native(
+                String(index + 100),
+                index < 24 ? "Anchor Artist" : `Artist ${index}`,
+            ),
+        );
+        const nativeCandidates = {
+            prepare: async () =>
+                ({
+                    userId: "listener",
+                    policyTime: now,
+                    options: { surface: "made-for-you" },
+                    recent: [],
+                    liked: [],
+                    plays: [],
+                    knownIds: new Set(),
+                    seeds: [seed],
+                    degradedSources: [],
+                }) as NativePersonalProfile,
+            getBatch: async () => ({
+                fresh: pool,
+                fallback: [],
+                degradedSources: [],
+            }),
+            admit: async (
+                _profile: NativePersonalProfile,
+                values: typeof pool,
+            ) => ({
+                fresh: values,
+                fallback: [],
+                degradedSources: [],
+            }),
+        };
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [],
+                loadFamiliar: async () => [],
+                nativeCandidates,
+                now: () => now,
+            }),
+        );
+        const first = (await service.getMixes("listener")).mixes[0].tracks;
+        expect(first).toHaveLength(40);
+        expect(
+            new Set(first.map((track) => track.artist.name)).size,
+        ).toBeGreaterThanOrEqual(35);
+        expect((await service.getMixes("listener")).mixes[0].tracks).toEqual(
+            first,
+        );
+        expect(
+            first.some(
+                (track, index) =>
+                    index > 0 &&
+                    track.artist.name === first[index - 1].artist.name,
+            ),
+        ).toBe(false);
+        now = new Date("2026-10-15T08:00:00Z");
+        const second = (await service.getMixes("listener")).mixes[0].tracks;
+        expect(second).toHaveLength(40);
+        expect(new Set(second.map((track) => track.id)).size).toBe(40);
+        expect(
+            second.filter((track) => !first.some((old) => old.id === track.id))
+                .length,
+        ).toBeGreaterThanOrEqual(5);
+    });
+
     it("renews daily membership from a static catalog while keeping same-day refreshes stable", async () => {
         let now = new Date("2026-10-09T08:00:00Z");
         const service = new PersonalDailyMixService(

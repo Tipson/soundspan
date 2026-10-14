@@ -715,17 +715,23 @@ export class PersonalDailyMixService {
             const newSongs = pool.filter(
                 (song) => !familiarIds.has(songIdentity(song)),
             );
-            // Native admission owns its ranking. Rotate only the legacy catalog
-            // lanes, keeping familiar/new quotas and fresh-before-recent ordering.
+            // Rotate only within an admitted freshness lane. This renews native
+            // membership when its source returns the same large pool each day,
+            // while preserving familiar/new and fresh-before-recent boundaries.
             const dailyLane = (songs: DailyMixCandidate[], lane: string) => {
-                if (direction.nativeSeedId) return songs;
                 const seedKey = JSON.stringify([
                     userId,
                     day,
                     direction.key,
                     lane,
                 ]);
-                const shuffled = seededShuffle(songs, seedKey);
+                const shuffled = direction.nativeSeedId
+                    ? rotateForDay(
+                          songs,
+                          day * 7,
+                          JSON.stringify([userId, direction.key, lane]),
+                      )
+                    : seededShuffle(songs, seedKey);
                 // Break allocation ties by seeded artist order, not artist-name
                 // alphabet. Otherwise >40 singleton artists keep the same songs.
                 const artistOrder = new Map(
