@@ -1,5 +1,12 @@
 import type { PlayTrackRef } from "../playTrackRef";
 import { type ApiClientConstructor, type ApiData } from "./core";
+import {
+    PlaybackStateCoordinator,
+    readPlaybackStateRevision,
+    type PlaybackStateAuthority,
+    type PlaybackStateInput,
+    type PlaybackStateSnapshot,
+} from "./playbackStateCoordinator";
 
 /** Product surface that started a tracked play. */
 export type PlayContext =
@@ -46,6 +53,55 @@ export interface PlayEngagementResponse {
 /** Add play-history operations to an API client base class. */
 export function WithPlays<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class PlaysApi extends Base {
+        private playbackStateCoordinator: PlaybackStateCoordinator | null =
+            null;
+
+        private playbackCoordinator(): PlaybackStateCoordinator {
+            const authGeneration = this.getSessionGeneration();
+            const deviceId = this.getPlaybackDeviceId();
+            if (
+                this.playbackStateCoordinator?.authGeneration ===
+                    authGeneration &&
+                this.playbackStateCoordinator.deviceId === deviceId
+            )
+                return this.playbackStateCoordinator;
+            this.playbackStateCoordinator?.retire();
+            const current = () =>
+                this.getSessionGeneration() === authGeneration &&
+                this.getPlaybackDeviceId() === deviceId;
+            this.playbackStateCoordinator = new PlaybackStateCoordinator(
+                authGeneration,
+                deviceId,
+                current,
+                () => this.getPlaybackStateSnapshot(),
+                async (kind, revision, state) => {
+                    let nextRevision: PlaybackStateSnapshot["revision"] = null;
+                    const response = await this.request<ApiData>(
+                        "/playback-state",
+                        {
+                            method: kind === "save" ? "POST" : "DELETE",
+                            headers: {
+                                "X-Playback-Device-Id": deviceId,
+                                "If-Match": revision.etag,
+                            },
+                            body:
+                                kind === "save"
+                                    ? JSON.stringify(state)
+                                    : undefined,
+                            onResponse: ({ headers }) => {
+                                nextRevision = readPlaybackStateRevision(
+                                    headers,
+                                    authGeneration,
+                                    deviceId,
+                                );
+                            },
+                        },
+                    );
+                    return { state: response, revision: nextRevision };
+                },
+            );
+            return this.playbackStateCoordinator;
+        }
         // Play tracking
         async logPlay(
             trackRef: PlayTrackRef,
@@ -93,42 +149,45 @@ export function WithPlays<TBase extends ApiClientConstructor>(Base: TBase) {
             });
         }
 
-        // Playback State (cross-device sync)
+        /** Read the payload without granting authority to overwrite a newer slot. */
         async getPlaybackState() {
-            return this.request<ApiData>("/playback-state", {
-                headers: {
-                    "X-Playback-Device-Id": this.getPlaybackDeviceId(),
-                },
-            });
+            return (await this.getPlaybackStateSnapshot()).state;
         }
 
-        async savePlaybackState(state: {
-            playbackType: string;
-            trackId?: string;
-            audiobookId?: string;
-            podcastId?: string;
-            queue?: ApiData[];
-            currentIndex?: number;
-            isShuffle?: boolean;
-            isPlaying?: boolean;
-            currentTime?: number;
-        }) {
-            return this.request<ApiData>("/playback-state", {
-                method: "POST",
+        /** Read a device snapshot with the immutable revision of that exact read. */
+        async getPlaybackStateSnapshot(): Promise<PlaybackStateSnapshot> {
+            const coordinator = this.playbackCoordinator();
+            const sequence = ++coordinator.readSequence;
+            const epoch = coordinator.writeEpoch;
+            let revision: PlaybackStateSnapshot["revision"] = null;
+            const state = await this.request<ApiData>("/playback-state", {
                 headers: {
-                    "X-Playback-Device-Id": this.getPlaybackDeviceId(),
+                    "X-Playback-Device-Id": coordinator.deviceId,
                 },
-                body: JSON.stringify(state),
+                onResponse: ({ headers }) => {
+                    revision = readPlaybackStateRevision(
+                        headers,
+                        coordinator.authGeneration,
+                        coordinator.deviceId,
+                    );
+                },
             });
+            const snapshot = Object.freeze({ state, revision });
+            coordinator.acceptRead(sequence, epoch, snapshot);
+            return snapshot;
         }
 
-        async clearPlaybackState() {
-            return this.request<void>("/playback-state", {
-                method: "DELETE",
-                headers: {
-                    "X-Playback-Device-Id": this.getPlaybackDeviceId(),
-                },
-            });
+        /** Coalesce pending progress; a conflict retires this semantic authority. */
+        savePlaybackState(
+            state: PlaybackStateInput,
+            authority?: PlaybackStateAuthority,
+        ) {
+            return this.playbackCoordinator().save(state, authority);
+        }
+
+        /** Clear explicitly, or condition automatic cleanup on the captured read. */
+        clearPlaybackState(snapshot?: PlaybackStateSnapshot) {
+            return this.playbackCoordinator().clear(snapshot);
         }
     }
     return PlaysApi;

@@ -163,6 +163,7 @@ export async function getFederationPresenceExport(): Promise<FederationPresence>
                 },
             },
             playbackStates: {
+                where: { isCleared: false },
                 orderBy: { updatedAt: "desc" },
                 take: 1,
                 select: {

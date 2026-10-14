@@ -6,7 +6,7 @@ import { config } from "./config";
 import { redisClient } from "./utils/redis";
 import { prisma } from "./utils/db";
 import { logger } from "./utils/logger";
-import { isOriginAllowed } from "./utils/cors";
+import { isOriginAllowed, playbackStateCorsOptions } from "./utils/cors";
 import {
     getRuntimeDrainState,
     setRuntimeDrainState,
@@ -184,6 +184,7 @@ app.use(
             callback(null, allowed);
         },
         credentials: true,
+        ...playbackStateCorsOptions,
     }),
 );
 app.use(

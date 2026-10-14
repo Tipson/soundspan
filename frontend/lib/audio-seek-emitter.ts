@@ -4,7 +4,10 @@
  * without subscribing to currentTime state changes
  */
 
-import { recordExplicitPlaybackSeek } from "./audio-engine/playbackAdvanceOrigin";
+import {
+    recordExplicitPlaybackSeek,
+    type PlaybackCommandOrigin,
+} from "./audio-engine/playbackAdvanceOrigin";
 
 type SeekListener = (time: number) => void;
 
@@ -18,8 +21,8 @@ class AudioSeekEmitter {
         };
     }
 
-    public emit(time: number): void {
-        recordExplicitPlaybackSeek();
+    public emit(time: number, origin: PlaybackCommandOrigin = "manual"): void {
+        recordExplicitPlaybackSeek(origin);
         this.listeners.forEach((listener) => listener(time));
     }
 }

@@ -15,6 +15,16 @@ import {
 } from "../../lib/audio-engine/playbackAdvanceOrigin";
 import type { VibeModeStartResult } from "../../lib/audio-controls-types";
 import type { OriginalRadioContinuationResponse } from "../../lib/radio/originalRadioContinuation";
+import { api as snapshotApi } from "../../lib/api";
+
+const snapshotMock = mock.method(
+    snapshotApi,
+    "getPlaybackStateSnapshot",
+    async () => ({
+        state: await snapshotApi.getPlaybackState(),
+        revision: null,
+    }),
+);
 
 before(() => {
     GlobalRegistrator.register();
@@ -22,7 +32,10 @@ before(() => {
         globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
 });
-after(() => GlobalRegistrator.unregister());
+after(() => {
+    snapshotMock.mock.restore();
+    GlobalRegistrator.unregister();
+});
 
 const originA: PlaybackRadioOrigin = {
     kind: "artist",

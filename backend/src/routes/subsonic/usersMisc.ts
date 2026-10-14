@@ -30,6 +30,7 @@ export async function handleGetNowPlaying(
         const playbackStates = await prisma.playbackState.findMany({
             where: {
                 userId: req.user!.id,
+                isCleared: false,
                 trackId: {
                     not: null,
                 },

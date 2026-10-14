@@ -25,6 +25,10 @@ let getTrack = async (id: string): Promise<unknown> => ({
 const getPlaybackStateMock = mock.method(api, "getPlaybackState", () =>
     getPlaybackState(),
 );
+const snapshotMock = mock.method(api, "getPlaybackStateSnapshot", async () => ({
+    state: await api.getPlaybackState(),
+    revision: null,
+}));
 const getTrackMock = mock.method(api, "getTrack", (id: string) => getTrack(id));
 const clearPlaybackStateMock = mock.method(
     api,
@@ -37,6 +41,7 @@ const savePlaybackStateMock = mock.method(api, "savePlaybackState", () =>
 
 after(async () => {
     getPlaybackStateMock.mock.restore();
+    snapshotMock.mock.restore();
     getTrackMock.mock.restore();
     clearPlaybackStateMock.mock.restore();
     savePlaybackStateMock.mock.restore();

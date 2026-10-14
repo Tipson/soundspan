@@ -39,6 +39,10 @@ const getPlaybackStateMock = mock.method(
     "getPlaybackState",
     async () => null,
 );
+const snapshotMock = mock.method(api, "getPlaybackStateSnapshot", async () => ({
+    state: await api.getPlaybackState(),
+    revision: null,
+}));
 const savePlaybackStateMock = mock.method(
     api,
     "savePlaybackState",
@@ -50,6 +54,7 @@ const savePlaybackStateMock = mock.method(
 
 after(() => {
     getPlaybackStateMock.mock.restore();
+    snapshotMock.mock.restore();
     savePlaybackStateMock.mock.restore();
     GlobalRegistrator.unregister();
 });

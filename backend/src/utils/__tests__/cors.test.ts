@@ -1,4 +1,39 @@
-import { isOriginAllowed } from "../cors";
+import { isOriginAllowed, playbackStateCorsOptions } from "../cors";
+import cors from "cors";
+import express from "express";
+import request from "supertest";
+
+it("exposes playback leases and allows conditional browser requests", async () => {
+    const app = express().use(
+        cors({ origin: true, credentials: true, ...playbackStateCorsOptions }),
+    );
+    app.get("/", (_req, res) =>
+        res
+            .set({ ETag: '"ps1.absent"', "X-Playback-State-Protocol": "1" })
+            .json(null),
+    );
+    const response = await request(app)
+        .get("/")
+        .set("Origin", "https://player.example");
+    const exposed = response.headers["access-control-expose-headers"]
+        ?.toLowerCase()
+        .split(",");
+    expect(exposed).toEqual(
+        expect.arrayContaining(["etag", "x-playback-state-protocol"]),
+    );
+    const preflight = await request(app)
+        .options("/")
+        .set("Origin", "https://player.example")
+        .set("Access-Control-Request-Method", "POST")
+        .set(
+            "Access-Control-Request-Headers",
+            "Content-Type,If-Match,X-Playback-Device-Id",
+        );
+    expect(preflight.status).toBe(204);
+    expect(
+        preflight.headers["access-control-allow-headers"].toLowerCase(),
+    ).toContain("if-match");
+});
 
 describe("isOriginAllowed", () => {
     it("allows requests with no origin (same-origin, curl, server-to-server)", () => {

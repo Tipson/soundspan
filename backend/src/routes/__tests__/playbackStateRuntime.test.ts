@@ -26,14 +26,16 @@ jest.mock("../../utils/logger", () => ({
         info: jest.fn(),
         warn: (...args: unknown[]) => mockLoggerWarn(...args),
         error: (...args: unknown[]) => mockLoggerError(...args),
+        child: () => ({
+            warn: (...args: unknown[]) => mockLoggerWarn(...args),
+            error: (...args: unknown[]) => mockLoggerError(...args),
+        }),
     },
 }));
 
 const prisma = {
     playbackState: {
         findUnique: jest.fn(),
-        upsert: jest.fn(),
-        deleteMany: jest.fn(),
     },
 };
 
@@ -46,18 +48,34 @@ jest.mock("../../utils/db", () => ({
     Prisma,
 }));
 
+const mockSave = jest.fn();
+jest.mock("../../services/playbackStateStore", () => ({
+    ...jest.requireActual("../../services/playbackStateStore"),
+    compareAndSetPlaybackState: async (args: unknown) => {
+        const state = await mockSave(args);
+        return {
+            ...state,
+            revision: state?.revision ?? "11111111-1111-4111-8111-111111111111",
+        };
+    },
+}));
+
 import router from "../playbackState";
 import { requireAuth } from "../../middleware/auth";
 import { playbackStateLimiter } from "../../middleware/rateLimiter";
 import { prisma as prismaClient, Prisma as PrismaClient } from "../../utils/db";
 
 const mockFindUnique = prismaClient.playbackState.findUnique as jest.Mock;
-const mockUpsert = prismaClient.playbackState.upsert as jest.Mock;
-const mockDeleteMany = prismaClient.playbackState.deleteMany as jest.Mock;
 
 function getHandler(method: "get" | "post" | "delete", path: string) {
     const handlers = getRouteHandlers(method, path);
-    return handlers[handlers.length - 1];
+    const handler = handlers[handlers.length - 1];
+    return (req: any, res: any) => {
+        const header = req.header;
+        req.header = (name: string) =>
+            name === "If-Match" ? '"ps1.absent"' : header(name);
+        return handler(req, res);
+    };
 }
 
 function getRouteHandlers(method: "get" | "post" | "delete", path: string) {
@@ -77,6 +95,10 @@ function createRuntimeApp() {
     const app = express();
     app.set("trust proxy", 1);
     app.use(express.json());
+    app.use((req, _res, next) => {
+        req.headers["if-match"] ??= '"ps1.absent"';
+        next();
+    });
     app.use("/", router);
     return app;
 }
@@ -85,6 +107,7 @@ function createRes() {
     const res: any = {
         statusCode: 200,
         body: undefined as unknown,
+        set: jest.fn().mockReturnThis(),
         status: jest.fn(function (code: number) {
             res.statusCode = code;
             return res;
@@ -98,13 +121,6 @@ function createRes() {
     return res;
 }
 
-function createForeignKeyError(constraint?: string): Error {
-    return Object.assign(new Error("foreign key constraint failed"), {
-        code: "P2003",
-        ...(constraint ? { meta: { constraint } } : {}),
-    });
-}
-
 describe("playbackState routes runtime", () => {
     const getState = getHandler("get", "/");
     const postState = getHandler("post", "/");
@@ -113,15 +129,14 @@ describe("playbackState routes runtime", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockFindUnique.mockReset();
-        mockUpsert.mockReset();
-        mockDeleteMany.mockReset();
+        mockSave.mockReset();
     });
 
     it.each(["vk", "yandex"])(
         "round-trips public %s recording metadata for exact queue restoration",
         async (provider) => {
             let stored: unknown;
-            mockUpsert.mockImplementation(async ({ create }) => {
+            mockSave.mockImplementation(async ({ create }) => {
                 stored = structuredClone(create);
                 return stored;
             });
@@ -279,7 +294,7 @@ describe("playbackState routes runtime", () => {
                 musicSourceRecording: { ...recording, isrc: "invalid" },
             },
         ];
-        mockUpsert.mockImplementation(async ({ create }) =>
+        mockSave.mockImplementation(async ({ create }) =>
             structuredClone(create),
         );
         const res = createRes();
@@ -308,7 +323,7 @@ describe("playbackState routes runtime", () => {
 
     it("round-trips original radio intent without storing credentials or arbitrary fields", async () => {
         let stored: unknown = null;
-        mockUpsert.mockImplementation(async ({ create }) => {
+        mockSave.mockImplementation(async ({ create }) => {
             stored = structuredClone(create);
             return stored;
         });
@@ -353,7 +368,7 @@ describe("playbackState routes runtime", () => {
     });
 
     it("discards malformed radio origin while preserving the playable queue item", async () => {
-        mockUpsert.mockImplementation(async ({ create }) => create);
+        mockSave.mockImplementation(async ({ create }) => create);
         const invalid = [
             null,
             "radio",
@@ -379,7 +394,7 @@ describe("playbackState routes runtime", () => {
 
     it("round-trips attribution and finite mode on every daily mix queue entry", async () => {
         let stored: unknown = null;
-        mockUpsert.mockImplementation(async ({ create }) => {
+        mockSave.mockImplementation(async ({ create }) => {
             stored = structuredClone(create);
             return stored;
         });
@@ -423,7 +438,7 @@ describe("playbackState routes runtime", () => {
     });
 
     it("bounds queue attribution strings and rejects malformed lineage and queue modes", async () => {
-        mockUpsert.mockImplementation(async ({ create }) => create);
+        mockSave.mockImplementation(async ({ create }) => create);
         const response = await request(createRuntimeApp())
             .post("/")
             .set("X-Forwarded-For", "198.51.100.31")
@@ -473,7 +488,7 @@ describe("playbackState routes runtime", () => {
     });
 
     it("allows the normal four playback-state updates per minute", async () => {
-        mockUpsert.mockResolvedValue({ id: "state-normal-cadence" });
+        mockSave.mockResolvedValue({ id: "state-normal-cadence" });
         const app = createRuntimeApp();
         const statuses: number[] = [];
 
@@ -490,7 +505,7 @@ describe("playbackState routes runtime", () => {
         }
 
         expect(statuses).toEqual([200, 200, 200, 200]);
-        expect(mockUpsert).toHaveBeenCalledTimes(4);
+        expect(mockSave).toHaveBeenCalledTimes(4);
     });
 
     it("returns 429 at the finite playback-state request boundary", async () => {
@@ -541,7 +556,7 @@ describe("playbackState routes runtime", () => {
         );
     });
 
-    it("falls back to legacy state and migrates it for non-legacy devices", async () => {
+    it("reads legacy fallback without writing it for non-legacy devices", async () => {
         const legacyState = {
             id: "legacy-state",
             userId: "u1",
@@ -560,7 +575,6 @@ describe("playbackState routes runtime", () => {
         mockFindUnique
             .mockResolvedValueOnce(null)
             .mockResolvedValueOnce(legacyState);
-        mockUpsert.mockResolvedValueOnce({ id: "migrated" });
 
         const req = {
             user: { id: "u1" },
@@ -576,63 +590,7 @@ describe("playbackState routes runtime", () => {
         expect(mockFindUnique).toHaveBeenNthCalledWith(2, {
             where: { userId_deviceId: { userId: "u1", deviceId: "legacy" } },
         });
-        expect(mockUpsert).toHaveBeenCalledWith({
-            where: { userId_deviceId: { userId: "u1", deviceId: "mobile" } },
-            update: expect.objectContaining({
-                playbackType: "podcast",
-                queue: (PrismaClient as any).DbNull,
-                currentIndex: 1,
-                isPlaying: false,
-                currentTime: 45,
-            }),
-            create: expect.objectContaining({
-                userId: "u1",
-                deviceId: "mobile",
-                isPlaying: false,
-                queue: (PrismaClient as any).DbNull,
-            }),
-        });
-        expect(res.statusCode).toBe(200);
-        expect(res.body).toBe(legacyState);
-    });
-
-    it("retries legacy migration once without a concurrently deleted audiobook", async () => {
-        const legacyState = {
-            userId: "u1",
-            deviceId: "legacy",
-            playbackType: "audiobook",
-            trackId: null,
-            audiobookId: "deleted-book",
-            podcastId: null,
-            queue: null,
-            currentIndex: 1,
-            isShuffle: false,
-            isPlaying: true,
-            currentTime: 45,
-        };
-        mockFindUnique
-            .mockResolvedValueOnce(null)
-            .mockResolvedValueOnce(legacyState);
-        mockUpsert
-            .mockRejectedValueOnce(
-                createForeignKeyError("PlaybackState_audiobookId_fkey"),
-            )
-            .mockResolvedValueOnce({ id: "migrated-without-book" });
-
-        const res = createRes();
-        await getState(
-            { user: { id: "u1" }, header: () => "mobile" } as any,
-            res,
-        );
-
-        expect(mockUpsert).toHaveBeenCalledTimes(2);
-        expect(mockUpsert).toHaveBeenNthCalledWith(
-            2,
-            expect.objectContaining({
-                update: expect.objectContaining({ audiobookId: null }),
-                create: expect.objectContaining({ audiobookId: null }),
-            }),
-        );
+        expect(mockSave).not.toHaveBeenCalled();
         expect(res.statusCode).toBe(200);
         expect(res.body).toBe(legacyState);
     });
@@ -648,8 +606,8 @@ describe("playbackState routes runtime", () => {
 
         await getState(req, res);
 
-        expect(mockFindUnique).toHaveBeenCalledTimes(2);
-        expect(mockUpsert).not.toHaveBeenCalled();
+        expect(mockFindUnique).toHaveBeenCalledTimes(1);
+        expect(mockSave).not.toHaveBeenCalled();
         expect(res.statusCode).toBe(200);
         expect(res.body).toBeNull();
     });
@@ -689,13 +647,13 @@ describe("playbackState routes runtime", () => {
         await postState(invalidReq, invalidRes);
         expect(invalidRes.statusCode).toBe(400);
         expect(invalidRes.body).toEqual({ error: "Invalid playbackType" });
-        expect(mockLoggerWarn).toHaveBeenCalledWith(
-            "[PlaybackState] Invalid playbackType: video",
-        );
+        expect(mockLoggerWarn).toHaveBeenCalledWith("Invalid playbackType", {
+            playbackType: "video",
+        });
     });
 
     it("preserves only the explicit device-only source policy in saved track queues", async () => {
-        mockUpsert.mockResolvedValueOnce({ id: "state-policy" });
+        mockSave.mockResolvedValueOnce({ id: "state-policy" });
         const req = {
             user: { id: "u1" },
             header: () => "device-a",
@@ -709,7 +667,7 @@ describe("playbackState routes runtime", () => {
             },
         } as any;
         await postState(req, createRes());
-        const saved = mockUpsert.mock.calls[0][0];
+        const saved = mockSave.mock.calls[0][0];
         expect(saved.update.queue[0].playbackSourcePolicy).toBe("device-only");
         expect(saved.create.queue[0].playbackSourcePolicy).toBe("device-only");
         expect(saved.update.queue[1]).not.toHaveProperty(
@@ -717,8 +675,8 @@ describe("playbackState routes runtime", () => {
         );
     });
 
-    it("sanitizes queue payload and upserts bounded values", async () => {
-        mockUpsert.mockResolvedValueOnce({
+    it("sanitizes queue payload and persists bounded values", async () => {
+        mockSave.mockResolvedValueOnce({
             id: "state-2",
             userId: "u1",
             deviceId: "legacy",
@@ -765,7 +723,7 @@ describe("playbackState routes runtime", () => {
 
         await postState(req, res);
 
-        expect(mockUpsert).toHaveBeenCalledWith({
+        expect(mockSave).toHaveBeenCalledWith({
             where: { userId_deviceId: { userId: "u1", deviceId: "legacy" } },
             update: expect.objectContaining({
                 playbackType: "track",
@@ -816,7 +774,7 @@ describe("playbackState routes runtime", () => {
     });
 
     it("round-trips youtube-direct queue items with their audio format", async () => {
-        mockUpsert.mockResolvedValueOnce({
+        mockSave.mockResolvedValueOnce({
             id: "state-yt-direct",
             userId: "u1",
             deviceId: "desktop",
@@ -848,7 +806,7 @@ describe("playbackState routes runtime", () => {
 
         await postState(req, res);
 
-        expect(mockUpsert).toHaveBeenCalledWith(
+        expect(mockSave).toHaveBeenCalledWith(
             expect.objectContaining({
                 update: expect.objectContaining({
                     queue: [
@@ -873,7 +831,7 @@ describe("playbackState routes runtime", () => {
     });
 
     it("passes through podcast episode queue items and defaults tracks to itemType track", async () => {
-        mockUpsert.mockResolvedValueOnce({
+        mockSave.mockResolvedValueOnce({
             id: "state-mixed",
             userId: "u1",
             deviceId: "legacy",
@@ -920,7 +878,7 @@ describe("playbackState routes runtime", () => {
 
         await postState(req, res);
 
-        const savedQueue = mockUpsert.mock.calls[0][0].update.queue;
+        const savedQueue = mockSave.mock.calls[0][0].update.queue;
         expect(savedQueue).toHaveLength(3);
         expect(savedQueue[0]).toEqual({
             itemType: "episode",
@@ -951,7 +909,7 @@ describe("playbackState routes runtime", () => {
     });
 
     it("falls back to DbNull when queue sanitization throws", async () => {
-        mockUpsert.mockResolvedValueOnce({ id: "state-3" });
+        mockSave.mockResolvedValueOnce({ id: "state-3" });
 
         const badItem: any = {};
         Object.defineProperty(badItem, "id", {
@@ -974,16 +932,16 @@ describe("playbackState routes runtime", () => {
 
         await postState(req, res);
 
-        const whereArg = mockUpsert.mock.calls[0][0].where;
+        const whereArg = mockSave.mock.calls[0][0].where;
         expect(whereArg.userId_deviceId.deviceId).toHaveLength(128);
-        expect(mockUpsert.mock.calls[0][0].update.queue).toBe(
+        expect(mockSave.mock.calls[0][0].update.queue).toBe(
             (PrismaClient as any).DbNull,
         );
         expect(res.statusCode).toBe(200);
     });
 
     it("does not overwrite persisted play intent when isPlaying is omitted", async () => {
-        mockUpsert.mockResolvedValueOnce({ id: "state-4" });
+        mockSave.mockResolvedValueOnce({ id: "state-4" });
 
         const req = {
             user: { id: "u1" },
@@ -997,10 +955,10 @@ describe("playbackState routes runtime", () => {
 
         await postState(req, res);
 
-        expect(mockUpsert.mock.calls[0][0].update).toEqual(
+        expect(mockSave.mock.calls[0][0].update).toEqual(
             expect.not.objectContaining({ isPlaying: expect.anything() }),
         );
-        expect(mockUpsert.mock.calls[0][0].update).toEqual(
+        expect(mockSave.mock.calls[0][0].update).toEqual(
             expect.not.objectContaining({
                 queue: expect.anything(),
                 currentIndex: expect.anything(),
@@ -1008,17 +966,17 @@ describe("playbackState routes runtime", () => {
                 currentTime: expect.anything(),
             }),
         );
-        expect(mockUpsert.mock.calls[0][0].create.isPlaying).toBe(false);
-        expect(mockUpsert.mock.calls[0][0].create.currentTime).toBe(0);
-        expect(mockUpsert.mock.calls[0][0].create.currentIndex).toBe(0);
-        expect(mockUpsert.mock.calls[0][0].create.queue).toBe(
+        expect(mockSave.mock.calls[0][0].create.isPlaying).toBe(false);
+        expect(mockSave.mock.calls[0][0].create.currentTime).toBe(0);
+        expect(mockSave.mock.calls[0][0].create.currentIndex).toBe(0);
+        expect(mockSave.mock.calls[0][0].create.queue).toBe(
             (PrismaClient as any).DbNull,
         );
         expect(res.statusCode).toBe(200);
     });
 
     it("returns a sanitized 500 when save fails", async () => {
-        mockUpsert.mockRejectedValueOnce(new Error("write failed"));
+        mockSave.mockRejectedValueOnce(new Error("write failed"));
 
         const req = {
             user: { id: "u1" },
@@ -1034,136 +992,35 @@ describe("playbackState routes runtime", () => {
         expect(JSON.stringify(res.body)).not.toContain("write failed");
     });
 
-    it("retries a save once with null audiobook payloads after its FK fails", async () => {
-        mockUpsert
-            .mockRejectedValueOnce(
-                createForeignKeyError("PlaybackState_audiobookId_fkey"),
-            )
-            .mockResolvedValueOnce({
-                id: "state-without-deleted-book",
-                audiobookId: null,
-            });
-        const req = {
-            user: { id: "u1" },
-            header: () => "desktop",
-            body: {
-                playbackType: "audiobook",
-                audiobookId: "deleted-book",
-                currentTime: 25,
-            },
-        } as any;
-        const res = createRes();
-
-        await postState(req, res);
-
-        expect(mockUpsert).toHaveBeenCalledTimes(2);
-        expect(mockUpsert).toHaveBeenNthCalledWith(
-            2,
-            expect.objectContaining({
-                update: expect.objectContaining({
-                    playbackType: "audiobook",
-                    audiobookId: null,
-                    currentTime: 25,
-                }),
-                create: expect.objectContaining({
-                    playbackType: "audiobook",
-                    audiobookId: null,
-                    currentTime: 25,
-                }),
-            }),
-        );
-        expect(res.statusCode).toBe(200);
-        expect(res.body).toEqual({
-            id: "state-without-deleted-book",
-            audiobookId: null,
+    it("clears only the current slot with a safe tombstone and sanitizes failures", async () => {
+        mockSave.mockResolvedValueOnce({
+            revision: "11111111-1111-4111-8111-111111111111",
         });
-    });
-
-    it("does not retry an audiobook FK violation more than once", async () => {
-        mockUpsert
-            .mockRejectedValueOnce(
-                createForeignKeyError("PlaybackState_audiobookId_fkey"),
-            )
-            .mockRejectedValueOnce(
-                createForeignKeyError("PlaybackState_audiobookId_fkey"),
-            );
+        const req = { user: { id: "u1" }, header: () => "mobile" } as any;
         const res = createRes();
-
-        await postState(
-            {
-                user: { id: "u1" },
-                header: () => "desktop",
-                body: {
-                    playbackType: "audiobook",
-                    audiobookId: "deleted-book",
-                },
-            } as any,
-            res,
-        );
-
-        expect(mockUpsert).toHaveBeenCalledTimes(2);
-        expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to save playback state" });
-    });
-
-    it("does not retry a P2003 for a different playback-state constraint", async () => {
-        mockUpsert.mockRejectedValueOnce(
-            createForeignKeyError("PlaybackState_userId_fkey"),
-        );
-        const res = createRes();
-
-        await postState(
-            {
-                user: { id: "u1" },
-                header: () => "desktop",
-                body: { playbackType: "track", trackId: "track-1" },
-            } as any,
-            res,
-        );
-
-        expect(mockUpsert).toHaveBeenCalledTimes(1);
-        expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to save playback state" });
-    });
-
-    it("does not retry a nameless P2003", async () => {
-        mockUpsert.mockRejectedValueOnce(createForeignKeyError());
-        const res = createRes();
-
-        await postState(
-            {
-                user: { id: "u1" },
-                header: () => "desktop",
-                body: {
-                    playbackType: "audiobook",
-                    audiobookId: "deleted-book",
-                },
-            } as any,
-            res,
-        );
-
-        expect(mockUpsert).toHaveBeenCalledTimes(1);
-        expect(res.statusCode).toBe(500);
-        expect(res.body).toEqual({ error: "Failed to save playback state" });
-    });
-
-    it("deletes state for the current device and handles failures", async () => {
-        mockDeleteMany.mockResolvedValueOnce({ count: 1 });
-        const req = {
-            user: { id: "u1" },
-            header: () => "mobile",
-        } as any;
-        const res = createRes();
-
         await deleteState(req, res);
-
-        expect(mockDeleteMany).toHaveBeenCalledWith({
-            where: { userId: "u1", deviceId: { in: ["mobile", "legacy"] } },
+        expect(mockSave).toHaveBeenCalledWith({
+            where: { userId_deviceId: { userId: "u1", deviceId: "mobile" } },
+            update: expect.objectContaining({
+                isCleared: true,
+                queue: (PrismaClient as any).DbNull,
+                trackId: null,
+                audiobookId: null,
+                podcastId: null,
+                currentTime: 0,
+                currentIndex: 0,
+                isPlaying: false,
+                isShuffle: false,
+            }),
+            create: expect.objectContaining({
+                userId: "u1",
+                deviceId: "mobile",
+                isCleared: true,
+            }),
         });
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ success: true });
-
-        mockDeleteMany.mockRejectedValueOnce(new Error("delete failed"));
+        mockSave.mockRejectedValueOnce(new Error("delete failed"));
         const errorRes = createRes();
         await deleteState(req, errorRes);
         expect(errorRes.statusCode).toBe(500);

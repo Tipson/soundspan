@@ -3,6 +3,16 @@ import { after, before, mock, test } from "node:test";
 import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { toMusicSourcePlaybackTrack } from "../../lib/audio/musicSourcePlayback";
+import { api as snapshotApi } from "../../lib/api";
+
+const snapshotMock = mock.method(
+    snapshotApi,
+    "getPlaybackStateSnapshot",
+    async () => ({
+        state: await snapshotApi.getPlaybackState(),
+        revision: null,
+    }),
+);
 
 before(() => {
     GlobalRegistrator.register();
@@ -10,7 +20,10 @@ before(() => {
         globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
 });
-after(() => GlobalRegistrator.unregister());
+after(() => {
+    snapshotMock.mock.restore();
+    GlobalRegistrator.unregister();
+});
 
 for (const provider of ["vk", "yandex"] as const) {
     for (const malformed of [false, true]) {

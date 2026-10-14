@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Save and clear device playback snapshots conditionally against their server revision. Keep cleared queues empty, serialize pending progress saves, and reject delayed restoration or account responses without interrupting local playback.
 - Rotate admitted VK/Yandex daily-mix songs within each freshness lane across UTC days and space available artists, so a stable source pool does not freeze the mix or cluster one performer. Keep the 40-track limit, existing feedback filters, and recent-play fallback.
 - Refresh the upcoming Wave queue after three mixed early skips and confirmed dislikes. Keep provider failures neutral, preserve pause and queue ownership, rank new songs by negative artist feedback, and use mapped explicit dislikes as bounded negative audio anchors.
 - Rotate oversubscribed personal mix directions and eligible VK/Yandex seed artists by UTC day while keeping one familiar anchor. Give recent listening room alongside saved tastes, and prefer meaningful plays over older likes without changing the six-mix or long-track limits.

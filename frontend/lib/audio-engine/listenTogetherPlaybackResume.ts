@@ -1,6 +1,7 @@
 import { isPlaybackAutoRestartSuppressed } from "./playbackAdvanceOrigin";
 
 interface ListenTogetherResumeOptions {
+    origin: "automatic";
     suppressListenTogetherBroadcast: true;
     listenTogetherForceIsPlaying: true;
     listenTogetherPositionMs: number;
@@ -21,6 +22,7 @@ export function resumeListenTogetherPlayback(
 ): boolean {
     if (isPlaybackAutoRestartSuppressed()) return false;
     resume({
+        origin: "automatic",
         suppressListenTogetherBroadcast: true,
         listenTogetherForceIsPlaying: true,
         listenTogetherPositionMs: playback.positionMs,
@@ -30,6 +32,7 @@ export function resumeListenTogetherPlayback(
 }
 
 type HostResumePlayback = (options: {
+    origin: "automatic";
     suppressListenTogetherBroadcast: true;
 }) => void;
 
@@ -43,7 +46,7 @@ export function resumeGroupForRole(
     playback: ListenTogetherPlaybackPosition,
 ): void {
     if (isHost) {
-        resume({ suppressListenTogetherBroadcast: true });
+        resume({ suppressListenTogetherBroadcast: true, origin: "automatic" });
         return;
     }
     resumeListenTogetherPlayback(resume, playback);

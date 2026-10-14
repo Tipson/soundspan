@@ -669,9 +669,11 @@ const providerEngineState = {
 };
 const providerControlCalls = {
     seek: [] as number[],
+    seekOptions: [] as unknown[],
     resume: 0,
     resumeOptions: [] as unknown[],
     pause: 0,
+    pauseOptions: [] as unknown[],
 };
 const providerAudioState = {
     queue: [] as MockTrack[],
@@ -721,8 +723,9 @@ const providerPlaybackEngine = {
 };
 
 const providerControls = {
-    seek: (positionSec: number) => {
+    seek: (positionSec: number, options?: unknown) => {
         providerControlCalls.seek.push(positionSec);
+        providerControlCalls.seekOptions.push(options);
         providerEngineState.currentTime = positionSec;
     },
     resume: (options?: unknown) => {
@@ -730,8 +733,9 @@ const providerControls = {
         providerControlCalls.resumeOptions.push(options);
         providerEngineState.playing = true;
     },
-    pause: () => {
+    pause: (options?: unknown) => {
         providerControlCalls.pause += 1;
+        providerControlCalls.pauseOptions.push(options);
         providerEngineState.playing = false;
     },
 };
@@ -1008,6 +1012,8 @@ function resetProviderHarness(isHost: boolean, currentIndex: number): void {
     providerControlCalls.resume = 0;
     providerControlCalls.resumeOptions = [];
     providerControlCalls.pause = 0;
+    providerControlCalls.pauseOptions = [];
+    providerControlCalls.seekOptions = [];
     providerAudioState.queue = group.playback.queue;
     providerAudioState.currentIndex = currentIndex;
     providerAudioState.currentTrack =
@@ -1119,6 +1125,70 @@ async function mountListenTogetherProvider(
         },
     };
 }
+
+test("remote group snapshots and deltas classify local playback changes as automatic", async (t) => {
+    const guest = await mountListenTogetherProvider(false, 0);
+    t.after(guest.unmount);
+    const group = makeGroup(false, 0);
+    await guest.act(() =>
+        guest.callbacks().onGroupState({
+            ...group,
+            playback: {
+                ...group.playback,
+                isPlaying: false,
+                positionMs: 20_000,
+                serverTime: Date.now(),
+            },
+        }),
+    );
+    assert.equal(
+        (providerControlCalls.pauseOptions.at(-1) as { origin?: string })
+            ?.origin,
+        "automatic",
+    );
+    assert.equal(
+        (providerControlCalls.seekOptions.at(-1) as { origin?: string })
+            ?.origin,
+        "automatic",
+    );
+    await guest.act(() =>
+        guest.callbacks().onPlaybackDelta({
+            isPlaying: true,
+            positionMs: 50_000,
+            serverTime: Date.now(),
+            stateVersion: group.playback.stateVersion + 1,
+            currentIndex: 1,
+            trackId: "remote-1",
+        }),
+    );
+    assert.equal(
+        (providerControlCalls.seekOptions.at(-1) as { origin?: string })
+            ?.origin,
+        "automatic",
+    );
+    assert.equal(
+        (providerControlCalls.resumeOptions.at(-1) as { origin?: string })
+            ?.origin,
+        "automatic",
+    );
+});
+
+test("explicit group play and seek stay user commands despite suppressing socket echoes", async (t) => {
+    const host = await mountListenTogetherProvider(true, 0);
+    t.after(host.unmount);
+    await host.act(() => host.latest().syncPlay());
+    assert.notEqual(
+        (providerControlCalls.resumeOptions.at(-1) as { origin?: string })
+            ?.origin,
+        "automatic",
+    );
+    await host.act(() => host.latest().syncSeek(12_000));
+    assert.notEqual(
+        (providerControlCalls.seekOptions.at(-1) as { origin?: string })
+            ?.origin,
+        "automatic",
+    );
+});
 
 test("membership revocation fully clears the active client session", async (t) => {
     const guest = await mountListenTogetherProvider(false, 0);
@@ -1609,7 +1679,7 @@ test("ready-gated play-at resumes hosts without seeking and followers with a com
     assert.deepEqual(providerControlCalls.seek, []);
     assert.equal(providerControlCalls.resume, 1);
     assert.deepEqual(providerControlCalls.resumeOptions, [
-        { suppressListenTogetherBroadcast: true },
+        { suppressListenTogetherBroadcast: true, origin: "automatic" },
     ]);
     assert.equal(providerEngineState.playing, true);
     await host.unmount();
@@ -1828,7 +1898,7 @@ test("reconnect recovery restores host position and compensates follower positio
     await host.act(() => emitProviderEngineLoad());
     assert.deepEqual(providerControlCalls.seek, [42]);
     assert.deepEqual(providerControlCalls.resumeOptions, [
-        { suppressListenTogetherBroadcast: true },
+        { suppressListenTogetherBroadcast: true, origin: "automatic" },
     ]);
     await host.unmount();
 

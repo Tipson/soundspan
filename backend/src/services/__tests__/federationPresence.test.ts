@@ -67,6 +67,30 @@ describe("federation presence export", () => {
         jest.useRealTimers();
     });
 
+    it("filters tombstones before limiting to the latest playback slot", async () => {
+        const active = presenceUser();
+        prisma.user.findMany.mockImplementation(async (query) => {
+            const states = [
+                { isCleared: true },
+                { ...active.playbackStates[0], isCleared: false },
+            ];
+            const selection = query.select.playbackStates;
+            const selected = states
+                .filter(
+                    (state) =>
+                        selection.where?.isCleared === undefined ||
+                        state.isCleared === selection.where.isCleared,
+                )
+                .slice(0, selection.take);
+            return [{ ...active, playbackStates: selected }];
+        });
+        const exported = await getFederationPresenceExport();
+        expect(exported.users[0]).toMatchObject({
+            status: "playing",
+            track: { title: "Song" },
+        });
+    });
+
     it.each([
         {
             name: "online sharing disabled",

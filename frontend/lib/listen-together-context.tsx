@@ -528,7 +528,10 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
             // Pause before switching tracks to prevent buffered audio from
             // the old track replaying during the async transition.
             if (trackChanged && playbackEngine.isPlaying()) {
-                ctrl.pause({ suppressListenTogetherBroadcast: true });
+                ctrl.pause({
+                    suppressListenTogetherBroadcast: true,
+                    origin: "automatic",
+                });
             }
 
             // Set queue + track
@@ -559,6 +562,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                     trackChanged
                 ) {
                     ctrl.seek(targetSec, {
+                        origin: "automatic",
                         allowListenTogetherFollower: true,
                         suppressListenTogetherBroadcast: true,
                     });
@@ -577,7 +581,10 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
             } else if (pb.isPlaying) {
                 resumeGroupForRole(isCurrentClientHost, ctrl.resume, pb);
             } else {
-                ctrl.pause({ suppressListenTogetherBroadcast: true });
+                ctrl.pause({
+                    suppressListenTogetherBroadcast: true,
+                    origin: "automatic",
+                });
             }
 
             queueMicrotask(() => {
@@ -637,7 +644,10 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                     // Pause before switching to prevent buffered audio from the old
                     // track replaying during the async transition.
                     if (playbackEngine.isPlaying()) {
-                        ctrl.pause({ suppressListenTogetherBroadcast: true });
+                        ctrl.pause({
+                            suppressListenTogetherBroadcast: true,
+                            origin: "automatic",
+                        });
                     }
                     state.setCurrentIndex(safeIdx);
                     state.setCurrentTrack(effectiveTrack);
@@ -667,6 +677,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 });
                 if (drifted) {
                     ctrl.seek(targetSec, {
+                        origin: "automatic",
                         allowListenTogetherFollower: true,
                         suppressListenTogetherBroadcast: true,
                     });
@@ -681,7 +692,10 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
             ) {
                 resumeGroupForRole(isCurrentClientHost, ctrl.resume, delta);
             } else if (!delta.isPlaying && playbackEngine.isPlaying()) {
-                ctrl.pause({ suppressListenTogetherBroadcast: true });
+                ctrl.pause({
+                    suppressListenTogetherBroadcast: true,
+                    origin: "automatic",
+                });
             }
 
             queueMicrotask(() => {
@@ -751,6 +765,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 if (!active?.playback?.isPlaying) return;
 
                 controlsRef.current.seek(targetSec, {
+                    origin: "automatic",
                     allowListenTogetherFollower: true,
                     suppressListenTogetherBroadcast: true,
                 });
@@ -1032,6 +1047,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                         }
                         clearAvailabilitySwapLoadListener();
                         controlsRef.current.seek(resumePositionSec, {
+                            origin: "automatic",
                             allowListenTogetherFollower: true,
                             suppressListenTogetherBroadcast: true,
                         });
@@ -1115,6 +1131,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                     if (isCurrentClientHost) {
                         if (!playbackEngine.isPlaying()) {
                             ctrl.resume({
+                                origin: "automatic",
                                 suppressListenTogetherBroadcast: true,
                             });
                         }
@@ -1138,6 +1155,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                         : targetSec;
 
                     ctrl.seek(Math.max(0, clampedSec), {
+                        origin: "automatic",
                         allowListenTogetherFollower: true,
                         suppressListenTogetherBroadcast: true,
                     });
@@ -1495,6 +1513,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
             // the host navigation emit is still in-flight, then re-assert
             // playing so the load effect auto-plays the new track.
             controlsRef.current.pause({
+                origin: "automatic",
                 suppressListenTogetherBroadcast: true,
             });
             state.setPlaybackType("track");
@@ -1504,10 +1523,12 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
             state.setCurrentPodcast(null);
             state.setVibeMode(false);
             controlsRef.current.seek(0, {
+                origin: "automatic",
                 allowListenTogetherFollower: true,
                 suppressListenTogetherBroadcast: true,
             });
             controlsRef.current.resume({
+                origin: "automatic",
                 suppressListenTogetherBroadcast: true,
             });
             if (optimisticSelectionPolicy.guardRemoteApply) {

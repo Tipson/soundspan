@@ -2,6 +2,21 @@ import assert from "node:assert/strict";
 import { after, before, mock, test } from "node:test";
 import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { api as snapshotApi } from "../../lib/api";
+
+const defaultReadMock = mock.method(
+    snapshotApi,
+    "getPlaybackState",
+    async () => null,
+);
+const snapshotMock = mock.method(
+    snapshotApi,
+    "getPlaybackStateSnapshot",
+    async () => ({
+        state: await snapshotApi.getPlaybackState(),
+        revision: null,
+    }),
+);
 
 type AudioState = ReturnType<
     (typeof import("../../lib/audio-state-context"))["useAudioState"]
@@ -15,6 +30,8 @@ before(() => {
 });
 
 after(() => {
+    snapshotMock.mock.restore();
+    defaultReadMock.mock.restore();
     GlobalRegistrator.unregister();
 });
 

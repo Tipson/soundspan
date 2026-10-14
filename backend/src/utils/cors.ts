@@ -1,3 +1,8 @@
+/** Expose the conditional playback protocol; CORS reflects requested headers, including If-Match. */
+export const playbackStateCorsOptions = {
+    exposedHeaders: ["ETag", "X-Playback-State-Protocol"],
+};
+
 /**
  * Decide whether a CORS request origin is permitted.
  *

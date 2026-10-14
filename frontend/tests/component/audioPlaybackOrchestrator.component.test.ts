@@ -532,6 +532,7 @@ const audioStateSetterCalls = {
 
 const controlCalls = {
     pause: 0,
+    pauseOptions: [] as Array<{ origin?: "manual" | "automatic" } | undefined>,
     next: 0,
     nextPodcastEpisode: 0,
     startVibeMode: 0,
@@ -748,6 +749,7 @@ const resetHarnessState = (): void => {
     }
 
     controlCalls.pause = 0;
+    controlCalls.pauseOptions.length = 0;
     controlCalls.next = 0;
     controlCalls.nextPodcastEpisode = 0;
     controlCalls.startVibeMode = 0;
@@ -1000,8 +1002,9 @@ mock.module("@/lib/audio-controls-context", {
         useAudioControls: () => {
             const queueLengthAtRender = audioState.queue.length;
             return {
-                pause: () => {
+                pause: (options?: { origin?: "manual" | "automatic" }) => {
                     controlCalls.pause += 1;
+                    controlCalls.pauseOptions.push(options);
                 },
                 next: () => {
                     controlCalls.next += 1;
@@ -1447,6 +1450,41 @@ const renderOrchestrator = (): void => {
     assert.ok(orchestratorComponent, "orchestrator should be imported");
     hookRuntime.render(orchestratorComponent as () => null);
 };
+
+for (const medium of ["track", "podcast", "audiobook"] as const) {
+    test(`natural ${medium} end pauses without claiming a new user command`, async (t) => {
+        if (medium === "track") {
+            const online = Object.getOwnPropertyDescriptor(navigator, "onLine");
+            Object.defineProperty(navigator, "onLine", {
+                configurable: true,
+                value: false,
+            });
+            t.after(() => {
+                if (online) Object.defineProperty(navigator, "onLine", online);
+                else Reflect.deleteProperty(navigator, "onLine");
+            });
+        }
+        audioState.playbackType = medium;
+        audioState.queue = [];
+        audioState.currentTrack =
+            medium === "track" ? makeTrack("finite-end") : null;
+        if (audioState.currentTrack)
+            audioState.queue = [audioState.currentTrack];
+        audioState.currentPodcast =
+            medium === "podcast" ? { id: "show:episode", duration: 180 } : null;
+        audioState.currentAudiobook =
+            medium === "audiobook" ? { id: "book", duration: 180 } : null;
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 180 });
+        engine.emit("end");
+        await flushAsync();
+        assert.equal(controlCalls.pause, 1);
+        assert.deepEqual(controlCalls.pauseOptions, [{ origin: "automatic" }]);
+        assert.equal(controlCalls.next, 0);
+    });
+}
 
 test("group membership immediately disables solo continuity and repeat without a React rerender", () => {
     const continuity = mock.method(engine, "setContinuousEnabled");

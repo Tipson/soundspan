@@ -10,10 +10,15 @@ import {
     normalizePlaybackRadioOrigin,
     toLegacyStreamFields,
 } from "@soundspan/media-metadata-contract";
-import { isForeignKeyViolationOn } from "../utils/prismaErrors";
+import {
+    compareAndSetPlaybackState,
+    PlaybackStateConflictError,
+} from "../services/playbackStateStore";
 
 const router = express.Router();
-const PLAYBACK_STATE_AUDIOBOOK_FK = "PlaybackState_audiobookId_fkey";
+const log = logger.child("PlaybackState");
+const REVISION_ETAG =
+    /^"ps1\.(absent|[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})"$/;
 
 // Public recording metadata required by the existing exact-source resolver.
 // Unknown fields (including credentials and stream URLs) are stripped by Zod.
@@ -38,27 +43,29 @@ const musicSourceRecordingSchema = z
         ).test(recording.id),
     );
 
-type PlaybackStateUpsertArgs = {
-    where: Prisma.PlaybackStateWhereUniqueInput;
-    update: Prisma.PlaybackStateUncheckedUpdateInput;
-    create: Prisma.PlaybackStateUncheckedCreateInput;
-};
+function setLeaseHeaders(res: express.Response, revision: string): void {
+    res.set({
+        "X-Playback-State-Protocol": "1",
+        "Cache-Control": "no-store",
+        ETag: `"ps1.${revision}"`,
+    });
+}
 
-async function upsertPlaybackStateWithAudiobookRetry(
-    args: PlaybackStateUpsertArgs,
-) {
-    try {
-        return await prisma.playbackState.upsert(args);
-    } catch (error: unknown) {
-        if (!isForeignKeyViolationOn(error, PLAYBACK_STATE_AUDIOBOOK_FK)) {
-            throw error;
-        }
-        return prisma.playbackState.upsert({
-            ...args,
-            update: { ...args.update, audiobookId: null },
-            create: { ...args.create, audiobookId: null },
-        });
+function expectedRevision(
+    req: express.Request,
+    res: express.Response,
+): string | null {
+    const value = req.header("If-Match");
+    if (value === undefined) {
+        res.status(428).json({ error: "If-Match is required" });
+        return null;
     }
+    const revision = REVISION_ETAG.exec(value)?.[1];
+    if (!revision) {
+        res.status(400).json({ error: "Invalid playback-state If-Match" });
+        return null;
+    }
+    return revision;
 }
 
 function getPlaybackDeviceId(req: express.Request): string {
@@ -222,6 +229,7 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
  * /api/playback-state:
  *   get:
  *     summary: Get current playback state for the authenticated user
+ *     description: Reads the own device slot or legacy fallback without writing. An own tombstone returns null. ETag always identifies the own device slot, including absent when a legacy payload is returned.
  *     tags: [Playback State]
  *     security:
  *       - apiKeyAuth: []
@@ -234,6 +242,14 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
  *     responses:
  *       200:
  *         description: Current playback state or null if none exists
+ *         headers:
+ *           ETag:
+ *             schema: { type: string }
+ *             description: Strong ps1-prefixed UUID lease for the requested user/device slot, or ps1.absent.
+ *           X-Playback-State-Protocol:
+ *             schema: { type: string, enum: ['1'] }
+ *           Cache-Control:
+ *             schema: { type: string, enum: [no-store] }
  *       401:
  *         description: Not authenticated
  */
@@ -248,53 +264,20 @@ router.get("/", playbackStateLimiter, requireAuth, async (req, res) => {
         });
 
         if (playbackState) {
-            return res.json(playbackState);
+            setLeaseHeaders(res, playbackState.revision);
+            return res.json(playbackState.isCleared ? null : playbackState);
         }
 
+        setLeaseHeaders(res, "absent");
+        if (deviceId === "legacy") return res.json(null);
         // Backward compatibility for pre-device rows
         const legacyState = await prisma.playbackState.findUnique({
             where: { userId_deviceId: { userId, deviceId: "legacy" } },
         });
 
-        if (!legacyState) {
-            return res.json(null);
-        }
-
-        // Opportunistically migrate legacy state to this device without removing legacy.
-        // Multiple active devices can copy once and then diverge independently.
-        if (deviceId !== "legacy") {
-            await upsertPlaybackStateWithAudiobookRetry({
-                where: { userId_deviceId: { userId, deviceId } },
-                update: {
-                    playbackType: legacyState.playbackType,
-                    trackId: legacyState.trackId,
-                    audiobookId: legacyState.audiobookId,
-                    podcastId: legacyState.podcastId,
-                    queue: legacyState.queue ?? Prisma.DbNull,
-                    currentIndex: legacyState.currentIndex,
-                    isShuffle: legacyState.isShuffle,
-                    isPlaying: legacyState.isPlaying,
-                    currentTime: legacyState.currentTime,
-                },
-                create: {
-                    userId,
-                    deviceId,
-                    playbackType: legacyState.playbackType,
-                    trackId: legacyState.trackId,
-                    audiobookId: legacyState.audiobookId,
-                    podcastId: legacyState.podcastId,
-                    queue: legacyState.queue ?? Prisma.DbNull,
-                    currentIndex: legacyState.currentIndex,
-                    isShuffle: legacyState.isShuffle,
-                    isPlaying: legacyState.isPlaying,
-                    currentTime: legacyState.currentTime,
-                },
-            });
-        }
-
-        res.json(legacyState);
+        res.json(legacyState?.isCleared ? null : (legacyState ?? null));
     } catch (error) {
-        logger.error("Get playback state error:", error);
+        log.error("Get playback state error:", error);
         res.status(500).json({ error: "Failed to get playback state" });
     }
 });
@@ -308,6 +291,11 @@ router.get("/", playbackStateLimiter, requireAuth, async (req, res) => {
  *     security:
  *       - apiKeyAuth: []
  *     parameters:
+ *       - in: header
+ *         name: If-Match
+ *         required: true
+ *         schema: { type: string }
+ *         description: Exact strong ETag from the own device lease. Wildcards, weak tags and lists are rejected.
  *       - in: header
  *         name: X-Playback-Device-Id
  *         schema:
@@ -422,8 +410,20 @@ router.get("/", playbackStateLimiter, requireAuth, async (req, res) => {
  *     responses:
  *       200:
  *         description: Playback state updated
+ *         headers:
+ *           ETag:
+ *             schema: { type: string }
+ *             description: Strong ps1-prefixed UUID lease for the requested user/device slot, or ps1.absent.
+ *           X-Playback-State-Protocol:
+ *             schema: { type: string, enum: ['1'] }
+ *           Cache-Control:
+ *             schema: { type: string, enum: [no-store] }
  *       400:
- *         description: Invalid playbackType or missing required fields
+ *         description: Invalid playbackType, missing required fields, or malformed If-Match
+ *       412:
+ *         description: The requested slot has changed; no mutation or presence event is committed
+ *       428:
+ *         description: If-Match header is missing
  *       401:
  *         description: Not authenticated
  */
@@ -432,6 +432,8 @@ router.post("/", playbackStateLimiter, requireAuth, async (req, res) => {
     try {
         const userId = req.user!.id;
         const deviceId = getPlaybackDeviceId(req);
+        const revision = expectedRevision(req, res);
+        if (revision === null) return;
         const {
             playbackType,
             trackId,
@@ -452,9 +454,7 @@ router.post("/", playbackStateLimiter, requireAuth, async (req, res) => {
         // Validate playback type
         const validPlaybackTypes = ["track", "audiobook", "podcast"];
         if (!validPlaybackTypes.includes(playbackType)) {
-            logger.warn(
-                `[PlaybackState] Invalid playbackType: ${playbackType}`,
-            );
+            log.warn("Invalid playbackType", { playbackType });
             return res.status(400).json({ error: "Invalid playbackType" });
         }
 
@@ -495,8 +495,8 @@ router.post("/", playbackStateLimiter, requireAuth, async (req, res) => {
                         safeQueue = null;
                     }
                 } catch (sanitizeError: any) {
-                    logger.error(
-                        "[PlaybackState] Queue sanitization failed:",
+                    log.error(
+                        "Queue sanitization failed:",
                         sanitizeError?.message,
                     );
                     safeQueue = null;
@@ -515,7 +515,8 @@ router.post("/", playbackStateLimiter, requireAuth, async (req, res) => {
                   )
                 : safeCurrentIndexFromPayload;
 
-        const updatePayload: Prisma.PlaybackStateUncheckedUpdateInput = {
+        const updatePayload: Prisma.PlaybackStateUncheckedUpdateManyInput = {
+            isCleared: false,
             playbackType,
             trackId: trackId || null,
             audiobookId: audiobookId || null,
@@ -539,6 +540,7 @@ router.post("/", playbackStateLimiter, requireAuth, async (req, res) => {
         const createPayload: Prisma.PlaybackStateUncheckedCreateInput = {
             userId,
             deviceId,
+            isCleared: false,
             playbackType,
             trackId: trackId || null,
             audiobookId: audiobookId || null,
@@ -556,11 +558,14 @@ router.post("/", playbackStateLimiter, requireAuth, async (req, res) => {
             currentTime: hasExplicitCurrentTime ? safeCurrentTime : 0,
         };
 
-        const playbackState = await upsertPlaybackStateWithAudiobookRetry({
-            where: { userId_deviceId: { userId, deviceId } },
-            update: updatePayload,
-            create: createPayload,
-        });
+        const playbackState = await compareAndSetPlaybackState(
+            {
+                where: { userId_deviceId: { userId, deviceId } },
+                update: updatePayload,
+                create: createPayload,
+            },
+            revision,
+        );
         publishSocialPresenceUpdate({
             userId,
             deviceId,
@@ -568,21 +573,24 @@ router.post("/", playbackStateLimiter, requireAuth, async (req, res) => {
             timestampMs: Date.now(),
         });
 
+        setLeaseHeaders(res, playbackState.revision);
         res.json(playbackState);
     } catch (error: any) {
-        logger.error(
-            "[PlaybackState] Error saving state:",
-            error?.message || error,
-        );
-        logger.error(
-            "[PlaybackState] Full error:",
+        if (error instanceof PlaybackStateConflictError) {
+            return res
+                .status(412)
+                .json({ error: "Playback state has changed" });
+        }
+        log.error("Error saving state:", error?.message || error);
+        log.error(
+            "Full error:",
             JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
         );
         if (error?.code) {
-            logger.error("[PlaybackState] Error code:", error.code);
+            log.error("Error code:", error.code);
         }
         if (error?.meta) {
-            logger.error("[PlaybackState] Prisma meta:", error.meta);
+            log.error("Prisma meta:", error.meta);
         }
         // Raw failure detail is available only in the server logs above.
         res.status(500).json({ error: "Failed to save playback state" });
@@ -599,6 +607,11 @@ router.post("/", playbackStateLimiter, requireAuth, async (req, res) => {
  *       - apiKeyAuth: []
  *     parameters:
  *       - in: header
+ *         name: If-Match
+ *         required: true
+ *         schema: { type: string }
+ *         description: Exact strong ETag from the own device lease. Wildcards, weak tags and lists are rejected.
+ *       - in: header
  *         name: X-Playback-Device-Id
  *         schema:
  *           type: string
@@ -606,6 +619,20 @@ router.post("/", playbackStateLimiter, requireAuth, async (req, res) => {
  *     responses:
  *       200:
  *         description: Playback state cleared
+ *         headers:
+ *           ETag:
+ *             schema: { type: string }
+ *             description: Strong ps1-prefixed UUID lease for the requested user/device slot, or ps1.absent.
+ *           X-Playback-State-Protocol:
+ *             schema: { type: string, enum: ['1'] }
+ *           Cache-Control:
+ *             schema: { type: string, enum: [no-store] }
+ *       400:
+ *         description: Malformed If-Match header
+ *       412:
+ *         description: The requested slot has changed; no mutation or presence event is committed
+ *       428:
+ *         description: If-Match header is missing
  *       401:
  *         description: Not authenticated
  */
@@ -614,13 +641,28 @@ router.delete("/", playbackStateLimiter, requireAuth, async (req, res) => {
     try {
         const userId = req.user!.id;
         const deviceId = getPlaybackDeviceId(req);
-
-        // An explicit clear must also remove the shared "legacy" row;
-        // otherwise the GET fallback re-migrates it onto this device and
-        // the cleared queue resurrects on the next playback-state poll.
-        await prisma.playbackState.deleteMany({
-            where: { userId, deviceId: { in: [deviceId, "legacy"] } },
-        });
+        const revision = expectedRevision(req, res);
+        if (revision === null) return;
+        const tombstone = {
+            playbackType: "track",
+            isCleared: true,
+            trackId: null,
+            audiobookId: null,
+            podcastId: null,
+            queue: Prisma.DbNull,
+            currentIndex: 0,
+            currentTime: 0,
+            isPlaying: false,
+            isShuffle: false,
+        };
+        const cleared = await compareAndSetPlaybackState(
+            {
+                where: { userId_deviceId: { userId, deviceId } },
+                update: tombstone,
+                create: { userId, deviceId, ...tombstone },
+            },
+            revision,
+        );
         publishSocialPresenceUpdate({
             userId,
             deviceId,
@@ -628,9 +670,15 @@ router.delete("/", playbackStateLimiter, requireAuth, async (req, res) => {
             timestampMs: Date.now(),
         });
 
+        setLeaseHeaders(res, cleared.revision);
         res.json({ success: true });
     } catch (error) {
-        logger.error("Delete playback state error:", error);
+        if (error instanceof PlaybackStateConflictError) {
+            return res
+                .status(412)
+                .json({ error: "Playback state has changed" });
+        }
+        log.error("Delete playback state error:", error);
         res.status(500).json({ error: "Failed to delete playback state" });
     }
 });

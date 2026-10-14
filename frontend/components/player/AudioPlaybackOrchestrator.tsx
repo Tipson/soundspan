@@ -604,13 +604,13 @@ export const AudioPlaybackOrchestrator = memo(
                         repeatMode,
                     });
                     if (podcastAdvance.kind === "stop") {
-                        pause();
+                        pause({ origin: "automatic" });
                     } else {
                         advancePlayIntentAtMsRef.current = Date.now();
                         next(null);
                     }
                 } else if (playbackType === "audiobook") {
-                    pause();
+                    pause({ origin: "automatic" });
                 } else if (playbackType === "track") {
                     if (repeatMode === "one" && !isListenTogether) {
                         playbackProgressConfirmationRef.current =
@@ -658,13 +658,13 @@ export const AudioPlaybackOrchestrator = memo(
                                 repeatMode,
                             }).kind === "stop"
                         ) {
-                            pause();
+                            pause({ origin: "automatic" });
                             return;
                         }
                         advanceEndedTrack();
                     }
                 } else {
-                    pause();
+                    pause({ origin: "automatic" });
                 }
             };
 

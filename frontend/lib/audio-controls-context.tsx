@@ -78,7 +78,10 @@ import {
     writePlaybackAdvanceOrigin,
     writePlaybackReplacementIntent,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
-import type { PlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import type {
+    PlaybackAdvanceOrigin,
+    PlaybackCommandOrigin,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
 import { toAddToPlaylistRef } from "@/lib/trackRef";
 import {
     createMigratingStorageKey,
@@ -918,8 +921,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     );
 
     const pause = useCallback(
-        (options?: { suppressListenTogetherBroadcast?: boolean }) => {
-            recordExplicitPlaybackPause();
+        (options?: {
+            suppressListenTogetherBroadcast?: boolean;
+            origin?: PlaybackCommandOrigin;
+        }) => {
+            recordExplicitPlaybackPause(options?.origin);
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
             playbackState.setIsPlaying(false);
@@ -1033,6 +1039,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
     const resume = useCallback(
         (options?: {
+            origin?: PlaybackCommandOrigin;
             suppressListenTogetherBroadcast?: boolean;
             listenTogetherForceIsPlaying?: boolean;
             listenTogetherPositionMs?: number;
@@ -1043,12 +1050,13 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 writePlaybackAdvanceOrigin(
                     "manual",
                     state.currentTrack?.id ?? null,
+                    options?.origin,
                 );
             }
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
                 if (ltSession.isHost) {
-                    recordExplicitPlaybackResume();
+                    recordExplicitPlaybackResume(options?.origin);
                     playbackState.setIsPlaying(true);
                     if (!options?.suppressListenTogetherBroadcast) {
                         listenTogetherSocket.play().catch(() => {});
@@ -1088,14 +1096,15 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
                 playbackState.lockSeek(clampedTarget);
                 playbackState.setCurrentTime(clampedTarget);
-                audioSeekEmitter.emit(clampedTarget);
-                if (syncIsPlaying) recordExplicitPlaybackResume();
-                else recordExplicitPlaybackPause();
+                audioSeekEmitter.emit(clampedTarget, options?.origin);
+                if (syncIsPlaying)
+                    recordExplicitPlaybackResume(options?.origin);
+                else recordExplicitPlaybackPause(options?.origin);
                 playbackState.setIsPlaying(syncIsPlaying);
                 return;
             }
 
-            recordExplicitPlaybackResume();
+            recordExplicitPlaybackResume(options?.origin);
             playbackState.setIsPlaying(true);
         },
         [state, getActiveListenTogetherSession, getPlaybackView],
@@ -2371,6 +2380,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         (
             time: number,
             options?: {
+                origin?: PlaybackCommandOrigin;
                 allowListenTogetherFollower?: boolean;
                 suppressListenTogetherBroadcast?: boolean;
             },
@@ -2450,7 +2460,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 });
             }
 
-            audioSeekEmitter.emit(clampedTime);
+            audioSeekEmitter.emit(clampedTime, options?.origin);
 
             if (
                 ltSession?.isHost &&

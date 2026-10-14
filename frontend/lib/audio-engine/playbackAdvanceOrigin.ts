@@ -1,6 +1,9 @@
 /** Origin of a playback action that may change or retry the active track. */
 export type PlaybackAdvanceOrigin = "error" | "manual" | "feedback" | null;
 
+/** Metadata provenance for user commands versus automatic playback synchronization. */
+export type PlaybackCommandOrigin = "manual" | "automatic";
+
 /** Pending origin consumed by the first breaker-reset decision. */
 export interface PlaybackAdvanceOriginMarker {
     origin: Exclude<PlaybackAdvanceOrigin, null>;
@@ -32,6 +35,12 @@ let explicitPauseGeneration = 0;
 let playbackIntentGeneration = 0;
 let queueReplacementGeneration = 0;
 let playbackReplacementGeneration = 0;
+let explicitPlaybackCommandGeneration = 0;
+
+/** Counts explicit commands while excluding persisted-state adoption and metadata polling. */
+export function getExplicitPlaybackCommandGeneration(): number {
+    return explicitPlaybackCommandGeneration;
+}
 
 /** Fence asynchronous queue work against newer playback commands. */
 export function getPlaybackIntentGeneration(): number {
@@ -40,6 +49,7 @@ export function getPlaybackIntentGeneration(): number {
 
 /** Reserves asynchronous user work without resuming, pausing, or replacing current media. */
 export function reservePlaybackIntent(): number {
+    explicitPlaybackCommandGeneration += 1;
     queueReplacementGeneration += 1;
     return ++playbackIntentGeneration;
 }
@@ -62,18 +72,27 @@ export function recordPlaybackReplacement(): void {
 }
 
 /** A user seek supersedes queue work even when track and index stay the same. */
-export function recordExplicitPlaybackSeek(): void {
+export function recordExplicitPlaybackSeek(
+    origin: PlaybackCommandOrigin = "manual",
+): void {
+    if (origin === "manual") explicitPlaybackCommandGeneration += 1;
     playbackIntentGeneration += 1;
 }
 
 /** Records an intentional UI, media-session, or synchronized pause command. */
-export function recordExplicitPlaybackPause(): void {
+export function recordExplicitPlaybackPause(
+    origin: PlaybackCommandOrigin = "manual",
+): void {
+    if (origin === "manual") explicitPlaybackCommandGeneration += 1;
     playbackIntentGeneration += 1;
     explicitPauseGeneration = ++explicitPauseSequence;
 }
 
 /** A later play command retires the earlier explicit pause. */
-export function recordExplicitPlaybackResume(): void {
+export function recordExplicitPlaybackResume(
+    origin: PlaybackCommandOrigin = "manual",
+): void {
+    if (origin === "manual") explicitPlaybackCommandGeneration += 1;
     playbackIntentGeneration += 1;
     explicitPauseGeneration = 0;
 }
@@ -87,10 +106,19 @@ export function getExplicitPlaybackPauseGeneration(): number {
 export function writePlaybackAdvanceOrigin(
     origin: PlaybackAdvanceOrigin,
     originatingTrackId: string | null,
+    commandOrigin: PlaybackCommandOrigin = "manual",
 ): void {
     if (origin === "manual" || origin === "feedback") {
         playbackIntentGeneration += 1;
+        if (commandOrigin === "manual") explicitPlaybackCommandGeneration += 1;
     }
+    writePlaybackAdvanceMarker(origin, originatingTrackId);
+}
+
+function writePlaybackAdvanceMarker(
+    origin: PlaybackAdvanceOrigin,
+    originatingTrackId: string | null,
+): void {
     playbackReplacementIntentRef.current = null;
     playbackAdvanceOriginRef.current = origin
         ? { origin, originatingTrackId }
@@ -159,7 +187,8 @@ export function markRemoteTrackChange(
         return "error-resync";
     }
 
-    writePlaybackAdvanceOrigin("manual", originatingTrackId);
+    playbackIntentGeneration += 1;
+    writePlaybackAdvanceMarker("manual", originatingTrackId);
     setPlaybackAutoRestartSuppressed(false);
     return "fresh-media";
 }

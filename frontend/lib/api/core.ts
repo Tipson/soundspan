@@ -50,6 +50,23 @@ export interface ServiceTestResult {
     error?: string;
 }
 
+/** Response metadata delivered only after body parsing and auth-session guards. */
+export interface ApiResponseMetadata {
+    headers: Headers;
+    status: number;
+}
+
+/** Authenticated request options; metadata observers opt out of GET single-flight. */
+export type ApiRequestOptions = RequestInit & {
+    silent404?: boolean;
+    _retryCount?: number;
+    _timeoutRetryCount?: number;
+    _authSessionGeneration?: number;
+    timeoutMs?: number;
+    retryOnTimeout?: boolean;
+    onResponse?: (metadata: ApiResponseMetadata) => void;
+};
+
 // API response data type - represents unvalidated JSON from the server.
 // Using a single suppression here allows all 100+ API methods to return
 // properly loose types without scattering suppressions across the file.
@@ -634,14 +651,7 @@ export abstract class ApiClientCore {
 
     async request<T>(
         endpoint: string,
-        options: RequestInit & {
-            silent404?: boolean;
-            _retryCount?: number;
-            _timeoutRetryCount?: number;
-            _authSessionGeneration?: number;
-            timeoutMs?: number;
-            retryOnTimeout?: boolean;
-        } = {},
+        options: ApiRequestOptions = {},
     ): Promise<T> {
         const {
             silent404,
@@ -650,6 +660,7 @@ export abstract class ApiClientCore {
             _authSessionGeneration = this.sessionGeneration,
             timeoutMs = DEFAULT_API_TIMEOUT_MS,
             retryOnTimeout = true,
+            onResponse,
             ...fetchOptions
         } = options;
         const headers: HeadersInit = {
@@ -669,7 +680,7 @@ export abstract class ApiClientCore {
         const isIdempotentMethod = method === "GET" || method === "HEAD";
         const isRetryAttempt = _retryCount > 0 || _timeoutRetryCount > 0;
         const inFlightGetKey =
-            method === "GET" && !isRetryAttempt
+            method === "GET" && !isRetryAttempt && !onResponse
                 ? this.buildInFlightGetKey(
                       endpoint,
                       timeoutMs,
@@ -780,14 +791,20 @@ export abstract class ApiClientCore {
             // 204/205 and other empty bodies have nothing to parse; WebKit
             // rejects response.json() on them even when the request succeeded.
             if (response.status === 204 || response.status === 205) {
+                onResponse?.({
+                    headers: response.headers,
+                    status: response.status,
+                });
                 return undefined as T;
             }
             const rawBody = await response.text();
             this.assertCurrentSession(_authSessionGeneration);
-            if (rawBody === "") {
-                return undefined as T;
-            }
-            return JSON.parse(rawBody) as T;
+            const data = rawBody === "" ? undefined : JSON.parse(rawBody);
+            onResponse?.({
+                headers: response.headers,
+                status: response.status,
+            });
+            return data as T;
         };
 
         if (!inFlightGetKey) {

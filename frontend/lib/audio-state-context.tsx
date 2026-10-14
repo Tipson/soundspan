@@ -510,10 +510,27 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         const startupContextRevision = radioContextRevisionRef.current;
         const startupIntent = getPlaybackIntentGeneration();
         const startupQueueReplacement = getQueueReplacementGeneration();
+        const startupAuth = api.getSessionGeneration();
+        const startupLastSave = parsePlaybackStateSaveTimestamp(
+            readStorage(STORAGE_KEYS.LAST_PLAYBACK_STATE_SAVE_AT),
+        );
         const startupMembership = radioPollMembershipGenerationRef.current;
         const startupGroupActive =
             isListenTogetherActiveOrPending() ||
             listenTogetherSocket.hasActiveGroup;
+        const canApplyStartupSnapshot = () =>
+            canApplyPlaybackState() &&
+            radioContextRevisionRef.current === startupContextRevision &&
+            getPlaybackIntentGeneration() === startupIntent &&
+            getQueueReplacementGeneration() === startupQueueReplacement &&
+            api.getSessionGeneration() === startupAuth &&
+            parsePlaybackStateSaveTimestamp(
+                readStorage(STORAGE_KEYS.LAST_PLAYBACK_STATE_SAVE_AT),
+            ) === startupLastSave &&
+            radioPollMembershipGenerationRef.current === startupMembership &&
+            !startupGroupActive &&
+            !isListenTogetherActiveOrPending() &&
+            !listenTogetherSocket.hasActiveGroup;
 
         // Fetch fresh audiobook progress
         const savedAudiobook = readStorage(STORAGE_KEYS.CURRENT_AUDIOBOOK);
@@ -529,7 +546,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 isFinished: boolean;
                             } | null;
                         }) => {
-                            if (!canApplyPlaybackState()) return;
+                            if (!canApplyStartupSnapshot()) return;
                             if (audiobook && audiobook.progress) {
                                 setCurrentAudiobook({
                                     ...audiobookData,
@@ -539,7 +556,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                         },
                     )
                     .catch((err: unknown) => {
-                        if (!canApplyPlaybackState()) return;
+                        if (!canApplyStartupSnapshot()) return;
                         sharedFrontendLogger.error(
                             "[AudioState] Failed to refresh audiobook progress:",
                             err,
@@ -564,7 +581,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 coverUrl: string;
                                 episodes?: Episode[];
                             }) => {
-                                if (!canApplyPlaybackState()) return;
+                                if (!canApplyStartupSnapshot()) return;
                                 const episode = podcast.episodes?.find(
                                     (ep: Episode) => ep.id === episodeId,
                                 );
@@ -577,7 +594,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                             },
                         )
                         .catch((err: unknown) => {
-                            if (!canApplyPlaybackState()) return;
+                            if (!canApplyStartupSnapshot()) return;
                             sharedFrontendLogger.error(
                                 "[AudioState] Failed to refresh podcast progress:",
                                 err,
@@ -590,24 +607,12 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         }
 
         // Load playback state from server
-        api.getPlaybackState()
-            .then((serverState) => {
+        api.getPlaybackStateSnapshot()
+            .then(async (snapshot) => {
+                const serverState = snapshot.state;
                 // Local commands can commit before their debounced storage write.
                 // A held startup response must not replace that newer authority.
-                if (
-                    !canApplyPlaybackState() ||
-                    radioContextRevisionRef.current !==
-                        startupContextRevision ||
-                    getPlaybackIntentGeneration() !== startupIntent ||
-                    getQueueReplacementGeneration() !==
-                        startupQueueReplacement ||
-                    radioPollMembershipGenerationRef.current !==
-                        startupMembership ||
-                    startupGroupActive ||
-                    isListenTogetherActiveOrPending() ||
-                    listenTogetherSocket.hasActiveGroup
-                )
-                    return;
+                if (!canApplyStartupSnapshot()) return;
                 if (!serverState) return;
 
                 const serverPlaybackType: PlaybackSnapshotType =
@@ -685,6 +690,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     return;
                 }
 
+                let restoredTrack: Track | null = null;
+                let restoredAudiobook: Audiobook | null = null;
+                let restoredPodcast: Podcast | null = null;
                 if (serverPlaybackType === "track" && serverState.trackId) {
                     const remoteQueueTrack = findRemoteQueueTrackForRestore(
                         serverState.trackId,
@@ -695,118 +703,101 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                         remoteQueueTrack &&
                         !isEpisodeQueueItem(remoteQueueTrack)
                     ) {
-                        markRemoteTrackChange(
-                            hydratedLocalTrack?.id ?? null,
-                            remoteQueueTrack.id,
-                        );
                         // Remote (yt:/tidal:/youtube-direct) tracks are not
                         // in the library — materialize the current track from
                         // the persisted queue snapshot instead of the library
                         // lookup, which 404s for provider ids.
-                        setCurrentTrack(remoteQueueTrack);
-                        setPlaybackType("track");
-                        setCurrentAudiobook(null);
-                        setCurrentPodcast(null);
+                        restoredTrack = remoteQueueTrack;
                     } else if (isNonLibraryTrackId(serverState.trackId)) {
                         // Non-library track missing from the queue snapshot:
                         // skip adoption, but never clear persisted state over
                         // a library 404 for a provider/synthetic id.
                     } else {
-                        api.getTrack(serverState.trackId)
-                            .then((track) => {
-                                if (!canApplyPlaybackState()) return;
-                                markRemoteTrackChange(
-                                    hydratedLocalTrack?.id ?? null,
-                                    track.id,
-                                );
-                                const savedTrack = findQueueTrackForRestore(
-                                    track.id,
-                                    serverQueue,
-                                    serverState.currentIndex,
-                                );
-                                setCurrentTrack(
-                                    withPlaybackRadioOrigin(
-                                        track,
-                                        savedTrack &&
-                                            !isEpisodeQueueItem(savedTrack)
-                                            ? savedTrack.radioOrigin
-                                            : undefined,
-                                    ),
-                                );
-                                setPlaybackType("track");
-                                setCurrentAudiobook(null);
-                                setCurrentPodcast(null);
-                            })
-                            .catch(() => {
-                                if (!canApplyPlaybackState()) return;
-                                // Fire-and-forget: clearing stale server state, failure is non-critical
-                                api.clearPlaybackState().catch(() => {});
-                                setCurrentTrack(null);
-                                setCurrentAudiobook(null);
-                                setCurrentPodcast(null);
-                                setPlaybackType(null);
-                                setQueue([]);
-                                setCurrentIndex(0);
-                            });
+                        try {
+                            const track = await api.getTrack(
+                                serverState.trackId,
+                            );
+                            if (!canApplyStartupSnapshot()) return;
+                            const savedTrack = findQueueTrackForRestore(
+                                track.id,
+                                serverQueue,
+                                serverState.currentIndex,
+                            );
+                            restoredTrack = withPlaybackRadioOrigin(
+                                track,
+                                savedTrack && !isEpisodeQueueItem(savedTrack)
+                                    ? savedTrack.radioOrigin
+                                    : undefined,
+                            );
+                        } catch {
+                            if (!canApplyStartupSnapshot()) return;
+                            const cleared = await api
+                                .clearPlaybackState(snapshot)
+                                .catch(() => false);
+                            if (!cleared || !canApplyStartupSnapshot()) return;
+                            setCurrentTrack(null);
+                            setCurrentAudiobook(null);
+                            setCurrentPodcast(null);
+                            setPlaybackType(null);
+                            setQueue([]);
+                            setCurrentIndex(0);
+                            return;
+                        }
                     }
                 } else if (
                     serverPlaybackType === "audiobook" &&
                     serverState.audiobookId
                 ) {
-                    api.getAudiobook(serverState.audiobookId)
-                        .then((audiobook) => {
-                            if (!canApplyPlaybackState()) return;
-                            setCurrentAudiobook(audiobook);
-                            setPlaybackType("audiobook");
-                            setCurrentTrack(null);
-                            setCurrentPodcast(null);
-                        })
-                        .catch((err: unknown) => {
-                            if (!canApplyPlaybackState()) return;
-                            sharedFrontendLogger.error(
-                                "[AudioState] Failed to restore audiobook playback state:",
-                                err,
-                            );
-                        });
+                    restoredAudiobook = await api.getAudiobook(
+                        serverState.audiobookId,
+                    );
                 } else if (
                     serverPlaybackType === "podcast" &&
                     serverState.podcastId
                 ) {
                     const [podcastId, episodeId] =
                         serverState.podcastId.split(":");
-                    api.getPodcast(podcastId)
-                        .then(
-                            (podcast: {
-                                title: string;
-                                coverUrl: string;
-                                episodes?: Episode[];
-                            }) => {
-                                if (!canApplyPlaybackState()) return;
-                                const episode = podcast.episodes?.find(
-                                    (ep: Episode) => ep.id === episodeId,
-                                );
-                                if (episode) {
-                                    setCurrentPodcast({
-                                        id: serverState.podcastId,
-                                        title: episode.title,
-                                        podcastTitle: podcast.title,
-                                        coverUrl: podcast.coverUrl,
-                                        duration: episode.duration,
-                                        progress: episode.progress,
-                                    });
-                                    setPlaybackType("podcast");
-                                    setCurrentTrack(null);
-                                    setCurrentAudiobook(null);
-                                }
-                            },
-                        )
-                        .catch((err: unknown) => {
-                            if (!canApplyPlaybackState()) return;
-                            sharedFrontendLogger.error(
-                                "[AudioState] Failed to restore podcast playback state:",
-                                err,
-                            );
-                        });
+                    const podcast: {
+                        title: string;
+                        coverUrl: string;
+                        episodes?: Episode[];
+                    } = await api.getPodcast(podcastId);
+                    const episode = podcast.episodes?.find(
+                        (ep: Episode) => ep.id === episodeId,
+                    );
+                    if (episode) {
+                        restoredPodcast = {
+                            id: serverState.podcastId,
+                            title: episode.title,
+                            podcastTitle: podcast.title,
+                            coverUrl: podcast.coverUrl,
+                            duration: episode.duration,
+                            progress: episode.progress,
+                        };
+                    }
+                }
+                // Materialize first, then adopt the snapshot in one guarded stage.
+                // The public setters increment the context fence themselves.
+                if (!canApplyStartupSnapshot()) return;
+                if (restoredTrack) {
+                    markRemoteTrackChange(
+                        hydratedLocalTrack?.id ?? null,
+                        restoredTrack.id,
+                    );
+                    setCurrentTrack(restoredTrack);
+                    setPlaybackType("track");
+                    setCurrentAudiobook(null);
+                    setCurrentPodcast(null);
+                } else if (restoredAudiobook) {
+                    setCurrentAudiobook(restoredAudiobook);
+                    setPlaybackType("audiobook");
+                    setCurrentTrack(null);
+                    setCurrentPodcast(null);
+                } else if (restoredPodcast) {
+                    setCurrentPodcast(restoredPodcast);
+                    setPlaybackType("podcast");
+                    setCurrentTrack(null);
+                    setCurrentAudiobook(null);
                 }
                 if (
                     serverQueue &&
@@ -1168,7 +1159,8 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     parsePlaybackStateSaveTimestamp(
                         readStorage(STORAGE_KEYS.LAST_PLAYBACK_STATE_SAVE_AT),
                     ) === lastLocalSave;
-                const serverState = await api.getPlaybackState();
+                const snapshot = await api.getPlaybackStateSnapshot();
+                const serverState = snapshot.state;
                 if (!serverState || !canApplyPollSnapshot()) {
                     return;
                 }
@@ -1379,8 +1371,10 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 }
                             } catch {
                                 if (!canApplyPollSnapshot()) return;
-                                await api.clearPlaybackState().catch(() => {});
-                                if (!canApplyPollSnapshot()) return;
+                                const cleared = await api
+                                    .clearPlaybackState(snapshot)
+                                    .catch(() => false);
+                                if (!cleared || !canApplyPollSnapshot()) return;
                                 setCurrentTrack(null);
                                 setCurrentAudiobook(null);
                                 setCurrentPodcast(null);

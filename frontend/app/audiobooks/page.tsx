@@ -94,7 +94,7 @@ export default function AudiobooksPage() {
     // Clear player state if Audiobookshelf is disabled
     useEffect(() => {
         if (!isConfigured && currentAudiobook) {
-            pause();
+            pause({ origin: "automatic" });
             // Clear from localStorage
             if (typeof window !== "undefined") {
                 removeMigratingStorageItem(CURRENT_AUDIOBOOK_KEY);

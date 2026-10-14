@@ -45,6 +45,7 @@ import {
     getUserPlaybackStorageGeneration,
     isUserPlaybackStorageGenerationCurrent,
 } from "@/lib/userPlaybackStorage";
+import { getExplicitPlaybackCommandGeneration } from "@/lib/audio-engine/playbackAdvanceOrigin";
 
 export interface PlaybackStreamProfile {
     mode: "direct";
@@ -194,6 +195,13 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
     // reading the (intentionally stale, up-to-1s-behind) currentTime state.
     const lastPublishedTimeRef = useRef<number>(currentTime);
     const state = useAudioState();
+    const audioStateRef = useRef(state);
+    const commandGeneration = getExplicitPlaybackCommandGeneration();
+    const committedCommandGenerationRef = useRef(commandGeneration);
+    useLayoutEffect(() => {
+        audioStateRef.current = state;
+        committedCommandGenerationRef.current = commandGeneration;
+    }, [state, commandGeneration]);
     const initialTrackId =
         state.playbackType === "track"
             ? (state.currentTrack?.id ?? null)
@@ -438,11 +446,16 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         }
 
         let cancelled = false;
+        const hydrationIntent = getExplicitPlaybackCommandGeneration();
+        const hydrationAuth = api.getSessionGeneration();
         void api
             .getPlaybackState()
             .then((serverState) => {
                 if (
                     cancelled ||
+                    hydrationIntent !==
+                        getExplicitPlaybackCommandGeneration() ||
+                    hydrationAuth !== api.getSessionGeneration() ||
                     !isUserPlaybackStorageGenerationCurrent(
                         playbackStorageGeneration,
                     )
@@ -615,26 +628,19 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         playbackStorageGeneration,
     ]);
 
-    // Ref for reading audio state inside the stable savePlaybackProgressToServer callback.
-    const audioStateRef = useRef(state);
-    useEffect(() => {
-        audioStateRef.current = state;
-    }, [state]);
-    const progressSaveInFlightRef = useRef(false);
-
     const savePlaybackProgressToServer = useCallback(
         async (force = false) => {
             if (
                 !isHydrated ||
                 !state.playbackType ||
+                commandGeneration !== getExplicitPlaybackCommandGeneration() ||
+                commandGeneration !== committedCommandGenerationRef.current ||
                 !isUserPlaybackStorageGenerationCurrent(
                     playbackStorageGeneration,
                 )
             ) {
                 return;
             }
-            if (progressSaveInFlightRef.current) return;
-
             const invocationSnapshot: PlaybackPersistenceSnapshot = {
                 playbackType: state.playbackType,
                 trackId: state.currentTrack?.id ?? null,
@@ -686,7 +692,6 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
                   }
                 : {};
 
-            progressSaveInFlightRef.current = true;
             try {
                 if (
                     !isPersistenceSnapshotActive(invocationSnapshot) ||
@@ -696,19 +701,30 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
                 ) {
                     return;
                 }
-                await api.savePlaybackState({
-                    playbackType: invocationSnapshot.playbackType,
-                    trackId: invocationSnapshot.trackId ?? undefined,
-                    audiobookId: invocationSnapshot.audiobookId ?? undefined,
-                    podcastId: invocationSnapshot.podcastId ?? undefined,
-                    ...queuePositionPayload,
-                    isShuffle: currentAudioState.isShuffle,
-                    isPlaying,
-                    currentTime: clampNonNegativePlaybackTime(
-                        currentTimeRef.current,
-                    ),
-                });
+                const saved = await api.savePlaybackState(
+                    {
+                        playbackType: invocationSnapshot.playbackType,
+                        trackId: invocationSnapshot.trackId ?? undefined,
+                        audiobookId:
+                            invocationSnapshot.audiobookId ?? undefined,
+                        podcastId: invocationSnapshot.podcastId ?? undefined,
+                        ...queuePositionPayload,
+                        isShuffle: currentAudioState.isShuffle,
+                        isPlaying,
+                        currentTime: clampNonNegativePlaybackTime(
+                            currentTimeRef.current,
+                        ),
+                    },
+                    {
+                        commandGeneration,
+                    },
+                );
+                if (saved === undefined) return;
                 if (
+                    commandGeneration !==
+                        getExplicitPlaybackCommandGeneration() ||
+                    commandGeneration !==
+                        committedCommandGenerationRef.current ||
                     !isPersistenceSnapshotActive(invocationSnapshot) ||
                     !isUserPlaybackStorageGenerationCurrent(
                         playbackStorageGeneration,
@@ -732,12 +748,11 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
                         err,
                     );
                 }
-            } finally {
-                progressSaveInFlightRef.current = false;
             }
         },
         [
             isHydrated,
+            commandGeneration,
             state.playbackType,
             state.currentTrack?.id,
             state.currentAudiobook?.id,

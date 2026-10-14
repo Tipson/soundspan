@@ -647,6 +647,7 @@ router.get("/online", async (_req, res) => {
                         },
                     },
                     playbackStates: {
+                        where: { isCleared: false },
                         orderBy: { updatedAt: "desc" },
                         take: 1,
                         select: {

@@ -320,7 +320,7 @@ async function loadPlayQueue(req: Request): Promise<{
     const deviceId = getLegacyPlaybackDeviceId(
         parsePlaybackDeviceIndex(req.query.index),
     );
-    const state = await prisma.playbackState.findUnique({
+    const storedState = await prisma.playbackState.findUnique({
         where: {
             userId_deviceId: {
                 userId: req.user!.id,
@@ -328,6 +328,7 @@ async function loadPlayQueue(req: Request): Promise<{
             },
         },
     });
+    const state = storedState?.isCleared ? null : storedState;
     const queueTrackIds = parseQueueTrackIds(state?.queue);
     const tracks = await loadPlayQueueTracks(queueTrackIds);
     const formatted = await formatPlayQueueEntries(
@@ -476,6 +477,7 @@ async function persistSavedQueue(input: {
         ? parseSubsonicId(input.queue[input.currentIndex].id, "track").id
         : null;
     const state = {
+        isCleared: false,
         playbackType: "track" as const,
         trackId: currentTrackId,
         queue: input.queue.length ? input.queue : Prisma.DbNull,

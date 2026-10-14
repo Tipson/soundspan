@@ -202,6 +202,8 @@ model AppPassword {
 model PlaybackState {
   userId       String
   deviceId     String     @default("legacy")
+  revision     String     @default(dbgenerated("gen_random_uuid()::text"))
+  isCleared    Boolean    @default(false)
   playbackType String
   trackId      String?
   audiobookId  String?

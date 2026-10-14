@@ -4,7 +4,10 @@ import type {
     Podcast,
     Track,
 } from "./audio-state-context";
-import type { PlaybackAdvanceOrigin } from "./audio-engine/playbackAdvanceOrigin";
+import type {
+    PlaybackAdvanceOrigin,
+    PlaybackCommandOrigin,
+} from "./audio-engine/playbackAdvanceOrigin";
 import type { EpisodeQueueItem } from "./queue-item";
 import type { Episode } from "@/features/podcast/types";
 import type { PlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
@@ -62,8 +65,12 @@ export interface AudioControlsContextType {
         episode: Episode,
         podcast: { id: string; title: string; coverUrl: string | null },
     ) => void;
-    pause: (options?: { suppressListenTogetherBroadcast?: boolean }) => void;
+    pause: (options?: {
+        suppressListenTogetherBroadcast?: boolean;
+        origin?: PlaybackCommandOrigin;
+    }) => void;
     resume: (options?: {
+        origin?: PlaybackCommandOrigin;
         suppressListenTogetherBroadcast?: boolean;
         listenTogetherForceIsPlaying?: boolean;
         listenTogetherPositionMs?: number;
@@ -100,6 +107,7 @@ export interface AudioControlsContextType {
     seek: (
         time: number,
         options?: {
+            origin?: PlaybackCommandOrigin;
             allowListenTogetherFollower?: boolean;
             suppressListenTogetherBroadcast?: boolean;
         },
