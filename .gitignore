@@ -111,6 +111,11 @@ pnpm-lock.yaml
 # Secrets & Keys
 *.keystore
 *.jks
+*.p12
+*.pfx
+*.dpapi
+**/key.properties
+**/signing.json
 keystore.b64
 **/key.txt
 *.conf

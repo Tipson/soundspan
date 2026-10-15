@@ -6,6 +6,12 @@
 
 ## Unreleased
 
+- Restore the mobile playback owner and paused queue before accepting queued native media controls. Abort superseded or failed startup without replaying an old command into another account or initializing a second audio handler.
+- Add an Android-first Flutter music client with a shared mobile foundation, dark adaptive navigation, Home, Wave, personal mixes, search, artist and album pages, likes, playlists and imports. Keep full-size controls, a compact player and a focused like–radio–dislike row in the full player.
+- Run music through one native playback service with a retained queue, lock-screen controls, protected artwork and exact recording resolution. Store verified device downloads privately, resume interrupted transfers and restore offline queues under their original account. Explicit download retries remain usable while automatic liked downloads are paused.
+- Provide mobile profile, taste, playback, offline and account-security settings, with confirmed photo updates and guarded one-time secrets. Apply measured loudness on the Android player's own audio session, preserve logical volume and report unavailable system effects safely.
+- Provide private local Android signing and APK verification helpers with a separate release identity, pinned build inputs and certificate checks. Keep signing credentials outside source control.
+
 - Save and clear device playback snapshots conditionally against their server revision. Keep cleared queues empty, serialize pending progress saves, and reject delayed restoration or account responses without interrupting local playback.
 - Rotate admitted VK/Yandex daily-mix songs within each freshness lane across UTC days and space available artists, so a stable source pool does not freeze the mix or cluster one performer. Keep the 40-track limit, existing feedback filters, and recent-play fallback.
 - Refresh the upcoming Wave queue after three mixed early skips and confirmed dislikes. Keep provider failures neutral, preserve pause and queue ownership, rank new songs by negative artist feedback, and use mapped explicit dislikes as bounded negative audio anchors.

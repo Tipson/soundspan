@@ -1,0 +1,311 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import '../../core/model/app_failure.dart';
+import '../../core/model/owner_key.dart';
+import '../../core/model/track.dart';
+import '../../core/network/network_policy.dart';
+import '../../downloads/download_models.dart';
+import '../../downloads/download_repository.dart';
+import '../../downloads/liked_download_automation.dart';
+import '../library/library_models.dart';
+
+enum DownloadsFilter { all, ready, active, failed }
+
+/// UI commands use only DownloadRepository and the existing native work bridge.
+final class DownloadsController extends ChangeNotifier {
+  DownloadsController({
+    required this.repository,
+    required this.fence,
+    required this.networkPolicy,
+    required this.storageReady,
+    required this.schedule,
+    required this.cancelJob,
+    this.requestNotificationPermission,
+    this.automation,
+  });
+  final DownloadRepository repository;
+  final SessionFence fence;
+  final NetworkPolicy networkPolicy;
+  final bool Function() storageReady;
+  final ScheduleDeviceDownload schedule;
+  final CancelDeviceDownload cancelJob;
+  final Future<bool> Function()? requestNotificationPermission;
+  final LikedDownloadAutomation? automation;
+  List<DeviceDownload> _jobs = const [];
+  String _query = '';
+  DownloadsFilter _filter = DownloadsFilter.all;
+  AppFailure? failure;
+  String? notice;
+  bool loading = false;
+  bool busy = false;
+  bool _closed = false;
+  bool _disposed = false;
+  Timer? _poll;
+  final _pending = <Future<void>>{};
+  Future<void>? _closing;
+  bool get isCurrent => !_closed && repository.authority.isCurrent(fence);
+  bool get canDownload =>
+      isCurrent && storageReady() && networkPolicy.networkAllowed;
+  List<DeviceDownload> get jobs => isCurrent ? _jobs : const [];
+  String get query => _query;
+  DownloadsFilter get filter => _filter;
+  List<DeviceDownload> get visible => List.unmodifiable(
+    jobs.where((job) {
+      final match = switch (_filter) {
+        DownloadsFilter.all => true,
+        DownloadsFilter.ready => job.state == DownloadState.ready,
+        DownloadsFilter.active => const {
+          DownloadState.queued,
+          DownloadState.downloading,
+          DownloadState.verifying,
+          DownloadState.paused,
+        }.contains(job.state),
+        DownloadsFilter.failed => job.state == DownloadState.failed,
+      };
+      return match &&
+          '${job.track.title} ${job.track.artist}'.toLowerCase().contains(
+            _query.toLowerCase(),
+          );
+    }),
+  );
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  void setQuery(String value) {
+    _query = value;
+    _notify();
+  }
+
+  void setFilter(DownloadsFilter value) {
+    _filter = value;
+    _notify();
+  }
+
+  Future<void> _track(Future<void> Function() body) {
+    late final Future<void> result;
+    result = body().whenComplete(() => _pending.remove(result));
+    _pending.add(result);
+    return result;
+  }
+
+  Future<void> refresh() {
+    if (!isCurrent || loading) return Future.value();
+    return _track(() async {
+      loading = true;
+      try {
+        final next = await repository.list(fence);
+        await automation?.readPaused();
+        await automation?.observeSnapshot(next);
+        if (isCurrent) {
+          _jobs = next;
+        }
+      } catch (error) {
+        if (isCurrent) failure = collectionFailure(error);
+      } finally {
+        loading = false;
+        _notify();
+      }
+    });
+  }
+
+  /// Bounded polling observes headless native commits only while the screen is
+  /// visible and the app foregrounded. The root owns visibility across routes.
+  void setVisible(bool value) {
+    _poll?.cancel();
+    _poll = null;
+    if (!value || !isCurrent) return;
+    unawaited(refresh());
+    _poll = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!isCurrent) {
+        setVisible(false);
+        _notify();
+      } else {
+        unawaited(refresh());
+      }
+    });
+  }
+
+  Future<void> _act(Future<void> Function() body) {
+    if (!isCurrent || busy) return Future.value();
+    busy = true;
+    failure = null;
+    _notify();
+    return _track(() async {
+      try {
+        await repository.authority.assertCurrent(fence);
+        await body();
+      } catch (error) {
+        if (isCurrent) failure = collectionFailure(error);
+      } finally {
+        busy = false;
+        await refresh();
+        _notify();
+      }
+    });
+  }
+
+  void _requireAdmission() {
+    if (!storageReady()) {
+      throw const AppFailure(
+        code: 'storage_not_ready',
+        message: 'Хранилище устройства пока недоступно. Проверьте память и повторите.',
+      );
+    }
+    networkPolicy.requireNetwork();
+  }
+
+  /// Receives the actual selected, already bounded collection subset. No crawl,
+  /// count truncation or permission prompt occurs elsewhere in the feature.
+  Future<void> downloadTracks(
+    List<Track> tracks, {
+    String quality = 'original',
+  }) {
+    final selected = List<Track>.of(tracks);
+    return _act(() async {
+      _requireAdmission();
+      final permission = requestNotificationPermission;
+      if (permission != null) {
+        final allowed = await permission();
+        await repository.authority.assertCurrent(fence);
+        if (!allowed) notice = 'Доступ к уведомлениям не разрешён. Загрузка может работать в приложении; фоновый запуск зависит от ограничений Android.';
+      }
+      var admitted = 0;
+      var skipped = 0;
+      for (final track in selected) {
+        if (!isCurrent) return;
+        if (!track.playable) {
+          skipped++;
+          continue;
+        }
+        try {
+          _requireAdmission();
+          var job = await repository.enqueue(
+            track,
+            quality,
+            fence,
+            manual: true,
+          );
+          if (!isCurrent) return;
+          if (job.state == DownloadState.ready) {
+            admitted++;
+            continue;
+          }
+          if (job.state == DownloadState.paused ||
+              job.state == DownloadState.failed) {
+            job = await repository.resume(
+              job.id,
+              fence,
+              expectedGeneration: job.generation,
+            );
+          }
+          await _schedule(job);
+          admitted++;
+        } catch (error) {
+          if (!isCurrent) return;
+          failure = collectionFailure(error);
+          if (error is AppFailure && error.code == 'offline_mode') break;
+        }
+      }
+      notice ??=
+          'Выбрано ${selected.length}; в загрузках $admitted${skipped > 0 ? ', недоступно $skipped' : ''}.';
+    });
+  }
+
+  Future<void> _schedule(DeviceDownload job) async {
+    await repository.authority.assertCurrent(fence);
+    _requireAdmission();
+    if (job.originalFence != fence || job.state == DownloadState.ready) return;
+    await schedule(job.id, job.originalFence, job.generation);
+  }
+
+  Future<void> pause(DeviceDownload job) => _act(() async {
+    final updated = await repository.pause(
+      job.id,
+      fence,
+      expectedGeneration: job.generation,
+    );
+    if (updated.generation == job.generation + 1 &&
+        updated.state == DownloadState.paused) {
+      await cancelJob(job.id, job.originalFence, job.generation);
+    }
+  });
+  Future<void> resume(DeviceDownload job) => _act(() async {
+    _requireAdmission();
+    final updated = await repository.restartManually(
+      job.id,
+      fence,
+      expectedGeneration: job.generation,
+    );
+    if (updated != null) {
+      await _schedule(updated);
+    }
+  });
+  Future<void> retry(DeviceDownload job) => _act(() async {
+    _requireAdmission();
+    final updated = await repository.restartManually(
+      job.id,
+      fence,
+      expectedGeneration: job.generation,
+      retry: true,
+    );
+    if (updated != null) {
+      await _schedule(updated);
+    }
+  });
+  Future<void> cancel(DeviceDownload job) => _act(() async {
+    final cancelled = await repository.cancel(
+      job.id,
+      fence,
+      expectedGeneration: job.generation,
+    );
+    if (cancelled) await cancelJob(job.id, job.originalFence, job.generation);
+  });
+  Future<void> remove(DeviceDownload job) => _act(() async {
+    await repository.remove(job.id, fence, expectedGeneration: job.generation);
+    await cancelJob(job.id, job.originalFence, job.generation);
+  });
+  Future<void> setAutomationPaused(bool value) => _act(() async {
+    final a = automation;
+    if (a == null) return;
+    await a.setPaused(value, fence);
+    if (!value) await a.reconcile(fence);
+  });
+  CollectionPlaybackRequest play(DeviceDownload selected) {
+    if (!isCurrent) throw collectionStaleSession;
+    final rows = visible
+        .where((j) => j.state == DownloadState.ready && j.track.playable)
+        .toList();
+    final index = rows.indexWhere((j) => j.id == selected.id);
+    if (index < 0) {
+      throw const AppFailure(
+        code: 'download_not_ready',
+        message: 'Трек ещё не загружен.',
+      );
+    }
+    return CollectionPlaybackRequest(
+      tracks: rows.map((j) => j.track),
+      startIndex: index,
+      fence: fence,
+    );
+  }
+
+  Future<void> close() => _closing ??= () async {
+    _closed = true;
+    _poll?.cancel();
+    _poll = null;
+    while (_pending.isNotEmpty) {
+      await Future.wait(List.of(_pending));
+    }
+    _jobs = const [];
+  }();
+  @override
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    unawaited(close());
+    super.dispose();
+  }
+}
