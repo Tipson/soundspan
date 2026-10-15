@@ -6,9 +6,27 @@ import {
     formatActivityRelativeTime,
     localizeActivityNotification,
     localizeDownloadStatusText,
+    localizeImportJobMessage,
     translateDownloadStatus,
     translateDownloadType,
 } from "../../lib/i18n/adminActivityRu";
+
+test("сохраняет безопасные причины ошибок импорта Яндекса, скрывая неизвестные ответы", () => {
+    for (const message of [
+        "Плейлист Яндекс Музыки недоступен. Сделайте его публичным и повторите импорт.",
+        "Яндекс Музыка вернула неполный список треков. Импорт не выполнен — повторите позже.",
+        "Яндекс Музыка ограничила запросы. Повторите импорт позже.",
+    ]) {
+        assert.equal(localizeImportJobMessage(message, "error"), message);
+    }
+    assert.doesNotMatch(
+        localizeImportJobMessage(
+            "OAuth private-token upstream-secret",
+            "error",
+        ),
+        /private-token|upstream-secret/,
+    );
+});
 
 test("Admin и панель активности используют согласованную русскую микрокопию", () => {
     assert.equal(adminActivityRu.admin.title, "Администрирование");

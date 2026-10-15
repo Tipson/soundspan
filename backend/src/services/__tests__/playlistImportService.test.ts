@@ -54,6 +54,10 @@ const mockYtMusicService = {
 };
 
 const mockGetSystemSettings = jest.fn();
+const mockYandexJson = jest.fn();
+jest.mock("../musicSources/transport", () => ({
+    musicSourceHttp: { json: mockYandexJson },
+}));
 
 const mockTrackMappingService = {
     upsertTrackYtMusic: jest.fn(),
@@ -139,6 +143,41 @@ describe("PlaylistImportService", () => {
     });
 
     describe("parseSourceUrl", () => {
+        it.each([
+            [
+                "https://music.yandex.ru/users/music.fan/playlists/123?utm_source=share",
+                "music.fan:123",
+            ],
+            [
+                "music.yandex.com/users/music-fan/playlists/00123/",
+                "music-fan:123",
+            ],
+            [
+                "https://music.yandex.ru/playlists/4afe6e2d-8e90-48ee-89fd-d8e73e9a797a",
+                "4afe6e2d-8e90-48ee-89fd-d8e73e9a797a",
+            ],
+            [
+                "https://music.yandex.ru/playlists/ar.4afe6e2d-8e90-48ee-89fd-d8e73e9a797a",
+                "ar.4afe6e2d-8e90-48ee-89fd-d8e73e9a797a",
+            ],
+        ])("recognizes Yandex playlist %s", (url, id) => {
+            expect(playlistImportService.parseSourceUrl(url)).toEqual({
+                source: "yandex",
+                id,
+            });
+        });
+        it.each([
+            "https://music.yandex.ru.evil.test/users/fan/playlists/123",
+            "https://evil.test/playlists/4afe6e2d-8e90-48ee-89fd-d8e73e9a797a",
+            "ftp://music.yandex.ru/users/fan/playlists/123",
+            "https://secret@music.yandex.ru/users/fan/playlists/123",
+            "https://music.yandex.ru:8443/users/fan/playlists/123",
+            "https://music.yandex.ru/users/%2e%2e%2fsecret/playlists/123",
+            "https://music.yandex.ru/users/fan/playlists/123/extra",
+            "https://music.yandex.ru/playlists/not-a-uuid",
+        ])("rejects an unsafe or invalid Yandex URL %s", (url) => {
+            expect(playlistImportService.parseSourceUrl(url)).toBeNull();
+        });
         it("parses Spotify playlist URL", () => {
             mockSpotifyService.parseUrl.mockReturnValueOnce({
                 type: "playlist",
@@ -289,6 +328,135 @@ describe("PlaylistImportService", () => {
     });
 
     describe("fetchSourceTracks", () => {
+        it("prepares a complete public Yandex playlist with versions and repeated positions", async () => {
+            const track = {
+                id: "17",
+                title: "Song",
+                version: "Live",
+                artists: [{ name: "Artist" }],
+                albums: [{ title: "Album" }],
+                durationMs: 181500,
+                isrc: "GB1234567890",
+                available: false,
+            };
+            mockYandexJson.mockResolvedValueOnce({
+                result: {
+                    title: "My Yandex playlist",
+                    visibility: "public",
+                    trackCount: 2,
+                    tracks: [
+                        { id: "17", track },
+                        { id: "17", track },
+                    ],
+                },
+            });
+            const prepared = await playlistImportService.prepareImport(
+                "owner-1",
+                "https://music.yandex.ru/users/fan/playlists/123",
+            );
+            expect(prepared.playlistName).toBe("My Yandex playlist");
+            expect(prepared.resolved).toEqual(
+                [0, 1].map((index) => ({
+                    index,
+                    artist: "Artist",
+                    title: "Song (Live)",
+                    album: "Album",
+                    duration: 181.5,
+                    isrc: "GB1234567890",
+                    source: "unresolved",
+                    confidence: 0,
+                })),
+            );
+            expect(prepared.summary).toEqual({
+                total: 2,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 2,
+            });
+            expect(mockYandexJson.mock.calls[0].slice(0, 2)).toEqual([
+                "https://api.music.yandex.net/users/fan/playlists/123?rich-tracks=false",
+                {},
+            ]);
+        });
+        it("loads every short track in bounded batches and restores source order", async () => {
+            const ids = Array.from({ length: 251 }, (_, i) => String(i + 1));
+            mockYandexJson.mockImplementation(
+                async (
+                    url: string,
+                    _headers: unknown,
+                    _signal: unknown,
+                    form?: Record<string, string>,
+                ) => {
+                    if (url.includes("/playlist/"))
+                        return {
+                            result: {
+                                title: "Large",
+                                visibility: "public",
+                                trackCount: ids.length,
+                                tracks: ids.map((id) => ({ id })),
+                            },
+                        };
+                    return {
+                        result: form!["track-ids"]
+                            .split(",")
+                            .reverse()
+                            .map((id) => ({
+                                id,
+                                title: `Track ${id}`,
+                                artists: [{ name: "Artist" }],
+                                durationMs: 180000,
+                            })),
+                    };
+                },
+            );
+            const prepared = await playlistImportService.prepareImport(
+                "owner-1",
+                "https://music.yandex.ru/playlists/4afe6e2d-8e90-48ee-89fd-d8e73e9a797a",
+            );
+            expect(prepared.summary.total).toBe(251);
+            expect(prepared.resolved.map((track) => track.title)).toEqual(
+                ids.map((id) => `Track ${id}`),
+            );
+            expect(
+                mockYandexJson.mock.calls
+                    .slice(1)
+                    .map((call) => call[3]["track-ids"].split(",").length),
+            ).toEqual([100, 100, 51]);
+            expect(
+                mockYandexJson.mock.calls.every(
+                    (call) => Object.keys(call[1]).length === 0,
+                ),
+            ).toBe(true);
+        });
+        it.each([
+            {
+                title: "Private",
+                visibility: "private",
+                trackCount: 0,
+                tracks: [],
+            },
+            {
+                title: "Truncated",
+                visibility: "public",
+                trackCount: 2,
+                tracks: [{ id: "1" }],
+            },
+            { title: "Unknown visibility", trackCount: 0, tracks: [] },
+        ])(
+            "rejects private or incomplete Yandex metadata without creating a playlist",
+            async (result) => {
+                mockYandexJson.mockResolvedValueOnce({ result });
+                await expect(
+                    playlistImportService.prepareImport(
+                        "owner-1",
+                        "https://music.yandex.ru/users/fan/playlists/123",
+                    ),
+                ).rejects.toThrow(/Яндекс/);
+                expect(mockPrisma.playlist.create).not.toHaveBeenCalled();
+                expect(mockYandexJson).toHaveBeenCalledTimes(1);
+            },
+        );
         it("imports a public Spotify playlist without a user OAuth connection", async () => {
             mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
                 name: "Public Spotify Playlist",

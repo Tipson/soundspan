@@ -63,6 +63,26 @@ export function isSupportedPlaylistUrl(url: string): boolean {
     const hostname = parsed.hostname.toLowerCase();
     const path = parsed.pathname;
 
+    if (
+        [
+            "music.yandex.ru",
+            "music.yandex.com",
+            "music.yandex.kz",
+            "music.yandex.by",
+            "music.yandex.uz",
+        ].includes(hostname)
+    ) {
+        if (parsed.username || parsed.password || parsed.port) return false;
+        return (
+            /^\/users\/[a-z0-9][a-z0-9._-]{0,99}\/playlists\/\d{1,20}\/?$/i.test(
+                path,
+            ) ||
+            /^\/playlists\/(?:[a-z]{1,16}\.)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(
+                path,
+            )
+        );
+    }
+
     if (hostname === "open.spotify.com") {
         return /^\/(?:intl-[a-z]{2}(?:-[a-z]{2})?\/)?playlist\/[a-zA-Z0-9]+\/?$/i.test(
             path,

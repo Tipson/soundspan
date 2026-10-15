@@ -59,6 +59,7 @@ import { playlistImportService } from "../playlistImportService";
 import { backgroundPlaylistImport } from "../backgroundPlaylistImport";
 import { genericImportJobRunner } from "../genericImportJobRunner";
 import { SpotifyPlaylistPaginationError } from "../spotifyPlaylistPagination";
+import { YandexPlaylistImportError } from "../yandexPlaylistImport";
 
 describe("generic import job runner", () => {
     const mockGetJob = importJobStore.getJob as jest.Mock;
@@ -1666,6 +1667,32 @@ describe("generic import job runner", () => {
             },
         );
     });
+
+    it.each(["private", "incomplete", "rate_limit"] as const)(
+        "stops Yandex %s without automatic retries and preserves the actionable error",
+        async (code) => {
+            const job = installStatefulJob({
+                id: "job-yandex",
+                userId: "user-1",
+                sourceUrl: "https://music.yandex.ru/users/fan/playlists/123",
+                requestedPlaylistName: null,
+                playlistName: "Yandex import",
+                status: "pending",
+                error: null as string | null,
+            });
+            const error = new YandexPlaylistImportError(code);
+            mockPreviewImport.mockRejectedValue(error);
+            await expect(
+                genericImportJobRunner.runJob(job.id, {
+                    retryFailures: true,
+                    finalAttempt: false,
+                }),
+            ).resolves.toBeUndefined();
+            expect(job.status).toBe("failed");
+            expect(job.error).toBe(error.codeOwnedMessage());
+            expect(mockImportPlaylist).not.toHaveBeenCalled();
+        },
+    );
 
     it("preserves a code-owned Spotify completeness error for the user", async () => {
         mockGetJob.mockResolvedValue({

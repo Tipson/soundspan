@@ -14,16 +14,16 @@ export const importPageRu = {
     previewM3uFailed: "Не удалось подготовить предпросмотр файла M3U",
     importFailed: "Не удалось импортировать плейлист",
     supportedUrls:
-        "Поддерживаются ссылки на плейлисты Spotify, Deezer и YouTube Music",
+        "Поддерживаются ссылки на публичные плейлисты Яндекс Музыки, Spotify, Deezer и YouTube Music",
     alreadyInProgress: "Импорт этого плейлиста уже выполняется",
     jobSubmitted:
         "Импорт запущен. Ход выполнения доступен во вкладке импорта в панели активности.",
     submitFailed: "Не удалось запустить импорт",
     back: "Назад",
     urlPlaceholder:
-        "Вставьте ссылку на плейлист Spotify, Deezer или YouTube Music",
+        "Вставьте ссылку на плейлист Яндекс Музыки, Spotify, Deezer или YouTube Music",
     urlHint:
-        "Вставьте ссылку на плейлист из Spotify, Deezer или YouTube Music.",
+        "Публичные плейлисты Яндекс Музыки, Spotify, Deezer и YouTube Music.",
     spotifyBoundary:
         "Spotify используется только для чтения списка треков из публичного плейлиста. Soundspan не воспроизводит музыку из Spotify, не изменяет исходный плейлист и не сохраняет аудиофайлы на сервере. Приватные плейлисты пока не поддерживаются.",
     m3uMatchHint:

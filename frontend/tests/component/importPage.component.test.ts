@@ -401,6 +401,49 @@ test("isSupportedPlaylistUrl accepts Spotify intl playlist URLs", async () => {
     assert.equal(isSupportedPlaylistUrl(intlSpotifyUrl), true);
 });
 
+test("accepts both Yandex playlist links and rejects unsafe hosts and paths", async () => {
+    const { isSupportedPlaylistUrl } = await import("../../app/import/page");
+    for (const url of [
+        "https://music.yandex.ru/users/fan/playlists/123?utm_source=share",
+        "music.yandex.com/users/music.fan/playlists/123/",
+        "https://music.yandex.ru/playlists/ar.4afe6e2d-8e90-48ee-89fd-d8e73e9a797a",
+    ])
+        assert.equal(isSupportedPlaylistUrl(url), true, url);
+    for (const url of [
+        "https://music.yandex.ru.evil.test/users/fan/playlists/123",
+        "https://user@music.yandex.ru/users/fan/playlists/123",
+        "https://music.yandex.ru:8443/users/fan/playlists/123",
+        "https://music.yandex.ru/users/fan/playlists/123/extra",
+        "https://music.yandex.ru/playlists/not-a-uuid",
+    ])
+        assert.equal(isSupportedPlaylistUrl(url), false, url);
+});
+
+test("submits a Yandex URL to the existing background import and names the source in the form", async () => {
+    const harness = await mountImportPage();
+    try {
+        const input = harness.container.querySelector(
+            'input[placeholder^="Вставьте ссылку"]',
+        );
+        assert.ok(input instanceof HTMLInputElement);
+        assert.match(input.placeholder, /Яндекс/);
+        await React.act(async () => {
+            typeInto(input, "music.yandex.ru/users/fan/playlists/123");
+        });
+        await click(findButton(harness.container, "Начать импорт"));
+        assert.deepEqual(backgroundJobCalls, [
+            {
+                url: "https://music.yandex.ru/users/fan/playlists/123",
+                name: undefined,
+            },
+        ]);
+        assert.equal(toastErrors.length, 0);
+        assert.equal(previewCalls.length, 0);
+    } finally {
+        await harness.unmount();
+    }
+});
+
 test("isSupportedPlaylistUrl rejects arbitrary text containing provider host fragments", async () => {
     const { isSupportedPlaylistUrl } = await import("../../app/import/page");
     const malformedValue =
