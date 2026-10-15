@@ -54,9 +54,12 @@ try {
         if ($free -lt 6GB) { throw 'Release requires at least 6 GiB free on D' }
         & (Join-Path $PSScriptRoot 'verify-mobile.ps1') -ToolEnvironment $ToolEnvironment -ToolEnvironmentSha256 $ToolEnvironmentSha256
         if ($LASTEXITCODE -ne 0) { throw "Mobile verification failed: $LASTEXITCODE" }
+        # Regenerate the release plugin registry before exposing signing secrets.
+        $flutter = Join-Path $env:FLUTTER_ROOT 'bin/flutter.bat'
+        Invoke-StreamingNative $flutter @('build','apk','--release','--config-only')
+        if ((Get-FileHash $lock).Hash -ne '01A909137D3B91DF57DAEC2581772AE2D745CE76DA6736BA00562CA870FDEA32') { throw 'Pinned pub lock changed during release configuration' }
         # No daemon, disk configuration cache, or heap dumps containing signing secrets.
         Invoke-WithEnvironment @{ GRADLE_OPTS = '-Dorg.gradle.daemon=false -Dorg.gradle.configuration-cache=false'; JAVA_TOOL_OPTIONS = '-Duser.home=D:/CodexData/runtime/mobile-profile -XX:-HeapDumpOnOutOfMemoryError' } {
-            $flutter = Join-Path $env:FLUTTER_ROOT 'bin/flutter.bat'
             Invoke-WithSigning $SigningMetadata {
                 & $flutter build apk --release --no-pub --no-android-gradle-daemon
                 if ($LASTEXITCODE -ne 0) { throw "Release build failed: $LASTEXITCODE" }
