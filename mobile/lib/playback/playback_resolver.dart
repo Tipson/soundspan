@@ -72,7 +72,11 @@ final class PlaybackResolver {
       if (playback['streamPath'] != expected) throw invalidMedia;
       uri = origin.resolve(expected);
     } else {
-      final query = <String, String>{'quality': ?quality};
+      // Library originals are files; YouTube's transport accepts quality tiers.
+      final streamQuality = ref is YoutubeTrackRef && quality == 'original'
+          ? 'HIGH'
+          : quality;
+      final query = <String, String>{'quality': ?streamQuality};
       if (ref is YoutubeTrackRef && ref.youtubeKind == YoutubeKind.music) {
         if (purpose == ResolvePurpose.playback) {
           final random = Random.secure();

@@ -37,6 +37,7 @@ void main() {
           await PlaybackResolver(
             transport: DartApiTransport(client: client, authority: authority),
             authority: authority,
+            quality: 'original',
           ).resolve(
             recordingRef,
             ResolvePurpose.playback,
@@ -126,4 +127,79 @@ void main() {
       expect(regular.uri.hasQuery, false);
     },
   );
+  for (final kind in YoutubeKind.values) {
+    for (final purpose in ResolvePurpose.values) {
+      test('YouTube $kind $purpose maps original to supported HIGH', () async {
+        final authority = await mediaAuthority(origin);
+        addTearDown(authority.invalidate);
+        final resolver = PlaybackResolver(
+          authority: authority,
+          transport: DartApiTransport(
+            authority: authority,
+            client: ScriptedJsonClient(
+              (_, _) async => throw StateError('No JSON expected'),
+            ),
+          ),
+          quality: 'original',
+        );
+        final media = await resolver.resolve(
+          YoutubeTrackRef('abcdefghijk', youtubeKind: kind),
+          purpose,
+          authority.requireFence(),
+        );
+        expect(media.uri.queryParameters['quality'], 'HIGH');
+      });
+    }
+    for (final quality in [
+      'low',
+      'medium',
+      'high',
+      'lossless',
+      'LOW',
+      'MEDIUM',
+      'HIGH',
+      'LOSSLESS',
+    ]) {
+      test('YouTube $kind preserves selected $quality quality', () async {
+        final authority = await mediaAuthority(origin);
+        addTearDown(authority.invalidate);
+        final resolver = PlaybackResolver(
+          authority: authority,
+          transport: DartApiTransport(
+            authority: authority,
+            client: ScriptedJsonClient(
+              (_, _) async => throw StateError('No JSON expected'),
+            ),
+          ),
+          quality: quality,
+        );
+        final media = await resolver.resolve(
+          YoutubeTrackRef('abcdefghijk', youtubeKind: kind),
+          ResolvePurpose.playback,
+          authority.requireFence(),
+        );
+        expect(media.uri.queryParameters['quality'], quality);
+      });
+    }
+  }
+  test('library original retains original file representation', () async {
+    final authority = await mediaAuthority(origin);
+    addTearDown(authority.invalidate);
+    final resolver = PlaybackResolver(
+      authority: authority,
+      transport: DartApiTransport(
+        authority: authority,
+        client: ScriptedJsonClient(
+          (_, _) async => throw StateError('No JSON expected'),
+        ),
+      ),
+      quality: 'original',
+    );
+    final media = await resolver.resolve(
+      const LibraryTrackRef('db-id'),
+      ResolvePurpose.playback,
+      authority.requireFence(),
+    );
+    expect(media.uri.queryParameters, {'quality': 'original'});
+  });
 }

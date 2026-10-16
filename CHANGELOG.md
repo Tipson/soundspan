@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Map the mobile original-quality preference to YouTube's supported HIGH tier for playback and device downloads, while preserving original local files. Reject unsupported YouTube quality in the integration fixture and verify complete transfers, ranges and reusable downloaded files.
 - Restore the mobile playback owner and paused queue before accepting queued native media controls. Abort superseded or failed startup without replaying an old command into another account or initializing a second audio handler.
 - Add an Android-first Flutter music client with a shared mobile foundation, dark adaptive navigation, Home, Wave, personal mixes, search, artist and album pages, likes, playlists and imports. Keep full-size controls, a compact player and a focused like–radio–dislike row in the full player.
 - Run music through one native playback service with a retained queue, lock-screen controls, protected artwork and exact recording resolution. Store verified device downloads privately, resume interrupted transfers and restore offline queues under their original account. Explicit download retries remain usable while automatic liked downloads are paused.

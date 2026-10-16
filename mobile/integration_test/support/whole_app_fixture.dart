@@ -210,6 +210,16 @@ class WholeAppFixture {
         request.response.add(bytes);
         return;
       }
+      if ((path.startsWith('/api/ytmusic/stream/') ||
+              path.startsWith('/api/youtube/stream/')) &&
+          !const {'LOW', 'MEDIUM', 'HIGH', 'LOSSLESS'}.contains(
+            (request.uri.queryParameters['quality'] ?? 'HIGH').toUpperCase(),
+          )) {
+        request.response.statusCode = 400;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write('{"error":"Invalid quality"}');
+        return;
+      }
       if (path.contains('/stream') || path.startsWith('/api/ytmusic/stream/')) {
         final match = RegExp(r'^bytes=(\d+)-(\d*)$')
             .firstMatch(request.headers.value(HttpHeaders.rangeHeader) ?? '');
