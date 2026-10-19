@@ -5,14 +5,18 @@ import 'package:soundspan/core/model/track.dart';
 import 'package:soundspan/core/model/track_ref.dart';
 import 'package:soundspan/design_system/music_controls.dart';
 import 'package:soundspan/design_system/theme.dart';
+import 'package:soundspan/design_system/tokens.dart';
 import 'package:soundspan/features/likes/preference_controller.dart';
 import 'package:soundspan/features/player/full_player_screen.dart';
+import 'package:soundspan/features/player/mini_player.dart';
 import 'package:soundspan/features/player/player_controller.dart';
 import 'package:soundspan/playback/playback_controller.dart';
 
 import '../support/collection_fixtures.dart';
 
 const _title = 'Очень длинное название любимой песни';
+const _longTitle =
+    'All I Want (From "High School Musical: The Musical: The Series")';
 
 void main() {
   late CollectionAuthority authority;
@@ -21,31 +25,33 @@ void main() {
   late PlayerController controller;
   var queues = 0, lyrics = 0, related = 0;
 
-  setUp(() {
-    queues = lyrics = related = 0;
-    authority = CollectionAuthority();
+  QueueSnapshot state(String title) {
     final entry = QueueEntry(
       entryId: 'first',
-      track: const Track(
-        ref: LibraryTrackRef('local-1'),
-        title: _title,
+      track: Track(
+        ref: const LibraryTrackRef('local-1'),
+        title: title,
         artist: 'Olivia Rodrigo',
         artistId: 'artist-1',
       ),
       context: const PlayContext(surface: PlaySurface.library),
     );
-    playback = CollectionPlayback(
-      QueueSnapshot(
-        fence: collectionFence,
-        entries: [entry],
-        effectiveOrder: ['first'],
-        currentEntryId: 'first',
-        position: const Duration(seconds: 37),
-        duration: const Duration(seconds: 177),
-        processing: PlaybackProcessing.ready,
-        playingIntent: true,
-      ),
-    )..moveOnNext = false;
+    return QueueSnapshot(
+      fence: collectionFence,
+      entries: [entry],
+      effectiveOrder: ['first'],
+      currentEntryId: 'first',
+      position: const Duration(seconds: 37),
+      duration: const Duration(seconds: 177),
+      processing: PlaybackProcessing.ready,
+      playingIntent: true,
+    );
+  }
+
+  setUp(() {
+    queues = lyrics = related = 0;
+    authority = CollectionAuthority();
+    playback = CollectionPlayback(state(_title))..moveOnNext = false;
     preferences = PreferenceController(
       transport: CollectionTransport(
         (_, _) => preferenceResponse('local-1', 'clear'),
@@ -78,7 +84,10 @@ void main() {
     WidgetTester tester, {
     required Size size,
     double scale = 1,
+    bool mini = false,
+    bool longTitle = false,
   }) async {
+    if (longTitle) playback.value = state(_longTitle);
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -93,10 +102,20 @@ void main() {
           ),
           child: child!,
         ),
-        home: FullPlayerScreen(
-          controller: controller,
-          onOpenQueue: () => queues++,
-        ),
+        home: mini
+            ? Scaffold(
+                body: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: MiniPlayer(
+                    controller: controller,
+                    onOpen: () => queues++,
+                  ),
+                ),
+              )
+            : FullPlayerScreen(
+                controller: controller,
+                onOpenQueue: () => queues++,
+              ),
       ),
     );
     await tester.pumpAndSettle();
@@ -104,6 +123,127 @@ void main() {
 
   Finder feedback(String text) =>
       find.ancestor(of: find.text(text), matching: find.byType(MusicTapTarget));
+
+  testWidgets('long title leaves artwork dominant and artist secondary', (
+    tester,
+  ) async {
+    await mount(tester, size: const Size(360, 800), longTitle: true);
+    final title = tester.renderObject<RenderParagraph>(find.text(_longTitle));
+    final art = tester.getSize(find.byKey(const ValueKey('player-art')));
+    // Flutter's test font has wide square glyphs; this still catches oversized
+    // title roles while retaining the complete real-world title.
+    expect(title.size.height, lessThanOrEqualTo(130));
+    expect(title.text.style?.fontSize, 20);
+    expect(art.height, greaterThanOrEqualTo(title.size.height * 1.5));
+    final artist = tester.renderObject<RenderParagraph>(
+      find.text('Olivia Rodrigo'),
+    );
+    expect(artist.text.style?.color, MusicColors.textSecondary);
+    expect(title.didExceedMaxLines, isFalse);
+    final viewport = tester.getRect(find.byType(SingleChildScrollView).first);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('player-more'))).top,
+      lessThanOrEqualTo(viewport.bottom - 24),
+      reason: 'The lower actions need a visible cue before scrolling',
+    );
+    expect(playback.commands, isEmpty);
+  });
+
+  testWidgets('seek times align to the full content width', (tester) async {
+    await mount(tester, size: const Size(360, 800));
+    final title = tester.getRect(find.text(_title));
+    final elapsed = tester.getRect(find.text('0:37'));
+    final duration = tester.getRect(find.text('2:57'));
+    expect(elapsed.left, closeTo(title.left, 1));
+    expect(duration.right, closeTo(title.right, 1));
+  });
+
+  for (final width in [320.0, 360.0]) {
+    testWidgets('seek has a 48 dp touch target at width $width', (
+      tester,
+    ) async {
+      await mount(tester, size: Size(width, 800));
+      expect(
+        tester.getSize(find.byKey(const ValueKey('player-seek'))).height,
+        greaterThanOrEqualTo(48),
+      );
+    });
+
+    for (final offset in [-23.0, 23.0]) {
+      testWidgets('seek accepts drag $offset dp from axis at width $width', (
+        tester,
+      ) async {
+        await mount(tester, size: Size(width, 800));
+        final slider = tester.getRect(
+          find.byKey(const ValueKey('player-seek')),
+        );
+        final start = slider.center + Offset(0, offset);
+        await tester.dragFrom(start, const Offset(40, 0));
+        await tester.pumpAndSettle();
+        expect(playback.commands, hasLength(1));
+        expect(playback.commands.single, isA<Seek>());
+        expect(
+          (playback.commands.single as Seek).position,
+          greaterThan(const Duration(seconds: 37)),
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('primary transport is a light 72 dp circle', (tester) async {
+    await mount(tester, size: const Size(360, 800));
+    final play = find.byType(FilledButton).first;
+    final material = tester.widget<Material>(
+      find.descendant(of: play, matching: find.byType(Material)).first,
+    );
+    expect(tester.getSize(play), const Size.square(72));
+    expect(material.color, MusicColors.text);
+    expect(material.shape, isA<CircleBorder>());
+    final ordered = [
+      'Нравится',
+      'В волну',
+      'Не нравится',
+    ].map((label) => tester.getCenter(feedback(label)).dx).toList();
+    expect(ordered[0], lessThan(ordered[1]));
+    expect(ordered[1], lessThan(ordered[2]));
+  });
+
+  testWidgets('mini player clips its surface and exposes a light 48 dp play', (
+    tester,
+  ) async {
+    await mount(tester, size: const Size(360, 800), mini: true);
+    final surface = tester
+        .widgetList<Material>(find.byType(Material))
+        .singleWhere((material) => material.color == MusicColors.surface2);
+    expect(surface.borderRadius, BorderRadius.circular(16));
+    expect(surface.clipBehavior, isNot(Clip.none));
+    final play = find.byTooltip('Пауза');
+    expect(tester.getSize(play), const Size.square(48));
+    final playMaterial = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byWidgetPredicate(
+              (widget) => widget is IconButton && widget.tooltip == 'Пауза',
+            ),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(playMaterial.color, MusicColors.text);
+    expect(tester.widget<Text>(find.text(_title)).style?.fontSize, 14);
+    expect(
+      tester.widget<Text>(find.text('Olivia Rodrigo')).style?.fontSize,
+      12,
+    );
+    await tester.tap(find.byKey(const ValueKey('mini-open')));
+    await tester.pumpAndSettle();
+    expect(queues, 1);
+    expect(playback.commands, isEmpty);
+    await tester.tap(play);
+    await tester.pumpAndSettle();
+    expect(playback.commands.single, isA<Pause>());
+  });
 
   for (final scenario in [
     (size: const Size(320, 640), scale: 1.0),
@@ -162,7 +302,10 @@ void main() {
   });
 
   for (final scenario in [
+    (size: const Size(320, 720), scale: 1.3),
+    (size: const Size(360, 800), scale: 1.3),
     (size: const Size(320, 640), scale: 2.0),
+    (size: const Size(360, 800), scale: 2.0),
     (size: const Size(640, 360), scale: 1.0),
     (size: const Size(640, 360), scale: 1.3),
     (size: const Size(640, 360), scale: 2.0),
@@ -170,7 +313,12 @@ void main() {
     testWidgets('large text and landscape keep scroll access at $scenario', (
       tester,
     ) async {
-      await mount(tester, size: scenario.size, scale: scenario.scale);
+      await mount(
+        tester,
+        size: scenario.size,
+        scale: scenario.scale,
+        longTitle: true,
+      );
       expect(tester.takeException(), isNull);
       for (final label in ['Нравится', 'В волну', 'Не нравится']) {
         final target = feedback(label);
@@ -190,7 +338,7 @@ void main() {
       expect(queues, 1);
       expect(lyrics, 1);
       expect(related, 1);
-      expect(tester.widget<Text>(find.text(_title)).maxLines, isNull);
+      expect(tester.widget<Text>(find.text(_longTitle)).maxLines, isNull);
       await tester.tap(find.byTooltip('Действия трека'));
       await tester.pumpAndSettle();
       expect(find.text('Громкость'), findsOneWidget);

@@ -763,11 +763,15 @@ void main() {
       final al = find.byKey(const ValueKey('entity-album:library:al'));
       await tester.scrollUntilVisible(al, 150);
       await tester.ensureVisible(al);
+      await tester.pumpAndSettle();
+      expect(al.hitTestable(), findsOneWidget);
       await tester.tap(al);
       await tester.pumpAndSettle();
       final track = find.byKey(const ValueKey('track-play-library:local-2'));
       await tester.scrollUntilVisible(track, 150);
       await tester.ensureVisible(track);
+      await tester.pumpAndSettle();
+      expect(track.hitTestable(), findsOneWidget);
       await tester.tap(track);
       await tester.pumpAndSettle();
       expect(played.single.startIndex, 1);

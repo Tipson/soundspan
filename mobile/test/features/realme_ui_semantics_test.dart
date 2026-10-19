@@ -117,8 +117,8 @@ void main() {
     await tester.pump();
     expect(home.state.mixLoading, isTrue);
     expect(find.byType(MusicLoadingState), findsOneWidget);
-    expect(find.text('40 треков · 0 доступны'), findsNothing);
-    expect(find.textContaining('записей пока недоступны'), findsNothing);
+    expect(find.text('40 треков · доступно: 0'), findsNothing);
+    expect(find.textContaining('Недоступных записей:'), findsNothing);
     response.complete(
       ApiResponse(200, {
         'id': 'lazy',
@@ -129,8 +129,8 @@ void main() {
       }),
     );
     await tester.pumpAndSettle();
-    expect(find.text('2 треков · 1 доступны'), findsOneWidget);
-    expect(find.textContaining('1 записей пока недоступны'), findsOneWidget);
+    expect(find.text('2 трека · доступно: 1'), findsOneWidget);
+    expect(find.textContaining('Недоступных записей: 1.'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     home.dispose();

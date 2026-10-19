@@ -97,7 +97,7 @@ void main() {
       await tester.runAsync(() => directory.delete(recursive: true));
     },
   );
-  testWidgets('Home editorial heading aligns with the content gutter', (
+  testWidgets('Home Wave composition aligns with the content gutter', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -130,7 +130,12 @@ void main() {
         ),
       ),
     );
-    expect(tester.getTopLeft(find.text('Для вас')).dx, 20);
+    final title = find.text('Ваша волна');
+    final hero = find
+        .ancestor(of: title, matching: find.byType(ClipRRect))
+        .first;
+    expect(tester.getTopLeft(hero).dx, 20);
+    expect(tester.getTopLeft(title).dx, 36);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
     await authority.updates.close();

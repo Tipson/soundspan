@@ -3,6 +3,7 @@ export 'music_action_sheet.dart';
 export 'music_card.dart';
 export 'music_controls.dart';
 export 'music_states.dart';
+export 'quantity.dart';
 export 'screen_scaffold.dart';
 export 'theme.dart';
 export 'tokens.dart';

@@ -237,7 +237,7 @@ class _AppShellState extends State<AppShell> {
   Widget _bottomNavigation(List<AppTab> tabs) => Material(
     color: MusicColors.canvas,
     child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 72),
+      constraints: const BoxConstraints(minHeight: 64),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -252,14 +252,19 @@ class _AppShellState extends State<AppShell> {
                   onTap: () => widget.router.selectTab(tab),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                      vertical: 10,
+                      vertical: 6,
                       horizontal: 4,
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 48,
+                        AnimatedContainer(
+                          duration: MusicMotion.duration(
+                            context,
+                            MusicMotion.fast,
+                          ),
+                          curve: MusicMotion.curve,
+                          width: 44,
                           height: 28,
                           decoration: BoxDecoration(
                             color: tab == widget.router.currentTab
@@ -271,15 +276,15 @@ class _AppShellState extends State<AppShell> {
                             tab == widget.router.currentTab
                                 ? tab.selectedIcon
                                 : tab.icon,
-                            size: 24,
+                            size: 22,
                             color: tab == widget.router.currentTab
                                 ? MusicColors.primary
                                 : MusicColors.textSecondary,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
-                          tab.label,
+                          tab == AppTab.library ? 'Медиатека' : tab.label,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(

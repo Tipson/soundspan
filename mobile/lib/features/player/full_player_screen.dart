@@ -40,8 +40,13 @@ class FullPlayerScreen extends StatelessWidget {
                       onPressed:
                           onCollapse ?? () => Navigator.of(context).maybePop(),
                     ),
-                    const Expanded(
-                      child: Text('Сейчас играет', textAlign: TextAlign.center),
+                    Expanded(
+                      child: Text(
+                        'Сейчас играет',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.labelLarge
+                            ?.copyWith(color: MusicColors.textSecondary),
+                      ),
                     ),
                     if (track != null)
                       MusicIconButton(
@@ -60,9 +65,9 @@ class FullPlayerScreen extends StatelessWidget {
                           key: const PageStorageKey('full-player-scroll'),
                           padding: EdgeInsets.fromLTRB(
                             viewport.maxWidth < 340 ? 12 : 20,
-                            16,
+                            12,
                             viewport.maxWidth < 340 ? 12 : 20,
-                            32,
+                            24,
                           ),
                           child: LayoutBuilder(
                             builder: (context, box) {
@@ -102,31 +107,37 @@ class FullPlayerScreen extends StatelessWidget {
                                     track.title,
                                     style: Theme.of(context)
                                         .textTheme
-                                        .headlineSmall,
+                                        .titleLarge,
                                   ),
                                   if (controller.callbacks.onArtist != null &&
                                       track.artistId != null)
                                     TextButton(
+                                      style: TextButton.styleFrom(
+                                        alignment: Alignment.centerLeft,
+                                        padding: EdgeInsets.zero,
+                                        foregroundColor:
+                                            MusicColors.textSecondary,
+                                        textStyle: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium,
+                                      ),
                                       onPressed: controller.busy
                                           ? null
                                           : () => controller.invoke(
                                               controller.callbacks.onArtist!,
                                             ),
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Text(track.artist),
-                                      ),
+                                      child: Text(track.artist),
                                     )
                                   else
                                     Padding(
                                       padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
+                                        vertical: 8,
                                       ),
                                       child: Text(
                                         track.artist,
                                         style: Theme.of(context)
                                             .textTheme
-                                            .bodyLarge
+                                            .bodyMedium
                                             ?.copyWith(
                                               color: MusicColors.textSecondary,
                                             ),
@@ -176,9 +187,9 @@ class FullPlayerScreen extends StatelessWidget {
                                       busy: controller.busy,
                                       onPressed: controller.retry,
                                     ),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 12),
                                   _feedback(context, large),
-                                  const SizedBox(height: 24),
+                                  const SizedBox(height: 20),
                                   _sections(context, large),
                                 ],
                               );
@@ -197,7 +208,7 @@ class FullPlayerScreen extends StatelessWidget {
                                           CrossAxisAlignment.stretch,
                                       children: [
                                         art,
-                                        const SizedBox(height: 16),
+                                        const SizedBox(height: 20),
                                         details,
                                       ],
                                     );
@@ -239,18 +250,15 @@ class FullPlayerScreen extends StatelessWidget {
 
     final artistHeight =
         controller.callbacks.onArtist != null && track.artistId != null
-        ? math.max(
-            48,
-            textHeight(track.artist, type.labelLarge, width - 24) + 24,
-          )
-        : textHeight(track.artist, type.bodyLarge, width) + 24;
+        ? math.max(48, textHeight(track.artist, type.bodyMedium, width))
+        : textHeight(track.artist, type.bodyMedium, width) + 16;
     final labels = [
       'Нравится',
       if (controller.callbacks.onRadio != null) 'В волну',
       'Не нравится',
     ];
     final feedbackHeight =
-        48 +
+        40 +
         labels
             .map(
               (label) => textHeight(
@@ -265,13 +273,13 @@ class FullPlayerScreen extends StatelessWidget {
     // Reserve the title at its real scaled height. Artwork gives space to the
     // unchanged touch targets; very large text and errors can still scroll.
     final reserved =
-        textHeight(track.title, type.headlineSmall, width) +
+        textHeight(track.title, type.titleLarge, width) +
         artistHeight +
         48 +
-        textHeight('0:00', type.bodyMedium, width) +
+        textHeight('0:00', type.bodySmall, width / 2) +
         (width < 280 || width >= 580 ? 120 : 72) +
         8 +
-        16 +
+        12 +
         feedbackHeight +
         (controller.canPrefer
             ? 0
@@ -289,7 +297,8 @@ class FullPlayerScreen extends StatelessWidget {
             ? 0
             : 24 + textHeight(failure.message, type.bodyMedium, width)) +
         (state.processing == PlaybackProcessing.failed ? 56 : 0) +
-        48;
+        48 +
+        (height >= 650 ? 32 : 0);
     return (height - reserved).clamp(minEdge, maxEdge).toDouble();
   }
 
@@ -315,6 +324,8 @@ class FullPlayerScreen extends StatelessWidget {
           height: 72,
           child: FilledButton(
             style: FilledButton.styleFrom(
+              backgroundColor: MusicColors.text,
+              foregroundColor: MusicColors.canvas,
               shape: const CircleBorder(),
               padding: EdgeInsets.zero,
             ),
@@ -391,12 +402,22 @@ class FullPlayerScreen extends StatelessWidget {
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, color: selected ? MusicColors.primary : null),
-                    const SizedBox(height: 8),
+                    Icon(
+                      icon,
+                      size: 20,
+                      color: selected
+                          ? MusicColors.primary
+                          : MusicColors.textSecondary,
+                    ),
+                    const SizedBox(height: 4),
                     Text(
                       label,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.labelMedium,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: selected
+                            ? MusicColors.primary
+                            : MusicColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -454,20 +475,29 @@ class FullPlayerScreen extends StatelessWidget {
   Widget _sections(BuildContext context, bool large) {
     final callbacks = controller.callbacks;
     return Column(
+      key: const ValueKey('player-more'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const Divider(),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             if (onOpenQueue != null)
               TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: MusicColors.textSecondary,
+                ),
                 onPressed: onOpenQueue,
-                icon: const Icon(Icons.queue_music),
+                icon: const Icon(Icons.queue_music, size: 20),
                 label: const Text('Открыть очередь'),
               ),
             if (callbacks.onLyrics != null)
               TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: MusicColors.textSecondary,
+                ),
                 onPressed: controller.busy
                     ? null
                     : () => controller.invoke(callbacks.onLyrics!),
@@ -475,6 +505,9 @@ class FullPlayerScreen extends StatelessWidget {
               ),
             if (callbacks.onRelated != null)
               TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: MusicColors.textSecondary,
+                ),
                 onPressed: controller.busy
                     ? null
                     : () => controller.invoke(callbacks.onRelated!),
@@ -616,102 +649,118 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
       0.0,
       known ? max : 1.0,
     );
-    return Column(
-      children: [
-        Semantics(
-          key: const ValueKey('player-seek-semantics'),
-          label: 'Позиция воспроизведения',
-          value: playerTime(Duration(milliseconds: value.round())),
-          increasedValue: playerTime(
-            Duration(
-              milliseconds: (state.position.inMilliseconds + 10000).clamp(
-                0,
-                max.toInt(),
-              ),
-            ),
-          ),
-          decreasedValue: playerTime(
-            Duration(
-              milliseconds: (state.position.inMilliseconds - 10000).clamp(
-                0,
-                max.toInt(),
-              ),
-            ),
-          ),
-          slider: true,
-          enabled: known && !controller.busy,
-          excludeSemantics: true,
-          onIncrease: known && !controller.busy
-              ? () => controller.seek(
-                  Duration(
-                    milliseconds: (state.position.inMilliseconds + 10000).clamp(
-                      0,
-                      max.toInt(),
-                    ),
-                  ),
-                )
-              : null,
-          onDecrease: known && !controller.busy
-              ? () => controller.seek(
-                  Duration(
-                    milliseconds: (state.position.inMilliseconds - 10000).clamp(
-                      0,
-                      max.toInt(),
-                    ),
-                  ),
-                )
-              : null,
-          child: Slider(
-            key: const ValueKey('player-seek'),
-            label: playerTime(Duration(milliseconds: value.round())),
-            min: 0,
-            max: known ? max : 1,
-            value: value,
-            secondaryTrackValue: known
-                ? state.bufferedPosition.inMilliseconds.toDouble().clamp(
-                    value,
-                    max,
-                  )
-                : null,
-            semanticFormatterCallback: (value) =>
-                '${playerTime(Duration(milliseconds: value.round()))} из ${known ? playerTime(duration!) : 'неизвестно'}',
-            onChangeStart: known && !controller.busy
-                ? (_) => _target = controller.captureTrack()
-                : null,
-            onChanged: known && !controller.busy
-                ? (value) => setState(() => _preview = value)
-                : null,
-            onChangeEnd: known && !controller.busy
-                ? (value) {
-                    final target = _target;
-                    setState(() {
-                      _preview = null;
-                      _target = null;
-                    });
-                    if (target != null) {
-                      controller.seek(
-                        Duration(milliseconds: value.round()),
-                        target: target,
-                      );
-                    }
-                  }
-                : null,
-          ),
-        ),
-        Row(
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        activeTrackColor: MusicColors.primary,
+        inactiveTrackColor: MusicColors.surface3,
+        secondaryActiveTrackColor: MusicColors.primary.withValues(alpha: .3),
+        thumbColor: MusicColors.primary,
+        trackHeight: 3,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+      ),
+      child: DefaultTextStyle.merge(
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(color: MusicColors.textSecondary),
+        child: Column(
           children: [
-            Expanded(
-              child: Text(playerTime(Duration(milliseconds: value.round()))),
-            ),
-            Flexible(
-              child: Text(
-                known ? playerTime(duration!) : 'Длительность неизвестна',
-                textAlign: TextAlign.right,
+            Semantics(
+              key: const ValueKey('player-seek-semantics'),
+              label: 'Позиция воспроизведения',
+              value: playerTime(Duration(milliseconds: value.round())),
+              increasedValue: playerTime(
+                Duration(
+                  milliseconds: (state.position.inMilliseconds + 10000).clamp(
+                    0,
+                    max.toInt(),
+                  ),
+                ),
               ),
+              decreasedValue: playerTime(
+                Duration(
+                  milliseconds: (state.position.inMilliseconds - 10000).clamp(
+                    0,
+                    max.toInt(),
+                  ),
+                ),
+              ),
+              slider: true,
+              enabled: known && !controller.busy,
+              excludeSemantics: true,
+              onIncrease: known && !controller.busy
+                  ? () => controller.seek(
+                      Duration(
+                        milliseconds: (state.position.inMilliseconds + 10000)
+                            .clamp(0, max.toInt()),
+                      ),
+                    )
+                  : null,
+              onDecrease: known && !controller.busy
+                  ? () => controller.seek(
+                      Duration(
+                        milliseconds: (state.position.inMilliseconds - 10000)
+                            .clamp(0, max.toInt()),
+                      ),
+                    )
+                  : null,
+              child: SizedBox(
+                height: 48,
+                child: Slider(
+                  key: const ValueKey('player-seek'),
+                  label: playerTime(Duration(milliseconds: value.round())),
+                  min: 0,
+                  max: known ? max : 1,
+                  value: value,
+                  secondaryTrackValue: known
+                      ? state.bufferedPosition.inMilliseconds.toDouble().clamp(
+                          value,
+                          max,
+                        )
+                      : null,
+                  semanticFormatterCallback: (value) =>
+                      '${playerTime(Duration(milliseconds: value.round()))} из ${known ? playerTime(duration!) : 'неизвестно'}',
+                  onChangeStart: known && !controller.busy
+                      ? (_) => _target = controller.captureTrack()
+                      : null,
+                  onChanged: known && !controller.busy
+                      ? (value) => setState(() => _preview = value)
+                      : null,
+                  onChangeEnd: known && !controller.busy
+                      ? (value) {
+                          final target = _target;
+                          setState(() {
+                            _preview = null;
+                            _target = null;
+                          });
+                          if (target != null) {
+                            controller.seek(
+                              Duration(milliseconds: value.round()),
+                              target: target,
+                            );
+                          }
+                        }
+                      : null,
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    playerTime(Duration(milliseconds: value.round())),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    known ? playerTime(duration!) : 'Длительность неизвестна',
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 }

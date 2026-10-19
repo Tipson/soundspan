@@ -199,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _heading(BuildContext context, String title, {String? subtitle}) =>
       Padding(
-        padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -211,70 +211,71 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: Theme.of(context).textTheme.bodyMedium
+                style: Theme.of(context).textTheme.bodySmall
                     ?.copyWith(color: MusicColors.textSecondary),
               ),
             ],
           ],
         ),
       );
-  Widget _hero(BuildContext context, HomeFeed feed) {
-    final art = feed.shelves
-        .expand((s) => s.tracks)
-        .map((t) => t.artwork)
-        .whereType<Uri>()
-        .firstOrNull;
+  Widget _hero(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: ColoredBox(
           color: MusicColors.surface1,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                height: 132,
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 112),
                 child: Stack(
-                  fit: StackFit.expand,
+                  alignment: Alignment.bottomLeft,
                   children: [
-                    Artwork(uri: art, radius: 0),
-                    const Align(
-                      alignment: Alignment.bottomLeft,
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: MusicColors.canvas,
-                            borderRadius: BorderRadius.all(Radius.circular(12)),
-                          ),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            child: Text('ВАША МУЗЫКА · БЕЗ ПАУЗ'),
+                    Positioned.fill(
+                      child: Image.asset(
+                        'assets/wave-dusk-city.png',
+                        fit: BoxFit.cover,
+                        alignment: const Alignment(0, -.25),
+                        excludeFromSemantics: true,
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              MusicColors.canvas.withValues(alpha: .08),
+                              MusicColors.canvas.withValues(alpha: .9),
+                            ],
                           ),
                         ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Text(
+                        'Ваша волна',
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
                     ),
                   ],
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Ваша волна',
-                      style: Theme.of(context).textTheme.headlineMedium,
+                      'Знакомые песни и новые открытия по вашему вкусу.',
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: MusicColors.textSecondary),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Знакомые песни, новые открытия — в вашем ритме.',
-                    ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     if (widget.onStartWave != null) ...[
                       MusicButton(
                         label: _startingWave
@@ -286,7 +287,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         busy: _startingWave,
                         onPressed: _startWave,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                     ],
                     Row(
                       children: [
@@ -323,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _featuredMix(BuildContext context, MusicMix mix) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
     child: MusicTapTarget(
       onTap: () => _run(() => widget.onOpenMix(mix)),
       child: DecoratedBox(
@@ -332,34 +333,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Artwork(
-                    uri: mix.cover,
-                    size: mix.kind == MusicMixKind.weekly ? 112 : 80,
-                    radius: 12,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
+              Artwork(uri: mix.cover, size: 80, radius: 12),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                       mix.title,
-                      style: Theme.of(context).textTheme.titleLarge,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(mix.description),
-              const SizedBox(height: 8),
-              Text(
-                '${mix.trackCount} треков · открыть подборку',
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: MusicColors.textSecondary),
+                    if (mix.description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        mix.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: MusicColors.textSecondary),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Text(
+                      musicQuantity(
+                        mix.trackCount,
+                        one: 'трек',
+                        few: 'трека',
+                        many: 'треков',
+                      ),
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: MusicColors.textMuted),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -383,17 +395,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (mounted) _scheduleVisible();
       });
       final sections = <Widget>[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-          child: Semantics(
-            header: true,
-            child: Text(
-              'Для вас',
-              style: Theme.of(context).textTheme.displaySmall,
-            ),
-          ),
-        ),
-        _hero(context, feed),
+        _hero(context),
         if (_waveFailure != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -460,11 +462,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
         if (daily.isNotEmpty) ...[
-          _heading(
-            context,
-            'Миксы для вас',
-            subtitle: '${daily.length} подборок по вашему вкусу',
-          ),
+          _heading(context, 'Миксы для вас'),
           _MixShelf(
             mixes: daily,
             onOpen: (mix) => _run(() => widget.onOpenMix(mix)),
@@ -486,7 +484,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _heading(
             context,
             shelf.title,
-            subtitle: '${shelf.tracks.length} треков',
+            subtitle: musicQuantity(
+              shelf.tracks.length,
+              one: 'трек',
+              few: 'трека',
+              many: 'треков',
+            ),
           ),
           _HomeTrackShelf(
             key: _shelves.putIfAbsent(
@@ -518,7 +521,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _heading(
             context,
             'Из вашей коллекции',
-            subtitle: '${legacy.length} подборок',
+            subtitle: musicQuantity(
+              legacy.length,
+              one: 'подборка',
+              few: 'подборки',
+              many: 'подборок',
+            ),
           ),
           _MixShelf(
             mixes: legacy,
@@ -608,7 +616,7 @@ class _MixShelf extends StatelessWidget {
     final width = MusicShelf.cardWidth(MediaQuery.sizeOf(context).width),
         scale = MediaQuery.textScalerOf(context).scale(16) / 16;
     return SizedBox(
-      height: width + 104 * scale + 12,
+      height: width + 88 * scale + 4,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -617,7 +625,12 @@ class _MixShelf extends StatelessWidget {
         itemBuilder: (_, i) => MusicCard(
           width: width,
           title: mixes[i].title,
-          subtitle: '${mixes[i].trackCount} треков',
+          subtitle: musicQuantity(
+            mixes[i].trackCount,
+            one: 'трек',
+            few: 'трека',
+            many: 'треков',
+          ),
           artwork: mixes[i].cover,
           onOpen: () => onOpen(mixes[i]),
         ),
@@ -690,9 +703,33 @@ class _HomeTrackShelfState extends State<_HomeTrackShelf> {
   Widget build(BuildContext context) {
     final width = MusicShelf.cardWidth(MediaQuery.sizeOf(context).width),
         scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final textTheme = Theme.of(context).textTheme;
+    double textHeight(String text, TextStyle? style, {int? maxLines}) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+        locale: Localizations.maybeLocaleOf(context),
+        maxLines: maxLines,
+      )..layout(maxWidth: width);
+      final height = painter.height;
+      painter.dispose();
+      return height;
+    }
+
+    var height = width + 88 * scale + 4;
+    for (final track in widget.shelf.tracks.where((track) => !track.playable)) {
+      final requiredHeight =
+          width +
+          8 +
+          textHeight(track.title, textTheme.titleMedium, maxLines: 2) +
+          4 +
+          textHeight('Запись недоступна', textTheme.bodySmall);
+      if (requiredHeight > height) height = requiredHeight;
+    }
     return SizedBox(
       key: _viewport,
-      height: width + 104 * scale + 12,
+      height: height,
       child: ListView.separated(
         key: ValueKey('home-shelf-${widget.shelf.id}'),
         scrollDirection: Axis.horizontal,
@@ -716,13 +753,20 @@ class _HomeTrackShelfState extends State<_HomeTrackShelf> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Artwork(uri: track.artwork),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Text(
                         track.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                        style: textTheme.titleMedium,
                       ),
-                      const Text('Запись недоступна'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Запись недоступна',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: MusicColors.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
           );

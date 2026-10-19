@@ -25,6 +25,8 @@ class MiniPlayer extends StatelessWidget {
       final large = MediaQuery.textScalerOf(context).scale(16) > 24;
       return Material(
         color: MusicColors.surface2,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -55,14 +57,19 @@ class MiniPlayer extends StatelessWidget {
                                     track.title,
                                     maxLines: large ? 2 : 1,
                                     overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
                                   ),
                                   Text(
                                     track.artist,
                                     maxLines: large ? 2 : 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: MusicColors.textSecondary,
+                                        ),
                                   ),
                                 ],
                               ),
@@ -84,23 +91,33 @@ class MiniPlayer extends StatelessWidget {
                         : null,
                     disabledReason: controller.canPrefer ? null : 'Нужна сеть',
                   ),
+                  const SizedBox(width: 8),
                   SizedBox(
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 48,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        MusicIconButton(
-                          label: failed
+                        IconButton.filled(
+                          tooltip: failed
                               ? 'Повторить'
                               : state.playingIntent
                               ? 'Пауза'
                               : 'Продолжить',
-                          icon: failed
-                              ? Icons.refresh
-                              : state.playingIntent
-                              ? Icons.pause
-                              : Icons.play_arrow,
+                          style: IconButton.styleFrom(
+                            backgroundColor: MusicColors.text,
+                            foregroundColor: MusicColors.canvas,
+                            shape: const CircleBorder(),
+                            minimumSize: const Size.square(48),
+                            padding: EdgeInsets.zero,
+                          ),
+                          icon: Icon(
+                            failed
+                                ? Icons.refresh
+                                : state.playingIntent
+                                ? Icons.pause
+                                : Icons.play_arrow,
+                          ),
                           onPressed: controller.busy
                               ? null
                               : failed

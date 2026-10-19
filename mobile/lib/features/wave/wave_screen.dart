@@ -78,9 +78,9 @@ class _WaveScreenState extends State<WaveScreen> {
               : LayoutBuilder(
                   builder: (context, viewport) {
                     final compact = viewport.maxWidth < 600;
-                    final artworkHeight = (viewport.maxHeight * .26).clamp(
-                      96.0,
-                      compact ? 144.0 : 240.0,
+                    final heroHeight = (viewport.maxHeight * .48).clamp(
+                      176.0,
+                      compact ? 224.0 : 280.0,
                     );
                     return CustomScrollView(
                       controller: widget.scrollController,
@@ -91,78 +91,121 @@ class _WaveScreenState extends State<WaveScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Semantics(
-                                  header: true,
-                                  child: Text(
-                                    current == null
-                                        ? 'В вашем ритме'
-                                        : 'Моя волна',
-                                    style: current == null && !compact
-                                        ? Theme.of(context)
-                                              .textTheme
-                                              .displaySmall
-                                        : Theme.of(context)
-                                              .textTheme
-                                              .headlineMedium,
-                                  ),
-                                ),
-                                SizedBox(height: compact ? 12 : 24),
-                                if (current == null)
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: SizedBox(
-                                      height: artworkHeight,
-                                      width: double.infinity,
-                                      child: Image.asset(
-                                        'assets/wave-dusk-city.png',
-                                        fit: BoxFit.cover,
-                                        excludeFromSemantics: true,
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: Image.asset(
+                                          'assets/wave-dusk-city.png',
+                                          fit: BoxFit.cover,
+                                          excludeFromSemantics: true,
+                                        ),
                                       ),
-                                    ),
-                                  )
-                                else
-                                  Center(
-                                    child: Artwork(
-                                      uri: current.track.artwork,
-                                      trackRef: current.track.ref,
-                                      size: artworkHeight,
-                                      radius: 20,
-                                    ),
+                                      Positioned.fill(
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [
+                                                MusicColors.canvas.withValues(
+                                                  alpha: .6,
+                                                ),
+                                                MusicColors.canvas.withValues(
+                                                  alpha: .95,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          minHeight: heroHeight,
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(20),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Semantics(
+                                                      header: true,
+                                                      child: Text(
+                                                        current == null
+                                                            ? 'В вашем ритме'
+                                                            : 'Моя волна',
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .headlineMedium,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (current != null) ...[
+                                                    const SizedBox(width: 12),
+                                                    Artwork(
+                                                      uri:
+                                                          current.track.artwork,
+                                                      trackRef:
+                                                          current.track.ref,
+                                                      size: 56,
+                                                      radius: 12,
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                              SizedBox(
+                                                height: compact ? 32 : 64,
+                                              ),
+                                              MusicButton(
+                                                label: current != null && !ended
+                                                    ? (queue.playingIntent
+                                                          ? 'Пауза'
+                                                          : 'Продолжить')
+                                                    : 'Начать волну',
+                                                icon:
+                                                    current != null &&
+                                                        queue.playingIntent &&
+                                                        !ended
+                                                    ? Icons.pause_rounded
+                                                    : Icons.play_arrow_rounded,
+                                                busy: busy,
+                                                onPressed:
+                                                    !owner.online &&
+                                                        current == null
+                                                    ? null
+                                                    : current != null && !ended
+                                                    ? owner.togglePlayback
+                                                    : owner.start,
+                                                disabledReason:
+                                                    !owner.online &&
+                                                        current == null
+                                                    ? 'Новые рекомендации доступны при подключении к сети.'
+                                                    : null,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                const SizedBox(height: 16),
-                                MusicButton(
-                                  label: current != null && !ended
-                                      ? (queue.playingIntent
-                                            ? 'Пауза'
-                                            : 'Продолжить')
-                                      : 'Начать волну',
-                                  icon:
-                                      current != null &&
-                                          queue.playingIntent &&
-                                          !ended
-                                      ? Icons.pause_rounded
-                                      : Icons.play_arrow_rounded,
-                                  busy: busy,
-                                  onPressed: !owner.online && current == null
-                                      ? null
-                                      : current != null && !ended
-                                      ? owner.togglePlayback
-                                      : owner.start,
-                                  disabledReason:
-                                      !owner.online && current == null
-                                      ? 'Новые рекомендации доступны при подключении к сети.'
-                                      : null,
                                 ),
-                                const SizedBox(height: 20),
+                                const SizedBox(height: 16),
                                 if (current == null) ...[
                                   Text(
-                                    'Музыка, к которой хочется вернуться. И та, которую ещё предстоит открыть.',
-                                    style: Theme.of(context).textTheme.bodyLarge
+                                    'Знакомые песни и новые открытия — в вашем ритме.',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
                                         ?.copyWith(
                                           color: MusicColors.textSecondary,
                                         ),
                                   ),
-                                  const SizedBox(height: 20),
+                                  const SizedBox(height: 16),
                                 ],
                                 if (current != null) ...[
                                   Semantics(
@@ -171,7 +214,7 @@ class _WaveScreenState extends State<WaveScreen> {
                                       current.track.title,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .headlineSmall,
+                                          .titleLarge,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -179,17 +222,26 @@ class _WaveScreenState extends State<WaveScreen> {
                                     current.track.artist,
                                     style: Theme.of(context)
                                         .textTheme
-                                        .bodyLarge,
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: MusicColors.textSecondary,
+                                        ),
                                   ),
-                                  const SizedBox(height: 20),
+                                  const SizedBox(height: 16),
                                 ],
                                 Text(
                                   'Направление · ${waveModeLabel(selection.mode)}',
-                                  style: Theme.of(context).textTheme.titleLarge,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium,
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
                                   '${waveMoodLabel(selection.mood)} · ${waveLanguageLabel(selection.language)}',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: MusicColors.textSecondary,
+                                      ),
                                 ),
                                 const SizedBox(height: 12),
                                 if (!owner.online) ...[
@@ -239,7 +291,7 @@ class _WaveScreenState extends State<WaveScreen> {
                                     },
                                     child: const Text('Открыть плеер'),
                                   ),
-                                const SizedBox(height: 32),
+                                const SizedBox(height: 20),
                                 Semantics(
                                   header: true,
                                   child: Text(

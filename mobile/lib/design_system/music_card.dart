@@ -34,12 +34,12 @@ class MusicCard extends StatelessWidget {
           label: 'Открыть $title${subtitle == null ? '' : ', $subtitle'}',
           child: MusicTapTarget(
             onTap: onOpen,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Artwork(uri: artwork, trackRef: trackRef, radius: 16),
-                const SizedBox(height: 12),
+                Artwork(uri: artwork, trackRef: trackRef, radius: 12),
+                const SizedBox(height: 8),
                 Text(
                   title,
                   maxLines: 2,
@@ -52,7 +52,7 @@ class MusicCard extends StatelessWidget {
                     subtitle!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium
+                    style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: MusicColors.textSecondary),
                   ),
                 ],
@@ -85,7 +85,7 @@ class MusicShelf extends StatelessWidget {
   final List<Widget> children;
   final VoidCallback? onShowAll;
   static double cardWidth(double width) =>
-      width < 360 ? 132 : (width < 410 ? 148 : 160);
+      width < 360 ? 132 : (width < 390 ? 140 : 148);
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,

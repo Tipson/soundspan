@@ -199,31 +199,18 @@ class _MixScreenState extends State<MixScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Center(
-                        child: Artwork(uri: mix.cover, size: 176, radius: 20),
-                      ),
-                      const SizedBox(height: 24),
-                      Semantics(
-                        header: true,
-                        child: Text(
-                          mix.title,
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(mix.description),
-                      const SizedBox(height: 8),
-                      Text(
-                        availabilityKnown
-                            ? '${mix.trackCount} треков · ${mix.playableCount} доступны'
-                            : '${mix.trackCount} треков',
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: MusicColors.textSecondary),
+                      _MixOverview(
+                        mix: mix,
+                        availabilityKnown: availabilityKnown,
                       ),
                       if (availabilityKnown && mix.unavailableCount > 0)
-                        MusicStatus(
-                          message:
-                              '${mix.unavailableCount} записей пока недоступны и не попадут в очередь.',
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Недоступных записей: ${mix.unavailableCount}. Они не попадут в очередь.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: MusicColors.textSecondary),
+                          ),
                         ),
                       if (mix.languagePending)
                         const MusicStatus(
@@ -239,7 +226,7 @@ class _MixScreenState extends State<MixScreen> {
                         ),
                       if (_failure != null)
                         MusicStatus(message: _failure!.message, error: true),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       if (MediaQuery.textScalerOf(context).scale(16) >= 24)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -320,4 +307,57 @@ class _MixScreenState extends State<MixScreen> {
       );
     },
   );
+}
+
+class _MixOverview extends StatelessWidget {
+  const _MixOverview({required this.mix, required this.availabilityKnown});
+  final MusicMix mix;
+  final bool availabilityKnown;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = Theme.of(context).textTheme;
+    final trackCount = musicQuantity(
+      mix.trackCount,
+      one: 'трек',
+      few: 'трека',
+      many: 'треков',
+    );
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(header: true, child: Text(mix.title, style: type.titleLarge)),
+        if (mix.description.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            mix.description,
+            style: type.bodyMedium?.copyWith(color: MusicColors.textSecondary),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text(
+          availabilityKnown
+              ? '$trackCount · доступно: ${mix.playableCount}'
+              : trackCount,
+          style: type.bodySmall?.copyWith(color: MusicColors.textMuted),
+        ),
+      ],
+    );
+    final artwork = Artwork(uri: mix.cover, size: 104, radius: 16);
+    if (MediaQuery.textScalerOf(context).scale(16) >= 24) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [artwork, const SizedBox(height: 16), details],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        artwork,
+        const SizedBox(width: 16),
+        Expanded(child: details),
+      ],
+    );
+  }
 }

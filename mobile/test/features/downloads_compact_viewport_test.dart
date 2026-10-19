@@ -50,23 +50,23 @@ void main() {
             ),
           ),
         );
-        expect(find.text('1 готовых загрузок · 3.0 МБ'), findsOneWidget);
+        expect(find.text('1 готовая загрузка · 3.0 МБ'), findsOneWidget);
         expect(find.textContaining(details), findsNothing);
         expect(find.text(warning), ready ? findsNothing : findsOneWidget);
         final tile = find.byType(ExpansionTile);
         expect(tile, findsOneWidget);
         await tester.tap(
           find.text(
-            ready ? '1 готовых загрузок · 3.0 МБ' : 'Хранилище недоступно',
+            ready ? '1 готовая загрузка · 3.0 МБ' : 'Хранилище недоступно',
           ),
         );
         await tester.pumpAndSettle();
         expect(find.textContaining(details), findsOneWidget);
-        expect(find.text('1 готовых загрузок · 3.0 МБ'), findsOneWidget);
+        expect(find.text('1 готовая загрузка · 3.0 МБ'), findsOneWidget);
         expect(find.text(warning), ready ? findsNothing : findsOneWidget);
         await tester.tap(
           find.text(
-            ready ? '1 готовых загрузок · 3.0 МБ' : 'Хранилище недоступно',
+            ready ? '1 готовая загрузка · 3.0 МБ' : 'Хранилище недоступно',
           ),
         );
         await tester.pumpAndSettle();

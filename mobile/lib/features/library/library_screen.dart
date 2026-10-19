@@ -152,27 +152,39 @@ class _LibraryScreenState extends State<LibraryScreen> {
     required IconData icon,
     required FutureOr<void> Function() callback,
   }) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.only(bottom: 8),
     child: MusicTapTarget(
       onTap: () => _run(callback),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
-            Icon(icon, size: 32, color: MusicColors.primary),
-            const SizedBox(width: 16),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: MusicColors.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 24, color: MusicColors.primary),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: Theme.of(context).textTheme.titleLarge),
+                  Text(label, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
-                  Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: MusicColors.textSecondary),
+                  ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.chevron_right),
+            const Icon(Icons.chevron_right, color: MusicColors.textMuted),
           ],
         ),
       ),
@@ -180,7 +192,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   );
 
   Widget _heading(String title) => Padding(
-    padding: const EdgeInsets.only(top: 28, bottom: 12),
+    padding: const EdgeInsets.only(top: 24, bottom: 10),
     child: Semantics(
       header: true,
       child: Text(title, style: Theme.of(context).textTheme.titleLarge),
@@ -194,7 +206,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ? null
               : () => _run(() => widget.onOpenEntity!(entity)),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             child: Row(
               children: [
                 Artwork(uri: entity.image, size: 48),
@@ -215,6 +227,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           entity.subtitle!,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: MusicColors.textSecondary),
                         ),
                       ],
                       if (widget.controller.state.pending.contains(
@@ -285,33 +299,42 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       callback: widget.onOpenDownloads!,
                     ),
                   if (widget.onCreatePlaylist != null) ...[
-                    const SizedBox(height: 8),
-                    MusicButton(
-                      label: 'Создать плейлист',
-                      icon: Icons.add,
+                    const SizedBox(height: 4),
+                    OutlinedButton.icon(
+                      label: const Text('Создать плейлист'),
+                      icon: const Icon(Icons.add),
                       onPressed: () => _run(widget.onCreatePlaylist!),
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final filter in _LibraryFilter.values)
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 48),
-                          child: ChoiceChip(
-                            label: Text(switch (filter) {
-                              _LibraryFilter.all => 'Всё',
-                              _LibraryFilter.playlists => 'Плейлисты',
-                              _LibraryFilter.albums => 'Альбомы',
-                              _LibraryFilter.artists => 'Исполнители',
-                            }),
-                            selected: _filter == filter,
-                            onSelected: (_) => setState(() => _filter = filter),
+                  const SizedBox(height: 16),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final filter in _LibraryFilter.values)
+                          Padding(
+                            padding: EdgeInsets.only(
+                              right: filter == _LibraryFilter.values.last
+                                  ? 0
+                                  : 8,
+                            ),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 48),
+                              child: ChoiceChip(
+                                label: Text(switch (filter) {
+                                  _LibraryFilter.all => 'Всё',
+                                  _LibraryFilter.playlists => 'Плейлисты',
+                                  _LibraryFilter.albums => 'Альбомы',
+                                  _LibraryFilter.artists => 'Исполнители',
+                                }),
+                                selected: _filter == filter,
+                                onSelected: (_) =>
+                                    setState(() => _filter = filter),
+                              ),
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                   if (_actionFailure != null)
                     MusicStatus(message: _actionFailure!.message, error: true),
@@ -356,11 +379,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   () => widget.onOpenPlaylist!(playlist.id),
                                 ),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
                             child: Row(
                               children: [
-                                const Icon(Icons.queue_music, size: 32),
-                                const SizedBox(width: 16),
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: MusicColors.surface2,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.queue_music,
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -375,7 +409,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                             .titleMedium,
                                       ),
                                       const SizedBox(height: 4),
-                                      Text('${playlist.trackCount} треков'),
+                                      Text(
+                                        musicQuantity(
+                                          playlist.trackCount,
+                                          one: 'трек',
+                                          few: 'трека',
+                                          many: 'треков',
+                                        ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: MusicColors.textSecondary,
+                                            ),
+                                      ),
                                     ],
                                   ),
                                 ),

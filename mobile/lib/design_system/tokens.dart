@@ -2,23 +2,23 @@ import 'package:flutter/material.dart';
 
 /// Soundspan's fixed palette. Wallpaper accents never replace music controls.
 abstract final class MusicColors {
-  static const canvas = Color(0xFF151413);
-  static const surface1 = Color(0xFF1D1B1A);
-  static const surface2 = Color(0xFF282524);
-  static const surface3 = Color(0xFF302C2B);
-  static const text = Color(0xFFF5F1EB);
-  static const textSecondary = Color(0xFFC6BFB9);
-  static const textMuted = Color(0xFFA89F99);
-  static const primary = Color(0xFFC9AAF2);
+  static const canvas = Color(0xFF121114);
+  static const surface1 = Color(0xFF1C1A20);
+  static const surface2 = Color(0xFF28252E);
+  static const surface3 = Color(0xFF322E38);
+  static const text = Color(0xFFF6F2F7);
+  static const textSecondary = Color(0xFFC2BBC9);
+  static const textMuted = Color(0xFFA79FAD);
+  static const primary = Color(0xFFC5A6EF);
   static const onPrimary = Color(0xFF21172E);
-  static const primaryContainer = Color(0xFF3D304A);
+  static const primaryContainer = Color(0xFF362A45);
   static const onPrimaryContainer = Color(0xFFEBDDFC);
   static const error = Color(0xFFFFB4AB);
   static const errorContainer = Color(0xFF512B28);
   static const success = Color(0xFFB8D1B0);
   static const warning = Color(0xFFE8C48D);
-  static const outline = Color(0xFF514A46);
-  static const outlineStrong = Color(0xFF8F8581);
+  static const outline = Color(0xFF48424F);
+  static const outlineStrong = Color(0xFF918697);
   static const scrim = Color(0xA3000000);
   static const selection = Color(0x52C9AAF2);
 }

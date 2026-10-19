@@ -17,7 +17,7 @@ class StorageStatusCard extends StatelessWidget {
     final complete = jobs.where((j) => j.state == DownloadState.ready).toList();
     final bytes = complete.fold<int>(0, (sum, j) => sum + j.bytes);
     final summary =
-        '${complete.length} готовых загрузок · ${downloadBytes(bytes)}';
+        '${musicQuantity(complete.length, one: 'готовая загрузка', few: 'готовые загрузки', many: 'готовых загрузок')} · ${downloadBytes(bytes)}';
     return Container(
       decoration: BoxDecoration(
         color: MusicColors.surface1,

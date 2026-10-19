@@ -7,10 +7,10 @@ function Check($Name, [scriptblock]$Action) { & $Action; $script:passed++; Write
 function Reject([scriptblock]$Action) { $caught = $false; try { & $Action | Out-Null } catch { $caught = $true }; if (-not $caught) { throw 'Expected rejection' } }
 $digest = 'A' * 64
 $cert = "Signer #1 certificate DN: CN=Soundspan Local Release`nSigner #1 certificate SHA-256 digest: $digest"
-$badging = "package: name='ru.agentik007.soundspan' versionCode='4' versionName='0.1.2'`nsdkVersion:'24'`ntargetSdkVersion:'36'`nuses-permission: name='android.permission.INTERNET'"
+$badging = "package: name='ru.agentik007.soundspan' versionCode='5' versionName='0.1.3'`nsdkVersion:'24'`ntargetSdkVersion:'36'`nuses-permission: name='android.permission.INTERNET'"
 Check 'valid inspected APK metadata accepted' { Assert-ApkMetadata $cert $badging $digest @('AndroidManifest.xml','classes.dex') }
-Check 'previous release metadata rejected' { Reject { Assert-ApkMetadata $cert ($badging.Replace("versionCode='4' versionName='0.1.2'", "versionCode='3' versionName='0.1.2'")) $digest @() } }
-Check 'older release metadata rejected' { Reject { Assert-ApkMetadata $cert ($badging.Replace("versionCode='4' versionName='0.1.2'", "versionCode='2' versionName='0.1.1'")) $digest @() } }
+Check 'previous release metadata rejected' { Reject { Assert-ApkMetadata $cert ($badging.Replace("versionCode='5' versionName='0.1.3'", "versionCode='4' versionName='0.1.2'")) $digest @() } }
+Check 'older release metadata rejected' { Reject { Assert-ApkMetadata $cert ($badging.Replace("versionCode='5' versionName='0.1.3'", "versionCode='2' versionName='0.1.1'")) $digest @() } }
 Check 'foreign certificate rejected' { Reject { Assert-ApkMetadata $cert $badging ('B'*64) @() } }
 Check 'debug certificate rejected even when pinned' { Reject { Assert-ApkMetadata ($cert.Replace('Soundspan Local Release','Android Debug')) $badging $digest @() } }
 Check 'malformed missing signer rejected' { Reject { Assert-ApkMetadata '' $badging $digest @() } }
@@ -18,7 +18,7 @@ Check 'multiple signers rejected' { Reject { Assert-ApkMetadata ($cert+"`nSigner
 foreach ($case in @("application-debuggable", "application-testOnly", "uses-permission: name='android.permission.MANAGE_EXTERNAL_STORAGE'")) {
     Check "unsafe APK attribute rejected: $case" { Reject { Assert-ApkMetadata $cert ($badging+"`n"+$case) $digest @() } }
 }
-foreach ($replacement in @(@('ru.agentik007.soundspan','wrong.app'),@("versionCode='4'","versionCode='5'"),@("versionName='0.1.2'","versionName='2'"),@("sdkVersion:'24'","sdkVersion:'23'"),@("targetSdkVersion:'36'","targetSdkVersion:'35'"))) {
+foreach ($replacement in @(@('ru.agentik007.soundspan','wrong.app'),@("versionCode='5'","versionCode='6'"),@("versionName='0.1.3'","versionName='2'"),@("sdkVersion:'24'","sdkVersion:'23'"),@("targetSdkVersion:'36'","targetSdkVersion:'35'"))) {
     Check "identity mismatch rejected: $($replacement[0])" { Reject { Assert-ApkMetadata $cert ($badging.Replace($replacement[0],$replacement[1])) $digest @() } }
 }
 Check 'packaged key rejected' { Reject { Assert-ApkMetadata $cert $badging $digest @('assets/key.properties') } }

@@ -16,6 +16,61 @@ import '../support/collection_fixtures.dart';
 import '../support/wave_reporting_fixtures.dart';
 
 void main() {
+  testWidgets(
+    'Wave entry shows its continuation heading above another track mini-player',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 740);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final authority = CollectionAuthority();
+      final playback = ReportingController();
+      final service = WaveContinuation(
+        controller: playback,
+        repository: RecommendationRepository(transport: ControlledTransport()),
+        authority: authority,
+      );
+      final controller = WaveController(
+        continuation: service,
+        playback: playback,
+        authority: authority,
+        fence: collectionFence,
+      );
+      final router = AppRouter(initialTab: AppTab.wave);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SoundspanTheme.dark(),
+          home: AppShell(
+            router: router,
+            miniPlayer: const SizedBox(height: 72),
+            destinations: {
+              for (final tab in AppTab.values)
+                tab: (_) => tab == AppTab.wave
+                    ? WaveScreen(controller: controller)
+                    : const SizedBox.shrink(),
+            },
+            routeBuilder: (_, _) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final scroll = tester.getRect(find.byType(CustomScrollView));
+      final continuation = tester.getRect(find.text('Дальше в волне'));
+      expect(
+        continuation.bottom,
+        lessThanOrEqualTo(scroll.bottom),
+        reason: 'The entry should show that a listening queue lives below its hero.',
+      );
+      expect(playback.commands, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      router.dispose();
+      controller.dispose();
+      await tester.runAsync(service.dispose);
+      await playback.dispose();
+      await authority.updates.close();
+    },
+  );
   for (final width in [320.0, 360.0]) {
     for (final scale in [1.0, 1.3]) {
       for (final mode in ['new', 'playing', 'paused']) {

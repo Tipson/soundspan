@@ -53,8 +53,10 @@ abstract final class SoundspanTheme {
       titleMedium: type(16, 22, FontWeight.w600),
       bodyLarge: type(16, 24, FontWeight.w400),
       bodyMedium: type(14, 20, FontWeight.w400),
+      bodySmall: type(12, 16, FontWeight.w400),
       labelLarge: type(14, 20, FontWeight.w600, 0.1),
-      labelSmall: type(12, 16, FontWeight.w500, 0.2),
+      labelMedium: type(12, 16, FontWeight.w600, 0.1),
+      labelSmall: type(11, 14, FontWeight.w500),
     );
     final focusSide = WidgetStateProperty.resolveWith<BorderSide?>(
       (states) => states.contains(WidgetState.focused)
@@ -62,12 +64,14 @@ abstract final class SoundspanTheme {
           : null,
     );
     final buttonStyle = ButtonStyle(
-      minimumSize: const WidgetStatePropertyAll(Size(48, 56)),
+      minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
       padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       ),
       side: focusSide,
-      shape: const WidgetStatePropertyAll(StadiumBorder()),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
     );
     return ThemeData(
       useMaterial3: true,
@@ -90,6 +94,14 @@ abstract final class SoundspanTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         toolbarHeight: 56,
+        titleSpacing: 20,
+        titleTextStyle: TextStyle(
+          color: MusicColors.text,
+          fontSize: 22,
+          height: 1.2,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+        ),
       ),
       textSelectionTheme: const TextSelectionThemeData(
         cursorColor: MusicColors.primary,
@@ -153,6 +165,23 @@ abstract final class SoundspanTheme {
         color: MusicColors.outline,
         thickness: 1,
         space: 1,
+      ),
+      listTileTheme: ListTileThemeData(
+        iconColor: MusicColors.textSecondary,
+        textColor: MusicColors.text,
+        titleTextStyle: typography.titleMedium,
+        subtitleTextStyle: typography.bodyMedium?.copyWith(
+          color: MusicColors.textSecondary,
+        ),
+        minVerticalPadding: 12,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: MusicColors.surface1,
+        selectedColor: MusicColors.primaryContainer,
+        labelStyle: typography.labelLarge,
+        side: const BorderSide(color: MusicColors.outline),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       navigationRailTheme: const NavigationRailThemeData(
         backgroundColor: MusicColors.canvas,
