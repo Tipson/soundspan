@@ -25,6 +25,8 @@ import 'package:soundspan/features/shares/share_sheet.dart';
 import 'package:soundspan/features/inbox/inbox_screen.dart';
 import 'package:soundspan/features/settings/profile_screen.dart';
 import 'package:soundspan/features/settings/playback_settings_screen.dart';
+import 'package:soundspan/features/settings/offline_settings_screen.dart';
+import 'package:soundspan/features/history/history_screen.dart';
 import 'package:soundspan/core/model/app_failure.dart';
 import 'package:soundspan/playback/playback_controller.dart';
 import 'package:soundspan/core/network/api_transport.dart';
@@ -360,6 +362,60 @@ void main() {
       session.router.back();
       await tester.pumpAndSettle();
       await settingsRoute;
+
+      session.router.selectTab(AppTab.search);
+      await tester.pumpAndSettle();
+      final retainedSearchRoute = session.router.push<void>(
+        const AppDestination(AppRouteKind.history),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(HistoryScreen), findsOneWidget);
+      final searchDepth = session.router.stackDepth(AppTab.search);
+      expect(searchDepth, 2);
+      session.router.selectTab(AppTab.home);
+      await tester.pumpAndSettle();
+      final playback = native.playback as CollectionPlayback;
+      final entries = playback.createEntries([
+        collectionTrack(1),
+        collectionTrack(2),
+      ], const PlayContext(surface: PlaySurface.library));
+      playback.value = QueueSnapshot(
+        fence: collectionFence,
+        entries: entries,
+        effectiveOrder: entries.map((entry) => entry.entryId),
+        currentEntryId: entries.first.entryId,
+        position: const Duration(seconds: 17),
+        duration: const Duration(seconds: 180),
+        playingIntent: true,
+        generation: 3,
+        lineage: 4,
+      );
+      final queueBeforeNavigation = playback.snapshot;
+      final commandsBeforeNavigation = playback.commands.length;
+      await tester.tap(find.byTooltip('Профиль'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsScreen), findsOneWidget);
+      await tester.ensureVisible(find.text('Офлайн и загрузки'));
+      await tester.tap(find.text('Офлайн и загрузки'));
+      await tester.pumpAndSettle();
+      expect(find.byType(OfflineSettingsScreen), findsOneWidget);
+      await tester.ensureVisible(find.text('Управлять загрузками'));
+      await tester.tap(find.text('Управлять загрузками'));
+      await tester.pumpAndSettle();
+      expect(session.router.currentTab, AppTab.downloads);
+      expect(find.byType(DownloadsScreen), findsOneWidget);
+      expect(find.byType(SettingsScreen), findsNothing);
+      expect(find.byType(OfflineSettingsScreen), findsNothing);
+      expect(visibility.value, isTrue);
+      expect(session.router.stackDepth(AppTab.search), searchDepth);
+      expect(identical(playback.snapshot, queueBeforeNavigation), isTrue);
+      expect(playback.commands.length, commandsBeforeNavigation);
+      session.router.selectTab(AppTab.search);
+      await tester.pumpAndSettle();
+      expect(find.byType(HistoryScreen), findsOneWidget);
+      session.router.back();
+      await tester.pumpAndSettle();
+      await retainedSearchRoute;
       await tester.pumpWidget(const SizedBox.shrink());
       final sessionClosing = session.close();
       await _drain(tester, sessionClosing);

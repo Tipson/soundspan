@@ -809,8 +809,15 @@ class _OwnerShellState extends State<OwnerShell>
               policy: owner.policy,
               downloads: s.downloads,
               onDownloads: () {
+                if (!mounted ||
+                    !context.mounted ||
+                    !s.isCurrent ||
+                    ModalRoute.of(context)?.isCurrent != true) {
+                  return;
+                }
+                final root = Navigator.of(context, rootNavigator: true);
                 s.router.selectTab(AppTab.downloads);
-                s.router.back();
+                root.popUntil((route) => route.isFirst);
               },
             ),
             _ => _logoutFrame(
