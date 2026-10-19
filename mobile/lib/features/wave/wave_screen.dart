@@ -75,191 +75,211 @@ class _WaveScreenState extends State<WaveScreen> {
                   title: 'Аккаунт изменился',
                   message: 'Откройте волну снова.',
                 )
-              : CustomScrollView(
-                  controller: widget.scrollController,
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                      sliver: SliverToBoxAdapter(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Semantics(
-                              header: true,
-                              child: Text(
-                                current == null ? 'В вашем ритме' : 'Моя волна',
-                                style: current == null
-                                    ? Theme.of(context).textTheme.displaySmall
-                                    : Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            if (current == null)
-                              Text(
-                                'Музыка, к которой хочется вернуться. И та, которую ещё предстоит открыть.',
-                                style: Theme.of(context).textTheme.bodyLarge
-                                    ?.copyWith(
-                                      color: MusicColors.textSecondary,
-                                    ),
-                              ),
-                            const SizedBox(height: 28),
-                            if (current == null)
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: AspectRatio(
-                                  aspectRatio: 3 / 2,
-                                  child: Image.asset(
-                                    'assets/wave-dusk-city.png',
-                                    fit: BoxFit.cover,
-                                    excludeFromSemantics: true,
+              : LayoutBuilder(
+                  builder: (context, viewport) {
+                    final compact = viewport.maxWidth < 600;
+                    final artworkHeight = (viewport.maxHeight * .26).clamp(
+                      96.0,
+                      compact ? 144.0 : 240.0,
+                    );
+                    return CustomScrollView(
+                      controller: widget.scrollController,
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                          sliver: SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Semantics(
+                                  header: true,
+                                  child: Text(
+                                    current == null
+                                        ? 'В вашем ритме'
+                                        : 'Моя волна',
+                                    style: current == null && !compact
+                                        ? Theme.of(context)
+                                              .textTheme
+                                              .displaySmall
+                                        : Theme.of(context)
+                                              .textTheme
+                                              .headlineMedium,
                                   ),
                                 ),
-                              )
-                            else
-                              Center(
-                                child: Artwork(
-                                  uri: current.track.artwork,
-                                  trackRef: current.track.ref,
-                                  size: 176,
-                                  radius: 20,
-                                ),
-                              ),
-                            const SizedBox(height: 24),
-                            if (current != null) ...[
-                              Semantics(
-                                header: true,
-                                child: Text(
-                                  current.track.title,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                current.track.artist,
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              const SizedBox(height: 20),
-                            ],
-                            Text(
-                              'Направление · ${waveModeLabel(selection.mode)}',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${waveMoodLabel(selection.mood)} · ${waveLanguageLabel(selection.language)}',
-                            ),
-                            const SizedBox(height: 16),
-                            OutlinedButton.icon(
-                              onPressed: _configure,
-                              icon: const Icon(Icons.tune_rounded),
-                              label: const Text('Настроить волну'),
-                            ),
-                            const SizedBox(height: 12),
-                            if (!owner.online) ...[
-                              const MusicStatus(
-                                message: 'Для новых рекомендаций нужна сеть. Загруженная музыка доступна на устройстве.',
-                              ),
-                              if (widget.onOpenDownloads != null)
+                                SizedBox(height: compact ? 12 : 24),
+                                if (current == null)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: SizedBox(
+                                      height: artworkHeight,
+                                      width: double.infinity,
+                                      child: Image.asset(
+                                        'assets/wave-dusk-city.png',
+                                        fit: BoxFit.cover,
+                                        excludeFromSemantics: true,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Center(
+                                    child: Artwork(
+                                      uri: current.track.artwork,
+                                      trackRef: current.track.ref,
+                                      size: artworkHeight,
+                                      radius: 20,
+                                    ),
+                                  ),
+                                const SizedBox(height: 16),
                                 MusicButton(
-                                  label: 'Открыть загрузки',
-                                  icon: Icons.offline_pin_outlined,
-                                  onPressed: () {
-                                    if (owner == widget.controller &&
-                                        owner.isCurrent) {
-                                      widget.onOpenDownloads!();
-                                    }
-                                  },
+                                  label: current != null && !ended
+                                      ? (queue.playingIntent
+                                            ? 'Пауза'
+                                            : 'Продолжить')
+                                      : 'Начать волну',
+                                  icon:
+                                      current != null &&
+                                          queue.playingIntent &&
+                                          !ended
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
+                                  busy: busy,
+                                  onPressed: !owner.online && current == null
+                                      ? null
+                                      : current != null && !ended
+                                      ? owner.togglePlayback
+                                      : owner.start,
+                                  disabledReason:
+                                      !owner.online && current == null
+                                      ? 'Новые рекомендации доступны при подключении к сети.'
+                                      : null,
                                 ),
-                            ],
-                            if (owner.failure != null) ...[
-                              MusicStatus(
-                                message: owner.failure!.message,
-                                error: true,
-                              ),
-                              if (owner.online &&
-                                  state.status == WaveStatus.error)
-                                MusicButton(
-                                  label: 'Повторить',
-                                  onPressed: owner.retry,
+                                const SizedBox(height: 20),
+                                if (current == null) ...[
+                                  Text(
+                                    'Музыка, к которой хочется вернуться. И та, которую ещё предстоит открыть.',
+                                    style: Theme.of(context).textTheme.bodyLarge
+                                        ?.copyWith(
+                                          color: MusicColors.textSecondary,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                ],
+                                if (current != null) ...[
+                                  Semantics(
+                                    header: true,
+                                    child: Text(
+                                      current.track.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineSmall,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    current.track.artist,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge,
+                                  ),
+                                  const SizedBox(height: 20),
+                                ],
+                                Text(
+                                  'Направление · ${waveModeLabel(selection.mode)}',
+                                  style: Theme.of(context).textTheme.titleLarge,
                                 ),
-                            ],
-                            if (busy)
-                              const MusicStatus(
-                                message: 'Обновляем состав волны. Текущая музыка продолжает играть.',
-                              ),
-                            if (ended)
-                              const MusicStatus(
-                                message:
-                                    'Музыка закончилась. Начните новую волну.',
-                              ),
-                            MusicButton(
-                              label: current != null && !ended
-                                  ? (queue.playingIntent
-                                        ? 'Пауза'
-                                        : 'Продолжить')
-                                  : 'Начать волну',
-                              icon:
-                                  current != null &&
-                                      queue.playingIntent &&
-                                      !ended
-                                  ? Icons.pause_rounded
-                                  : Icons.play_arrow_rounded,
-                              busy: busy,
-                              onPressed: !owner.online && current == null
-                                  ? null
-                                  : current != null && !ended
-                                  ? owner.togglePlayback
-                                  : owner.start,
-                              disabledReason: !owner.online && current == null
-                                  ? 'Новые рекомендации доступны при подключении к сети.'
-                                  : null,
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${waveMoodLabel(selection.mood)} · ${waveLanguageLabel(selection.language)}',
+                                ),
+                                const SizedBox(height: 12),
+                                if (!owner.online) ...[
+                                  const MusicStatus(
+                                    message: 'Для новых рекомендаций нужна сеть. Загруженная музыка доступна на устройстве.',
+                                  ),
+                                  if (widget.onOpenDownloads != null)
+                                    MusicButton(
+                                      label: 'Открыть загрузки',
+                                      icon: Icons.offline_pin_outlined,
+                                      onPressed: () {
+                                        if (owner == widget.controller &&
+                                            owner.isCurrent) {
+                                          widget.onOpenDownloads!();
+                                        }
+                                      },
+                                    ),
+                                ],
+                                if (owner.failure != null) ...[
+                                  MusicStatus(
+                                    message: owner.failure!.message,
+                                    error: true,
+                                  ),
+                                  if (owner.online &&
+                                      state.status == WaveStatus.error)
+                                    MusicButton(
+                                      label: 'Повторить',
+                                      onPressed: owner.retry,
+                                    ),
+                                ],
+                                if (busy)
+                                  const MusicStatus(
+                                    message: 'Обновляем состав волны. Текущая музыка продолжает играть.',
+                                  ),
+                                if (ended)
+                                  const MusicStatus(
+                                    message: 'Музыка закончилась. Начните новую волну.',
+                                  ),
+                                if (current != null &&
+                                    widget.onOpenPlayer != null)
+                                  TextButton(
+                                    onPressed: () {
+                                      if (owner == widget.controller &&
+                                          owner.isCurrent) {
+                                        widget.onOpenPlayer!();
+                                      }
+                                    },
+                                    child: const Text('Открыть плеер'),
+                                  ),
+                                const SizedBox(height: 32),
+                                Semantics(
+                                  header: true,
+                                  child: Text(
+                                    'Дальше в волне',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  upcoming.isEmpty
+                                      ? 'Новый состав появится после запуска.'
+                                      : '${upcoming.where((e) => e.track.playable).length} доступных треков · продолжение подбирается автоматически',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: MusicColors.textSecondary,
+                                      ),
+                                ),
+                              ],
                             ),
-                            if (current != null && widget.onOpenPlayer != null)
-                              TextButton(
-                                onPressed: () {
-                                  if (owner == widget.controller &&
-                                      owner.isCurrent) {
-                                    widget.onOpenPlayer!();
-                                  }
-                                },
-                                child: const Text('Открыть плеер'),
-                              ),
-                            const SizedBox(height: 32),
-                            Semantics(
-                              header: true,
-                              child: Text(
-                                'Дальше в волне',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              upcoming.isEmpty
-                                  ? 'Новый состав появится после запуска.'
-                                  : '${upcoming.where((e) => e.track.playable).length} доступных треков · продолжение подбирается автоматически',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: MusicColors.textSecondary),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                      sliver: SliverList.builder(
-                        itemCount: upcoming.length,
-                        itemBuilder: (_, i) => TrackRow(
-                          key: ValueKey('wave-upcoming-${upcoming[i].entryId}'),
-                          track: upcoming[i].track,
-                          onPlay: () => owner.playUpcoming(upcoming[i].entryId),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                          sliver: SliverList.builder(
+                            itemCount: upcoming.length,
+                            itemBuilder: (_, i) => TrackRow(
+                              key: ValueKey(
+                                'wave-upcoming-${upcoming[i].entryId}',
+                              ),
+                              track: upcoming[i].track,
+                              onPlay: () =>
+                                  owner.playUpcoming(upcoming[i].entryId),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
         ),
       );

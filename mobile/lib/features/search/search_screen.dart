@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart' hide SearchController;
 
 import '../../core/model/app_failure.dart';
+import '../../core/model/track.dart';
 import '../../design_system/design_system.dart';
+import '../../playback/playback_controller.dart';
 import '../library/library_models.dart';
 import 'catalog_actions.dart';
 import 'catalog_models.dart';
@@ -13,6 +15,7 @@ class SearchScreen extends StatefulWidget {
   const SearchScreen({
     super.key,
     required this.controller,
+    this.playback,
     this.onOpenArtist,
     this.onOpenAlbum,
     this.onPlay,
@@ -20,6 +23,7 @@ class SearchScreen extends StatefulWidget {
     this.scrollController,
   });
   final SearchController controller;
+  final PlaybackController? playback;
   final FutureOr<void> Function(CatalogEntityRef)? onOpenArtist, onOpenAlbum;
   final FutureOr<void> Function(CollectionPlaybackRequest)? onPlay;
   final CatalogActions actions;
@@ -99,8 +103,29 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  TrackPlaybackState _playbackState(Track track) {
+    final snapshot = widget.playback?.snapshot;
+    if (!widget.controller.isCurrent ||
+        snapshot?.fence != widget.controller.fence ||
+        snapshot?.currentEntry?.track.ref != track.ref) {
+      return TrackPlaybackState.idle;
+    }
+    if (snapshot!.processing == PlaybackProcessing.loading ||
+        snapshot.processing == PlaybackProcessing.buffering) {
+      return TrackPlaybackState.resolving;
+    }
+    return snapshot.playingIntent
+        ? TrackPlaybackState.playing
+        : TrackPlaybackState.paused;
+  }
+
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
+  Widget build(BuildContext context) => StreamBuilder<QueueSnapshot>(
+    stream: widget.playback?.snapshots,
+    builder: (context, _) => _content(context),
+  );
+
+  Widget _content(BuildContext context) => AnimatedBuilder(
     animation: widget.controller,
     builder: (context, _) {
       final owner = widget.controller,
@@ -217,6 +242,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       if (!state.loading &&
                           state.query.isNotEmpty &&
                           state.failure == null &&
+                          state.page.failures.isEmpty &&
                           state.page.tracks.isEmpty &&
                           state.page.artists.isEmpty &&
                           state.page.albums.isEmpty)
@@ -251,6 +277,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         actions = widget.actions;
                     return TrackRow(
                       track: track,
+                      playbackState: _playbackState(track),
                       onPlay: widget.onPlay == null
                           ? null
                           : () => _run(

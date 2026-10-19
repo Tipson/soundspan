@@ -6,6 +6,7 @@ class ArtistScreen extends CatalogDetailScreen {
     super.key,
     required super.controller,
     required super.entity,
+    super.playback,
     super.onPlay,
     super.onOpenArtist,
     super.onOpenAlbum,

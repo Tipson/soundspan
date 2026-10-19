@@ -126,7 +126,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                   key: const PageStorageKey('device-downloads'),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: rows.length + 1,
                   itemBuilder: (context, index) {
                     if (index == 0) {
@@ -138,14 +138,14 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                             ready: controller.storageReady(),
                           ),
                           if (automation != null) ...[
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 8),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
                               title: const Text('Автозагрузка Любимого'),
                               subtitle: Text(
                                 automation.paused
-                                    ? 'Приостановлена. Готовая музыка сохранена.'
-                                    : 'Включена после подготовки хранилища.',
+                                    ? 'Приостановлена'
+                                    : 'Включена',
                               ),
                               value: !automation.paused,
                               onChanged: controller.busy
@@ -157,7 +157,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                             if (automation.notice != null)
                               MusicStatus(message: automation.notice!),
                           ],
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 8),
                           TextField(
                             controller: _search,
                             onChanged: controller.setQuery,
@@ -166,24 +166,34 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                               prefixIcon: Icon(Icons.search),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final filter in DownloadsFilter.values)
-                                ChoiceChip(
-                                  label: Text(switch (filter) {
-                                    DownloadsFilter.all => 'Все',
-                                    DownloadsFilter.ready => 'Готовые',
-                                    DownloadsFilter.active => 'В процессе',
-                                    DownloadsFilter.failed => 'Ошибки',
-                                  }),
-                                  selected: controller.filter == filter,
-                                  onSelected: (_) =>
-                                      controller.setFilter(filter),
-                                ),
-                            ],
+                          const SizedBox(height: 8),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                for (final filter in DownloadsFilter.values)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        minHeight: 48,
+                                      ),
+                                      child: ChoiceChip(
+                                        label: Text(switch (filter) {
+                                          DownloadsFilter.all => 'Все',
+                                          DownloadsFilter.ready => 'Готовые',
+                                          DownloadsFilter.active =>
+                                            'В процессе',
+                                          DownloadsFilter.failed => 'Ошибки',
+                                        }),
+                                        selected: controller.filter == filter,
+                                        onSelected: (_) =>
+                                            controller.setFilter(filter),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                           if (controller.failure != null)
                             MusicStatus(
@@ -203,7 +213,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                                     : 'По выбранным условиям загрузок нет.',
                               ),
                             ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 4),
                         ],
                       );
                     }

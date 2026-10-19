@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/model/app_failure.dart';
+import '../../core/model/track.dart';
 import '../../design_system/design_system.dart';
+import '../../playback/playback_controller.dart';
 import '../library/library_models.dart';
 import 'catalog_actions.dart';
 import 'catalog_detail_controller.dart';
@@ -18,6 +20,7 @@ class CatalogDetailScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.entity,
+    this.playback,
     this.onPlay,
     this.onOpenArtist,
     this.onOpenAlbum,
@@ -25,6 +28,7 @@ class CatalogDetailScreen extends StatefulWidget {
     this.autoLoad = true,
   });
   final CatalogDetailController controller;
+  final PlaybackController? playback;
   final CatalogEntityRef entity;
   final FutureOr<void> Function(CollectionPlaybackRequest)? onPlay;
   final FutureOr<void> Function(CatalogEntityRef)? onOpenArtist, onOpenAlbum;
@@ -394,8 +398,29 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
     );
   }
 
+  TrackPlaybackState _playbackState(Track track) {
+    final snapshot = widget.playback?.snapshot;
+    if (!widget.controller.isCurrent ||
+        snapshot?.fence != widget.controller.fence ||
+        snapshot?.currentEntry?.track.ref != track.ref) {
+      return TrackPlaybackState.idle;
+    }
+    if (snapshot!.processing == PlaybackProcessing.loading ||
+        snapshot.processing == PlaybackProcessing.buffering) {
+      return TrackPlaybackState.resolving;
+    }
+    return snapshot.playingIntent
+        ? TrackPlaybackState.playing
+        : TrackPlaybackState.paused;
+  }
+
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
+  Widget build(BuildContext context) => StreamBuilder<QueueSnapshot>(
+    stream: widget.playback?.snapshots,
+    builder: (context, _) => _content(context),
+  );
+
+  Widget _content(BuildContext context) => AnimatedBuilder(
     animation: widget.controller,
     builder: (context, _) {
       final owner = widget.controller,
@@ -457,6 +482,7 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
                       final track = detail.tracks[i];
                       return TrackRow(
                         track: track,
+                        playbackState: _playbackState(track),
                         onPlay: widget.onPlay == null || _busy
                             ? null
                             : () => _run(

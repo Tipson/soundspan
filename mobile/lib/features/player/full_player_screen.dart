@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/model/track_ref.dart';
@@ -53,126 +55,154 @@ class FullPlayerScreen extends StatelessWidget {
               Expanded(
                 child: track == null
                     ? const Center(child: Text('Очередь пуста'))
-                    : SingleChildScrollView(
-                        key: const PageStorageKey('full-player-scroll'),
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                        child: LayoutBuilder(
-                          builder: (context, box) {
-                            final large =
-                                MediaQuery.textScalerOf(context).scale(16) > 24;
-                            final landscape = box.maxWidth >= 580 && !large;
-                            final art = Center(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 350,
-                                ),
+                    : LayoutBuilder(
+                        builder: (context, viewport) => SingleChildScrollView(
+                          key: const PageStorageKey('full-player-scroll'),
+                          padding: EdgeInsets.fromLTRB(
+                            viewport.maxWidth < 340 ? 12 : 20,
+                            16,
+                            viewport.maxWidth < 340 ? 12 : 20,
+                            32,
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, box) {
+                              final large =
+                                  MediaQuery.textScalerOf(context).scale(16) >
+                                  24;
+                              final landscape = box.maxWidth >= 580 && !large;
+                              final art = Center(
                                 child: Artwork(
                                   key: const ValueKey('player-art'),
                                   uri: track.artwork,
                                   trackRef: track.ref,
                                   radius: 16,
+                                  size: landscape
+                                      ? math
+                                            .min(
+                                              (box.maxWidth - 24) / 2,
+                                              (viewport.maxHeight - 48).clamp(
+                                                64,
+                                                350,
+                                              ),
+                                            )
+                                            .toDouble()
+                                      : _artworkEdge(
+                                          context,
+                                          state,
+                                          box.maxWidth,
+                                          viewport.maxHeight,
+                                          large,
+                                        ),
                                 ),
-                              ),
-                            );
-                            final details = Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  track.title,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall,
-                                ),
-                                if (controller.callbacks.onArtist != null &&
-                                    track.artistId != null)
-                                  TextButton(
-                                    onPressed: controller.busy
-                                        ? null
-                                        : () => controller.invoke(
-                                            controller.callbacks.onArtist!,
-                                          ),
-                                    child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(track.artist),
-                                    ),
-                                  )
-                                else
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                    child: Text(
-                                      track.artist,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyLarge
-                                          ?.copyWith(
-                                            color: MusicColors.textSecondary,
-                                          ),
-                                    ),
+                              );
+                              final details = Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    track.title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall,
                                   ),
-                                PlayerSeekBar(controller: controller),
-                                const SizedBox(height: 8),
-                                _transport(context, box.maxWidth, state),
-                                if (state.processing ==
-                                        PlaybackProcessing.loading ||
-                                    state.processing ==
-                                        PlaybackProcessing.buffering)
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 8),
-                                    child: Text('Загружаем музыку…'),
-                                  ),
-                                if (state.failure != null ||
-                                    controller.failure != null ||
-                                    controller.preference.failure != null)
-                                  Semantics(
-                                    liveRegion: true,
-                                    child: Padding(
+                                  if (controller.callbacks.onArtist != null &&
+                                      track.artistId != null)
+                                    TextButton(
+                                      onPressed: controller.busy
+                                          ? null
+                                          : () => controller.invoke(
+                                              controller.callbacks.onArtist!,
+                                            ),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(track.artist),
+                                      ),
+                                    )
+                                  else
+                                    Padding(
                                       padding: const EdgeInsets.symmetric(
                                         vertical: 12,
                                       ),
                                       child: Text(
-                                        (controller.failure ??
-                                                state.failure ??
-                                                controller.preference.failure)!
-                                            .message,
+                                        track.artist,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyLarge
+                                            ?.copyWith(
+                                              color: MusicColors.textSecondary,
+                                            ),
                                       ),
                                     ),
+                                  PlayerSeekBar(controller: controller),
+                                  const SizedBox(height: 8),
+                                  _transport(
+                                    context,
+                                    landscape
+                                        ? (box.maxWidth - 24) / 2
+                                        : box.maxWidth,
+                                    state,
                                   ),
-                                if (state.processing ==
-                                    PlaybackProcessing.failed)
-                                  MusicButton(
-                                    label: 'Повторить',
-                                    icon: Icons.refresh,
-                                    busy: controller.busy,
-                                    onPressed: controller.retry,
-                                  ),
-                                const SizedBox(height: 16),
-                                _feedback(context, large),
-                                const SizedBox(height: 24),
-                                _sections(context, large),
-                              ],
-                            );
-                            return landscape
-                                ? Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(child: art),
-                                      const SizedBox(width: 24),
-                                      Expanded(child: details),
-                                    ],
-                                  )
-                                : Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      art,
-                                      const SizedBox(height: 24),
-                                      details,
-                                    ],
-                                  );
-                          },
+                                  if (state.processing ==
+                                          PlaybackProcessing.loading ||
+                                      state.processing ==
+                                          PlaybackProcessing.buffering)
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 8),
+                                      child: Text('Загружаем музыку…'),
+                                    ),
+                                  if (state.failure != null ||
+                                      controller.failure != null ||
+                                      controller.preference.failure != null)
+                                    Semantics(
+                                      liveRegion: true,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
+                                        child: Text(
+                                          (controller.failure ??
+                                                  state.failure ??
+                                                  controller
+                                                      .preference
+                                                      .failure)!
+                                              .message,
+                                        ),
+                                      ),
+                                    ),
+                                  if (state.processing ==
+                                      PlaybackProcessing.failed)
+                                    MusicButton(
+                                      label: 'Повторить',
+                                      icon: Icons.refresh,
+                                      busy: controller.busy,
+                                      onPressed: controller.retry,
+                                    ),
+                                  const SizedBox(height: 16),
+                                  _feedback(context, large),
+                                  const SizedBox(height: 24),
+                                  _sections(context, large),
+                                ],
+                              );
+                              return landscape
+                                  ? Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(child: art),
+                                        const SizedBox(width: 24),
+                                        Expanded(child: details),
+                                      ],
+                                    )
+                                  : Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        art,
+                                        const SizedBox(height: 16),
+                                        details,
+                                      ],
+                                    );
+                            },
+                          ),
                         ),
                       ),
               ),
@@ -182,6 +212,87 @@ class FullPlayerScreen extends StatelessWidget {
       );
     },
   );
+
+  double _artworkEdge(
+    BuildContext context,
+    QueueSnapshot state,
+    double width,
+    double height,
+    bool large,
+  ) {
+    final maxEdge = math.min(width, 350.0), minEdge = math.min(maxEdge, 48.0);
+    if (large) {
+      return (height * .3).clamp(minEdge, math.min(maxEdge, 200)).toDouble();
+    }
+    final track = state.currentEntry!.track;
+    final type = Theme.of(context).textTheme;
+    double textHeight(String value, TextStyle? style, double available) {
+      final painter = TextPainter(
+        text: TextSpan(text: value, style: style),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout(maxWidth: math.max(1, available));
+      final result = painter.height;
+      painter.dispose();
+      return result;
+    }
+
+    final artistHeight =
+        controller.callbacks.onArtist != null && track.artistId != null
+        ? math.max(
+            48,
+            textHeight(track.artist, type.labelLarge, width - 24) + 24,
+          )
+        : textHeight(track.artist, type.bodyLarge, width) + 24;
+    final labels = [
+      'Нравится',
+      if (controller.callbacks.onRadio != null) 'В волну',
+      'Не нравится',
+    ];
+    final feedbackHeight =
+        48 +
+        labels
+            .map(
+              (label) => textHeight(
+                label,
+                type.labelMedium,
+                width / labels.length - 16,
+              ),
+            )
+            .reduce(math.max);
+    final failure =
+        controller.failure ?? state.failure ?? controller.preference.failure;
+    // Reserve the title at its real scaled height. Artwork gives space to the
+    // unchanged touch targets; very large text and errors can still scroll.
+    final reserved =
+        textHeight(track.title, type.headlineSmall, width) +
+        artistHeight +
+        48 +
+        textHeight('0:00', type.bodyMedium, width) +
+        (width < 280 || width >= 580 ? 120 : 72) +
+        8 +
+        16 +
+        feedbackHeight +
+        (controller.canPrefer
+            ? 0
+            : 8 +
+                  textHeight(
+                    'Для оценки трека нужна сеть.',
+                    type.bodyMedium,
+                    width,
+                  )) +
+        (state.processing == PlaybackProcessing.loading ||
+                state.processing == PlaybackProcessing.buffering
+            ? 8 + textHeight('Загружаем музыку…', type.bodyMedium, width)
+            : 0) +
+        (failure == null
+            ? 0
+            : 24 + textHeight(failure.message, type.bodyMedium, width)) +
+        (state.processing == PlaybackProcessing.failed ? 56 : 0) +
+        48;
+    return (height - reserved).clamp(minEdge, maxEdge).toDouble();
+  }
+
   Widget _transport(BuildContext context, double width, QueueSnapshot state) {
     Widget icon(
       String label,
@@ -237,7 +348,7 @@ class FullPlayerScreen extends StatelessWidget {
       controller.cycleRepeat,
       selected: state.repeat != QueueRepeat.off,
     );
-    if (width < 310 || width >= 580) {
+    if (width < 280 || width >= 580) {
       return Column(
         children: [
           central,

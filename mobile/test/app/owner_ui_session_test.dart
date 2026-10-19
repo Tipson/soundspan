@@ -173,34 +173,30 @@ void main() {
       await authority.updates.close();
     },
   );
-  test(
-    'owner change during artwork await prevents queue replacement',
-    () async {
-      final authority = CollectionAuthority();
-      final playback = CollectionPlayback(
-        QueueSnapshot(fence: collectionFence),
-      );
-      final gate = Completer<void>();
-      final actions = OwnerPlaybackActions(
-        authority: authority,
+  test('owner change during admission prevents queue replacement', () async {
+    final authority = CollectionAuthority();
+    final playback = CollectionPlayback(QueueSnapshot(fence: collectionFence));
+    final gate = Completer<void>();
+    final actions = OwnerPlaybackActions(
+      authority: authority,
+      fence: collectionFence,
+      playback: playback,
+      isCurrent: () => true,
+      prefetch: (_) => gate.future,
+    );
+    final result = actions.play(
+      CollectionPlaybackRequest(
+        tracks: [collectionTrack(1)],
+        startIndex: 0,
         fence: collectionFence,
-        playback: playback,
-        isCurrent: () => true,
-        prefetch: (_) => gate.future,
-      );
-      final result = actions.play(
-        CollectionPlaybackRequest(
-          tracks: [collectionTrack(1)],
-          startIndex: 0,
-          fence: collectionFence,
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-      authority.switchOwner();
-      gate.complete();
-      await expectLater(result, throwsA(isA<Object>()));
-      expect(playback.commands, isEmpty);
-      await authority.updates.close();
-    },
-  );
+      ),
+    );
+    final rejected = expectLater(result, throwsA(isA<Object>()));
+    authority.switchOwner();
+    await Future<void>.delayed(Duration.zero);
+    gate.complete();
+    await rejected;
+    expect(playback.commands, isEmpty);
+    await authority.updates.close();
+  });
 }

@@ -6,6 +6,9 @@
 
 ## Unreleased
 
+- Keep the Android Wave launch controls, player transport and track feedback visible on compact screens, including long titles and larger text. Move download storage explanations into an expandable summary and keep full download filter names in a scrollable row.
+- Show Wave startup progress and recoverable failures on Home, distinguish provider failures from empty search results, and wait for mix details before reporting unavailable songs. Reflect the current account's preparing, playing and paused track in search, mixes, artists and albums.
+- Keep optional cover prefetch failures outside collection playback and queue admission, retaining account fences and queue ordering. Release the signed Android client as 0.1.2 (3).
 - Map the mobile original-quality preference to YouTube's supported HIGH tier for playback and device downloads, while preserving original local files. Reject unsupported YouTube quality in the integration fixture and verify complete transfers, ranges and reusable downloaded files.
 - Restore the mobile playback owner and paused queue before accepting queued native media controls. Abort superseded or failed startup without replaying an old command into another account or initializing a second audio handler.
 - Add an Android-first Flutter music client with a shared mobile foundation, dark adaptive navigation, Home, Wave, personal mixes, search, artist and album pages, likes, playlists and imports. Keep full-size controls, a compact player and a focused like–radio–dislike row in the full player.

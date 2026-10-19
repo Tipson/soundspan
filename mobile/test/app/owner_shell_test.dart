@@ -245,6 +245,20 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(HomeScreen), findsOneWidget);
+      final startWave = tester
+          .widget<HomeScreen>(find.byType(HomeScreen))
+          .onStartWave!;
+      await expectLater(
+        Future<void>.sync(startWave),
+        throwsA(
+          isA<AppFailure>().having(
+            (failure) => failure.code,
+            'code',
+            'offline_mode',
+          ),
+        ),
+        reason: 'Production Home callback must expose the actual Wave failure',
+      );
       for (final entry in {
         AppTab.wave: WaveScreen,
         AppTab.search: SearchScreen,

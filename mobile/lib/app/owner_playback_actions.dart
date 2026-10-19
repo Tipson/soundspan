@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../core/model/owner_key.dart';
 import '../core/model/track.dart';
 import '../core/session/session_authority.dart';
@@ -24,11 +26,19 @@ final class OwnerPlaybackActions {
     if (!isCurrent()) throw collectionStaleSession;
   }
 
+  void _prefetch(Iterable<Track> tracks) {
+    unawaited(
+      Future<void>.sync(() => prefetch(tracks)).catchError((Object _) {
+        // Cover availability must not delay or reject an audio command.
+      }),
+    );
+  }
+
   Future<void> play(CollectionPlaybackRequest request) async {
     if (request.fence != fence) throw collectionStaleSession;
     final lineage = playback.snapshot.lineage;
     await guard();
-    await prefetch(request.tracks.skip(request.startIndex).take(6));
+    _prefetch(request.tracks.skip(request.startIndex).take(6));
     await guard();
     if (playback.snapshot.lineage != lineage) throw collectionStaleSession;
     final entries = playback.createEntries(request.tracks, request.context);
@@ -54,7 +64,7 @@ final class OwnerPlaybackActions {
     if (original != fence) throw collectionStaleSession;
     final lineage = playback.snapshot.lineage;
     await guard();
-    await prefetch(tracks.take(6));
+    _prefetch(tracks.take(6));
     await guard();
     await playback.dispatch(
       Enqueue(

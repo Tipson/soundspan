@@ -608,6 +608,7 @@ class _OwnerShellState extends State<OwnerShell>
           });
           return ArtistScreen(
             controller: c,
+            playback: owner.playback,
             entity: ref,
             onPlay: _play,
             onOpenArtist: _entity,
@@ -631,6 +632,7 @@ class _OwnerShellState extends State<OwnerShell>
           });
           return AlbumScreen(
             controller: c,
+            playback: owner.playback,
             entity: ref,
             onPlay: _play,
             onOpenArtist: _entity,
@@ -698,6 +700,7 @@ class _OwnerShellState extends State<OwnerShell>
           retire(c.dispose);
           return MixScreen(
             controller: c,
+            playback: owner.playback,
             mix: mix,
             onPlay: _play,
             onSaveMix: (mix, fence) async {
@@ -1049,7 +1052,10 @@ class _OwnerShellState extends State<OwnerShell>
                 controller: s.home,
                 visibility: _visibility.home,
                 onOpenWave: () => s.router.selectTab(AppTab.wave),
-                onStartWave: s.wave.start,
+                onStartWave: () async {
+                  await s.wave.start();
+                  if (s.wave.failure case final failure?) throw failure;
+                },
                 onConfigureWave: () => s.router.selectTab(AppTab.wave),
                 onPlay: _play,
                 onOpenMix: (mix) async {
@@ -1081,6 +1087,7 @@ class _OwnerShellState extends State<OwnerShell>
                 builder: (source, intent, _) => SearchScreen(
                   key: ValueKey(intent),
                   controller: s.search,
+                  playback: s.owner.playback,
                   onPlay: _play,
                   onOpenArtist: _entity,
                   onOpenAlbum: _entity,

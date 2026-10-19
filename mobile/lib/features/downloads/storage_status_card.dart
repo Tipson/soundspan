@@ -16,8 +16,9 @@ class StorageStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final complete = jobs.where((j) => j.state == DownloadState.ready).toList();
     final bytes = complete.fold<int>(0, (sum, j) => sum + j.bytes);
+    final summary =
+        '${complete.length} готовых загрузок · ${downloadBytes(bytes)}';
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: MusicColors.surface1,
         borderRadius: BorderRadius.circular(16),
@@ -25,22 +26,33 @@ class StorageStatusCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            ready ? 'На этом устройстве' : 'Хранилище недоступно',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Text('${complete.length} готовых загрузок · ${downloadBytes(bytes)}'),
-          const SizedBox(height: 8),
-          const Text(
-            'Объём по данным загрузок приложения. Свободное место смотрите в настройках устройства. Серверная музыка и файлы на других устройствах сюда не входят.',
-          ),
-          if (!ready) ...[
-            const SizedBox(height: 8),
-            const Text(
-              'Проверьте доступ к памяти. Готовые записи остаются в списке; доступность файла проверяется при воспроизведении.',
+          ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: const Border(),
+            collapsedShape: const Border(),
+            title: Semantics(
+              label: ready ? 'На этом устройстве' : null,
+              child: Text(
+                ready ? summary : 'Хранилище недоступно',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
-          ],
+            subtitle: ready ? null : Text(summary),
+            children: const [
+              Text(
+                'Объём по данным загрузок приложения. Свободное место смотрите в настройках устройства. Серверная музыка и файлы на других устройствах сюда не входят.',
+              ),
+            ],
+          ),
+          if (!ready)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: MusicStatus(
+                message: 'Проверьте доступ к памяти. Готовые записи остаются в списке; доступность файла проверяется при воспроизведении.',
+                error: true,
+              ),
+            ),
         ],
       ),
     );

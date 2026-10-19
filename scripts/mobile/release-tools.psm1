@@ -113,7 +113,7 @@ function Assert-ApkMetadata([string]$Certificates, [string]$Badging, [string]$Ex
     if ($ExpectedCertificate -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Invalid pinned certificate digest' }
     $digests = [regex]::Matches($Certificates, '(?m)^Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9]{64})\s*$')
     if ($digests.Count -ne 1 -or $digests[0].Groups[1].Value -ne $ExpectedCertificate -or $Certificates -match '(?i)Android Debug') { throw 'APK signer does not match the private release identity' }
-    if ($Badging -notmatch "(?m)^package: name='ru\.agentik007\.soundspan' versionCode='2' versionName='0\.1\.1'" -or $Badging -notmatch "(?m)^sdkVersion:'24'" -or $Badging -notmatch "(?m)^targetSdkVersion:'36'") { throw 'APK identity/version/SDK mismatch' }
+    if ($Badging -notmatch "(?m)^package: name='ru\.agentik007\.soundspan' versionCode='3' versionName='0\.1\.2'" -or $Badging -notmatch "(?m)^sdkVersion:'24'" -or $Badging -notmatch "(?m)^targetSdkVersion:'36'") { throw 'APK identity/version/SDK mismatch' }
     if ($Badging -match '(?i)application-debuggable|application-testOnly|testOnly') { throw 'Debuggable or test-only APK rejected' }
     $allowed = @('android.permission.INTERNET','android.permission.WAKE_LOCK','android.permission.FOREGROUND_SERVICE','android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK','android.permission.FOREGROUND_SERVICE_DATA_SYNC','android.permission.POST_NOTIFICATIONS','android.permission.ACCESS_NETWORK_STATE','android.permission.RECEIVE_BOOT_COMPLETED','ru.agentik007.soundspan.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION')
     foreach ($permission in [regex]::Matches($Badging, "(?m)^uses-permission[^:]*: name='([^']+)'")) {
@@ -175,7 +175,7 @@ function Test-ReleaseApk([string]$Apk, [string]$BuildTools, [string]$ExpectedCer
         Assert-ApkMetadata $cert $badging $ExpectedCertificate @($zip.Entries.FullName)
         $nativeAbis = @(Assert-ApkNativeLibraries $badging @($zip.Entries))
     } finally { $zip.Dispose() }
-    return [ordered]@{ apkSha256=(Get-FileHash -LiteralPath $Apk).Hash; certificateSha256=$ExpectedCertificate; applicationId='ru.agentik007.soundspan'; versionName='0.1.1'; versionCode=2; minSdk=24; targetSdk=36; nativeAbis=$nativeAbis; apksigner=$cert; badging=$badging; manifest=$tree }
+    return [ordered]@{ apkSha256=(Get-FileHash -LiteralPath $Apk).Hash; certificateSha256=$ExpectedCertificate; applicationId='ru.agentik007.soundspan'; versionName='0.1.2'; versionCode=3; minSdk=24; targetSdk=36; nativeAbis=$nativeAbis; apksigner=$cert; badging=$badging; manifest=$tree }
 }
 
 Export-ModuleMember -Function *

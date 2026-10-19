@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/model/app_failure.dart';
+import '../../core/model/track.dart';
 import '../../design_system/design_system.dart';
+import '../../playback/playback_controller.dart';
 import '../library/library_models.dart';
 import 'home_controller.dart';
 import 'home_models.dart';
@@ -15,12 +17,14 @@ class MixScreen extends StatefulWidget {
     required this.controller,
     required this.mix,
     required this.onPlay,
+    this.playback,
     this.onSaveMix,
     this.onReconcileSave,
     this.onOpenPlaylists,
     this.onTrackActions,
   });
   final HomeController controller;
+  final PlaybackController? playback;
   final MusicMix mix;
   final FutureOr<void> Function(CollectionPlaybackRequest request) onPlay;
   final SaveMusicMix? onSaveMix;
@@ -105,8 +109,29 @@ class _MixScreenState extends State<MixScreen> {
     ], title: 'Действия с подборкой');
   }
 
+  TrackPlaybackState _playbackState(Track track) {
+    final snapshot = widget.playback?.snapshot;
+    if (!widget.controller.isCurrent ||
+        snapshot?.fence != widget.controller.fence ||
+        snapshot?.currentEntry?.track.ref != track.ref) {
+      return TrackPlaybackState.idle;
+    }
+    if (snapshot!.processing == PlaybackProcessing.loading ||
+        snapshot.processing == PlaybackProcessing.buffering) {
+      return TrackPlaybackState.resolving;
+    }
+    return snapshot.playingIntent
+        ? TrackPlaybackState.playing
+        : TrackPlaybackState.paused;
+  }
+
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
+  Widget build(BuildContext context) => StreamBuilder<QueueSnapshot>(
+    stream: widget.playback?.snapshots,
+    builder: (context, _) => _content(context),
+  );
+
+  Widget _content(BuildContext context) => AnimatedBuilder(
     animation: widget.controller,
     builder: (context, _) {
       final owner = widget.controller, state = owner.state;
@@ -119,6 +144,7 @@ class _MixScreenState extends State<MixScreen> {
           ),
         );
       }
+      final availabilityKnown = mix.loaded && !state.mixLoading;
       final firstPlayable = mix.tracks.indexWhere((t) => t.playable),
           revision = owner.selectionRevision;
       void play(int index, {bool shuffle = false}) => unawaited(
@@ -139,7 +165,7 @@ class _MixScreenState extends State<MixScreen> {
         icon: Icons.play_arrow_rounded,
         busy: state.mixLoading,
         onPressed: firstPlayable < 0 ? null : () => play(firstPlayable),
-        disabledReason: firstPlayable < 0 && !state.mixLoading
+        disabledReason: firstPlayable < 0 && availabilityKnown
             ? 'В подборке пока нет доступных записей.'
             : null,
       );
@@ -188,11 +214,13 @@ class _MixScreenState extends State<MixScreen> {
                       Text(mix.description),
                       const SizedBox(height: 8),
                       Text(
-                        '${mix.trackCount} треков · ${mix.playableCount} доступны',
+                        availabilityKnown
+                            ? '${mix.trackCount} треков · ${mix.playableCount} доступны'
+                            : '${mix.trackCount} треков',
                         style: Theme.of(context).textTheme.bodyMedium
                             ?.copyWith(color: MusicColors.textSecondary),
                       ),
-                      if (mix.unavailableCount > 0)
+                      if (availabilityKnown && mix.unavailableCount > 0)
                         MusicStatus(
                           message:
                               '${mix.unavailableCount} записей пока недоступны и не попадут в очередь.',
@@ -274,6 +302,7 @@ class _MixScreenState extends State<MixScreen> {
                   itemBuilder: (_, i) => TrackRow(
                     key: ValueKey('mix-track-$i'),
                     track: mix.tracks[i],
+                    playbackState: _playbackState(mix.tracks[i]),
                     onPlay: () => play(i),
                     onMore: widget.onTrackActions == null
                         ? null

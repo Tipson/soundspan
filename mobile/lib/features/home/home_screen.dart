@@ -53,6 +53,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _shelves = <String, GlobalKey<_HomeTrackShelfState>>{};
   Timer? _visibility;
   AppFailure? _actionFailure;
+  AppFailure? _waveFailure;
+  bool _startingWave = false;
   bool _foreground = true, _tickersEnabled = true, _routeCurrent = true;
   @override
   void initState() {
@@ -132,6 +134,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _visibility?.cancel();
       _shelves.clear();
       _actionFailure = null;
+      _waveFailure = null;
+      _startingWave = false;
       if (widget.autoLoad) unawaited(widget.controller.refresh());
     }
   }
@@ -169,6 +173,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (error) {
       if (mounted && owner == widget.controller && owner.isCurrent) {
         setState(() => _actionFailure = homeFailure(error));
+      }
+    }
+  }
+
+  Future<void> _startWave() async {
+    final owner = widget.controller, start = widget.onStartWave;
+    if (_startingWave || start == null || !owner.isCurrent) return;
+    setState(() {
+      _startingWave = true;
+      _waveFailure = null;
+    });
+    try {
+      await start();
+    } catch (error) {
+      if (mounted && owner == widget.controller && owner.isCurrent) {
+        setState(() => _waveFailure = homeFailure(error));
+      }
+    } finally {
+      if (mounted && owner == widget.controller && owner.isCurrent) {
+        setState(() => _startingWave = false);
       }
     }
   }
@@ -253,9 +277,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     const SizedBox(height: 20),
                     if (widget.onStartWave != null) ...[
                       MusicButton(
-                        label: 'Слушать волну',
+                        label: _startingWave
+                            ? 'Запускаем волну…'
+                            : _waveFailure == null
+                            ? 'Слушать волну'
+                            : 'Повторить запуск',
                         icon: Icons.play_arrow_rounded,
-                        onPressed: () => _run(widget.onStartWave!),
+                        busy: _startingWave,
+                        onPressed: _startWave,
                       ),
                       const SizedBox(height: 8),
                     ],
@@ -365,6 +394,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ),
         _hero(context, feed),
+        if (_waveFailure != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: MusicStatus(message: _waveFailure!.message, error: true),
+          ),
         if (_actionFailure != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
