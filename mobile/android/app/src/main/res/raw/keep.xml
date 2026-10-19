@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AudioService resolves these notification drawables by name at runtime. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/audio_service_pause,@drawable/audio_service_play_arrow,@drawable/audio_service_skip_previous,@drawable/audio_service_skip_next,@drawable/audio_service_stop,@drawable/ic_stat_soundspan" />

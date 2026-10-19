@@ -1,5 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $module = Import-Module (Join-Path $PSScriptRoot 'release-tools.psm1') -Force -PassThru
+. (Join-Path $PSScriptRoot 'release-media.fixtures.ps1')
+$mediaFixture = New-MediaResourceFixture
 $fixture = 'D:\CodexData\temp\t25-abi-tests-' + [guid]::NewGuid().ToString('N')
 $null = Assert-SafeDPath $fixture 'D:\CodexData\temp'
 $null = New-Item -ItemType Directory -Path $fixture
@@ -10,16 +12,18 @@ $script:passed = 0
     $script:fixtureBadging = ''
     function script:Invoke-CheckedNative([string]$Executable, [string[]]$Arguments) {
         if ($Arguments[0] -eq 'verify') { return "Signer #1 certificate DN: CN=Fixture`nSigner #1 certificate SHA-256 digest: $('A' * 64)" }
-        if ($Arguments[1] -eq 'badging') { return "package: name='ru.agentik007.soundspan' versionCode='5' versionName='0.1.3'`nsdkVersion:'24'`ntargetSdkVersion:'36'`nuses-permission: name='android.permission.INTERNET'`n$script:fixtureBadging" }
+        if ($Arguments[1] -eq 'badging') { return "package: name='ru.agentik007.soundspan' versionCode='6' versionName='0.1.4'`nsdkVersion:'24'`ntargetSdkVersion:'36'`nuses-permission: name='android.permission.INTERNET'`n$script:fixtureBadging" }
+        if ($Arguments[1] -eq '--values' -and $Arguments[2] -eq 'resources') { return $script:fixtureMediaResources }
         return 'E: manifest (line=1)'
     }
 }
+& $module { param($value) $script:fixtureMediaResources = $value } $mediaFixture.resources
 function Check-Package([string]$Name, [object[]]$Entries, [string]$NativeCode, [bool]$Accept = $false) {
     $path = Join-Path $fixture ($Name + '.apk')
     $zip = [IO.Compression.ZipFile]::Open($path,[IO.Compression.ZipArchiveMode]::Create)
     try {
         $null = $zip.CreateEntry('AndroidManifest.xml')
-        foreach ($entry in $Entries) {
+        foreach ($entry in ($Entries + $mediaFixture.entries)) {
             $stream = $zip.CreateEntry($entry.path).Open()
             try { if ($entry.nonempty) { $stream.WriteByte(1) } } finally { $stream.Dispose() }
         }
@@ -34,7 +38,7 @@ function Check-Package([string]$Name, [object[]]$Entries, [string]$NativeCode, [
     if ($Accept) {
         if ($rejected) { throw "Valid package rejected: $Name" }
         if (($receipt.nativeAbis -join ',') -cne 'armeabi-v7a,arm64-v8a,x86_64') { throw 'Receipt must record all verified ABIs' }
-        if ($receipt.versionName -cne '0.1.3' -or $receipt.versionCode -ne 5) { throw 'Receipt must record the inspected release version' }
+        if ($receipt.versionName -cne '0.1.4' -or $receipt.versionCode -ne 6) { throw 'Receipt must record the inspected release version' }
     } elseif (-not $rejected) { throw "Expected rejection: $Name" }
     $script:passed++
     Write-Output "PASS $Name"

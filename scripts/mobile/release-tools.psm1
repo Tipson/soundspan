@@ -113,7 +113,7 @@ function Assert-ApkMetadata([string]$Certificates, [string]$Badging, [string]$Ex
     if ($ExpectedCertificate -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Invalid pinned certificate digest' }
     $digests = [regex]::Matches($Certificates, '(?m)^Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9]{64})\s*$')
     if ($digests.Count -ne 1 -or $digests[0].Groups[1].Value -ne $ExpectedCertificate -or $Certificates -match '(?i)Android Debug') { throw 'APK signer does not match the private release identity' }
-    if ($Badging -notmatch "(?m)^package: name='ru\.agentik007\.soundspan' versionCode='5' versionName='0\.1\.3'" -or $Badging -notmatch "(?m)^sdkVersion:'24'" -or $Badging -notmatch "(?m)^targetSdkVersion:'36'") { throw 'APK identity/version/SDK mismatch' }
+    if ($Badging -notmatch "(?m)^package: name='ru\.agentik007\.soundspan' versionCode='6' versionName='0\.1\.4'" -or $Badging -notmatch "(?m)^sdkVersion:'24'" -or $Badging -notmatch "(?m)^targetSdkVersion:'36'") { throw 'APK identity/version/SDK mismatch' }
     if ($Badging -match '(?i)application-debuggable|application-testOnly|testOnly') { throw 'Debuggable or test-only APK rejected' }
     $allowed = @('android.permission.INTERNET','android.permission.WAKE_LOCK','android.permission.FOREGROUND_SERVICE','android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK','android.permission.FOREGROUND_SERVICE_DATA_SYNC','android.permission.POST_NOTIFICATIONS','android.permission.ACCESS_NETWORK_STATE','android.permission.RECEIVE_BOOT_COMPLETED','ru.agentik007.soundspan.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION')
     foreach ($permission in [regex]::Matches($Badging, "(?m)^uses-permission[^:]*: name='([^']+)'")) {
@@ -165,17 +165,62 @@ function Assert-ApkNativeLibraries([string]$Badging, [IO.Compression.ZipArchiveE
     return $expected
 }
 
+function Assert-ApkMediaResources([string]$Resources, [IO.Compression.ZipArchiveEntry[]]$Entries) {
+    # audio_service resolves these drawables with getIdentifier at runtime, so
+    # source XML and spec-only table entries cannot prove release availability.
+    $required = @('audio_service_pause','audio_service_play_arrow','audio_service_skip_previous','audio_service_skip_next','audio_service_stop','ic_stat_soundspan')
+    $records = @{}
+    foreach ($name in $required) { $records[$name] = [Collections.Generic.List[object]]::new() }
+    $current = $null
+    foreach ($line in ($Resources -split "`n")) {
+        $resource = [regex]::Match($line, '^\s*resource\s+(0x[0-9a-fA-F]{8})\s+([^:\s]+):([^/\s]+)/([^:\s]+):\s*(.*)$')
+        if ($resource.Success) {
+            $current = $null
+            $name = $resource.Groups[4].Value
+            if ($resource.Groups[2].Value -ceq 'ru.agentik007.soundspan' -and $resource.Groups[3].Value -ceq 'drawable' -and $required -ccontains $name) {
+                $value = [regex]::Match($resource.Groups[5].Value, '^t=(0x[0-9a-fA-F]{2})\s+d=0x[0-9a-fA-F]{8}\b')
+                if ($resource.Groups[1].Value -eq '0x00000000' -or -not $value.Success -or $value.Groups[1].Value -ne '0x03') { throw "APK media drawable has a zero ID or invalid compiled value: $name" }
+                $current = [pscustomobject]@{ id=$resource.Groups[1].Value.ToLowerInvariant(); files=[Collections.Generic.List[string]]::new() }
+                $records[$name].Add($current)
+            }
+        } elseif ($line -match '^\s*(spec resource|config|type|Package|INVALID)\b') { $current = $null }
+        if ($null -ne $current) {
+            $file = [regex]::Match($line, '\(string(?:8|16)\)\s+"([^"\r\n]+)"\s*$')
+            if ($file.Success) { $current.files.Add($file.Groups[1].Value) }
+        }
+    }
+    $verified = [Collections.Generic.List[object]]::new()
+    foreach ($name in $required) {
+        if ($records[$name].Count -eq 0) { throw "APK media drawable is missing from the compiled resource table: $name" }
+        $ids = @($records[$name].id | Sort-Object -Unique)
+        if ($ids.Count -ne 1) { throw "APK media drawable has conflicting compiled IDs: $name" }
+        $paths = [Collections.Generic.List[string]]::new()
+        foreach ($record in $records[$name]) {
+            if ($record.files.Count -ne 1) { throw "APK media drawable has no unique compiled file value: $name" }
+            $path = $record.files[0]
+            if (-not $path.StartsWith('res/', [StringComparison]::Ordinal) -or $path -match '(^|/)\.{1,2}(/|$)|\\') { throw "APK media drawable has an invalid compiled ZIP path: $name" }
+            $files = @($Entries | Where-Object { $_.FullName -ceq $path })
+            if ($files.Count -ne 1 -or $files[0].Length -le 0) { throw "APK media drawable ZIP file is missing, empty or duplicated: $name" }
+            if (-not $paths.Contains($path)) { $paths.Add($path) }
+        }
+        $verified.Add([pscustomobject]@{ name=$name; id=$ids[0]; files=$paths.ToArray() })
+    }
+    return $verified.ToArray()
+}
+
 function Test-ReleaseApk([string]$Apk, [string]$BuildTools, [string]$ExpectedCertificate) {
     $cert = Invoke-CheckedNative (Join-Path $BuildTools 'apksigner.bat') @('verify','--verbose','--print-certs',$Apk)
     $badging = Invoke-CheckedNative (Join-Path $BuildTools 'aapt.exe') @('dump','badging',$Apk)
     $tree = Invoke-CheckedNative (Join-Path $BuildTools 'aapt.exe') @('dump','xmltree',$Apk,'AndroidManifest.xml')
+    $resources = Invoke-CheckedNative (Join-Path $BuildTools 'aapt.exe') @('dump','--values','resources',$Apk)
     Assert-ReleaseManifest $tree
     $zip = [IO.Compression.ZipFile]::OpenRead($Apk)
     try {
         Assert-ApkMetadata $cert $badging $ExpectedCertificate @($zip.Entries.FullName)
         $nativeAbis = @(Assert-ApkNativeLibraries $badging @($zip.Entries))
+        $mediaDrawables = @(Assert-ApkMediaResources $resources @($zip.Entries))
     } finally { $zip.Dispose() }
-    return [ordered]@{ apkSha256=(Get-FileHash -LiteralPath $Apk).Hash; certificateSha256=$ExpectedCertificate; applicationId='ru.agentik007.soundspan'; versionName='0.1.3'; versionCode=5; minSdk=24; targetSdk=36; nativeAbis=$nativeAbis; apksigner=$cert; badging=$badging; manifest=$tree }
+    return [ordered]@{ apkSha256=(Get-FileHash -LiteralPath $Apk).Hash; certificateSha256=$ExpectedCertificate; applicationId='ru.agentik007.soundspan'; versionName='0.1.4'; versionCode=6; minSdk=24; targetSdk=36; nativeAbis=$nativeAbis; mediaDrawables=$mediaDrawables; apksigner=$cert; badging=$badging; manifest=$tree }
 }
 
 Export-ModuleMember -Function *

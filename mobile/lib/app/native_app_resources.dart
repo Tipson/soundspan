@@ -155,6 +155,7 @@ final class NativeAppResources {
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'ru.agentik007.soundspan.playback',
         androidNotificationChannelName: 'Воспроизведение музыки',
+        androidNotificationIcon: 'drawable/ic_stat_soundspan',
         androidStopForegroundOnPause: false,
       ),
     );
