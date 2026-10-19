@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Expose the same guarded navigation and track-play actions to screen readers and touch input, without enabling unavailable tracks or duplicating playback commands.
 - Refine the Android music interface with a compact photo-led Home and Wave, swipeable mixes, calmer library and settings, and a rounded mini-player. Give full-player artwork, complete titles and playback controls a consistent visual hierarchy while retaining large-text and narrow-screen navigation.
 - Keep music collection counts grammatically correct in Russian and verify signed Android release 0.1.3 (5) against its pinned metadata.
 - Keep the Android Wave launch controls, player transport and track feedback visible on compact screens, including long titles and larger text. Move download storage explanations into an expandable summary and keep full download filter names in a scrollable row.

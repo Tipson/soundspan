@@ -248,6 +248,7 @@ class _AppShellState extends State<AppShell> {
                 button: true,
                 label: tab.label,
                 excludeSemantics: true,
+                onTap: () => widget.router.selectTab(tab),
                 child: MusicTapTarget(
                   onTap: () => widget.router.selectTab(tab),
                   child: Padding(

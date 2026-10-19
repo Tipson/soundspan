@@ -57,6 +57,7 @@ class TrackRow extends StatelessWidget {
               enabled: track.playable && onPlay != null,
               button: true,
               excludeSemantics: true,
+              onTap: track.playable ? onPlay : null,
               child: MusicTapTarget(
                 key: ValueKey('track-play-${ref.identityKey}'),
                 onTap: track.playable ? onPlay : null,
