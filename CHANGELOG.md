@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Keep unavailable remote-library album IDs outside MusicBrainz discovery fallback and explain when an album cannot be opened. Preserve exact MusicBrainz fallback, accessible remote albums, and original authentication/rate-limit/server failures.
 - Give the Android Home and Wave a compact musical identity, bring mixes and saved collections closer to the first viewport, and keep search entry focused on its query. Group settings, move download automation into the expandable storage summary, and align likes and playlist playback actions without changing queue or audio ownership. Keep empty-state actions reachable with large text, use consistent library naming, and distinguish displayed playlist rows from files downloaded to the device.
 - Preserve Android media-notification action icons in optimized release APKs and use a monochrome status icon, keeping pause, resume and track changes visible in the system panel. Reject signed releases with missing packaged playback controls.
 - Expose the same guarded navigation and track-play actions to screen readers and touch input, without enabling unavailable tracks or duplicating playback commands.

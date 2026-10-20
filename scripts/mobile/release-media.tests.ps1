@@ -12,7 +12,7 @@ $script:passed = 0
     $script:fixtureMediaResources = ''
     function script:Invoke-CheckedNative([string]$Executable, [string[]]$Arguments) {
         if ($Arguments[0] -eq 'verify') { return "Signer #1 certificate DN: CN=Fixture`nSigner #1 certificate SHA-256 digest: $('A' * 64)" }
-        if ($Arguments[1] -eq 'badging') { return "package: name='ru.agentik007.soundspan' versionCode='9' versionName='0.1.6'`nsdkVersion:'24'`ntargetSdkVersion:'36'`nnative-code: 'armeabi-v7a' 'arm64-v8a' 'x86_64'" }
+        if ($Arguments[1] -eq 'badging') { return "package: name='ru.agentik007.soundspan' versionCode='10' versionName='0.1.7'`nsdkVersion:'24'`ntargetSdkVersion:'36'`nnative-code: 'armeabi-v7a' 'arm64-v8a' 'x86_64'" }
         if ($Arguments[1] -eq '--values' -and $Arguments[2] -eq 'resources') { return $script:fixtureMediaResources }
         if ($Arguments[1] -ne 'xmltree') { throw 'Unexpected native inspection request' }
         return 'E: manifest (line=1)'

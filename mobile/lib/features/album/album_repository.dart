@@ -5,6 +5,10 @@ import '../search/catalog_models.dart';
 import '../search/catalog_repository.dart';
 
 final class AlbumRepository extends CatalogRepository {
+  static final _musicBrainzId = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
   AlbumRepository({
     required super.transport,
     required super.authority,
@@ -24,17 +28,26 @@ final class AlbumRepository extends CatalogRepository {
     try {
       dto = collectionObject(await get('$path${Uri.encodeComponent(ref.id)}'));
     } on AppFailure catch (e) {
-      if (e.statusCode != 404 ||
-          ref.source != CatalogSource.library ||
-          ref.mbid == null) {
+      if (e.statusCode != 404 || ref.source != CatalogSource.library) {
         rethrow;
+      }
+      // Persisted rgMbid also carries remote/federation identities. Only an
+      // exact MusicBrainz UUID may cross into its discovery endpoint.
+      final mbid = ref.mbid;
+      if (mbid == null || _musicBrainzId.stringMatch(mbid) != mbid) {
+        throw const AppFailure(
+          code: 'album_unavailable',
+          message:
+              'Этот альбом пока недоступен. Выберите другой результат поиска.',
+          statusCode: 404,
+        );
       }
       return load(
         CatalogEntityRef(
           kind: ref.kind,
           source: CatalogSource.discovery,
-          id: ref.mbid!,
-          mbid: ref.mbid,
+          id: mbid,
+          mbid: mbid,
           name: ref.name,
           artwork: ref.artwork,
         ),
