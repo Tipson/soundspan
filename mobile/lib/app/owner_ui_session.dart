@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../core/model/track.dart';
 import '../core/model/track_ref.dart';
 import '../downloads/download_worker_bridge.dart';
+import '../downloads/download_models.dart';
 import '../downloads/liked_download_automation.dart';
 import '../features/account/account_controller.dart';
 import '../features/account/account_repository.dart';
@@ -194,6 +195,30 @@ final class OwnerUiSession {
           onRadio: (target) => _present('radio', target),
           onArtist: (target) => _present('artist', target),
           onAlbum: (target) => _present('album', target),
+          isDownloaded: (target) async {
+            await guard();
+            await target.assertCurrent();
+            final jobs = await owner.downloads.list(fence);
+            for (final job in jobs.where(
+              (j) =>
+                  j.track.ref == target.track.ref &&
+                  j.state == DownloadState.ready,
+            )) {
+              if (await owner.downloads.openReady(
+                    job.track.ref,
+                    job.quality,
+                    fence,
+                  ) !=
+                  null) {
+                await guard();
+                await target.assertCurrent();
+                return true;
+              }
+            }
+            await guard();
+            await target.assertCurrent();
+            return false;
+          },
           onDownload: (target) async {
             await guard();
             await target.assertCurrent();

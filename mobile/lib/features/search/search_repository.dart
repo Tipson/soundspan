@@ -206,8 +206,8 @@ final class SearchRepository extends CatalogRepository {
     final pageInfo = objectOrEmpty(discovery?['pageInfo']);
     return SearchPage(
       tracks: tracks,
-      artists: artists,
-      albums: albums,
+      artists: _browseFirst(artists),
+      albums: _browseFirst(albums),
       failures: failures,
       localOffset:
           local == null ||
@@ -234,5 +234,17 @@ final class SearchRepository extends CatalogRepository {
           textOrNull(objectOrEmpty(discovery?['aliasInfo'])['canonical']) ??
           previous?.alias,
     );
+  }
+
+  // Keep the server's relevance order inside each group. Provider browse IDs
+  // lead directly to a music catalogue; names never establish shared identity.
+  Iterable<CatalogEntity> _browseFirst(List<CatalogEntity> entities) sync* {
+    for (final source in [
+      CatalogSource.ytmusic,
+      CatalogSource.library,
+      CatalogSource.discovery,
+    ]) {
+      yield* entities.where((entity) => entity.ref.source == source);
+    }
   }
 }

@@ -348,6 +348,19 @@ void main() {
       );
       expect(tester.getTopLeft(find.text('Мой плейлист')).dy, lessThan(360));
       expect(
+        tester
+            .getSize(
+              find
+                  .ancestor(
+                    of: find.text('Любимое'),
+                    matching: find.byType(MusicTapTarget),
+                  )
+                  .first,
+            )
+            .height,
+        lessThanOrEqualTo(104),
+      );
+      expect(
         tester.getTopLeft(find.text('Исполнители')).dy,
         tester.getTopLeft(find.text('Всё')).dy,
       );

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 
@@ -8,6 +9,7 @@ import 'just_audio_engine.dart';
 import 'playback_controller.dart';
 import 'playback_engine.dart';
 import 'queue_coordinator.dart';
+import 'platform_playback_guard.dart';
 
 /// Construct exactly once for the process, then attach to AudioService when
 /// application owner restoration is ready.
@@ -39,11 +41,23 @@ final class SoundspanAudioHandler extends BaseAudioHandler {
       await coordinator.dispose();
       rethrow;
     }
-    return SoundspanAudioHandler(coordinator: coordinator, focus: focus);
+    final handler = SoundspanAudioHandler(
+      coordinator: coordinator,
+      focus: focus,
+    );
+    if (Platform.isAndroid) {
+      handler._platformGuard = PlatformPlaybackGuard(
+        coordinator: coordinator,
+        errors: AudioService.asyncError,
+        foreground: PlatformPlaybackGuard.readAndroidForeground,
+      );
+    }
+    return handler;
   }
 
   final QueueCoordinator coordinator;
   final AudioFocusCoordinator? focus;
+  PlatformPlaybackGuard? _platformGuard;
   late final StreamSubscription<PlaybackEvent> _subscription;
   QueueSnapshot? _lastSystemState;
   Duration _lastSystemElapsed = Duration.zero;
@@ -177,6 +191,7 @@ final class SoundspanAudioHandler extends BaseAudioHandler {
         SetShuffle(shuffleMode != AudioServiceShuffleMode.none),
       );
   Future<void> dispose() async {
+    await _platformGuard?.dispose();
     await _subscription.cancel();
     await focus?.dispose();
     await coordinator.dispose();

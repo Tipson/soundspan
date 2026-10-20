@@ -53,6 +53,7 @@ class PlayerCallbacks {
     this.onShare,
     this.onSettings,
     this.onSaveQueue,
+    this.isDownloaded,
   });
   final PlayerTrackAction? onLyrics,
       onRelated,
@@ -64,6 +65,7 @@ class PlayerCallbacks {
       onShare,
       onSettings;
   final PlayerQueueAction? onSaveQueue;
+  final Future<bool> Function(PlayerTrackTarget)? isDownloaded;
 }
 
 /// UI projection over the single service; owns neither audio nor a queue copy.
@@ -316,6 +318,19 @@ class PlayerController extends ChangeNotifier {
       await captured.assertCurrent();
       await action(captured);
     });
+  }
+
+  Future<bool?> downloaded(PlayerTrackTarget target) async {
+    final lookup = callbacks.isDownloaded;
+    if (lookup == null) return false;
+    bool? result;
+    await _run(() async {
+      await target.assertCurrent();
+      final ready = await lookup(target);
+      await target.assertCurrent();
+      result = ready;
+    });
+    return result;
   }
 
   Future<void> saveQueue({PlayerQueueTarget? target}) {

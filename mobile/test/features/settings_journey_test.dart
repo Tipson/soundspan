@@ -245,12 +245,16 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull);
       expect(tastes.progress, 0);
+      final genresButton = find.widgetWithText(TextButton, 'Все жанры');
       await tester.scrollUntilVisible(
-        find.text('Все жанры'),
+        genresButton,
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(find.text('Все жанры'));
+      await tester.ensureVisible(genresButton);
+      await tester.pumpAndSettle();
+      expect(genresButton.hitTestable(), findsOneWidget);
+      await tester.tap(genresButton);
       await tester.pumpAndSettle();
       expect(find.text('Закрыть жанры'), findsNothing);
       expect(find.byType(CheckboxListTile), findsWidgets);

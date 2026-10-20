@@ -12,7 +12,7 @@ $script:passed = 0
     $script:fixtureBadging = ''
     function script:Invoke-CheckedNative([string]$Executable, [string[]]$Arguments) {
         if ($Arguments[0] -eq 'verify') { return "Signer #1 certificate DN: CN=Fixture`nSigner #1 certificate SHA-256 digest: $('A' * 64)" }
-        if ($Arguments[1] -eq 'badging') { return "package: name='ru.agentik007.soundspan' versionCode='10' versionName='0.1.7'`nsdkVersion:'24'`ntargetSdkVersion:'36'`nuses-permission: name='android.permission.INTERNET'`n$script:fixtureBadging" }
+        if ($Arguments[1] -eq 'badging') { return "package: name='ru.agentik007.soundspan' versionCode='11' versionName='0.1.8'`nsdkVersion:'24'`ntargetSdkVersion:'36'`nuses-permission: name='android.permission.INTERNET'`n$script:fixtureBadging" }
         if ($Arguments[1] -eq '--values' -and $Arguments[2] -eq 'resources') { return $script:fixtureMediaResources }
         return 'E: manifest (line=1)'
     }
@@ -38,7 +38,7 @@ function Check-Package([string]$Name, [object[]]$Entries, [string]$NativeCode, [
     if ($Accept) {
         if ($rejected) { throw "Valid package rejected: $Name" }
         if (($receipt.nativeAbis -join ',') -cne 'armeabi-v7a,arm64-v8a,x86_64') { throw 'Receipt must record all verified ABIs' }
-        if ($receipt.versionName -cne '0.1.7' -or $receipt.versionCode -ne 10) { throw 'Receipt must record the inspected release version' }
+        if ($receipt.versionName -cne '0.1.8' -or $receipt.versionCode -ne 11) { throw 'Receipt must record the inspected release version' }
     } elseif (-not $rejected) { throw "Expected rejection: $Name" }
     $script:passed++
     Write-Output "PASS $Name"

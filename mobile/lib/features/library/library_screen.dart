@@ -159,18 +159,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
       borderRadius: BorderRadius.circular(MusicRadius.card),
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 28, color: MusicColors.primary),
-            const SizedBox(height: 12),
-            Text(label, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: MusicColors.textSecondary),
+            Icon(icon, size: 24, color: MusicColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Semantics(
+                label: '$label, $subtitle',
+                excludeSemantics: true,
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
             ),
           ],
         ),
@@ -442,7 +444,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           ),
                         ),
                     ],
-                    for (final kind in kinds) ...[
+                    for (final kind in kinds.where(
+                      (kind) =>
+                          _filter != _LibraryFilter.all ||
+                          collection.savedFailure != null ||
+                          collection.saved.any((e) => e.kind == kind),
+                    )) ...[
                       _heading(
                         kind == SavedEntityKind.album
                             ? 'Сохранённые альбомы'

@@ -55,6 +55,7 @@ import '../features/settings/settings_models.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/tastes/taste_screen.dart';
 import '../features/wave/wave_screen.dart';
+import '../features/wave/wave_direction_sheet.dart';
 import 'add_to_playlist_sheet.dart';
 import 'app_destinations.dart';
 import 'app_shell.dart';
@@ -86,6 +87,28 @@ class OwnerShell extends StatefulWidget {
 class _OwnerShellState extends State<OwnerShell>
     implements OwnerUiPresentation {
   OwnerUiSession get s => widget.session;
+  Future<void> _configureWave() async {
+    final session = s, wave = s.wave, tab = s.router.currentTab;
+    final initial = wave.selection, revision = wave.selectionRevision;
+    if (!session.isCurrent || !widget.rootExposure.value) return;
+    final selection = await WaveDirectionSheet.show(context, initial);
+    if (!mounted ||
+        !identical(s, session) ||
+        !session.isCurrent ||
+        !widget.rootExposure.value ||
+        s.router.currentTab != tab ||
+        wave.selectionRevision != revision ||
+        wave.selection != initial ||
+        selection == null) {
+      return;
+    }
+    await wave.apply(selection);
+    final failure = wave.failure;
+    if (identical(s, session) && session.isCurrent && failure != null) {
+      throw failure;
+    }
+  }
+
   late OwnerVisibility _visibility;
   Timer? _clock;
   final _entities = <String, CatalogEntityRef>{};
@@ -907,19 +930,17 @@ class _OwnerShellState extends State<OwnerShell>
                             .navigatorKey(session.router.currentTab)
                             .currentState,
                       )));
-          return _logoutFrame(
-            TasteScreen(
-              controller: session.tastes,
-              current: current,
-              onComplete: () {
-                if (current()) {
-                  session.router.back();
-                  session.observe(
-                    session.home.refresh(request: session.request()),
-                  );
-                }
-              },
-            ),
+          return TasteScreen(
+            controller: session.tastes,
+            current: current,
+            onComplete: () {
+              if (current()) {
+                session.router.back();
+                session.observe(
+                  session.home.refresh(request: session.request()),
+                );
+              }
+            },
           );
         case AppRouteKind.player:
           return FullPlayerScreen(
@@ -1063,7 +1084,7 @@ class _OwnerShellState extends State<OwnerShell>
                   await s.wave.start();
                   if (s.wave.failure case final failure?) throw failure;
                 },
-                onConfigureWave: () => s.router.selectTab(AppTab.wave),
+                onConfigureWave: _configureWave,
                 onPlay: _play,
                 onOpenMix: (mix) async {
                   _mixes[mix.identity] = mix;

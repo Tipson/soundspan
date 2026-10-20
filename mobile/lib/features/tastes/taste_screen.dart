@@ -94,6 +94,34 @@ class _TasteScreenState extends State<TasteScreen> {
     listenable: c,
     builder: (context, _) => Scaffold(
       appBar: AppBar(title: const Text('Музыкальные вкусы')),
+      bottomNavigationBar: c.state == null
+          ? null
+          : SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        'Выбрано: ${c.count}',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _progressButton(context),
+                    if (c.state!.needsOnboarding)
+                      TextButton(
+                        onPressed: c.canEdit ? () => _save(skip: true) : null,
+                        child: const Text('Пропустить'),
+                      ),
+                  ],
+                ),
+              ),
+            ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -230,8 +258,8 @@ class _TasteScreenState extends State<TasteScreen> {
                           padding: const EdgeInsets.only(right: 12),
                           child: SizedBox(
                             width: MediaQuery.sizeOf(context).width < 360
-                                ? 200
-                                : 230,
+                                ? 128
+                                : 144,
                             child: _artistCard(artist),
                           ),
                         ),
@@ -292,17 +320,6 @@ class _TasteScreenState extends State<TasteScreen> {
                     ),
                   ),
               ],
-              const SizedBox(height: 24),
-              Semantics(liveRegion: true, child: Text('Выбрано: ${c.count}')),
-              const SizedBox(height: 12),
-              _progressButton(context),
-              if (c.state!.needsOnboarding)
-                Center(
-                  child: TextButton(
-                    onPressed: c.canEdit ? () => _save(skip: true) : null,
-                    child: const Text('Пропустить'),
-                  ),
-                ),
             ],
             const SizedBox(height: 24),
           ],
@@ -327,10 +344,12 @@ class _TasteScreenState extends State<TasteScreen> {
               children: [
                 CircleAvatar(
                   radius: 32,
-                  child: Icon(
-                    selected ? Icons.check : Icons.music_note,
-                    size: 28,
-                  ),
+                  child: selected
+                      ? const Icon(Icons.check, size: 28)
+                      : Text(
+                          artist.characters.take(1).toString().toUpperCase(),
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
                 ),
                 const SizedBox(height: 12),
                 Text(artist, textAlign: TextAlign.center),

@@ -465,11 +465,19 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
                         CatalogNotice(_actionMessage!),
                       if (state.failure != null)
                         MusicButton(
-                          label: 'Повторить',
-                          icon: Icons.refresh,
-                          onPressed: () => detail == null
-                              ? owner.open(widget.entity)
-                              : owner.loadMore(),
+                          label: state.failure!.retryable
+                              ? 'Повторить'
+                              : 'Вернуться назад',
+                          icon: state.failure!.retryable
+                              ? Icons.refresh
+                              : Icons.arrow_back,
+                          onPressed: !owner.isCurrent
+                              ? null
+                              : state.failure!.retryable
+                              ? () => detail == null
+                                    ? owner.open(widget.entity)
+                                    : owner.loadMore()
+                              : () => Navigator.maybePop(context),
                         ),
                       if (detail != null) _header(detail),
                     ],

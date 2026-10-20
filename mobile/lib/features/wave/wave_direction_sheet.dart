@@ -32,6 +32,7 @@ class WaveDirectionSheet extends StatefulWidget {
     WaveSelection initial,
   ) => showModalBottomSheet<WaveSelection>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     useSafeArea: true,
     builder: (_) => WaveDirectionSheet(initial: initial),

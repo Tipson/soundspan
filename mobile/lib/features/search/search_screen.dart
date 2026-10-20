@@ -94,6 +94,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ...entities.map(
           (e) => CatalogEntityTile(
             entity: e,
+            showCatalogHint: true,
             onTap: open == null
                 ? null
                 : () => _run(owner, revision, () => open(e.ref)),
@@ -350,9 +351,15 @@ class CatalogNotice extends StatelessWidget {
 }
 
 class CatalogEntityTile extends StatelessWidget {
-  const CatalogEntityTile({super.key, required this.entity, this.onTap});
+  const CatalogEntityTile({
+    super.key,
+    required this.entity,
+    this.onTap,
+    this.showCatalogHint = false,
+  });
   final CatalogEntity entity;
   final VoidCallback? onTap;
+  final bool showCatalogHint;
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -392,6 +399,16 @@ class CatalogEntityTile extends StatelessWidget {
                       Text(
                         entity.year!,
                         style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    if (showCatalogHint)
+                      Text(
+                        switch (entity.ref.source) {
+                          CatalogSource.ytmusic => 'Онлайн-каталог',
+                          CatalogSource.library => 'Медиатека',
+                          CatalogSource.discovery => 'Справочная карточка',
+                        },
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: MusicColors.textSecondary),
                       ),
                   ],
                 ),

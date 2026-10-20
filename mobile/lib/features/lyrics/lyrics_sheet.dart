@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/model/track.dart';
-import '../../design_system/artwork.dart';
+import '../../design_system/track_row.dart';
 import '../../design_system/tokens.dart';
 import '../library/library_models.dart';
 import 'lyrics_controller.dart';
@@ -18,10 +18,12 @@ class ExtrasContents {
     required this.header,
     this.count = 0,
     this.itemBuilder,
+    this.footer = const [],
   });
   final List<Widget> header;
   final int count;
   final Widget Function(BuildContext, int)? itemBuilder;
+  final List<Widget> footer;
 }
 
 /// Lazy scroll body, accessible Back during loading, lifetime action retirement.
@@ -93,8 +95,11 @@ class _ExtrasFrameState extends State<ExtrasFrame> {
             top: false,
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-              itemCount: c.isCurrent ? body.count + 1 : 1,
+              itemCount: c.isCurrent ? body.count + 1 + body.footer.length : 1,
               itemBuilder: (context, index) {
+                if (index > body.count) {
+                  return body.footer[index - body.count - 1];
+                }
                 if (index > 0) return body.itemBuilder!(context, index - 1);
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -176,77 +181,35 @@ class ExtrasTrackTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Material(
-      color: MusicColors.surface1,
-      borderRadius: BorderRadius.circular(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: track.playable && !controller.busy && controller.isCurrent
-                ? onPlay
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Artwork(trackRef: track.ref, uri: track.artwork, size: 48),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          track.title.isEmpty
-                              ? 'Недоступный трек'
-                              : track.title,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        Text(
-                          track.artist,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        if (subtitle != null)
-                          Text(
-                            subtitle!,
-                            style: Theme.of(context).textTheme.labelSmall,
-                          ),
-                        if (!track.playable)
-                          const Text(
-                            'Воспроизведение недоступно',
-                            style: TextStyle(color: MusicColors.textMuted),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if ((onEnqueue != null && track.playable) || onActions != null)
-            Wrap(
-              alignment: WrapAlignment.end,
-              children: [
-                if (onEnqueue != null && track.playable)
-                  TextButton(
-                    onPressed: controller.busy ? null : onEnqueue,
-                    child: const Text('В очередь'),
-                  ),
-                if (onActions != null)
-                  IconButton(
-                    tooltip: 'Действия с треком',
-                    onPressed: controller.busy ? null : () => _actions(context),
-                    icon: const Icon(Icons.more_horiz),
-                  ),
-              ],
-            ),
-        ],
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: TrackRow(
+          track: track,
+          subtitle: [
+            track.artist,
+            ?subtitle,
+          ].where((s) => s.isNotEmpty).join(' · '),
+          onPlay: !controller.busy && controller.isCurrent ? onPlay : null,
+        ),
       ),
-    ),
+      if (onEnqueue != null && track.playable)
+        IconButton(
+          tooltip: 'В очередь',
+          icon: const Icon(Icons.playlist_add),
+          onPressed: controller.busy || !controller.isCurrent
+              ? null
+              : onEnqueue,
+        ),
+      if (onActions != null)
+        IconButton(
+          tooltip: 'Действия с треком',
+          icon: const Icon(Icons.more_horiz),
+          onPressed: controller.busy || !controller.isCurrent
+              ? null
+              : () => _actions(context),
+        ),
+    ],
   );
 }
 

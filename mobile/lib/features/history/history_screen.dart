@@ -107,27 +107,55 @@ class _HistoryScreenState extends State<HistoryScreen> {
             if (c.message != null) Text(c.message!),
             if (c.page != null && rows.isEmpty)
               const Text('В этом окне нет отображаемых записей'),
-            if (c.page?.nextCursor != null)
-              TextButton(
-                onPressed: c.busy ? null : () => unawaited(c.more()),
-                child: const Text('Показать более ранние'),
-              ),
             if (c.page?.reachedServerLimit ?? false)
               const Text(
                 'Окно последних 200 записей. Недоступные записи сервер может пропускать; более ранние страницы не предоставляются.',
               ),
           ],
+          footer: [
+            if (c.page?.nextCursor != null)
+              TextButton(
+                onPressed: c.busy ? null : () => unawaited(c.more()),
+                child: const Text('Показать более ранние'),
+              ),
+          ],
           count: rows.length,
           itemBuilder: (context, index) {
             final row = rows[index], date = row.playedAt.toLocal();
-            return ExtrasTrackTile(
-              track: row.track,
-              controller: c,
-              subtitle:
-                  '${date.day}.${date.month}.${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
-              onPlay: () => unawaited(c.play(index)),
-              onEnqueue: () => unawaited(c.enqueue(index)),
-              onActions: widget.onTrackActions,
+            final previousDate = index > 0
+                ? rows[index - 1].playedAt.toLocal()
+                : null;
+            final newDay =
+                previousDate == null ||
+                previousDate.year != date.year ||
+                previousDate.month != date.month ||
+                previousDate.day != date.day;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (newDay)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 24, bottom: 8),
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        '${date.day}.${date.month}.${date.year}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ),
+                ExtrasTrackTile(
+                  track: row.track,
+                  controller: c,
+                  subtitle:
+                      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
+                  onPlay: () => unawaited(c.play(index)),
+                  onEnqueue: widget.onTrackActions == null
+                      ? () => unawaited(c.enqueue(index))
+                      : null,
+                  onActions: widget.onTrackActions,
+                ),
+              ],
             );
           },
         );

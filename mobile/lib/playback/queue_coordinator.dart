@@ -679,7 +679,40 @@ final class QueueCoordinator implements PlaybackController {
     );
   }
 
-  void _fail() {
+  /// Native refusal recovery retains the exact queue and position. Admission
+  /// before and after the await prevents a delayed platform observation from
+  /// stopping a replacement track, owner, or a later manual Play.
+  Future<void> reportPlatformFailure(
+    QueueSnapshot expected,
+    int revision,
+  ) async {
+    final fence = expected.fence;
+    bool current() =>
+        fence != null &&
+        _valid(expected.generation, fence) &&
+        _queueEpoch == expected.lineage &&
+        _current == expected.currentEntryId &&
+        _intentRevision == revision &&
+        snapshot.playing;
+    if (!current()) return;
+    try {
+      await authority.assertCurrent(fence!);
+    } catch (_) {
+      return;
+    }
+    if (!current()) return;
+    _intentRevision++;
+    _focusSuspended = false;
+    _fail(
+      failure: const AppFailure(
+        code: 'background_playback_unavailable',
+        message: 'Android не разрешил фоновое воспроизведение. Откройте приложение и нажмите «Продолжить».',
+        retryable: true,
+      ),
+    );
+  }
+
+  void _fail({AppFailure? failure}) {
     _naturalContinuation = null;
     _preparingGeneration = null;
     ++_generation;
@@ -687,11 +720,13 @@ final class QueueCoordinator implements PlaybackController {
     _resource = null;
     unawaited(engine.stop());
     if (resource != null) unawaited(resource.revoke());
-    _failure = const AppFailure(
-      code: 'playback_failed',
-      message: 'Не удалось воспроизвести запись',
-      retryable: true,
-    );
+    _failure =
+        failure ??
+        const AppFailure(
+          code: 'playback_failed',
+          message: 'Не удалось воспроизвести запись',
+          retryable: true,
+        );
     _processing = PlaybackProcessing.failed;
     _audible = false;
     _intent = false;

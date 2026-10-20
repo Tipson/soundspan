@@ -697,4 +697,61 @@ void main() {
       });
     }
   }
+  testWidgets(
+    'ready track menu reports local availability without another download',
+    (tester) async {
+      controller.dispose();
+      var checks = 0, downloads = 0;
+      controller = PlayerController(
+        playback: playback,
+        authority: authority,
+        fence: collectionFence,
+        preferences: preferences,
+        callbacks: PlayerCallbacks(
+          isDownloaded: (target) async {
+            checks++;
+            expect(target.track.ref, entries[1].track.ref);
+            return true;
+          },
+          onDownload: (_) {
+            downloads++;
+          },
+        ),
+      );
+      await mount(tester, FullPlayerScreen(controller: controller));
+      await tester.tap(find.byTooltip('Действия трека'));
+      await tester.pumpAndSettle();
+      expect(checks, 1);
+      expect(find.text('На устройстве'), findsOneWidget);
+      expect(find.text('Скачать на устройство'), findsNothing);
+      expect(downloads, 0);
+    },
+  );
+
+  testWidgets(
+    'late download availability cannot open menu after track changes',
+    (tester) async {
+      controller.dispose();
+      final gate = Completer<bool>();
+      controller = PlayerController(
+        playback: playback,
+        authority: authority,
+        fence: collectionFence,
+        preferences: preferences,
+        callbacks: PlayerCallbacks(
+          isDownloaded: (_) => gate.future,
+          onDownload: (_) {},
+        ),
+      );
+      await mount(tester, FullPlayerScreen(controller: controller));
+      await tester.tap(find.byTooltip('Действия трека'));
+      await tester.pump();
+      playback.publish(state(current: 'c', generation: 2));
+      gate.complete(true);
+      await tester.pumpAndSettle();
+      expect(find.text('Громкость'), findsNothing);
+      expect(find.text('На устройстве'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

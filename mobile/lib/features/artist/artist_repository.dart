@@ -5,6 +5,10 @@ import '../search/catalog_repository.dart';
 import '../library/library_models.dart';
 
 final class ArtistRepository extends CatalogRepository {
+  static final _musicBrainzId = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
   ArtistRepository({
     required super.transport,
     required super.authority,
@@ -24,16 +28,22 @@ final class ArtistRepository extends CatalogRepository {
     try {
       dto = collectionObject(await get('$path${Uri.encodeComponent(ref.id)}'));
     } on AppFailure catch (e) {
-      if (e.statusCode != 404 ||
-          ref.source != CatalogSource.library ||
-          ref.mbid == null) {
+      if (e.statusCode != 404 || ref.source != CatalogSource.library) {
         rethrow;
+      }
+      final mbid = ref.mbid;
+      if (mbid == null || _musicBrainzId.stringMatch(mbid) != mbid) {
+        throw const AppFailure(
+          code: 'artist_unavailable',
+          message: 'Этот исполнитель пока недоступен. Выберите другой результат поиска.',
+          statusCode: 404,
+        );
       }
       return load(
         CatalogEntityRef(
           kind: ref.kind,
           source: CatalogSource.discovery,
-          id: ref.mbid!,
+          id: mbid,
           mbid: ref.mbid,
           name: ref.name,
           artwork: ref.artwork,

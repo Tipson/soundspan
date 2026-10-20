@@ -145,6 +145,20 @@ void main() {
     expect(playback.commands, isEmpty);
   });
 
+  testWidgets(
+    'long-title player exposes both text and related without scrolling',
+    (tester) async {
+      await mount(tester, size: const Size(360, 800), longTitle: true);
+      for (final label in ['Текст', 'Похожее']) {
+        expect(find.text(label).hitTestable(), findsOneWidget);
+        expect(
+          tester.getBottomLeft(find.text(label)).dy,
+          lessThanOrEqualTo(776),
+        );
+      }
+    },
+  );
+
   Finder feedback(String text) =>
       find.ancestor(of: find.text(text), matching: find.byType(MusicTapTarget));
 
@@ -172,7 +186,7 @@ void main() {
     );
   }
 
-  testWidgets('long title leaves artwork dominant and artist secondary', (
+  testWidgets('long title retains square artwork and artist secondary', (
     tester,
   ) async {
     await mount(tester, size: const Size(360, 800), longTitle: true);
@@ -182,7 +196,10 @@ void main() {
     // title roles while retaining the complete real-world title.
     expect(title.size.height, lessThanOrEqualTo(130));
     expect(title.text.style?.fontSize, 20);
-    expect(art.height, greaterThanOrEqualTo(title.size.height * 1.5));
+    // A compact cover makes room for text/related actions without truncating
+    // the title. Very long titles must not reduce it to a tiny placeholder.
+    expect(art.height, greaterThanOrEqualTo(128));
+    expect(art.width, art.height);
     final artist = tester.renderObject<RenderParagraph>(
       find.text('Olivia Rodrigo'),
     );

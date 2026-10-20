@@ -318,8 +318,14 @@ class FullPlayerScreen extends StatelessWidget {
                   )
             : 0) +
         (state.processing == PlaybackProcessing.failed ? 56 : 0) +
+        // Cover gap, feedback-to-sections gap, divider, tabs and scroll insets.
+        20 +
+        20 +
+        16 +
+        8 +
         48 +
-        (height >= 650 ? 32 : 0);
+        12 +
+        24;
     return (height - reserved).clamp(minEdge, maxEdge).toDouble();
   }
 
@@ -572,10 +578,20 @@ class FullPlayerScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _actions(BuildContext context) {
+  Future<void> _actions(BuildContext context) async {
+    if (controller.busy) return;
     final target = controller.captureTrack();
-    if (target == null) return Future.value();
+    if (target == null) return;
     final cb = controller.callbacks;
+    final routeOwner = ModalRoute.of(context);
+    final downloaded = cb.onDownload == null
+        ? false
+        : await controller.downloaded(target);
+    if (!context.mounted ||
+        !target.isCurrent ||
+        routeOwner?.isCurrent == false) {
+      return;
+    }
     MusicAction route(
       String id,
       String label,
@@ -587,7 +603,7 @@ class FullPlayerScreen extends StatelessWidget {
       icon: icon,
       onSelected: () => controller.invoke(action, target: target),
     );
-    return MusicActionSheet.show(context, [
+    await MusicActionSheet.show(context, [
       MusicAction(
         id: 'volume',
         label: 'Громкость',
@@ -609,7 +625,20 @@ class FullPlayerScreen extends StatelessWidget {
         route('album', 'Открыть альбом', Icons.album, cb.onAlbum!),
       if (cb.onArtist != null && target.track.artistId != null)
         route('artist', 'Открыть исполнителя', Icons.person, cb.onArtist!),
-      if (cb.onDownload != null)
+      if (cb.onDownload != null && downloaded != false)
+        MusicAction(
+          id: 'download-status',
+          label: downloaded == true
+              ? 'На устройстве'
+              : 'Не удалось проверить загрузку',
+          icon: downloaded == true
+              ? Icons.offline_pin_outlined
+              : Icons.error_outline,
+          disabledReason: downloaded == true
+              ? 'Трек доступен без сети.'
+              : 'Закройте меню и попробуйте снова.',
+        ),
+      if (cb.onDownload != null && downloaded == false)
         route(
           'download',
           'Скачать на устройство',
