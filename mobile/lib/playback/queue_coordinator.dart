@@ -83,6 +83,7 @@ final class QueueCoordinator implements PlaybackController {
     bufferedPosition: _buffer,
     processing: _processing,
     playingIntent: _intent,
+    focusSuspended: _focusSuspended,
     audible: _audible,
     shuffle: _shuffle,
     repeat: _repeat,
@@ -530,6 +531,9 @@ final class QueueCoordinator implements PlaybackController {
       case Resume():
         if (_current == null) return;
         _naturalContinuation = null;
+        // An explicit Play may reclaim focus after a permanent loss, which has
+        // no matching end callback. Late callbacks cannot replay this revision.
+        _focusSuspended = false;
         _intent = true;
         _intentRevision++;
         _publish();
@@ -773,8 +777,12 @@ final class QueueCoordinator implements PlaybackController {
   }
 
   /// Focus pauses preserve user intent; resume needs the exact saved revision.
-  Future<void> suspendForFocus() async {
-    _focusSuspended = true;
+  Future<void> suspendForFocus({bool resumeOnGain = true}) async {
+    _focusSuspended = resumeOnGain;
+    if (!resumeOnGain) {
+      _intent = false;
+      _intentRevision++;
+    }
     _audible = false;
     _publish();
     await engine.pause();
@@ -785,6 +793,7 @@ final class QueueCoordinator implements PlaybackController {
     int revision, {
     bool allowResume = true,
   }) async {
+    if (!_focusSuspended) return;
     _focusSuspended = false;
     final fence = _fence;
     if (allowResume &&
@@ -793,10 +802,15 @@ final class QueueCoordinator implements PlaybackController {
         revision == _intentRevision &&
         _intent) {
       await _play(generation, fence);
+    } else {
+      _intent = false;
+      _intentRevision++;
+      _publish();
     }
   }
 
   Future<void> _clear() async {
+    _focusSuspended = false;
     _naturalContinuation = null;
     _preparingGeneration = null;
     ++_replacementIntent;

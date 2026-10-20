@@ -42,6 +42,7 @@ class _Playback extends CollectionPlayback {
     Track track, {
     PlaybackProcessing processing = PlaybackProcessing.ready,
     bool playing = true,
+    bool focusSuspended = false,
     SessionFence? fence,
   }) {
     final entry = QueueEntry(
@@ -56,6 +57,7 @@ class _Playback extends CollectionPlayback {
       fence: fence ?? collectionFence,
       processing: processing,
       playingIntent: playing,
+      focusSuspended: focusSuspended,
     );
     updates.add(value);
   }
@@ -217,6 +219,10 @@ void main() {
         playback.publish(_tracks[0], playing: false);
         await tester.pump();
         expect(_status(1, 'На паузе'), findsOneWidget);
+        playback.publish(_tracks[0], focusSuspended: true);
+        await tester.pump();
+        expect(_status(1, 'На паузе'), findsOneWidget);
+        expect(_status(1, 'Воспроизводится'), findsNothing);
         playback.publish(_tracks[0], processing: PlaybackProcessing.buffering);
         await tester.pump();
         expect(_status(1, 'Подготавливаем воспроизведение'), findsOneWidget);

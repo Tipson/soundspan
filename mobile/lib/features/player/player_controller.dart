@@ -231,7 +231,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> togglePlayback() =>
-      _command(snapshot.playingIntent ? const Pause() : const Resume());
+      _command(snapshot.playing ? const Pause() : const Resume());
   Future<void> retry() => _command(const Resume());
   Future<void> previous() => _command(const Previous());
   Future<void> next() =>

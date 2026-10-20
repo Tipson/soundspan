@@ -258,7 +258,7 @@ class _LikesScreenState extends State<LikesScreen> {
         snapshot.processing == PlaybackProcessing.buffering) {
       return TrackPlaybackState.resolving;
     }
-    return snapshot.playingIntent
+    return snapshot.playing
         ? TrackPlaybackState.playing
         : TrackPlaybackState.paused;
   }

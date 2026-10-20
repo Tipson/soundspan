@@ -409,7 +409,7 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
         snapshot.processing == PlaybackProcessing.buffering) {
       return TrackPlaybackState.resolving;
     }
-    return snapshot.playingIntent
+    return snapshot.playing
         ? TrackPlaybackState.playing
         : TrackPlaybackState.paused;
   }

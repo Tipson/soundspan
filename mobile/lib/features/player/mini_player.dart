@@ -101,7 +101,7 @@ class MiniPlayer extends StatelessWidget {
                         IconButton.filled(
                           tooltip: failed
                               ? 'Повторить'
-                              : state.playingIntent
+                              : state.playing
                               ? 'Пауза'
                               : 'Продолжить',
                           style: IconButton.styleFrom(
@@ -114,7 +114,7 @@ class MiniPlayer extends StatelessWidget {
                           icon: Icon(
                             failed
                                 ? Icons.refresh
-                                : state.playingIntent
+                                : state.playing
                                 ? Icons.pause
                                 : Icons.play_arrow,
                           ),

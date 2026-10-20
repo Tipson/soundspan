@@ -74,6 +74,7 @@ final class SoundspanAudioHandler extends BaseAudioHandler {
         previous != null &&
         previous.processing == state.processing &&
         previous.playingIntent == state.playingIntent &&
+        previous.focusSuspended == state.focusSuspended &&
         previous.audible == state.audible &&
         previous.repeat == state.repeat &&
         previous.shuffle == state.shuffle &&
@@ -98,7 +99,7 @@ final class SoundspanAudioHandler extends BaseAudioHandler {
       PlaybackState(
         controls: [
           MediaControl.skipToPrevious,
-          state.playingIntent ? MediaControl.pause : MediaControl.play,
+          state.playing ? MediaControl.pause : MediaControl.play,
           MediaControl.skipToNext,
           MediaControl.stop,
         ],
@@ -112,7 +113,7 @@ final class SoundspanAudioHandler extends BaseAudioHandler {
           PlaybackProcessing.completed => AudioProcessingState.completed,
           PlaybackProcessing.failed => AudioProcessingState.error,
         },
-        playing: state.playingIntent,
+        playing: state.playing,
         updatePosition: state.position,
         bufferedPosition: state.bufferedPosition,
         queueIndex: current == null ? null : state.entries.indexOf(current),

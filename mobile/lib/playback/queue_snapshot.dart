@@ -29,6 +29,7 @@ final class QueueSnapshot {
     this.bufferedPosition = Duration.zero,
     this.processing = PlaybackProcessing.idle,
     this.playingIntent = false,
+    this.focusSuspended = false,
     this.audible = false,
     this.shuffle = false,
     this.repeat = QueueRepeat.off,
@@ -47,6 +48,10 @@ final class QueueSnapshot {
   final Duration bufferedPosition;
   final PlaybackProcessing processing;
   final bool playingIntent;
+
+  /// Runtime interruption state. Never restore OS focus from a checkpoint.
+  final bool focusSuspended;
+  bool get playing => playingIntent && !focusSuspended;
   final bool audible;
   final bool shuffle;
   final QueueRepeat repeat;

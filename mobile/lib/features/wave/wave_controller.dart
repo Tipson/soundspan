@@ -119,9 +119,7 @@ final class WaveController extends ChangeNotifier {
   Future<void> retry() => _run(continuation.retry, network: true);
   Future<void> togglePlayback() => _run(() async {
     if (!ownsCurrentWave) return;
-    await playback.dispatch(
-      snapshot.playingIntent ? const Pause() : const Resume(),
-    );
+    await playback.dispatch(snapshot.playing ? const Pause() : const Resume());
   });
   Future<void> playUpcoming(String entryId) => _run(() async {
     if (!upcoming.any((e) => e.entryId == entryId && e.track.playable)) return;

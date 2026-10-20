@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audio_session/audio_session.dart';
 
@@ -18,11 +19,21 @@ final class AudioFocusCoordinator {
     if (_interruptions != null) throw StateError('Focus already attached');
     final session = await AudioSession.instance;
     if (_disposed) return;
-    await session.configure(const AudioSessionConfiguration.music());
+    await session.configure(
+      const AudioSessionConfiguration.music().copyWith(
+        androidWillPauseWhenDucked: true,
+      ),
+    );
     if (_disposed) return;
     _interruptions = session.interruptionEventStream.listen((event) {
       if (event.begin) {
-        unawaited(interruptionBegan());
+        unawaited(
+          interruptionBegan(
+            permanent:
+                Platform.isAndroid &&
+                event.type == AudioInterruptionType.unknown,
+          ),
+        );
       } else {
         unawaited(
           interruptionEnded(
@@ -38,11 +49,11 @@ final class AudioFocusCoordinator {
     });
   }
 
-  Future<void> interruptionBegan() async {
+  Future<void> interruptionBegan({bool permanent = false}) async {
     if (_disposed) return;
-    _generation ??= coordinator.snapshot.generation;
-    _revision ??= coordinator.intentRevision;
-    await coordinator.suspendForFocus();
+    _generation = permanent ? null : coordinator.snapshot.generation;
+    _revision = permanent ? null : coordinator.intentRevision;
+    await coordinator.suspendForFocus(resumeOnGain: !permanent);
   }
 
   Future<void> interruptionEnded({required bool allowResume}) async {

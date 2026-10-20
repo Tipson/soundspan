@@ -163,13 +163,13 @@ class _WaveScreenState extends State<WaveScreen> {
                                               ),
                                               MusicButton(
                                                 label: current != null && !ended
-                                                    ? (queue.playingIntent
+                                                    ? (queue.playing
                                                           ? 'Пауза'
                                                           : 'Продолжить')
                                                     : 'Начать волну',
                                                 icon:
                                                     current != null &&
-                                                        queue.playingIntent &&
+                                                        queue.playing &&
                                                         !ended
                                                     ? Icons.pause_rounded
                                                     : Icons.play_arrow_rounded,

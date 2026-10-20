@@ -48,6 +48,12 @@ class FullPlayerScreen extends StatelessWidget {
                             ?.copyWith(color: MusicColors.textSecondary),
                       ),
                     ),
+                    if (track != null && onOpenQueue != null)
+                      MusicIconButton(
+                        label: 'Открыть очередь',
+                        icon: Icons.queue_music,
+                        onPressed: onOpenQueue,
+                      ),
                     if (track != null)
                       MusicIconButton(
                         label: 'Действия трека',
@@ -152,6 +158,13 @@ class FullPlayerScreen extends StatelessWidget {
                                         : box.maxWidth,
                                     state,
                                   ),
+                                  if (state.focusSuspended)
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 8),
+                                      child: Text(
+                                        'Пауза: звук в другом приложении',
+                                      ),
+                                    ),
                                   if (state.processing ==
                                           PlaybackProcessing.loading ||
                                       state.processing ==
@@ -190,7 +203,7 @@ class FullPlayerScreen extends StatelessWidget {
                                   const SizedBox(height: 12),
                                   _feedback(context, large),
                                   const SizedBox(height: 20),
-                                  _sections(context, large),
+                                  _sections(context),
                                 ],
                               );
                               return landscape
@@ -296,6 +309,14 @@ class FullPlayerScreen extends StatelessWidget {
         (failure == null
             ? 0
             : 24 + textHeight(failure.message, type.bodyMedium, width)) +
+        (state.focusSuspended
+            ? 8 +
+                  textHeight(
+                    'Пауза: звук в другом приложении',
+                    type.bodyMedium,
+                    width,
+                  )
+            : 0) +
         (state.processing == PlaybackProcessing.failed ? 56 : 0) +
         48 +
         (height >= 650 ? 32 : 0);
@@ -331,9 +352,9 @@ class FullPlayerScreen extends StatelessWidget {
             ),
             onPressed: controller.busy ? null : controller.togglePlayback,
             child: Semantics(
-              label: state.playingIntent ? 'Пауза' : 'Продолжить',
+              label: state.playing ? 'Пауза' : 'Продолжить',
               child: Icon(
-                state.playingIntent ? Icons.pause : Icons.play_arrow,
+                state.playing ? Icons.pause : Icons.play_arrow,
                 size: 36,
               ),
             ),
@@ -472,49 +493,44 @@ class FullPlayerScreen extends StatelessWidget {
     );
   }
 
-  Widget _sections(BuildContext context, bool large) {
+  Widget _sectionActions(BuildContext context) {
     final callbacks = controller.callbacks;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (callbacks.onLyrics != null)
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: MusicColors.textSecondary,
+            ),
+            onPressed: controller.busy
+                ? null
+                : () => controller.invoke(callbacks.onLyrics!),
+            child: const Text('Текст'),
+          ),
+        if (callbacks.onRelated != null)
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: MusicColors.textSecondary,
+            ),
+            onPressed: controller.busy
+                ? null
+                : () => controller.invoke(callbacks.onRelated!),
+            child: const Text('Похожее'),
+          ),
+      ],
+    );
+  }
+
+  Widget _sections(BuildContext context) {
     return Column(
       key: const ValueKey('player-more'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Divider(),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (onOpenQueue != null)
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: MusicColors.textSecondary,
-                ),
-                onPressed: onOpenQueue,
-                icon: const Icon(Icons.queue_music, size: 20),
-                label: const Text('Открыть очередь'),
-              ),
-            if (callbacks.onLyrics != null)
-              TextButton(
-                style: TextButton.styleFrom(
-                  foregroundColor: MusicColors.textSecondary,
-                ),
-                onPressed: controller.busy
-                    ? null
-                    : () => controller.invoke(callbacks.onLyrics!),
-                child: const Text('Текст'),
-              ),
-            if (callbacks.onRelated != null)
-              TextButton(
-                style: TextButton.styleFrom(
-                  foregroundColor: MusicColors.textSecondary,
-                ),
-                onPressed: controller.busy
-                    ? null
-                    : () => controller.invoke(callbacks.onRelated!),
-                child: const Text('Похожее'),
-              ),
-          ],
-        ),
+        _sectionActions(context),
         for (final entry
             in controller.orderedEntries
                 .skipWhile(

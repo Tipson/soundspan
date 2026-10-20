@@ -25,7 +25,7 @@ void main() {
   late PlayerController controller;
   var queues = 0, lyrics = 0, related = 0;
 
-  QueueSnapshot state(String title) {
+  QueueSnapshot state(String title, {bool interrupted = false}) {
     final entry = QueueEntry(
       entryId: 'first',
       track: Track(
@@ -45,6 +45,7 @@ void main() {
       duration: const Duration(seconds: 177),
       processing: PlaybackProcessing.ready,
       playingIntent: true,
+      focusSuspended: interrupted,
     );
   }
 
@@ -86,8 +87,14 @@ void main() {
     double scale = 1,
     bool mini = false,
     bool longTitle = false,
+    bool interrupted = false,
   }) async {
-    if (longTitle) playback.value = state(_longTitle);
+    if (longTitle || interrupted) {
+      playback.value = state(
+        longTitle ? _longTitle : _title,
+        interrupted: interrupted,
+      );
+    }
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -121,8 +128,49 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('queue is directly reachable with long title on a short phone', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      size: const Size(320, 640),
+      scale: 1.3,
+      longTitle: true,
+    );
+    final queue = find.byTooltip('Открыть очередь');
+    expect(queue.hitTestable(), findsOneWidget);
+    await tester.tap(queue);
+    await tester.pumpAndSettle();
+    expect(queues, 1);
+    expect(playback.commands, isEmpty);
+  });
+
   Finder feedback(String text) =>
       find.ancestor(of: find.text(text), matching: find.byType(MusicTapTarget));
+
+  for (final mini in [false, true]) {
+    testWidgets(
+      'focus pause offers one-tap resume in ${mini ? 'mini' : 'full'} player',
+      (tester) async {
+        await mount(
+          tester,
+          size: const Size(360, 800),
+          interrupted: true,
+          mini: mini,
+        );
+        final play = mini
+            ? find.byTooltip('Продолжить')
+            : find.byType(FilledButton).first;
+        if (!mini) {
+          expect(find.text('Пауза: звук в другом приложении'), findsOneWidget);
+        }
+        await tester.tap(play);
+        await tester.pumpAndSettle();
+        expect(playback.commands.single, isA<Resume>());
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('long title leaves artwork dominant and artist secondary', (
     tester,
@@ -328,7 +376,9 @@ void main() {
         expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
         expect(tester.getSize(target).width, greaterThanOrEqualTo(48));
       }
-      for (final label in ['Открыть очередь', 'Текст', 'Похожее']) {
+      await tester.tap(find.byTooltip('Открыть очередь'));
+      await tester.pumpAndSettle();
+      for (final label in ['Текст', 'Похожее']) {
         final target = find.text(label);
         await tester.ensureVisible(target);
         await tester.pumpAndSettle();

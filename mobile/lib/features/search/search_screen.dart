@@ -114,7 +114,7 @@ class _SearchScreenState extends State<SearchScreen> {
         snapshot.processing == PlaybackProcessing.buffering) {
       return TrackPlaybackState.resolving;
     }
-    return snapshot.playingIntent
+    return snapshot.playing
         ? TrackPlaybackState.playing
         : TrackPlaybackState.paused;
   }
