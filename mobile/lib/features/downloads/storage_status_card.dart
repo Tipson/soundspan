@@ -9,7 +9,13 @@ String downloadBytes(int bytes) => bytes < 1024 * 1024
 
 /// Counts committed manifest bytes. This is not OS disk capacity/free space.
 class StorageStatusCard extends StatelessWidget {
-  const StorageStatusCard({super.key, required this.jobs, required this.ready});
+  const StorageStatusCard({
+    super.key,
+    required this.jobs,
+    required this.ready,
+    this.settings = const [],
+  });
+  final List<Widget> settings;
   final List<DeviceDownload> jobs;
   final bool ready;
   @override
@@ -38,11 +44,16 @@ class StorageStatusCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
-            subtitle: ready ? null : Text(summary),
-            children: const [
-              Text(
+            subtitle: !ready
+                ? Text(summary)
+                : settings.isEmpty
+                ? null
+                : const Text('Память и автозагрузка'),
+            children: [
+              const Text(
                 'Объём по данным загрузок приложения. Свободное место смотрите в настройках устройства. Серверная музыка и файлы на других устройствах сюда не входят.',
               ),
+              ...settings,
             ],
           ),
           if (!ready)

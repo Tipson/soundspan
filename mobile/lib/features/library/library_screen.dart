@@ -151,44 +151,74 @@ class _LibraryScreenState extends State<LibraryScreen> {
     required String subtitle,
     required IconData icon,
     required FutureOr<void> Function() callback,
-  }) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
+  }) => Material(
+    color: MusicColors.surface1,
+    borderRadius: BorderRadius.circular(MusicRadius.card),
     child: MusicTapTarget(
       onTap: () => _run(callback),
+      borderRadius: BorderRadius.circular(MusicRadius.card),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: MusicColors.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, size: 24, color: MusicColors.primary),
+            Icon(icon, size: 28, color: MusicColors.primary),
+            const SizedBox(height: 12),
+            Text(label, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: MusicColors.textSecondary),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: MusicColors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: MusicColors.textMuted),
           ],
         ),
       ),
     ),
+  );
+
+  Widget _quickDestinations() => LayoutBuilder(
+    builder: (context, constraints) {
+      final children = [
+        _destination(
+          label: 'Любимое',
+          subtitle: 'Понравившиеся треки',
+          icon: Icons.favorite_rounded,
+          callback: widget.onOpenLiked,
+        ),
+        if (widget.onOpenDownloads != null)
+          _destination(
+            label: 'Загрузки',
+            subtitle: 'На этом устройстве',
+            icon: Icons.offline_pin_outlined,
+            callback: widget.onOpenDownloads!,
+          ),
+      ];
+      if (children.length == 2 &&
+          constraints.maxWidth >= 268 &&
+          MediaQuery.textScalerOf(context).scale(16) <= 20.8) {
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: children.first),
+              const SizedBox(width: 12),
+              Expanded(child: children.last),
+            ],
+          ),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, child) in children.indexed) ...[
+            if (i > 0) const SizedBox(height: 12),
+            child,
+          ],
+        ],
+      );
+    },
   );
 
   Widget _heading(String title) => Padding(
@@ -267,7 +297,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         _LibraryFilter.all => SavedEntityKind.values,
       };
       return ScreenScaffold(
-        title: 'Моя музыка',
+        title: 'Медиатека',
         scrollController: widget.scrollController,
         actions: state.stale
             ? null
@@ -285,27 +315,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _destination(
-                    label: 'Любимое',
-                    subtitle: 'Треки, которые вам нравятся',
-                    icon: Icons.favorite_rounded,
-                    callback: widget.onOpenLiked,
-                  ),
-                  if (widget.onOpenDownloads != null)
-                    _destination(
-                      label: 'Загрузки',
-                      subtitle: 'Музыка на этом устройстве',
-                      icon: Icons.offline_pin_outlined,
-                      callback: widget.onOpenDownloads!,
-                    ),
-                  if (widget.onCreatePlaylist != null) ...[
-                    const SizedBox(height: 4),
-                    OutlinedButton.icon(
-                      label: const Text('Создать плейлист'),
-                      icon: const Icon(Icons.add),
-                      onPressed: () => _run(widget.onCreatePlaylist!),
-                    ),
-                  ],
+                  _quickDestinations(),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -321,6 +331,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(minHeight: 48),
                               child: ChoiceChip(
+                                showCheckmark: false,
                                 label: Text(switch (filter) {
                                   _LibraryFilter.all => 'Всё',
                                   _LibraryFilter.playlists => 'Плейлисты',

@@ -166,8 +166,8 @@ void main() {
       await mount(tester, router, width: width, scale: 2);
       await tester.tap(find.text('Разделы: Главная'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Моя музыка'));
-      await tester.tap(find.text('Моя музыка'));
+      await tester.ensureVisible(find.text('Медиатека'));
+      await tester.tap(find.text('Медиатека'));
       await tester.pumpAndSettle();
       expect(router.currentTab, AppTab.library);
       expect(find.text('Корень library'), findsOneWidget);

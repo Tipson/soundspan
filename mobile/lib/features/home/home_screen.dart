@@ -221,100 +221,78 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _hero(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: ColoredBox(
-          color: MusicColors.surface1,
+      child: Material(
+        key: const ValueKey('home-wave-entry'),
+        borderRadius: BorderRadius.circular(MusicRadius.card),
+        color: MusicColors.surface1,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 112),
-                child: Stack(
-                  alignment: Alignment.bottomLeft,
-                  children: [
-                    Positioned.fill(
-                      child: Image.asset(
-                        'assets/wave-dusk-city.png',
-                        fit: BoxFit.cover,
-                        alignment: const Alignment(0, -.25),
-                        excludeFromSemantics: true,
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              MusicColors.canvas.withValues(alpha: .08),
-                              MusicColors.canvas.withValues(alpha: .9),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                      child: Text(
-                        'Ваша волна',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Знакомые песни и новые открытия по вашему вкусу.',
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: MusicColors.textSecondary),
-                    ),
-                    const SizedBox(height: 12),
-                    if (widget.onStartWave != null) ...[
-                      MusicButton(
-                        label: _startingWave
-                            ? 'Запускаем волну…'
-                            : _waveFailure == null
-                            ? 'Слушать волну'
-                            : 'Повторить запуск',
-                        icon: Icons.play_arrow_rounded,
-                        busy: _startingWave,
-                        onPressed: _startWave,
-                      ),
-                      const SizedBox(height: 4),
-                    ],
-                    Row(
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: widget.onStartWave == null
-                              ? MusicButton(
-                                  label: 'Открыть волну',
-                                  icon: Icons.arrow_forward_rounded,
-                                  onPressed: () => _run(widget.onOpenWave),
-                                )
-                              : TextButton(
-                                  onPressed: () => _run(widget.onOpenWave),
-                                  child: const Text('Открыть волну'),
-                                ),
+                        Text(
+                          'Ваша волна',
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        if (widget.onConfigureWave != null) ...[
-                          const SizedBox(width: 12),
-                          MusicIconButton(
-                            label: 'Настроить волну',
-                            icon: Icons.tune_rounded,
-                            onPressed: () => _run(widget.onConfigureWave!),
-                          ),
-                        ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'Знакомое и новые открытия.',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: MusicColors.textSecondary),
+                        ),
                       ],
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 12),
+                  const SizedBox(width: 72, height: 52, child: WaveArtwork()),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (widget.onStartWave != null)
+                MusicButton(
+                  label: _startingWave
+                      ? 'Запускаем волну…'
+                      : _waveFailure == null
+                      ? 'Слушать волну'
+                      : 'Повторить запуск',
+                  icon: Icons.play_arrow_rounded,
+                  busy: _startingWave,
+                  onPressed: _startWave,
                 ),
+              Row(
+                children: [
+                  Expanded(
+                    child: widget.onStartWave == null
+                        ? MusicButton(
+                            label: 'Открыть волну',
+                            icon: Icons.arrow_forward_rounded,
+                            onPressed: () => _run(widget.onOpenWave),
+                          )
+                        : TextButton(
+                            onPressed: () => _run(widget.onOpenWave),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(child: Text('Открыть волну')),
+                                SizedBox(width: 8),
+                                Icon(Icons.arrow_forward_rounded, size: 18),
+                              ],
+                            ),
+                          ),
+                  ),
+                  if (widget.onConfigureWave != null)
+                    MusicIconButton(
+                      label: 'Настроить волну',
+                      icon: Icons.tune_rounded,
+                      onPressed: () => _run(widget.onConfigureWave!),
+                    ),
+                ],
               ),
             ],
           ),
@@ -556,8 +534,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             if (widget.onOpenProfile != null)
               MusicIconButton(
-                label: 'Профиль',
-                icon: Icons.person_outline,
+                label: 'Настройки',
+                icon: Icons.settings_outlined,
                 onPressed: () => _run(widget.onOpenProfile!),
               ),
           ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../design_system/tokens.dart';
+import '../../design_system/design_system.dart';
 
 /// Root owns navigation and constructs the owner-bound destination controllers.
 class SettingsScreen extends StatelessWidget {
@@ -23,13 +23,12 @@ class SettingsScreen extends StatelessWidget {
       onHistory;
   final VoidCallback? onShares, onInbox;
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Настройки')),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        children: [
-          _heading(context, 'Для вас'),
+  Widget build(BuildContext context) => ScreenScaffold(
+    title: 'Настройки',
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _group(context, 'Для вас', [
           _entry(
             context,
             Icons.person_outline,
@@ -44,8 +43,8 @@ class SettingsScreen extends StatelessWidget {
             'Жанры и исполнители для рекомендаций',
             onTaste,
           ),
-          const SizedBox(height: 20),
-          _heading(context, 'Музыка'),
+        ]),
+        _group(context, 'Музыка', [
           _entry(
             context,
             Icons.graphic_eq,
@@ -67,8 +66,8 @@ class SettingsScreen extends StatelessWidget {
             'Просмотр и очистка истории',
             onHistory,
           ),
-          const SizedBox(height: 20),
-          _heading(context, 'Аккаунт'),
+        ]),
+        _group(context, 'Аккаунт', [
           _entry(
             context,
             Icons.shield_outlined,
@@ -92,21 +91,48 @@ class SettingsScreen extends StatelessWidget {
               'События серверной библиотеки',
               onInbox!,
             ),
-        ],
-      ),
+        ]),
+      ],
     ),
   );
-  Widget _heading(BuildContext context, String title) => Padding(
-    padding: const EdgeInsets.only(top: 8, bottom: 8),
-    child: Semantics(
-      header: true,
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.labelMedium
-            ?.copyWith(color: MusicColors.textMuted),
-      ),
-    ),
-  );
+
+  Widget _group(BuildContext context, String title, List<Widget> entries) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.labelMedium
+                      ?.copyWith(color: MusicColors.textSecondary),
+                ),
+              ),
+            ),
+            Material(
+              color: MusicColors.surface1,
+              borderRadius: BorderRadius.circular(MusicRadius.card),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  for (final (index, entry) in entries.indexed) ...[
+                    if (index > 0)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 56),
+                        child: Divider(),
+                      ),
+                    entry,
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
 
   Widget _entry(
     BuildContext context,
@@ -115,9 +141,11 @@ class SettingsScreen extends StatelessWidget {
     String subtitle,
     VoidCallback action,
   ) => ListTile(
-    contentPadding: const EdgeInsets.symmetric(vertical: 4),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
     minVerticalPadding: 8,
-    leading: Icon(icon, color: MusicColors.textSecondary),
+    minLeadingWidth: 24,
+    horizontalTitleGap: 12,
+    leading: Icon(icon, size: 24, color: MusicColors.textSecondary),
     title: Text(title, style: Theme.of(context).textTheme.titleMedium),
     subtitle: Text(
       subtitle,

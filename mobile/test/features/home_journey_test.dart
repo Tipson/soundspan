@@ -1157,7 +1157,9 @@ void main() {
   testWidgets(
     'impressions only exposed cards; horizontal swipe and vertical scroll coexist',
     (tester) async {
-      tester.view.physicalSize = const Size(390, 850);
+      // Keep the recommendation shelf below the fold even with the compact
+      // entry card: only scrolling into view may create an impression.
+      tester.view.physicalSize = const Size(390, 480);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -1184,6 +1186,10 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.byKey(const ValueKey('home-shelf-discovery')).hitTestable(),
+        findsNothing,
+      );
       expect(
         transport.requests.where((r) => r.method == ApiMethod.post),
         isEmpty,

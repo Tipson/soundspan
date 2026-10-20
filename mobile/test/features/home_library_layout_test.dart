@@ -200,6 +200,40 @@ void main() {
   }
 
   testWidgets(
+    'Home navigation remains accessible at 320dp with large text and all actions',
+    (tester) async {
+      final controller = homeController();
+      await controller.refresh();
+      var starts = 0, opens = 0, settings = 0, plays = 0;
+      await mount(
+        tester,
+        HomeScreen(
+          controller: controller,
+          autoLoad: false,
+          onOpenWave: () => opens++,
+          onOpenMix: (_) {},
+          onPlay: (_) => plays++,
+          onStartWave: () => starts++,
+          onConfigureWave: () => settings++,
+        ),
+        width: 320,
+        scale: 2,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Открыть волну'));
+      await tester.tap(find.text('Открыть волну'));
+      await tester.pump();
+      await tester.ensureVisible(find.byTooltip('Настроить волну'));
+      await tester.tap(find.byTooltip('Настроить волну'));
+      await tester.pump();
+      expect([starts, opens, settings, plays], [0, 1, 1, 0]);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
     'Home keeps listening and the daily shelf in the first viewport',
     (tester) async {
       final controller = homeController();
@@ -218,10 +252,10 @@ void main() {
         ),
       );
       final shelfTop = tester.getTopLeft(find.text('Миксы для вас')).dy;
-      expect(shelfTop, lessThan(420));
+      expect(shelfTop, lessThan(330));
       expect(
         tester.getBottomLeft(find.text('Слушать волну')).dy,
-        lessThan(380),
+        lessThan(300),
       );
       await tester.tap(find.text('Слушать волну'));
       await tester.pump();
@@ -312,20 +346,22 @@ void main() {
           onOpenPlaylist: (id) => opened = id,
         ),
       );
-      expect(tester.getTopLeft(find.text('Мой плейлист')).dy, lessThan(500));
+      expect(tester.getTopLeft(find.text('Мой плейлист')).dy, lessThan(360));
       expect(
         tester.getTopLeft(find.text('Исполнители')).dy,
         tester.getTopLeft(find.text('Всё')).dy,
       );
-      for (final text in [
-        'Любимое',
-        'Загрузки',
-        'Создать плейлист',
-        'Мой плейлист',
-      ]) {
+      for (final text in ['Любимое', 'Загрузки']) {
         await tester.tap(find.text(text));
         await tester.pump();
       }
+      expect(find.text('Создать плейлист'), findsNothing);
+      await tester.tap(find.byTooltip('Действия с коллекцией'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Создать плейлист'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Мой плейлист'));
+      await tester.pump();
       expect([liked, downloads, created], [1, 1, 1]);
       expect(opened, 'private-exact');
       expect(tester.takeException(), isNull);

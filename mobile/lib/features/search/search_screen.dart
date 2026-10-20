@@ -131,8 +131,11 @@ class _SearchScreenState extends State<SearchScreen> {
       final owner = widget.controller,
           state = owner.state,
           revision = owner.revision;
-      return Material(
-        child: SafeArea(
+      return Scaffold(
+        appBar: AppBar(title: const Text('Поиск')),
+        body: SafeArea(
+          top: false,
+          bottom: false,
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: MusicSpace.gutter(MediaQuery.sizeOf(context).width),
@@ -146,12 +149,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 24),
-                      Text(
-                        'Поиск',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: _query,
                         maxLength: 500,
@@ -162,51 +160,56 @@ class _SearchScreenState extends State<SearchScreen> {
                         },
                         onSubmitted: (q) => owner.submit(q),
                         decoration: InputDecoration(
-                          labelText: 'Треки, альбомы, артисты',
+                          labelText: 'Поиск музыки',
+                          hintText: 'Песня, исполнитель или альбом',
                           prefixIcon: const Icon(Icons.search),
                           counterText: '',
-                          suffixIcon: MusicIconButton(
-                            label: 'Очистить поиск',
-                            icon: Icons.close,
-                            onPressed: state.query.isEmpty
-                                ? null
-                                : () {
-                                    _query.clear();
-                                    owner.clear();
-                                    FocusScope.of(context).unfocus();
-                                  },
-                          ),
+                          suffixIcon: state.query.isEmpty
+                              ? null
+                              : MusicIconButton(
+                                  label: 'Очистить поиск',
+                                  icon: Icons.close,
+                                  onPressed: state.query.isEmpty
+                                      ? null
+                                      : () {
+                                          _query.clear();
+                                          owner.clear();
+                                          FocusScope.of(context).unfocus();
+                                        },
+                                ),
                         ),
                       ),
                       const SizedBox(height: 16),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            for (final pair in [
-                              (SearchKind.all, 'Всё'),
-                              (SearchKind.tracks, 'Треки'),
-                              (SearchKind.artists, 'Артисты'),
-                              (SearchKind.albums, 'Альбомы'),
-                            ])
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    minHeight: 48,
-                                  ),
-                                  child: ChoiceChip(
-                                    label: Text(pair.$2),
-                                    selected: state.kind == pair.$1,
-                                    onSelected: owner.isCurrent
-                                        ? (_) => owner.setKind(pair.$1)
-                                        : null,
+                      if (state.query.trim().isNotEmpty)
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final pair in [
+                                (SearchKind.all, 'Всё'),
+                                (SearchKind.tracks, 'Треки'),
+                                (SearchKind.artists, 'Артисты'),
+                                (SearchKind.albums, 'Альбомы'),
+                              ])
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      minHeight: 48,
+                                    ),
+                                    child: ChoiceChip(
+                                      showCheckmark: false,
+                                      label: Text(pair.$2),
+                                      selected: state.kind == pair.$1,
+                                      onSelected: owner.isCurrent
+                                          ? (_) => owner.setKind(pair.$1)
+                                          : null,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
                       if (state.stale)
                         const CatalogNotice(
                           'Аккаунт изменился. Откройте поиск снова.',
@@ -236,8 +239,11 @@ class _SearchScreenState extends State<SearchScreen> {
                       if (state.page.alias case final alias?)
                         CatalogNotice('Результаты для «$alias»'),
                       if (!state.loading && state.query.isEmpty && !state.stale)
-                        const CatalogNotice(
-                          'Найдите музыку, которую хочется услышать.',
+                        const MusicEmptyState(
+                          title: 'Что хочется услышать?',
+                          message:
+                              'Песни, исполнители и альбомы — в одном поиске.',
+                          icon: Icons.search_rounded,
                         ),
                       if (!state.loading &&
                           state.query.isNotEmpty &&

@@ -5,7 +5,7 @@ enum AppTab {
   wave('Волна', Icons.graphic_eq_rounded, Icons.graphic_eq_rounded),
   search('Поиск', Icons.search_rounded, Icons.search_rounded),
   library(
-    'Моя музыка',
+    'Медиатека',
     Icons.library_music_outlined,
     Icons.library_music_rounded,
   ),

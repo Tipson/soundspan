@@ -188,6 +188,39 @@ class _CatalogReviewNavigation extends NavigatorObserver {
 }
 
 void main() {
+  testWidgets('empty search keeps result controls out of the entry state', (
+    tester,
+  ) async {
+    final authority = CollectionAuthority();
+    final controller = SearchController(
+      repository: repository(
+        CollectionTransport((r, _) => emptyFor(r)),
+        authority,
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: SoundspanTheme.dark(),
+        home: SearchScreen(controller: controller),
+      ),
+    );
+    expect(find.byTooltip('Очистить поиск'), findsNothing);
+    expect(find.text('Всё'), findsNothing);
+    await tester.enterText(find.byType(TextField), 'Музыка');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Очистить поиск'), findsOneWidget);
+    expect(find.text('Всё'), findsOneWidget);
+    await tester.tap(find.byTooltip('Очистить поиск'));
+    await tester.pumpAndSettle();
+    expect(controller.state.query, isEmpty);
+    expect(find.byTooltip('Очистить поиск'), findsNothing);
+    expect(find.text('Всё'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+    await authority.updates.close();
+  });
   testWidgets(
     'collection like-all 1001 loaded confirms only the reviewed first100 exact refs',
     (tester) async {

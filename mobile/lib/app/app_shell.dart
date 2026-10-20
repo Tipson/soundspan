@@ -285,7 +285,7 @@ class _AppShellState extends State<AppShell> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          tab == AppTab.library ? 'Медиатека' : tab.label,
+                          tab.label,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(

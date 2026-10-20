@@ -321,8 +321,9 @@ class _LikesScreenState extends State<LikesScreen> {
                     )
                   else if (state.tracks.isNotEmpty) ...[
                     Text(
-                      '${(state.total - removed).clamp(0, state.total)} треков в любимом',
-                      style: Theme.of(context).textTheme.bodyLarge,
+                      '${musicQuantity((state.total - removed).clamp(0, state.total).toInt(), one: 'трек', few: 'трека', many: 'треков')} в любимом',
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: MusicColors.textSecondary),
                     ),
                     const SizedBox(height: 20),
                     TextField(
@@ -334,26 +335,30 @@ class _LikesScreenState extends State<LikesScreen> {
                       onChanged: (value) => setState(() => _query = value),
                     ),
                     const SizedBox(height: 20),
-                    MusicButton(
-                      label: 'Слушать',
-                      icon: Icons.play_arrow_rounded,
-                      busy: _playing,
-                      onPressed: playable ? () => _play(visible) : null,
-                      disabledReason: playable
-                          ? null
-                          : 'Среди показанных треков нет доступных записей.',
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: MusicButton(
+                            label: 'Слушать',
+                            icon: Icons.play_arrow_rounded,
+                            busy: _playing,
+                            onPressed: playable ? () => _play(visible) : null,
+                            disabledReason: playable ? null : 'Среди показанных треков нет доступных записей.',
+                          ),
+                        ),
+                        if (playable) ...[
+                          const SizedBox(width: 8),
+                          MusicIconButton(
+                            label: 'Перемешать',
+                            icon: Icons.shuffle,
+                            onPressed: _playing
+                                ? null
+                                : () => _play(visible, shuffle: true),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (playable) ...[
-                      const SizedBox(height: 12),
-                      MusicButton(
-                        label: 'Перемешать',
-                        icon: Icons.shuffle,
-                        tonal: true,
-                        onPressed: _playing
-                            ? null
-                            : () => _play(visible, shuffle: true),
-                      ),
-                    ],
                     const SizedBox(height: 20),
                     if (state.loading) const LinearProgressIndicator(),
                     if (visible.isEmpty)

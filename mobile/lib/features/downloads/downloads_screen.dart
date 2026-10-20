@@ -136,28 +136,27 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                           StorageStatusCard(
                             jobs: controller.jobs,
                             ready: controller.storageReady(),
+                            settings: [
+                              if (automation != null)
+                                SwitchListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('Автозагрузка Любимого'),
+                                  subtitle: Text(
+                                    automation.paused
+                                        ? 'Приостановлена'
+                                        : 'Включена',
+                                  ),
+                                  value: !automation.paused,
+                                  onChanged: controller.busy
+                                      ? null
+                                      : (enabled) => controller
+                                            .setAutomationPaused(!enabled),
+                                ),
+                            ],
                           ),
-                          if (automation != null) ...[
-                            const SizedBox(height: 8),
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Автозагрузка Любимого'),
-                              subtitle: Text(
-                                automation.paused
-                                    ? 'Приостановлена'
-                                    : 'Включена',
-                              ),
-                              value: !automation.paused,
-                              onChanged: controller.busy
-                                  ? null
-                                  : (enabled) => controller.setAutomationPaused(
-                                      !enabled,
-                                    ),
-                            ),
-                            if (automation.notice != null)
-                              MusicStatus(message: automation.notice!),
-                          ],
-                          const SizedBox(height: 8),
+                          if (automation?.notice != null)
+                            MusicStatus(message: automation!.notice!),
+                          const SizedBox(height: 16),
                           TextField(
                             controller: _search,
                             onChanged: controller.setQuery,
@@ -179,6 +178,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                                         minHeight: 48,
                                       ),
                                       child: ChoiceChip(
+                                        showCheckmark: false,
                                         label: Text(switch (filter) {
                                           DownloadsFilter.all => 'Все',
                                           DownloadsFilter.ready => 'Готовые',

@@ -586,27 +586,37 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
               const MusicLoadingState(label: 'Загружаем плейлист'),
             if (d != null) ...[
               Text(
-                '${d.total} записей · Загружено ${d.items.length}${d.playlist.isPublic ? ' · Публичный' : ''}${d.playlist.isHidden ? ' · Скрыт' : ''}',
-                style: Theme.of(context).textTheme.bodyLarge,
+                '${musicQuantity(d.total, one: 'трек', few: 'трека', many: 'треков')}${d.items.length < d.total ? ' · Показано ${d.items.length}' : ''}${d.playlist.isPublic ? ' · Публичный' : ''}${d.playlist.isHidden ? ' · Скрыт' : ''}',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: MusicColors.textSecondary),
               ),
               const SizedBox(height: 20),
-              MusicButton(
-                label: d.complete ? 'Слушать' : 'Слушать загруженное',
-                icon: Icons.play_arrow,
-                busy: _playing,
-                onPressed: playable ? () => _play(c) : null,
-                disabledReason: playable
-                    ? null
-                    : 'В плейлисте пока нет доступных записей.',
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: MusicButton(
+                      label: d.complete ? 'Слушать' : 'Слушать показанное',
+                      icon: Icons.play_arrow,
+                      busy: _playing,
+                      onPressed: playable ? () => _play(c) : null,
+                      disabledReason: playable
+                          ? null
+                          : 'В плейлисте пока нет доступных записей.',
+                    ),
+                  ),
+                  if (playable) ...[
+                    const SizedBox(width: 8),
+                    MusicIconButton(
+                      label: 'Перемешать показанные треки',
+                      icon: Icons.shuffle,
+                      onPressed: _playing
+                          ? null
+                          : () => _play(c, shuffle: true),
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(height: 12),
-              if (playable)
-                MusicButton(
-                  label: 'Перемешать загруженное',
-                  icon: Icons.shuffle,
-                  tonal: true,
-                  onPressed: _playing ? null : () => _play(c, shuffle: true),
-                ),
               const SizedBox(height: 20),
               if (d.items.isEmpty && !state.loading)
                 const MusicEmptyState(

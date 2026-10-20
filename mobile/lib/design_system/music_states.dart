@@ -50,40 +50,67 @@ class MusicEmptyState extends StatelessWidget {
     this.actionLabel,
     this.onAction,
     this.icon = Icons.library_music_outlined,
+    this.iconColor = MusicColors.primary,
   }) : assert((actionLabel == null) == (onAction == null));
   final String title;
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
   final IconData icon;
+  final Color iconColor;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Icon(icon, size: 40, color: MusicColors.textMuted),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final content = Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: MusicColors.surface2,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(icon, size: 30, color: iconColor),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Semantics(
+                  header: true,
+                  child: Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: MusicColors.textSecondary),
+                ),
+                if (onAction != null) ...[
+                  const SizedBox(height: 24),
+                  MusicButton(label: actionLabel!, onPressed: onAction),
+                ],
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 20),
-        Semantics(
-          header: true,
-          child: Text(title, style: Theme.of(context).textTheme.headlineSmall),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          message,
-          style: Theme.of(context).textTheme.bodyLarge
-              ?.copyWith(color: MusicColors.textSecondary),
-        ),
-        if (onAction != null) ...[
-          const SizedBox(height: 24),
-          MusicButton(label: actionLabel!, onPressed: onAction),
-        ],
-      ],
-    ),
+      );
+      return constraints.hasBoundedHeight
+          ? SingleChildScrollView(child: content)
+          : content;
+    },
   );
 }
 
@@ -106,6 +133,7 @@ class MusicErrorState extends StatelessWidget {
       actionLabel: 'Повторить',
       onAction: onRetry,
       icon: Icons.error_outline,
+      iconColor: MusicColors.error,
     ),
   );
 }

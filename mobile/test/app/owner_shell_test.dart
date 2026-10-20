@@ -392,7 +392,7 @@ void main() {
       );
       final queueBeforeNavigation = playback.snapshot;
       final commandsBeforeNavigation = playback.commands.length;
-      await tester.tap(find.byTooltip('Профиль'));
+      await tester.tap(find.byTooltip('Настройки'));
       await tester.pumpAndSettle();
       expect(find.byType(SettingsScreen), findsOneWidget);
       await tester.ensureVisible(find.text('Офлайн и загрузки'));

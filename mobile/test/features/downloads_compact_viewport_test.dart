@@ -172,7 +172,13 @@ void main() {
       expect(row, findsOneWidget);
       expect(tester.getRect(row).bottom, lessThanOrEqualTo(viewport.bottom));
       expect(find.text('Выбрано 1; в загрузках 1.'), findsOneWidget);
+      expect(find.text('Автозагрузка Любимого'), findsNothing);
+      await tester.tap(find.text('1 готовая загрузка · 0 КБ'));
+      await tester.pumpAndSettle();
+      expect(find.text('Автозагрузка Любимого'), findsOneWidget);
       expect(find.text('Включена'), findsOneWidget);
+      await tester.tap(find.text('1 готовая загрузка · 0 КБ'));
+      await tester.pumpAndSettle();
       expect(find.text('Тест').hitTestable(), findsOneWidget);
       await tester.tap(find.text('Тест'));
       await tester.pump();

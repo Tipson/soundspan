@@ -68,7 +68,7 @@ void main() {
           );
           await tester.pumpAndSettle();
           if (scenario == 'rapid reopen after failed load') {
-            await tester.tap(find.byTooltip('Профиль'));
+            await tester.tap(find.byTooltip('Настройки'));
             await tester.pumpAndSettle();
             final settingsTaste = find.widgetWithText(
               ListTile,

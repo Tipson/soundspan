@@ -8,3 +8,4 @@ export 'screen_scaffold.dart';
 export 'theme.dart';
 export 'tokens.dart';
 export 'track_row.dart';
+export 'wave_artwork.dart';

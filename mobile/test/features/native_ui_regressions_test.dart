@@ -15,6 +15,7 @@ import 'package:soundspan/core/model/track_ref.dart';
 import 'package:soundspan/core/network/api_transport.dart';
 import 'package:soundspan/design_system/theme.dart';
 import 'package:soundspan/design_system/artwork.dart';
+import 'package:soundspan/design_system/wave_artwork.dart';
 import 'package:soundspan/features/home/home_controller.dart';
 import 'package:soundspan/features/home/home_repository.dart';
 import 'package:soundspan/features/home/home_models.dart';
@@ -131,17 +132,16 @@ void main() {
       ),
     );
     final title = find.text('Ваша волна');
-    final hero = find
-        .ancestor(of: title, matching: find.byType(ClipRRect))
-        .first;
+    final hero = find.byKey(const ValueKey('home-wave-entry'));
     expect(tester.getTopLeft(hero).dx, 20);
+    expect(tester.getSize(hero).width, 350);
     expect(tester.getTopLeft(title).dx, 36);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
     await authority.updates.close();
   });
   testWidgets(
-    'Idle Wave uses the brand scene rather than an absent-track placeholder',
+    'Idle Wave uses its brand visual without an absent-track placeholder',
     (tester) async {
       final authority = CollectionAuthority(), playback = ReportingController();
       final continuation = WaveContinuation(
@@ -162,7 +162,7 @@ void main() {
         ),
       );
       expect(find.byType(Artwork), findsNothing);
-      expect(find.byType(Image), findsOneWidget);
+      expect(find.byType(WaveArtwork), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
       await tester.runAsync(continuation.dispose);
