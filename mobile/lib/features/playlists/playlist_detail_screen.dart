@@ -271,14 +271,14 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       if (enqueue != null && tracks.isNotEmpty)
         MusicAction(
           id: 'queue',
-          label: 'Добавить загруженные треки в очередь',
+          label: 'Добавить показанные треки в очередь',
           icon: Icons.queue_music,
           onSelected: () => run(() => enqueue(tracks)),
         ),
       if (download != null && tracks.isNotEmpty)
         MusicAction(
           id: 'download',
-          label: 'Скачать загруженные треки',
+          label: 'Скачать показанные треки',
           icon: Icons.download_outlined,
           onSelected: () => run(() => download(tracks)),
         ),
@@ -286,7 +286,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           tracks.every((t) => prefs.supports(t.ref, PreferenceSignal.like)))
         MusicAction(
           id: 'like-all',
-          label: 'Добавить загруженные треки в любимое',
+          label: 'Добавить показанные треки в любимое',
           icon: Icons.favorite_border,
           disabledReason: !prefs.canMutate ? 'Для изменения нужна сеть.' : null,
           onSelected: !prefs.canMutate
