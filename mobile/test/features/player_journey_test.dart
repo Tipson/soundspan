@@ -106,6 +106,39 @@ void main() {
     await playback.updates.close();
     await authority.updates.close();
   });
+  testWidgets(
+    'single-item queue has no idle reorder action but editing can finish',
+    (tester) async {
+      QueueSnapshot queued(int count) => QueueSnapshot(
+        entries: entries.take(count),
+        effectiveOrder: entries.take(count).map((e) => e.entryId),
+        currentEntryId: 'a',
+        fence: collectionFence,
+        lineage: count,
+      );
+      playback.value = queued(1);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SoundspanTheme.dark(),
+          home: QueueScreen(controller: controller),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('1 позиция · Ваша очередь'), findsOneWidget);
+      expect(find.byTooltip('Изменить порядок'), findsNothing);
+      playback.publish(queued(2));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Изменить порядок'));
+      await tester.pumpAndSettle();
+      playback.publish(queued(1));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Готово'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Изменить порядок'), findsNothing);
+      expect(playback.commands, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
   test(
     'transport dispatches exact commands without autoplay on mount',
     () async {

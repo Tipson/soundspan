@@ -406,6 +406,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Keep Android playback and system controls in sync during audio interruptions. Pause for competing speech audio, recover from permanent focus loss on explicit Play, and prevent late focus callbacks from restarting manually paused music.
 - Keep the full-player queue directly accessible from its top bar, including short screens, long titles and larger text. Reflect interruption pauses consistently in the mini-player, Wave and track lists.
+- Use correct Russian queue counts and hide unavailable single-item reordering while allowing an active edit session to finish.
 - Release signed Android client 0.1.5 (7), retaining the existing notification resource and package verification gates.
 
 - Preserve browser seeking during progressive YouTube Music playback by advertising the validated full byte length and returning a proper partial response for an open initial range, without waiting for the complete download.

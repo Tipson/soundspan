@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../design_system/artwork.dart';
 import '../../design_system/music_controls.dart';
+import '../../design_system/quantity.dart';
 import '../../design_system/tokens.dart';
 import '../../playback/queue_snapshot.dart';
 import 'player_controller.dart';
@@ -141,7 +142,7 @@ class _QueueScreenState extends State<QueueScreen> {
                         () => Navigator.of(context).maybePop(),
                   ),
                   const Expanded(child: Text('Очередь')),
-                  if (ids.isNotEmpty)
+                  if (ids.isNotEmpty && (_editing || ids.length > 1))
                     MusicIconButton(
                       label: _editing ? 'Готово' : 'Изменить порядок',
                       icon: _editing ? Icons.check : Icons.swap_vert,
@@ -171,7 +172,7 @@ class _QueueScreenState extends State<QueueScreen> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Text(
-                                  '${ids.length} позиций · ${state.currentEntry?.context.surface == PlaySurface.wave ? 'Волна' : 'Ваша очередь'}',
+                                  '${musicQuantity(ids.length, one: 'позиция', few: 'позиции', many: 'позиций')} · ${state.currentEntry?.context.surface == PlaySurface.wave ? 'Волна' : 'Ваша очередь'}',
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                                 if (controller.failure != null)
