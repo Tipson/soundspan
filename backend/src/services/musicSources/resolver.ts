@@ -99,6 +99,45 @@ export function createMusicSourceResolver(options: Options) {
     const active = new Map<string, number>();
     const controllers = new Map<MusicSource, Set<AbortController>>();
     let revision = 0;
+    let connectionRead:
+        | { revision: number; result: Promise<MusicSourceAdapter[]> }
+        | undefined;
+    /** Coalesce only the pending service-config read; each caller retains its own deadline. */
+    function readConnections(signal: AbortSignal): Promise<MusicSourceAdapter[]> {
+        signal.throwIfAborted();
+        if (!connectionRead) {
+            const read = {
+                revision,
+                result: Promise.resolve().then(() => options.connections()),
+            };
+            connectionRead = read;
+            const retire = () => {
+                if (connectionRead === read) connectionRead = undefined;
+            };
+            void read.result.then(retire, retire);
+        }
+        const read = connectionRead;
+        return new Promise((resolve, reject) => {
+            const abort = () => {
+                signal.removeEventListener("abort", abort);
+                reject(signal.reason);
+            };
+            signal.addEventListener("abort", abort, { once: true });
+            void read.result.then(
+                (connections) => {
+                    signal.removeEventListener("abort", abort);
+                    if (signal.aborted) reject(signal.reason);
+                    else if (read.revision !== revision)
+                        reject(new MusicSourceError("lease_expired"));
+                    else resolve(connections);
+                },
+                (error: unknown) => {
+                    signal.removeEventListener("abort", abort);
+                    reject(signal.aborted ? signal.reason : error);
+                },
+            );
+        });
+    }
     function lifetime(provider: MusicSource, parent: AbortSignal) {
         const controller = new AbortController();
         const group = controllers.get(provider) ?? new Set<AbortController>();
@@ -202,7 +241,7 @@ export function createMusicSourceResolver(options: Options) {
                     AbortSignal.timeout(16_000),
                 ]);
                 const generation = revision;
-                const connections = await options.connections();
+                const connections = await readConnections(deadline);
                 if (generation !== revision)
                     throw new MusicSourceError("lease_expired");
                 const eligible = connections.filter(
@@ -363,7 +402,10 @@ export function createMusicSourceResolver(options: Options) {
                 throw new MusicSourceError("lease_expired");
             }
             const generation = revision;
-            const source = (await options.connections()).find(
+            const source = (await readConnections(AbortSignal.any([
+                signal,
+                AbortSignal.timeout(16_000),
+            ]))).find(
                 (s) =>
                     s.provider === lease.provider &&
                     s.enabled &&

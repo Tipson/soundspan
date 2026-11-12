@@ -9,6 +9,8 @@
 
 ## Unreleased
 
+- Apply the shared Unicode and whitespace artist identity rules to daily mixes, so equivalent provider credits cannot split repeated dislikes or bypass artist suppression.
+- Bound music-source connection reads by each caller's acquisition deadline and cancellation. Coalesce only the pending read, retain credential-revocation fencing, and keep stream lifetime independent of the connection-check timer.
 - Keep the partial-search retry action within narrow screens when text is enlarged, allowing its label to wrap without reducing the touch target.
 - Disclose partial online-search results, keep working matches visible, and allow an explicit retry without treating an incomplete catalogue as fresh. Preserve listening and negative taste signals when optional liked-track audio analysis fails. Refresh incomplete daily mixes after provider recovery while retaining admitted native rotation, freshness lanes and exact recording identities.
 - Cancel queued transient reloads and delayed pause recovery when a track finishes. Retire late provider-recovery responses before they can replace a completed source, pause playback, or advance the queue again. Preserve replay, repeat and current-owner recovery.

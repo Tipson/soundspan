@@ -642,7 +642,11 @@ describe("PersonalDailyMixService", () => {
         ).toBe(false);
     });
 
-    it("suppresses only artists with two distinct current dislikes from this account", async () => {
+    it.each([
+        [" Ibrahim Maalouf ", "IBRAHIM MAALOUF"],
+        ["Ibrahim\t Maalouf", "Ibrahim Maalouf"],
+        ["Ｉｂｒａｈｉｍ Ｍａａｌｏｕｆ", "Ibrahim Maalouf"],
+    ])("combines two distinct current dislikes for equivalent artist credits %p / %p", async (firstArtist, secondArtist) => {
         jest.mocked(prisma.dislikedEntity.findMany).mockResolvedValueOnce([
             { entityId: "yt:first" },
             { entityId: "yt:second" },
@@ -650,8 +654,8 @@ describe("PersonalDailyMixService", () => {
             { entityId: "yt:duplicate" },
         ] as never);
         jest.mocked(prisma.trackYtMusic.findMany).mockResolvedValueOnce([
-            { videoId: "first", artist: " Ibrahim Maalouf " },
-            { videoId: "second", artist: "IBRAHIM MAALOUF" },
+            { videoId: "first", artist: firstArtist },
+            { videoId: "second", artist: secondArtist },
             { videoId: "single", artist: "Single Artist" },
             { videoId: "duplicate", artist: "Single Artist" },
             { videoId: "duplicate", artist: "Single Artist" },
@@ -702,7 +706,11 @@ describe("PersonalDailyMixService", () => {
         ).toEqual(new Set());
     });
 
-    it("excludes a suppressed artist from daily radio and familiar songs", async () => {
+    it.each([
+        "Ibrahim Maalouf",
+        "Ibrahim\t Maalouf",
+        "Ｉｂｒａｈｉｍ Ｍａａｌｏｕｆ",
+    ])("excludes equivalent suppressed credit %p from daily radio and familiar songs", async (artist) => {
         const service = new PersonalDailyMixService(
             Object.assign(
                 dependencies({
@@ -710,12 +718,12 @@ describe("PersonalDailyMixService", () => {
                         { key: "jazz", label: "Джаз", query: "jazz music" },
                     ],
                     loadFamiliar: async () => [
-                        song("known-blocked", "Ibrahim Maalouf"),
+                        song("known-blocked", artist),
                     ],
                     getRadio: async () => [
                         ...radio("blocked", "Ibrahim Maalouf").map((track) => ({
                             ...track,
-                            artist: "Ibrahim Maalouf",
+                            artist,
                         })),
                         ...radio("fresh", "Jazz Artist"),
                     ],
@@ -734,7 +742,7 @@ describe("PersonalDailyMixService", () => {
         expect(
             result.mixes[0].tracks.some(
                 (track) =>
-                    track.artist.name.toLowerCase() === "ibrahim maalouf",
+                    track.artist.name === artist,
             ),
         ).toBe(false);
     });

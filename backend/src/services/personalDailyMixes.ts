@@ -105,7 +105,7 @@ export interface PersonalDailyMix {
 }
 
 function artistKey(value: string): string {
-    return value.trim().toLocaleLowerCase("en-US");
+    return normalizeRecommendationArtistKey(value);
 }
 
 type DailyMixCandidate = DailyMixSong | PersonalizedNativeTrack;
