@@ -10,6 +10,7 @@ import '../session/session_authority.dart';
 import 'api_transport.dart';
 import 'network_policy.dart';
 import 'retry_after.dart';
+import 'request_cancellation.dart';
 
 /// One original operation owns one 401 replay budget. Lost mutation responses,
 /// transient failures and provider failures are never retried automatically.
@@ -19,7 +20,15 @@ final class DartApiTransport implements ApiTransport {
   final SessionAuthority authority;
 
   @override
-  Future<ApiResponse> send(ApiRequest request, {SessionFence? fence}) async {
+  Future<ApiResponse> send(ApiRequest request, {SessionFence? fence}) {
+    final cancellation = request.cancellation;
+    return cancellation == null
+        ? _send(request, fence: fence)
+        : cancellation.run(() => _send(request, fence: fence));
+  }
+
+  Future<ApiResponse> _send(ApiRequest request, {SessionFence? fence}) async {
+    request.cancellation?.check();
     if (!request.authenticated) {
       final response = await client.send(request);
       response.requireSuccess();
@@ -28,11 +37,14 @@ final class DartApiTransport implements ApiTransport {
     final captured = fence ?? authority.requireFence();
     for (var attempt = 0; attempt < 2; attempt++) {
       final grant = await authority.grantAccess(captured, request.origin);
+      request.cancellation?.check();
       final response = await client.send(
         request,
         accessToken: grant.accessToken,
       );
+      request.cancellation?.check();
       await authority.assertCurrent(captured);
+      request.cancellation?.check();
       if (response.statusCode == 401 && attempt == 0) {
         await authority.after401(grant.authStamp);
         continue;
@@ -100,6 +112,7 @@ final class DartJsonHttpClient implements JsonHttpClient {
   }
 
   void _check([_JsonOperation? operation]) {
+    operation?.cancellation?.check();
     if (_closed || operation?.cancelled == true) {
       throw const AppFailure(
         code: 'network_cancelled',
@@ -111,19 +124,22 @@ final class DartJsonHttpClient implements JsonHttpClient {
 
   @override
   Future<ApiResponse> send(ApiRequest request, {String? accessToken}) async {
+    request.cancellation?.check();
     _check();
     final client = HttpClient(context: _securityContext)
       ..connectionTimeout = timeout;
-    final operation = _JsonOperation(client);
+    final operation = _JsonOperation(client, request.cancellation);
     _active.add(operation);
+    final removeCancellation = request.cancellation?.listen(() {
+      operation.cancelled = true;
+      client.close(force: true);
+    });
     // Each operation owns its sockets; timeout must abort I/O, not merely stop
     // awaiting a still-active mutating request or an unbounded response stream.
     try {
-      final response = await _send(
-        operation,
-        request,
-        accessToken,
-      ).timeout(timeout);
+      Future<ApiResponse> execute() =>
+          _send(operation, request, accessToken).timeout(timeout);
+      final response = await (request.cancellation?.run(execute) ?? execute());
       _check(operation);
       return response;
     } catch (error) {
@@ -163,6 +179,7 @@ final class DartJsonHttpClient implements JsonHttpClient {
       }
       rethrow;
     } finally {
+      removeCancellation?.call();
       client.close(force: true);
       _active.remove(operation);
       operation.done.complete();
@@ -241,8 +258,9 @@ final class DartJsonHttpClient implements JsonHttpClient {
 }
 
 final class _JsonOperation {
-  _JsonOperation(this.client);
+  _JsonOperation(this.client, this.cancellation);
   final HttpClient client;
+  final RequestCancellation? cancellation;
   final done = Completer<void>();
   bool cancelled = false;
 }

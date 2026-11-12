@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../core/model/owner_key.dart';
+import '../core/model/app_failure.dart';
 import '../core/model/track.dart';
 import '../core/session/session_authority.dart';
 import '../features/library/library_models.dart';
@@ -22,7 +23,16 @@ final class OwnerPlaybackActions {
   final Future<void> Function(Iterable<Track>) prefetch;
   Future<void> guard() async {
     if (!isCurrent()) throw collectionStaleSession;
-    await authority.assertCurrent(fence);
+    try {
+      await authority.assertCurrent(fence).timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      if (!isCurrent()) throw collectionStaleSession;
+      throw const AppFailure(
+        code: 'playback_admission_timeout',
+        message: 'Не удалось начать воспроизведение. Повторите попытку',
+        retryable: true,
+      );
+    }
     if (!isCurrent()) throw collectionStaleSession;
   }
 

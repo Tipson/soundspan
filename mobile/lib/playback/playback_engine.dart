@@ -62,3 +62,9 @@ abstract interface class PlaybackEngine {
   Future<void> setVolume(double volume);
   Future<void> dispose();
 }
+
+/// A read-only native acknowledgement, independent of extrapolated UI clocks.
+abstract interface class PlaybackStartConfirmation {
+  bool get requiresNativeStartConfirmation;
+  Future<bool> confirmPlaying();
+}

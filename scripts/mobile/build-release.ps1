@@ -28,8 +28,8 @@ if ($version.flutterVersion -ne '3.47.7' -or $version.dartSdkVersion -ne '3.13.5
 $lock = Join-Path $source 'mobile/pubspec.lock'
 if ((Get-FileHash $lock).Hash -ne '01A909137D3B91DF57DAEC2581772AE2D745CE76DA6736BA00562CA870FDEA32') { throw 'Pinned pub lock mismatch' }
 $pinnedInputs = @{
-    'mobile/pubspec.yaml' = '9A1C0C04A79C37C87AF0B669F05021A7EF7AAB4CC00FE3DACAFE70A3C7A2CE01'
-    'mobile/android/settings.gradle.kts' = '3D6A3541F66484EE1AB8D46B78AE3CC197635BF529BF0C299FE09C9EF3D2406C'
+    'mobile/pubspec.yaml' = 'D83B37613F6DD492DC10BC779C02B40F8A7A98E140F0B9DD798C15AFD2D16772'
+    'mobile/android/settings.gradle.kts' = 'AF7626661E1DE91F28892C8EBF0139F75C5042F078ED132121F68C99365D8A10'
     'mobile/android/gradle/wrapper/gradle-wrapper.properties' = 'B690D26223576FE4E63889FAD9A00DF81945CB870B9476CC5A563152A1A88A74'
 }
 foreach ($inputPath in $pinnedInputs.Keys) {
@@ -38,7 +38,7 @@ foreach ($inputPath in $pinnedInputs.Keys) {
 $buildTools = Join-Path $env:ANDROID_HOME 'build-tools/36.0.0'
 $metadata = Read-SigningMetadata $SigningMetadata
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$name = "soundspan-0.1.9+12-$($ExpectedSourceCommit.Substring(0,12))-$stamp"
+$name = "soundspan-0.1.10+13-$($ExpectedSourceCommit.Substring(0,12))-$stamp"
 $apkOut = Join-Path $output "$name.apk"
 $reportOut = Join-Path $output "$name.json"
 Assert-NewOutput $apkOut

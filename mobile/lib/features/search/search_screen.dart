@@ -228,7 +228,13 @@ class _SearchScreenState extends State<SearchScreen> {
                         CatalogNotice(failure.message),
                       for (final failure in state.page.failures.values)
                         CatalogNotice(failure.message),
+                      if (state.page.hasUnresolvedTracks &&
+                          !state.page.failures.containsKey('discovery'))
+                        const CatalogNotice(
+                          'Для части треков пока нет источника воспроизведения. Можно повторить поиск.',
+                        ),
                       if (state.page.failures.isNotEmpty ||
+                          state.page.hasUnresolvedTracks ||
                           state.failure != null)
                         MusicButton(
                           label: 'Повторить поиск',

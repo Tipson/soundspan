@@ -3,6 +3,7 @@ import 'dart:async';
 import '../core/model/app_failure.dart';
 import '../core/model/owner_key.dart';
 import '../core/model/track_ref.dart';
+import '../core/network/request_cancellation.dart';
 
 enum ResolvePurpose { playback, preload, download }
 
@@ -71,14 +72,16 @@ final class ByteRange {
 
 /// Synchronous cancellation reaches pending headers and active sockets even
 /// when the consumer has paused its stream subscription.
-final class MediaCancellation {
+final class MediaCancellation implements RequestCancellation {
   bool _cancelled = false;
   final Set<void Function()> _listeners = {};
   bool get isCancelled => _cancelled;
+  @override
   void check() {
     if (_cancelled) throw mediaCancelled;
   }
 
+  @override
   void Function() listen(void Function() listener) {
     if (_cancelled) {
       listener();

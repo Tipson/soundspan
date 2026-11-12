@@ -6,6 +6,7 @@ import '../core/model/owner_key.dart';
 import '../core/model/track_ref.dart';
 import '../core/network/api_transport.dart';
 import '../core/network/redirect_policy.dart';
+import '../core/network/request_cancellation.dart';
 import '../core/session/session_authority.dart';
 import 'resolved_media.dart';
 
@@ -24,9 +25,13 @@ final class PlaybackResolver {
   Future<ResolvedMedia> resolve(
     TrackRef ref,
     ResolvePurpose purpose,
-    SessionFence fence,
-  ) async {
-    await authority.assertCurrent(fence);
+    SessionFence fence, {
+    MediaCancellation? cancellation,
+  }) async {
+    Future<void> guard() =>
+        cancellation?.run(() => authority.assertCurrent(fence)) ??
+        authority.assertCurrent(fence);
+    await guard();
     final origin = fence.owner.serverOrigin;
     var uri = origin.resolve(RedirectPolicy.identityPath(ref));
     Uri? renewable;
@@ -38,6 +43,7 @@ final class PlaybackResolver {
           origin: origin,
           method: ApiMethod.post,
           path: '/api/music-sources/resolve',
+          cancellation: cancellation,
           body: {
             'provider': r.provider.name,
             'providerTrackId': r.id,
@@ -50,7 +56,7 @@ final class PlaybackResolver {
         ),
         fence: fence,
       );
-      await authority.assertCurrent(fence);
+      await guard();
       response.requireSuccess();
       final data = response.data;
       if (data is! Map) throw invalidMedia;
@@ -97,7 +103,7 @@ final class PlaybackResolver {
       renewableUri: renewable,
     );
     RedirectPolicy.validate(uri, media);
-    await authority.assertCurrent(fence);
+    await guard();
     return media;
   }
 }

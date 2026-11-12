@@ -72,6 +72,7 @@ final class QueueCoordinator implements PlaybackController {
   int _seekRevision = 0;
   bool _focusSuspended = false;
   Timer? _playStartTimer;
+  int _playStartAttempt = 0;
   Duration _playStartPosition = Duration.zero;
   int get intentRevision => _intentRevision;
   @override
@@ -239,6 +240,7 @@ final class QueueCoordinator implements PlaybackController {
       return;
     }
     int? replacementIntent;
+    Stopwatch? replacementClock;
     if (command is RestoreQueue) {
       if (!_matchesLineage(command.fence, command.expectedLineage)) return;
       _validateRestored(command.snapshot, command.fence);
@@ -265,6 +267,7 @@ final class QueueCoordinator implements PlaybackController {
       if (command.expectedLineage == null) {
         _pendingManualReplacementIntent = replacementIntent;
       }
+      replacementClock = Stopwatch()..start();
     }
     if (command is Enqueue &&
         command.expectedLineage == null &&
@@ -326,8 +329,25 @@ final class QueueCoordinator implements PlaybackController {
       case ReplaceQueue():
         final fence = command.fence;
         try {
-          await authority.assertCurrent(fence);
-        } catch (_) {
+          final budget = prepareTimeout < const Duration(seconds: 10)
+              ? prepareTimeout
+              : const Duration(seconds: 10);
+          await authority.assertCurrent(fence).timeout(budget);
+        } catch (error) {
+          if (error is TimeoutException) {
+            if (_disposed ||
+                _replacementIntent != replacementIntent ||
+                !authority.isCurrent(fence) ||
+                (command.expectedLineage != null &&
+                    !_matchesLineage(fence, command.expectedLineage!))) {
+              return;
+            }
+            throw const AppFailure(
+              code: 'playback_admission_timeout',
+              message: 'Не удалось начать воспроизведение. Повторите попытку',
+              retryable: true,
+            );
+          }
           if (command.expectedLineage != null) return;
           rethrow;
         } finally {
@@ -354,7 +374,10 @@ final class QueueCoordinator implements PlaybackController {
         if (_shuffle) _order.shuffle(_random);
         _intent = command.play;
         _intentRevision++;
-        await _select(command.initialEntryId ?? _entries.first.entryId);
+        await _select(
+          command.initialEntryId ?? _entries.first.entryId,
+          preparationClock: replacementClock,
+        );
       case Enqueue():
         final boundary = _queueBoundary;
         try {
@@ -574,6 +597,7 @@ final class QueueCoordinator implements PlaybackController {
   Future<void> _select(
     String id, {
     Duration initialPosition = Duration.zero,
+    Stopwatch? preparationClock,
   }) async {
     _cancelPlayStartWatchdog();
     final old = _current;
@@ -596,9 +620,9 @@ final class QueueCoordinator implements PlaybackController {
     PreparedAudio? resource;
     var handedToQueue = false;
     var abandoned = false;
-    final preparationClock = Stopwatch()..start();
+    preparationClock ??= Stopwatch()..start();
     Future<T> withinDeadline<T>(Future<T> Function() operation) {
-      final remaining = prepareTimeout - preparationClock.elapsed;
+      final remaining = prepareTimeout - preparationClock!.elapsed;
       if (remaining <= Duration.zero) {
         throw TimeoutException('Media preparation timed out');
       }
@@ -653,7 +677,15 @@ final class QueueCoordinator implements PlaybackController {
       _preparingGeneration = null;
       _processing = PlaybackProcessing.ready;
       _publish();
-      if (_intent) await withinDeadline(() => _play(generation, fence));
+      if (_intent) {
+        await withinDeadline(
+          () => _play(
+            generation,
+            fence,
+            budget: prepareTimeout - preparationClock!.elapsed,
+          ),
+        );
+      }
     } catch (error) {
       abandoned = true;
       if (!_valid(generation, fence)) {
@@ -681,16 +713,24 @@ final class QueueCoordinator implements PlaybackController {
     }
   }
 
-  Future<void> _play(int generation, SessionFence fence) async {
+  Future<void> _play(
+    int generation,
+    SessionFence fence, {
+    Duration? budget,
+  }) async {
     if (_focusSuspended) return;
+    _cancelPlayStartWatchdog();
+    final attempt = _playStartAttempt;
     final revision = _intentRevision;
     final startClock = Stopwatch()..start();
-    final startBudget = prepareTimeout < const Duration(seconds: 10)
-        ? prepareTimeout
+    final available = budget ?? prepareTimeout;
+    final startBudget = available < const Duration(seconds: 10)
+        ? available
         : const Duration(seconds: 10);
     try {
       await authority.assertCurrent(fence).timeout(startBudget);
       if (!_valid(generation, fence) ||
+          attempt != _playStartAttempt ||
           revision != _intentRevision ||
           !_intent ||
           _focusSuspended) {
@@ -698,6 +738,7 @@ final class QueueCoordinator implements PlaybackController {
       }
     } catch (error) {
       if (_generation != generation ||
+          attempt != _playStartAttempt ||
           _fence != fence ||
           _disposed ||
           revision != _intentRevision ||
@@ -722,11 +763,11 @@ final class QueueCoordinator implements PlaybackController {
       }
       return;
     }
-    _cancelPlayStartWatchdog();
     _playStartPosition = _position;
     _playStartTimer = Timer(startBudget - startClock.elapsed, () {
       _playStartTimer = null;
       if (!_valid(generation, fence) ||
+          attempt != _playStartAttempt ||
           revision != _intentRevision ||
           !_intent ||
           _focusSuspended) {
@@ -742,12 +783,55 @@ final class QueueCoordinator implements PlaybackController {
     });
     unawaited(
       engine.play().catchError((Object _) {
-        if (_valid(generation, fence)) _fail();
+        if (_valid(generation, fence) &&
+            attempt == _playStartAttempt &&
+            revision == _intentRevision &&
+            _intent &&
+            !_focusSuspended) {
+          _fail();
+        }
       }),
     );
+    if (engine case PlaybackStartConfirmation probe
+        when probe.requiresNativeStartConfirmation) {
+      unawaited(
+        _confirmNativeStart(probe, generation, fence, revision, attempt),
+      );
+    }
   }
 
-  void _cancelPlayStartWatchdog() {
+  Future<void> _confirmNativeStart(
+    PlaybackStartConfirmation probe,
+    int generation,
+    SessionFence fence,
+    int revision,
+    int attempt,
+  ) async {
+    bool current() =>
+        _playStartTimer != null &&
+        attempt == _playStartAttempt &&
+        _valid(generation, fence) &&
+        revision == _intentRevision &&
+        _intent &&
+        !_focusSuspended;
+    while (current()) {
+      var confirmed = false;
+      try {
+        confirmed = await probe.confirmPlaying();
+      } catch (_) {
+        // The watchdog owns the bounded, retryable failure. No restart loop.
+      }
+      if (!current()) return;
+      if (confirmed) {
+        _cancelPlayStartWatchdog(invalidate: false);
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+  }
+
+  void _cancelPlayStartWatchdog({bool invalidate = true}) {
+    if (invalidate) _playStartAttempt++;
     _playStartTimer?.cancel();
     _playStartTimer = null;
   }
@@ -881,12 +965,15 @@ final class QueueCoordinator implements PlaybackController {
         _intent &&
         !_focusSuspended &&
         event.processing == PlaybackProcessing.ready;
-    // A silent refusal must retain its deadline. just_audio's public position
-    // can be extrapolated; this guard does not diagnose a hung native Play RPC.
-    if (_audible &&
+    final nativeConfirmation =
+        engine is PlaybackStartConfirmation &&
+        (engine as PlaybackStartConfirmation).requiresNativeStartConfirmation;
+    // UI position is extrapolated. Android acknowledges the exact native source.
+    if (!nativeConfirmation &&
+        _audible &&
         event.position >
             _playStartPosition + const Duration(milliseconds: 150)) {
-      _cancelPlayStartWatchdog();
+      _cancelPlayStartWatchdog(invalidate: false);
     }
     _publish(
       buffering ? PlaybackEventKind.buffering : PlaybackEventKind.position,

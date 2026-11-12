@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../model/app_failure.dart';
 import '../model/owner_key.dart';
+import 'request_cancellation.dart';
 
 enum ApiMethod { get, post, put, patch, delete }
 
@@ -36,6 +37,7 @@ final class ApiRequest {
     Map<String, String> query = const {},
     Map<String, Object?>? body,
     this.authenticated = true,
+    this.cancellation,
   }) : origin = normalizeServerOrigin(origin),
        query = Map.unmodifiable(query),
        body = body == null ? null : _freezeBody(body) {
@@ -77,6 +79,7 @@ final class ApiRequest {
   final Map<String, String> query;
   final Map<String, Object?>? body;
   final bool authenticated;
+  final RequestCancellation? cancellation;
   Uri get uri => origin
       .resolve(path)
       .replace(queryParameters: query.isEmpty ? null : query);

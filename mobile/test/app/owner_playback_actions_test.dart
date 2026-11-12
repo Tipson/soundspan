@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soundspan/app/owner_playback_actions.dart';
 import 'package:soundspan/core/model/owner_key.dart';
 import 'package:soundspan/core/model/track.dart';
+import 'package:soundspan/core/model/app_failure.dart';
 import 'package:soundspan/features/library/library_models.dart';
 import 'package:soundspan/playback/playback_engine.dart';
 import 'package:soundspan/playback/queue_coordinator.dart';
@@ -92,6 +93,43 @@ void main() {
             fence: collectionFence,
           ),
         );
+
+  testWidgets(
+    'UI Play bounds its first broker guard and ignores its late reply',
+    (tester) async {
+      final gate = authority.nextAdmission = Completer<void>();
+      var completed = false;
+      Object? failure;
+      final pending = select(actions((_) async {})).then<void>(
+        (_) {
+          completed = true;
+        },
+        onError: (Object error) {
+          completed = true;
+          failure = error;
+        },
+      );
+      try {
+        await tester.pump(const Duration(seconds: 11));
+        expect(completed, true);
+        expect(
+          failure,
+          isA<AppFailure>().having(
+            (e) => e.code,
+            'code',
+            'playback_admission_timeout',
+          ),
+        );
+        gate.complete();
+        await pending;
+        await tester.pump();
+        expect(queue.snapshot.entries, isEmpty);
+      } finally {
+        if (!gate.isCompleted) gate.complete();
+        await pending;
+      }
+    },
+  );
 
   for (final enqueue in [false, true]) {
     final operation = enqueue ? 'enqueue' : 'play';

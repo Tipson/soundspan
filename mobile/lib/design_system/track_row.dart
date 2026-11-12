@@ -30,8 +30,13 @@ class TrackRow extends StatelessWidget {
     final ref = track.ref;
     final reason = track.playable
         ? null
-        : track.unavailableReason ??
-              (ref is UnavailableTrackRef ? ref.reason : 'Запись недоступна');
+        : switch (track.unavailableReason ??
+              (ref is UnavailableTrackRef ? ref.reason : 'Запись недоступна')) {
+            'missing_provider_track' =>
+              'Источник воспроизведения пока не найден',
+            'unsupported_source' => 'Этот источник пока не поддерживается',
+            final message => message,
+          };
     final state = switch (playbackState) {
       TrackPlaybackState.idle => '',
       TrackPlaybackState.playing => 'Воспроизводится',

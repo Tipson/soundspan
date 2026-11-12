@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart' as audio;
 
 import 'playback_engine.dart';
@@ -11,7 +12,11 @@ import 'platform_gain_adapter.dart';
 import 'queue_snapshot.dart';
 
 /// Real single-source engine. Queue transitions remain service-owned and fresh.
-final class JustAudioEngine implements PlaybackEngine, LoudnessPlaybackEngine {
+final class JustAudioEngine
+    implements
+        PlaybackEngine,
+        LoudnessPlaybackEngine,
+        PlaybackStartConfirmation {
   factory JustAudioEngine({
     audio.AudioPlayer? player,
     @visibleForTesting AndroidPlaybackGain? gainBridge,
@@ -70,7 +75,42 @@ final class JustAudioEngine implements PlaybackEngine, LoudnessPlaybackEngine {
   final _events = StreamController<EngineEvent>.broadcast();
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   int _generation = -1;
+  Uri? _source;
   bool _loading = false, _disposed = false;
+  static const _nativeChannel = MethodChannel(
+    'com.ryanheise.just_audio.methods',
+  );
+  @override
+  bool get requiresNativeStartConfirmation =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  @override
+  Future<bool> confirmPlaying() async {
+    final generation = _generation, source = _source;
+    final session = _player.androidAudioSessionId;
+    if (_disposed ||
+        _loading ||
+        generation < 0 ||
+        source == null ||
+        session == null) {
+      return false;
+    }
+    final result = await _nativeChannel
+        .invokeMapMethod<String, Object?>('soundspanReadPlayback', {
+          'sessionId': session,
+          'source': source.toString(),
+        })
+        .timeout(const Duration(seconds: 1));
+    return !_disposed &&
+        !_loading &&
+        _generation == generation &&
+        _source == source &&
+        _player.androidAudioSessionId == session &&
+        result?['sessionId'] == session &&
+        result?['source'] == source.toString() &&
+        result?['isPlaying'] == true;
+  }
+
   @override
   Stream<EngineEvent> get events => _events.stream;
   void _emit({bool failed = false}) {
@@ -106,6 +146,7 @@ final class JustAudioEngine implements PlaybackEngine, LoudnessPlaybackEngine {
       throw ArgumentError('Only local prepared media allowed');
     }
     _generation = generation;
+    _source = uri;
     _loading = true;
     try {
       await loudness.suspend();
@@ -148,6 +189,7 @@ final class JustAudioEngine implements PlaybackEngine, LoudnessPlaybackEngine {
   @override
   Future<void> stop() {
     _generation = -1;
+    _source = null;
     _loading = false;
     final stopped = _player.stop();
     return Future.wait<void>([

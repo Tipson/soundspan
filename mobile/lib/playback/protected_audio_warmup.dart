@@ -25,7 +25,12 @@ final class ProtectedAudioWarmup {
     }
 
     check();
-    final media = await resolver.resolve(ref, ResolvePurpose.preload, fence);
+    final media = await resolver.resolve(
+      ref,
+      ResolvePurpose.preload,
+      fence,
+      cancellation: cancellation,
+    );
     check();
     final response = await fetcher.open(
       media,

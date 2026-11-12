@@ -70,6 +70,8 @@ final class SearchPage {
   final int localOffset, discoveryLimit;
   final String? alias;
   bool get hasMore => localHasMore || discoveryHasMore;
+  bool get hasUnresolvedTracks =>
+      tracks.any((t) => t.unavailableReason == 'missing_provider_track');
 }
 
 /// A detail's tracks have already passed its endpoint-specific adapter.
