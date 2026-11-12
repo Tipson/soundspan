@@ -4,6 +4,9 @@ import { playbackStateMachine } from "@/lib/audio";
 import type { Track } from "@/lib/audio-state-context";
 import type { QueueItem } from "@/lib/queue-item";
 import { isListenTogetherActiveOrPending } from "@/lib/listen-together-session";
+import { getAuthRuntimeGeneration } from "@/lib/auth-runtime-generation";
+import { getPlaybackIntentGeneration } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import {
     createUnavailableYtMusicRecoveryCoordinator,
     type UnavailableYtMusicRecoveryOutcome,
@@ -90,14 +93,30 @@ export function useUnavailableYtMusicRecovery({
     const coordinatorRef = useRef<ReturnType<
         typeof createUnavailableYtMusicRecoveryCoordinator
     > | null>(null);
+    const coordinatorOwnerIsCurrentRef = useRef<(() => boolean) | null>(null);
     const getCoordinator = useCallback(() => {
-        if (!coordinatorRef.current) {
+        if (
+            !coordinatorRef.current ||
+            !coordinatorOwnerIsCurrentRef.current?.()
+        ) {
+            const loadId = refs.loadIdRef.current;
+            const seekOperationId = refs.seekOperationIdRef.current;
+            const completedEnd = refs.lastHandledTrackEndRef.current;
+            const intentGeneration = getPlaybackIntentGeneration();
+            const authGeneration = getAuthRuntimeGeneration();
+            const ownsRecovery = () =>
+                refs.loadIdRef.current === loadId &&
+                refs.seekOperationIdRef.current === seekOperationId &&
+                refs.lastHandledTrackEndRef.current === completedEnd &&
+                getPlaybackIntentGeneration() === intentGeneration &&
+                getAuthRuntimeGeneration() === authGeneration;
+            coordinatorOwnerIsCurrentRef.current = ownsRecovery;
             coordinatorRef.current =
                 createUnavailableYtMusicRecoveryCoordinator({
                     request: (input) =>
                         api.recoverUnavailableYtMusicTrack(input),
                     getCurrentTrack: () => currentTrackRef.current,
-                    isActive: () => mountedRef.current,
+                    isActive: () => mountedRef.current && ownsRecovery(),
                     applyReplacement: (expectedTrack, replacement) => {
                         clearPendingTrackErrorSkip();
                         clearTransientTrackRecovery(true);
@@ -134,6 +153,7 @@ export function useUnavailableYtMusicRecovery({
         currentTrackRef,
         isLoadingRef,
         lastTrackIdRef,
+        refs,
         setCurrentTrack,
         setIsBuffering,
         setQueue,
@@ -151,6 +171,13 @@ export function useUnavailableYtMusicRecovery({
             ) {
                 return "not_applicable";
             }
+            const completedEnd = refs.lastHandledTrackEndRef.current;
+            if (
+                completedEnd.trackId === track.id &&
+                completedEnd.loadId === refs.loadIdRef.current &&
+                audioEngine.hasTrackEnded()
+            )
+                return "stale";
             unavailableYtMusicRecoveryInFlightRef.current = true;
             playbackStateMachine.forceTransition("LOADING");
             setIsBuffering(true);
@@ -160,7 +187,7 @@ export function useUnavailableYtMusicRecovery({
                 unavailableYtMusicRecoveryInFlightRef.current = false;
             }
         },
-        [getCoordinator, setIsBuffering],
+        [getCoordinator, refs, setIsBuffering],
     );
 
     return {

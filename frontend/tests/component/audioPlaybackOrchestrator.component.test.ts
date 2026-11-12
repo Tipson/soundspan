@@ -3039,6 +3039,212 @@ test("the offline queue ends without waiting for network recommendations", async
     assert.equal(controlCalls.pause, 1);
 });
 
+test("natural completion cancels a transient reload queued before the end", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    const seed = makeTrack("yt:pending-end-reload", { duration: 210 });
+    audioState.currentTrack = seed;
+    audioState.queue = [seed];
+    startVibeModeImpl = () => new Promise(() => {});
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 210;
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.currentTime = engine.actualCurrentTime = 209;
+    engine.emit("timeupdate", { timeSec: 209 });
+    await flushAsync();
+
+    engine.emit("playerror", {
+        error: new Error("network connection reset"),
+    });
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 0);
+
+    // A buffered source can finish before an already queued network recovery.
+    // Online continuation deliberately keeps Play intent while awaiting tracks.
+    engine.currentTime = engine.actualCurrentTime = 210;
+    engine.playing = false;
+    engine.trackEnded = true;
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+
+    t.mock.timers.tick(451);
+    await flushAsync();
+    assert.equal(
+        engine.reloadCalls,
+        0,
+        "a completed source must not be reloaded by its earlier recovery timer",
+    );
+});
+
+test("natural completion retires an error handler still awaiting its first recovery decision", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    const seed = makeTrack("yt:inflight-end-reload", { duration: 210 });
+    audioState.currentTrack = seed;
+    audioState.queue = [seed];
+    startVibeModeImpl = () => new Promise(() => {});
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 210;
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.currentTime = engine.actualCurrentTime = 209;
+    engine.emit("timeupdate", { timeSec: 209 });
+    await flushAsync();
+    engine.emit("playerror", { error: new Error("network connection reset") });
+    engine.currentTime = engine.actualCurrentTime = 210;
+    engine.playing = false;
+    engine.trackEnded = true;
+    engine.emit("end");
+    await flushAsync();
+    t.mock.timers.tick(451);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 0);
+});
+
+for (const responseStatus of [
+    "original_available",
+    "no_candidate",
+    "replaced",
+] as const) {
+    test(`late ${responseStatus} recovery cannot take ownership after natural completion`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+        runtimeEngineMode = "native";
+        playbackState.isPlaying = true;
+        const videoId =
+            responseStatus === "original_available"
+                ? "endavail001"
+                : responseStatus === "no_candidate"
+                  ? "endabsnt001"
+                  : "endreplc001";
+        const seed = makeTrack(`yt:${videoId}`, {
+            duration: 210,
+            streamSource: "youtube",
+            youtubeVideoId: videoId,
+            artist: { name: "Artist" },
+        });
+        audioState.currentTrack = seed;
+        audioState.queue = [makeTrack("previous"), seed];
+        audioState.currentIndex = 1;
+        startVibeModeImpl = () => new Promise(() => {});
+        const pendingRecovery = deferred<Record<string, unknown>>();
+        recoverUnavailableYtMusicTrackImpl = () => pendingRecovery.promise;
+        renderOrchestrator();
+        await flushAsync();
+        // Admit the actual source load before emitting native callbacks; other
+        // cases can leave the manual YouTube switch debounce active.
+        t.mock.timers.tick(1_251);
+        await flushAsync();
+        engine.duration = 210;
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = 209.5;
+        engine.emit("timeupdate", { timeSec: 209.5 });
+        await flushAsync();
+        engine.emit("playerror", {
+            error: new Error("network connection reset"),
+            code: "MEDIA_ERR_NETWORK",
+            recoverable: false,
+        });
+        await flushAsync();
+        assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 1);
+        engine.currentTime = engine.actualCurrentTime = 210;
+        engine.playing = false;
+        engine.trackEnded = true;
+        engine.emit("end");
+        await flushAsync();
+        const rejectedEnds = loggerCalls.warn.filter((call) =>
+            JSON.stringify(call).includes("Rejected track end"),
+        );
+        assert.deepEqual(
+            rejectedEnds,
+            [],
+            "the completed source must be admitted",
+        );
+        const stateBeforeResolution = playbackMachine.state;
+        const pausesBeforeResolution = playbackCalls.setIsPlaying.filter(
+            (value) => !value,
+        ).length;
+        pendingRecovery.resolve({
+            status: responseStatus,
+            originalVideoId: seed.youtubeVideoId,
+            replacement:
+                responseStatus === "replaced"
+                    ? {
+                          videoId: "alternate02",
+                          title: "Alternate",
+                          duration: 210,
+                      }
+                    : null,
+            persisted: responseStatus === "replaced",
+        });
+        await flushAsync();
+        t.mock.timers.tick(1_201);
+        await flushAsync();
+        assert.equal(
+            audioState.currentTrack?.youtubeVideoId,
+            seed.youtubeVideoId,
+        );
+        assert.equal(playbackMachine.state, stateBeforeResolution);
+        assert.equal(
+            playbackCalls.setIsPlaying.filter((value) => !value).length,
+            pausesBeforeResolution,
+        );
+        assert.equal(controlCalls.next, 0);
+    });
+}
+
+for (const recoveryKind of ["startup", "pause"] as const) {
+    const description =
+        recoveryKind === "startup"
+            ? "natural completion without timeupdates does not restart startup recovery"
+            : "natural completion cancels a pending pause watchdog";
+    test(description, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+        runtimeEngineMode = "native";
+        playbackState.isPlaying = true;
+        const seed = makeTrack(`yt:ended-${recoveryKind}-watchdog`, {
+            duration: 210,
+        });
+        audioState.currentTrack = seed;
+        audioState.queue = [seed];
+        startVibeModeImpl = () => new Promise(() => {});
+        renderOrchestrator();
+        await flushAsync();
+        engine.duration = 210;
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        if (recoveryKind === "pause") {
+            engine.currentTime = engine.actualCurrentTime = 200;
+            engine.emit("timeupdate", { timeSec: 200 });
+            engine.bufferedAheadSec = 0;
+            engine.playing = false;
+            engine.emit("pause");
+        }
+        await flushAsync();
+        engine.currentTime = engine.actualCurrentTime = 210;
+        engine.playing = false;
+        engine.trackEnded = true;
+        engine.emit("end");
+        await flushAsync();
+        t.mock.timers.tick(2_001);
+        await flushAsync();
+        t.mock.timers.tick(451);
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 0);
+    });
+}
+
 test("heartbeat does not reload an ended nine-second track while online continuation is pending", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
     runtimeEngineMode = "native";

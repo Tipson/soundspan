@@ -3,6 +3,7 @@ import { playbackStateMachine } from "@/lib/audio";
 import type { Track } from "@/lib/audio-state-context";
 import type { AudioEngineErrorPayload } from "@/lib/audio-engine/types";
 import {
+    audioEngine,
     logPlaybackClientMetric,
     orchestratorLogger,
 } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
@@ -20,7 +21,11 @@ import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session"
 import { frontendLogger } from "@/lib/logger";
 import type { UnavailableYtMusicRecoveryOutcome } from "@/lib/audio/unavailableYtMusicRecovery";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
-import { isPlaybackFailureSupersededByManualIntent } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    getPlaybackIntentGeneration,
+    isPlaybackFailureSupersededByManualIntent,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { getAuthRuntimeGeneration } from "@/lib/auth-runtime-generation";
 import {
     getTrackProviderFailureKey,
     providerFailureCooldown,
@@ -103,6 +108,27 @@ export function createPlaybackErrorHandler({
     } = refs;
 
     return async (data: AudioEngineErrorPayload): Promise<void> => {
+        const trackId = playbackType === "track" ? currentTrack?.id : null;
+        const loadId = refs.loadIdRef.current;
+        const seekOperationId = refs.seekOperationIdRef.current;
+        const completedEnd = refs.lastHandledTrackEndRef.current;
+        const intentGeneration = getPlaybackIntentGeneration();
+        const authGeneration = getAuthRuntimeGeneration();
+        const ownsError = () =>
+            !trackId ||
+            (currentTrackRef.current?.id === trackId &&
+                refs.loadIdRef.current === loadId &&
+                refs.seekOperationIdRef.current === seekOperationId &&
+                refs.lastHandledTrackEndRef.current === completedEnd &&
+                getPlaybackIntentGeneration() === intentGeneration &&
+                getAuthRuntimeGeneration() === authGeneration);
+        if (
+            trackId &&
+            completedEnd.trackId === trackId &&
+            completedEnd.loadId === loadId &&
+            audioEngine.hasTrackEnded()
+        )
+            return;
         if (
             refs.providerFailedLoadIdRef.current === refs.loadIdRef.current &&
             !isLoadingRef.current
@@ -237,6 +263,7 @@ export function createPlaybackErrorHandler({
             const serverOutcome = attemptServerMusicSourceRecovery
                 ? await attemptServerMusicSourceRecovery(data)
                 : "not_applicable";
+            if (!ownsError()) return;
             if (
                 serverOutcome === "recovered" ||
                 serverOutcome === "stale" ||
@@ -267,6 +294,7 @@ export function createPlaybackErrorHandler({
                 providerStartupFailure || serverRecoveryFailed
                     ? "failed"
                     : await attemptUnavailableYtMusicRecovery(currentTrack);
+            if (!ownsError()) return;
             if (
                 unavailableOutcome === "replaced" ||
                 unavailableOutcome === "stale"

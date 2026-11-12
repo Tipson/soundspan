@@ -9,6 +9,8 @@
 
 ## Unreleased
 
+- Cancel queued transient reloads and delayed pause recovery when a track finishes. Retire late provider-recovery responses before they can replace a completed source, pause playback, or advance the queue again. Preserve replay, repeat and current-owner recovery.
+
 - Refresh the upcoming Wave queue after three mixed early skips and confirmed dislikes. Keep provider failures neutral, preserve pause and queue ownership, rank new songs by negative artist feedback, and use mapped explicit dislikes as bounded negative audio anchors.
 - Rotate oversubscribed personal mix directions and eligible VK/Yandex seed artists by UTC day while keeping one familiar anchor. Give recent listening room alongside saved tastes, and prefer meaningful plays over older likes without changing the six-mix or long-track limits.
 

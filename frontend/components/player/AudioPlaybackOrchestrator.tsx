@@ -575,13 +575,20 @@ export const AudioPlaybackOrchestrator = memo(
                             });
                             return;
                         }
-                        lastHandledTrackEndRef.current = {
-                            trackId: currentTrackId,
-                            loadId: activeLoadId,
-                            handledAtMs: now,
-                        };
                     }
+                    // Publish completion for every playback cycle, including
+                    // repeat-one, so in-flight error work loses its owner.
+                    lastHandledTrackEndRef.current = {
+                        trackId: currentTrackId,
+                        loadId: activeLoadId,
+                        handledAtMs: now,
+                    };
                     trackEndWatchdogRef.current?.clear();
+                    // A buffered source can finish after a transient recovery
+                    // was queued. That old timer/load listener no longer owns
+                    // playback while next-track continuation is pending.
+                    clearUnexpectedPauseRecoveryCheck();
+                    clearTransientTrackRecovery(false);
                     playEngagement.finishCompleted();
                 }
 
