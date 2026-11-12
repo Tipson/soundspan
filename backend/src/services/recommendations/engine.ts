@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { logger } from "../../utils/logger";
 import { recordRecommendationGenerationMetrics } from "../../metrics";
 import type { RecommendationGenerationMetricInput } from "../../metrics/recommendationMetrics";
-import { moodRankingScore, rankRecommendationCandidates } from "./rankerV2";
+import {
+    moodRankingScore,
+    rankRecommendationCandidates,
+    recommendationNegativeFeedbackPenalty,
+} from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
 import type { RadioRequestExecution } from "./radioRequestExecution";
 import type { VerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
@@ -208,6 +212,7 @@ function baselineRank(
     perLaneLimit?: number,
     waveMood?: RecommendRequest["intent"]["mood"],
     diversify = false,
+    waveTaste?: RecommendationTasteContext,
 ): ScoredRecommendation[] {
     const seenCanonical = new Set<string>();
     const recommendations: ScoredRecommendation[] = [];
@@ -220,15 +225,26 @@ function baselineRank(
             ? Math.max(0, Math.floor(perLaneLimit))
             : null;
     const artistCounts = new Map<string, number>();
-    const ordered = waveMood
-        ? [...candidates].sort(
-              (left, right) =>
-                  right.providerPrior +
-                  moodRankingScore(right, waveMood) -
-                  (left.providerPrior + moodRankingScore(left, waveMood)),
-          )
-        : candidates;
-    for (const candidate of ordered) {
+    const ordered = candidates.map((candidate, index) => ({
+        candidate,
+        index,
+        score:
+            candidate.providerPrior +
+            (waveMood ? moodRankingScore(candidate, waveMood) : 0) -
+            (waveTaste
+                ? recommendationNegativeFeedbackPenalty(candidate, waveTaste)
+                : 0),
+    }));
+    if (
+        waveMood ||
+        (waveTaste?.negativeCentroids.length ?? 0) > 0 ||
+        waveTaste?.sessionNegativeEmbedding
+    )
+        ordered.sort(
+            (left, right) =>
+                right.score - left.score || left.index - right.index,
+        );
+    for (const { candidate, score } of ordered) {
         if (
             !hasPlayableIdentity(candidate) ||
             isExcluded(candidate, excludes)
@@ -250,7 +266,7 @@ function baselineRank(
         artistCounts.set(artist, (artistCounts.get(artist) ?? 0) + 1);
         recommendations.push({
             track: candidate,
-            score: candidate.providerPrior,
+            score,
         });
         if (candidate.lane) {
             laneCounts.set(
@@ -454,6 +470,7 @@ export class RecommendationEngine {
             request.perLaneLimit,
             isWave ? request.intent.mood : undefined,
             isWave,
+            sharedContext?.taste,
         );
 
         if (this.dependencies.mode === "baseline") {
@@ -646,7 +663,8 @@ export class RecommendationEngine {
         const [exposures, dislikes, taste] = await Promise.allSettled([
             this.dependencies.loadRecentExposures(request.userId, now),
             this.dependencies.loadDislikedCanonicalKeys(request.userId),
-            this.dependencies.mode === "baseline"
+            this.dependencies.mode === "baseline" &&
+            request.intent.surface !== "wave"
                 ? Promise.resolve<RecommendationTasteContext>({
                       positiveCentroids: [],
                       negativeCentroids: [],

@@ -16,6 +16,7 @@ import { ru } from "@/lib/i18n/ru";
 import { getRecommendationSessionId } from "@/lib/recommendationSession";
 import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
 import { recommendationTrackKey } from "../recommendationIdentity";
+import { normalizePlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
 
 interface HomeWaveHeroProps {
     personalizedFeed: PersonalizedHomeFeed | null;
@@ -105,7 +106,10 @@ export function HomeWaveHero({
         setShuffleIndices,
     ]);
 
-    const hasActiveWave = vibeMode && currentTrack !== null;
+    const hasActiveWave =
+        vibeMode &&
+        currentTrack !== null &&
+        !normalizePlaybackRadioOrigin(currentTrack.radioOrigin);
     const isWavePlaying = hasActiveWave && isPlaying;
     const toggleWave = useCallback(() => {
         if (!hasActiveWave) startWave();

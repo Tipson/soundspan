@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { PlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
 
 GlobalRegistrator.register({ url: "https://music.test/vibe" });
 (
@@ -41,7 +42,10 @@ const calls = {
     waveLanguage: [] as unknown[],
 };
 const audioState = {
-    currentTrack: null as { id: string } | null,
+    currentTrack: null as {
+        id: string;
+        radioOrigin?: PlaybackRadioOrigin;
+    } | null,
     vibeMode: false,
     waveMode: "for-you",
     waveMood: null as string | null,
@@ -280,6 +284,47 @@ test("Vibe starts its ranked queue with shuffle explicitly disabled", async () =
 
     await React.act(async () => root.unmount());
     container.remove();
+});
+
+test("Wave screen starts personalized music when a previous song station is paused", async () => {
+    audioState.vibeMode = true;
+    audioState.currentTrack = {
+        id: "old-station",
+        radioOrigin: { kind: "track", source: "youtube", id: "AAAAAAAAAAA" },
+    };
+    feedResult = {
+        data: {
+            shelves: {
+                quickPicks: [{ id: "personal" }],
+                discovery: [],
+                listenAgain: [],
+            },
+        },
+        isLoading: false,
+        isError: false,
+    };
+    const { VibeProviderFallback } =
+        await import("../../components/vibe/VibeAvailability");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await React.act(async () =>
+            root.render(React.createElement(VibeProviderFallback)),
+        );
+        assert.equal(
+            container.querySelector('[data-testid="wave-now-playing-panel"]'),
+            null,
+        );
+        const button = container.querySelector<HTMLButtonElement>(
+            '[data-testid="wave-main-toggle"]',
+        )!;
+        await React.act(async () => button.click());
+        assert.equal(calls.playTracks.length, 1);
+        assert.deepEqual(calls.playTracks[0], [[{ id: "personal" }], 0, true]);
+    } finally {
+        await React.act(async () => root.unmount());
+    }
 });
 
 test("Wave hides unrelated current and seed tracks until its own session starts", async () => {

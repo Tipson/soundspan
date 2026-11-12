@@ -4,6 +4,7 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { PlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
 
 GlobalRegistrator.register();
 (
@@ -25,7 +26,8 @@ let waveFeed: unknown = undefined;
 let waveLoading = false;
 let playing = false;
 let activeWave = false;
-let currentTrack: { id: string } | null = null;
+let currentTrack: { id: string; radioOrigin?: PlaybackRadioOrigin } | null =
+    null;
 const pause = mock.fn();
 const play = mock.fn();
 mock.module("@/lib/audio-playback-context", {
@@ -192,6 +194,36 @@ test("home Wave follows shared playback and resumes without replacing the queue"
         await render();
         assert.equal(button().getAttribute("aria-pressed"), "false");
         assert.equal(button().disabled, true);
+    } finally {
+        await act(async () => root.unmount());
+    }
+});
+
+test("home Wave starts the personal queue instead of resuming a previous song station", async () => {
+    activeWave = true;
+    currentTrack = {
+        id: "old-radio-track",
+        radioOrigin: { kind: "track", source: "youtube", id: "AAAAAAAAAAA" },
+    };
+    const { HomeWaveHero } =
+        await import("../../features/home/components/HomeWaveHero");
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () =>
+            root.render(
+                React.createElement(HomeWaveHero, {
+                    personalizedFeed: null,
+                    isLoading: false,
+                }),
+            ),
+        );
+        const button = container.querySelector("button")!;
+        assert.equal(button.getAttribute("data-home-wave-state"), "ready");
+        await act(async () => button.click());
+        assert.equal(calls.playTracks.length, 1);
+        assert.equal(play.mock.callCount(), 0);
+        assert.equal(pause.mock.callCount(), 0);
     } finally {
         await act(async () => root.unmount());
     }

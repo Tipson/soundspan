@@ -218,7 +218,14 @@ export function useVibeModeControls({
             };
 
             try {
-                if (radioOrigin) {
+                // A series of negative actions retunes the upcoming remote
+                // queue from the account's taste rather than asking the same
+                // rejected station for another batch. Ordinary continuation
+                // still belongs to its original song/artist.
+                if (
+                    radioOrigin &&
+                    !(replaceUpcoming && isProviderRadioTrack(currentTrack))
+                ) {
                     const previous = originalRadioCursorRef.current;
                     if (
                         !playbackRadioOriginsMatch(

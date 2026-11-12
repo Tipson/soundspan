@@ -903,113 +903,131 @@ test("late provider radio response is ignored after the active track changes", a
     assert.deepEqual(second.mutations, []);
 });
 
-test("adaptive provider refresh replaces only the tail after the latest selection is paused", async () => {
-    const { useVibeModeControls } =
-        await import("../../lib/audio/useVibeModeControls");
-    const harness = new HookLifecycleHarness();
-    const first = makeProviderTrack("AAAAAAAAAAA");
-    const second = makeProviderTrack("BBBBBBBBBBB");
-    const stale = makeProviderTrack("CCCCCCCCCCC");
-    const freshOne = makeProviderTrack("DDDDDDDDDDD");
-    const freshTwo = makeProviderTrack("EEEEEEEEEEE");
-    const queue = [first, second, stale];
-    const committed: {
-        queue: ReturnType<typeof makeProviderTrack>[] | null;
-        currentTrack: ReturnType<typeof makeProviderTrack> | null;
-        currentIndex: number | null;
-        mutation: string | null;
-    } = {
-        queue: null,
-        currentTrack: null,
-        currentIndex: null,
-        mutation: null,
-    };
-    const sharedSetters = {
-        setIsShuffle: () => undefined,
-        setShuffleIndices: () => undefined,
-        setVibeMode: () => undefined,
-        setVibeSourceFeatures: () => undefined,
-        setVibeQueueIds: () => undefined,
-        setQueue: (
-            value: typeof queue | ((previous: typeof queue) => typeof queue),
-        ) => {
-            committed.queue =
-                typeof value === "function" ? value(queue) : value;
-        },
-        setCurrentIndex: (value: number) => {
-            committed.currentIndex = value;
-        },
-        setCurrentTrack: (value: typeof first) => {
-            committed.currentTrack = value;
-        },
-        setCurrentAudiobook: () => undefined,
-        setCurrentPodcast: () => undefined,
-        setPlaybackType: () => undefined,
-    };
+for (const origin of [
+    undefined,
+    { kind: "track", source: "youtube", id: "ZZZZZZZZZZZ" } as const,
+]) {
+    test(`adaptive provider refresh ${origin ? "escapes the rejected original station and" : ""} replaces only the tail after the latest selection is paused`, async () => {
+        const { useVibeModeControls } =
+            await import("../../lib/audio/useVibeModeControls");
+        const harness = new HookLifecycleHarness();
+        const first = {
+            ...makeProviderTrack("AAAAAAAAAAA"),
+            radioOrigin: origin,
+        };
+        const second = {
+            ...makeProviderTrack("BBBBBBBBBBB"),
+            radioOrigin: origin,
+        };
+        const stale = makeProviderTrack("CCCCCCCCCCC");
+        const freshOne = makeProviderTrack("DDDDDDDDDDD");
+        const freshTwo = makeProviderTrack("EEEEEEEEEEE");
+        const queue = [first, second, stale];
+        const committed: {
+            queue: ReturnType<typeof makeProviderTrack>[] | null;
+            currentTrack: ReturnType<typeof makeProviderTrack> | null;
+            currentIndex: number | null;
+            mutation: string | null;
+        } = {
+            queue: null,
+            currentTrack: null,
+            currentIndex: null,
+            mutation: null,
+        };
+        const sharedSetters = {
+            setIsShuffle: () => undefined,
+            setShuffleIndices: () => undefined,
+            setVibeMode: () => undefined,
+            setVibeSourceFeatures: () => undefined,
+            setVibeQueueIds: () => undefined,
+            setQueue: (
+                value:
+                    | typeof queue
+                    | ((previous: typeof queue) => typeof queue),
+            ) => {
+                committed.queue =
+                    typeof value === "function" ? value(queue) : value;
+            },
+            setCurrentIndex: (value: number) => {
+                committed.currentIndex = value;
+            },
+            setCurrentTrack: (value: typeof first) => {
+                committed.currentTrack = value;
+            },
+            setCurrentAudiobook: () => undefined,
+            setCurrentPodcast: () => undefined,
+            setPlaybackType: () => undefined,
+        };
 
-    const initialState = {
-        currentTrack: first,
-        currentIndex: 0,
-        queue,
-        vibeMode: true,
-        waveMode: "for-you" as const,
-        waveMood: null,
-        isShuffle: false,
-        ...sharedSetters,
-    };
-    const advancedState = {
-        ...initialState,
-        currentTrack: second,
-        currentIndex: 1,
-    };
+        const initialState = {
+            currentTrack: first,
+            currentIndex: 0,
+            queue,
+            vibeMode: true,
+            waveMode: "for-you" as const,
+            waveMood: null,
+            isShuffle: false,
+            ...sharedSetters,
+        };
+        const advancedState = {
+            ...initialState,
+            currentTrack: second,
+            currentIndex: 1,
+        };
 
-    function HookProbe(audioState: typeof initialState) {
-        harness.beginRender();
-        activeHarness = harness;
-        const controls = useVibeModeControls({
-            state: audioState as never,
-            getActiveListenTogetherSession: () => null,
-            showQueueMutationToasts: () => undefined,
+        function HookProbe(audioState: typeof initialState) {
+            harness.beginRender();
+            activeHarness = harness;
+            const controls = useVibeModeControls({
+                state: audioState as never,
+                getActiveListenTogetherSession: () => null,
+                showQueueMutationToasts: () => undefined,
+            });
+            harness.commitRender();
+            return controls;
+        }
+
+        const initialControls = HookProbe(initialState);
+        const queueCommitToken = {};
+        const pendingResult = initialControls.startVibeMode({
+            queueStrategy: "replace-upcoming",
+            queueCommitToken,
+            onLocalQueueCommit: (commit) => {
+                committed.mutation = commit.mutation;
+            },
         });
-        harness.commitRender();
-        return controls;
-    }
+        await Promise.resolve();
 
-    const initialControls = HookProbe(initialState);
-    const queueCommitToken = {};
-    const pendingResult = initialControls.startVibeMode({
-        queueStrategy: "replace-upcoming",
-        queueCommitToken,
-        onLocalQueueCommit: (commit) => {
-            committed.mutation = commit.mutation;
-        },
+        assert.equal(
+            new URL(feedRequestPaths[0], "https://fixture.test").pathname,
+            "/personalized/home",
+        );
+
+        recordExplicitPlaybackPause();
+        HookProbe(advancedState);
+        feedRequests[0].resolve({
+            shelves: {
+                discovery: [freshOne, freshTwo],
+                quickPicks: [],
+                listenAgain: [],
+            },
+            degraded: false,
+            reason: null,
+            seedCount: 1,
+            nextCursor: 2,
+        });
+
+        assert.deepEqual(await pendingResult, { success: true, trackCount: 2 });
+        assert.deepEqual(
+            committed.queue?.map((track) => track.id),
+            [first.id, second.id, freshOne.id, freshTwo.id],
+        );
+        // A late recommendation response must not replace the user's selection.
+        assert.equal(committed.currentTrack, null);
+        assert.equal(committed.currentIndex, null);
+        assert.equal(committed.mutation, "replace-upcoming");
     });
-    await Promise.resolve();
-
-    recordExplicitPlaybackPause();
-    HookProbe(advancedState);
-    feedRequests[0].resolve({
-        shelves: {
-            discovery: [freshOne, freshTwo],
-            quickPicks: [],
-            listenAgain: [],
-        },
-        degraded: false,
-        reason: null,
-        seedCount: 1,
-        nextCursor: 2,
-    });
-
-    assert.deepEqual(await pendingResult, { success: true, trackCount: 2 });
-    assert.deepEqual(
-        committed.queue?.map((track) => track.id),
-        [first.id, second.id, freshOne.id, freshTwo.id],
-    );
-    // A late recommendation response must not replace the user's selection.
-    assert.equal(committed.currentTrack, null);
-    assert.equal(committed.currentIndex, null);
-    assert.equal(committed.mutation, "replace-upcoming");
-});
+}
 
 for (const continuation of ["provider append", "Audio-DNA replace"] as const) {
     for (const action of [

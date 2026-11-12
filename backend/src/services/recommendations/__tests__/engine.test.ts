@@ -72,6 +72,58 @@ describe("unified recommendation engine", () => {
         exclude: [],
     };
 
+    it.each(["baseline", "shadow", "active"] as const)(
+        "respects negative sound evidence in the served Wave, including the baseline rollout arm (%s)",
+        async (mode) => {
+            const deps = dependencies(mode);
+            deps.hybridRolloutPercent = 0;
+            deps.loadRecentExposures.mockResolvedValue([]);
+            deps.loadCandidates.mockResolvedValue({
+                candidates: [
+                    candidate("rejected-sound", { embedding: [1, 0] }),
+                    candidate("different-sound", { embedding: [0, 1] }),
+                    candidate("unmeasured"),
+                ],
+                nextCursor: 1,
+                degradedSources: [],
+            });
+            deps.loadTasteContext.mockResolvedValue({
+                positiveCentroids: [],
+                negativeCentroids: [[1, 0]],
+            });
+            const result = await new RecommendationEngine(deps).recommend({
+                ...request,
+                limit: 3,
+            });
+            expect(result.tracks.map((track) => track.id)).toEqual([
+                "yt:different-sound",
+                "yt:unmeasured",
+                "yt:rejected-sound",
+            ]);
+            expect(
+                deps.recordGeneration.mock.calls[0][0].recommendations[2].score,
+            ).toBeCloseTo(0.6);
+        },
+    );
+
+    it("preserves baseline provider order when no negative sound evidence is available", async () => {
+        const deps = dependencies("baseline");
+        deps.loadRecentExposures.mockResolvedValue([]);
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [
+                candidate("first", { providerPrior: 1 }),
+                candidate("second", { providerPrior: 2 }),
+            ],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend(request);
+        expect(result.tracks.map((track) => track.id)).toEqual([
+            "yt:first",
+            "yt:second",
+        ]);
+    });
+
     it.each(["baseline", "active", "shadow"] as const)(
         "prepares unseen mood discoveries without presenting unmeasured songs in %s",
         async (mode) => {

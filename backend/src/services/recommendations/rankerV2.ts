@@ -337,6 +337,48 @@ function candidateSimilarity(
     return 0;
 }
 
+function negativeFeedbackPenalty(
+    vector: readonly number[] | null,
+    options: Pick<
+        RankRecommendationOptions,
+        "negativeCentroids" | "sessionNegativeEmbedding"
+    >,
+): number {
+    if (!vector) return 0;
+    const persistent =
+        options.negativeCentroids.length > 0
+            ? Math.max(
+                  0,
+                  ...options.negativeCentroids.map((center) =>
+                      cosine(vector, center),
+                  ),
+              ) * 0.4
+            : 0;
+    const session = options.sessionNegativeEmbedding;
+    return (
+        persistent + (session ? Math.max(0, cosine(vector, session)) * 0.9 : 0)
+    );
+}
+
+/** Shared negative sound evidence, including the baseline Wave experiment arm. */
+export function recommendationNegativeFeedbackPenalty(
+    candidate: RecommendationCandidate,
+    options: Pick<
+        RankRecommendationOptions,
+        "negativeCentroids" | "sessionNegativeEmbedding"
+    >,
+): number {
+    return negativeFeedbackPenalty(
+        candidate.embedding ? normalizeVector(candidate.embedding) : null,
+        {
+            ...options,
+            sessionNegativeEmbedding: options.sessionNegativeEmbedding
+                ? normalizeVector(options.sessionNegativeEmbedding)
+                : null,
+        },
+    );
+}
+
 function baseScore(
     candidate: RecommendationCandidate,
     options: RankRecommendationOptions,
@@ -357,15 +399,7 @@ function baseScore(
                 ),
             ) * 1.35;
     }
-    if (vector && options.negativeCentroids.length > 0) {
-        score -=
-            Math.max(
-                0,
-                ...options.negativeCentroids.map((center) =>
-                    cosine(vector, center),
-                ),
-            ) * 0.4;
-    }
+    score -= negativeFeedbackPenalty(vector, options);
     const moodVector = options.moodEmbedding;
     if (vector && moodVector && vector.length === moodVector.length) {
         score += cosine(vector, moodVector) * 0.9;
@@ -373,10 +407,6 @@ function baseScore(
     const sessionPositive = options.sessionPositiveEmbedding;
     if (vector && sessionPositive && vector.length === sessionPositive.length) {
         score += cosine(vector, sessionPositive) * 1.8;
-    }
-    const sessionNegative = options.sessionNegativeEmbedding;
-    if (vector && sessionNegative && vector.length === sessionNegative.length) {
-        score -= Math.max(0, cosine(vector, sessionNegative)) * 0.9;
     }
     if (vector && (options.contextCentroids?.length ?? 0) > 0) {
         score +=

@@ -2,6 +2,9 @@
 
 ## Radio queue identity
 
+- Keep personal Wave controls separate from song and artist stations. Retune the upcoming remote queue from account preferences after repeated negative feedback, preserving the current selection and pause state.
+- Apply explicit dislikes ahead of historical listening and collection boosts when choosing recommendation seeds. Share negative audio evidence with the baseline Wave ranker while retaining exact recording exclusions and existing experiment allocation.
+
 - Preserve the selected song or artist on each radio queue occurrence and in playback snapshots. Starting another collection clears the prior station intent; replacing only the upcoming radio tail preserves the current playback position and pause state.
 
 ## Unreleased

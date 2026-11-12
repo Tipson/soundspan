@@ -523,6 +523,19 @@ function buildPreferenceProfile(
         }
     }
 
+    // A current explicit rejection overrides old listening and collection
+    // votes. Otherwise the rejected song can remain a positive radio seed,
+    // and another recording by that artist still receives its old boost.
+    for (const candidate of signals.dislikedTracks ?? []) {
+        const track = toPersonalizedTrack(candidate);
+        if (!track) continue;
+        trackArtists.set(
+            track.youtubeVideoId,
+            normalizedArtistKey(track.artist.name),
+        );
+        trackScores.set(track.youtubeVideoId, -8);
+    }
+
     const artistScores = new Map<string, number>();
     for (const [videoId, score] of trackScores) {
         const artistKey = trackArtists.get(videoId);
@@ -531,6 +544,7 @@ function buildPreferenceProfile(
     }
     for (const [artistKey, score] of artistScores) {
         artistScores.set(artistKey, Math.max(-20, Math.min(24, score)));
+        if (score < 0) knownArtists.delete(artistKey);
     }
 
     return {
@@ -923,7 +937,7 @@ async function loadSignalsFromPrisma(
         ),
     ];
     const dislikedTracks =
-        dislikedVideoIds.length >= 2
+        dislikedVideoIds.length > 0
             ? await prisma.trackYtMusic.findMany({
                   where: { videoId: { in: dislikedVideoIds } },
                   select: YOUTUBE_TRACK_SELECT,

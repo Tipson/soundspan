@@ -17,6 +17,7 @@ import { isListenTogetherActiveOrPending } from "@/lib/listen-together-session";
 import { api } from "@/lib/api";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { ru } from "@/lib/i18n/ru";
+import { normalizePlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
 import {
     persistWaveSelection,
     readWaveSelection,
@@ -369,7 +370,10 @@ export function VibeProviderFallback() {
         setWaveMood,
         setWaveLanguage,
     ]);
-    const hasActiveWave = vibeMode && currentTrack !== null;
+    const hasActiveWave =
+        vibeMode &&
+        currentTrack !== null &&
+        !normalizePlaybackRadioOrigin(currentTrack.radioOrigin);
     const toggleWavePlayback = useCallback(() => {
         if (!hasActiveWave) {
             startWave();

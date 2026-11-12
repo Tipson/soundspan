@@ -628,6 +628,56 @@ describe("PersonalizedCatalogService", () => {
         ).toEqual(["other"]);
     });
 
+    it.each(["for-you", "new", "familiar"] as const)(
+        "lets one explicit dislike override positive history and seed selection in %s",
+        async (mode) => {
+            const rejected = storedTrack("rejected", {
+                artist: "Rejected Artist",
+            });
+            const getRadio = jest.fn(async (seedVideoId: string) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [
+                    radioTrack("another-rejected", {
+                        artist: "Rejected Artist",
+                    }),
+                    radioTrack("neutral", { artist: "Neutral Artist" }),
+                ],
+            }));
+            const service = createService({
+                loadSignals: async () => ({
+                    ...emptySignals(),
+                    recentPlays: [rejected],
+                    likedTracks: [rejected, storedTrack("accepted")],
+                    playlistTracks: [rejected],
+                    dislikedTracks: [rejected],
+                    playbackSignals: [
+                        playbackSignal("rejected", "completed", {
+                            track: rejected,
+                        }),
+                    ],
+                }),
+                getRadio,
+            });
+            const result = await service.getHomeFeed("user-1", 12, {
+                surface: "wave",
+                mode,
+            });
+            expect(getRadio.mock.calls.map(([id]) => id)).not.toContain(
+                "rejected",
+            );
+            expect(
+                Object.values(result.shelves)
+                    .flat()
+                    .map((track) => track.id),
+            ).not.toContain("yt:rejected");
+            expect(result.shelves.discovery.map((track) => track.id)).toEqual([
+                "yt:neutral",
+                "yt:another-rejected",
+            ]);
+        },
+    );
+
     it("keeps fulfilled radio results and reports a partial provider failure", async () => {
         const loadSignals = jest.fn(async () => ({
             ...emptySignals(),
@@ -1570,5 +1620,46 @@ describe("PersonalizedCatalogService", () => {
         expect(
             result.shelves.discovery.map((track) => track.youtubeVideoId),
         ).toEqual(["other"]);
+    });
+
+    it("uses the first persisted dislike to demote another recording without an artist-wide ban", async () => {
+        const seed = storedTrack("seed", { artist: "Seed Artist" });
+        const rejected = storedTrack("rejected", { artist: "Rejected Artist" });
+        mockPrisma.play.findMany.mockReset().mockResolvedValue([]);
+        mockPrisma.likedRemoteTrack.findMany
+            .mockReset()
+            .mockResolvedValue([{ trackYtMusicId: seed.id }]);
+        mockPrisma.playlistItem.findMany.mockReset().mockResolvedValue([]);
+        mockPrisma.userSettings.findUnique.mockReset().mockResolvedValue(null);
+        mockPrisma.trackYtMusic.findMany
+            .mockReset()
+            .mockImplementation(
+                async ({ where }: { where: Record<string, unknown> }) =>
+                    where.videoId ? [rejected] : [seed],
+            );
+        mockPrisma.dislikedEntity.findMany
+            .mockReset()
+            .mockImplementation(
+                async ({ where }: { where: Record<string, unknown> }) =>
+                    where.dislikedAt ? [{ entityId: "yt:rejected" }] : [],
+            );
+        mockPrisma.scrobbleConnection.findUnique.mockResolvedValue(null);
+        mockDefaultGetRadio.mockReset().mockResolvedValue({
+            playlistId: null,
+            seedVideoId: "seed",
+            tracks: [
+                radioTrack("another-rejected", { artist: "Rejected Artist" }),
+                radioTrack("neutral", { artist: "Neutral Artist" }),
+            ],
+        });
+        const result = await personalizedCatalogService.getHomeFeed(
+            "first-dislike-owner",
+            12,
+            { surface: "wave" },
+        );
+        expect(result.shelves.discovery.map((track) => track.id)).toEqual([
+            "yt:neutral",
+            "yt:another-rejected",
+        ]);
     });
 });
