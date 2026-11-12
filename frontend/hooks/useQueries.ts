@@ -664,7 +664,10 @@ export function useDiscoverSearchQuery(
                 query,
                 type,
             ),
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        // Successful rows remain useful, but an incomplete catalogue is not
+        // fresh for five minutes after its provider becomes available again.
+        staleTime: (query) =>
+            query.state.data?.partialFailure ? 0 : 5 * 60 * 1000,
     });
 }
 

@@ -15,6 +15,9 @@ Start-here guide for `frontend/features/search`.
 External song results retain Last.fm metadata and merge exact YouTube Music
 provider identities when that integration is enabled. Rows with a provider
 identity play directly; only metadata-only rows use provider fuzzy matching.
+An incomplete discovery response retains its successful matches, exposes a
+partial-catalogue notice and an explicit repeat action, and remains stale in
+the client cache. Successful complete discovery keeps its normal cache window.
 The same global query returns browsable YouTube Music albums and artists;
 provider artist identities remain available even when a same-name local artist
 exists. When an exact local shadow duplicates a canonical provider artist or

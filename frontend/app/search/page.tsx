@@ -90,6 +90,7 @@ export default function SearchPage() {
         isFetchingNextLibraryTracks,
         fetchNextLibraryTracks,
         catalogNotice,
+        retryCatalogSearch,
     } = useSearchData({
         query,
         libraryType: searchCatalogPolicy.libraryType,
@@ -454,10 +455,23 @@ export default function SearchPage() {
                 ) : null}
 
                 <EmptyState hasSearched={hasSearched} isLoading={isLoading} />
-                {catalogNotice && hasSearched && showTracksView ? (
-                    <p role="status" className="text-sm text-content-muted">
-                        {catalogNotice}
-                    </p>
+                {catalogNotice && hasSearched ? (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <p
+                            role="status"
+                            className="min-w-0 text-sm text-content-muted"
+                        >
+                            {catalogNotice}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => void retryCatalogSearch()}
+                            disabled={isDiscoverSearching}
+                            className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
+                        >
+                            {isDiscoverSearching ? "Ищем…" : "Повторить поиск"}
+                        </button>
+                    </div>
                 ) : null}
 
                 {hasSearched && isDiscoverSearching && activeViewHasResults ? (

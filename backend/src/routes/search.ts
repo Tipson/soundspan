@@ -927,6 +927,9 @@ router.get("/genres", async (req, res) => {
  *                       type: string
  *                     mbid:
  *                       type: string
+ *                 partialFailure:
+ *                   type: boolean
+ *                   description: Some external categories failed; successful results remain available and an explicit repeat can fetch the missing categories.
  *       401:
  *         description: Not authenticated
  */
@@ -954,11 +957,13 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
 
         let ytMusicEnabled = false;
         let lastFmEnabled = false;
+        let configurationDegraded = false;
         if (type === "music" || type === "all") {
             try {
                 const settings = await getSystemSettings();
                 ytMusicEnabled = Boolean(settings?.ytMusicEnabled);
             } catch (settingsError) {
+                configurationDegraded = true;
                 logger.warn(
                     "[SEARCH DISCOVER] YouTube Music settings check failed:",
                     settingsError,
@@ -967,6 +972,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
             try {
                 lastFmEnabled = await lastFmService.isConfigured();
             } catch (lastFmSettingsError) {
+                configurationDegraded = true;
                 logger.warn(
                     "[SEARCH DISCOVER] Last.fm settings check failed:",
                     lastFmSettingsError,
@@ -977,7 +983,9 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         // Cache TTL: 15 min (900s) -- external API data rarely changes
         const cacheKey = `search:discover:v9:yt${ytMusicEnabled ? "1" : "0"}:lf${lastFmEnabled ? "1" : "0"}:${type}:${scope}:${normalizeCacheQuery(query)}:${searchLimit}`;
         try {
-            const cached = await redisClient.get(cacheKey);
+            const cached = configurationDegraded
+                ? null
+                : await redisClient.get(cacheKey);
             if (cached) {
                 logger.debug(
                     `[SEARCH DISCOVER] Cache hit for query="${query}" type=${type}`,
@@ -1114,7 +1122,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
             keys.map((k) => promiseMap[k]),
         );
         const resolved: Record<string, any[]> = {};
-        let externalSearchFailed = false;
+        let externalSearchFailed = configurationDegraded;
         keys.forEach((k, i) => {
             const result = settled[i];
             if (result.status === "fulfilled") {
@@ -1189,6 +1197,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         const payload = {
             results,
             aliasInfo,
+            ...(externalSearchFailed ? { partialFailure: true } : {}),
             ...(canRequestMoreTracks
                 ? {
                       pageInfo: {

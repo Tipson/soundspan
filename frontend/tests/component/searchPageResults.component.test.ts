@@ -419,4 +419,8 @@ test("an empty search still discloses a partial provider outage", async () => {
         renderToStaticMarkup(React.createElement(SearchPage)),
         /VK временно недоступен/,
     );
+    assert.match(
+        renderToStaticMarkup(React.createElement(SearchPage)),
+        /Повторить поиск/,
+    );
 });

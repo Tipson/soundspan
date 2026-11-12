@@ -31,6 +31,7 @@ interface UseSearchDataProps {
 
 interface UseSearchDataReturn {
     catalogNotice: string | null;
+    retryCatalogSearch: () => Promise<void>;
     libraryResults: SearchResult | null;
     discoverResults: DiscoverResult[];
     similarArtists: DiscoverResult[];
@@ -78,6 +79,8 @@ export function useSearchData({
         data: discoverData,
         isLoading: isDiscoverSearching,
         isFetching: isDiscoverFetching,
+        isError: isDiscoverError,
+        refetch: refetchDiscover,
     } = useDiscoverSearchQuery(
         query,
         discoverType,
@@ -144,15 +147,32 @@ export function useSearchData({
     }, [similarData]);
 
     const hasSearched = query.trim().length >= 2;
+    const serviceNotice =
+        serviceSearchEnabled && serviceCatalog.isError
+            ? "VK и Яндекс сейчас недоступны. Показаны результаты остальных каталогов."
+            : serviceSearchEnabled && serviceCatalog.data?.unavailable.length
+              ? `${serviceCatalog.data.unavailable.map((source) => (source === "vk" ? "VK" : "Яндекс")).join(" и ")} сейчас недоступны. Показаны результаты остальных каталогов.`
+              : null;
 
     return {
         catalogNotice:
-            serviceSearchEnabled && serviceCatalog.isError
-                ? "VK и Яндекс сейчас недоступны. Показаны результаты остальных каталогов."
-                : serviceSearchEnabled &&
-                    serviceCatalog.data?.unavailable.length
-                  ? `${serviceCatalog.data.unavailable.map((source) => (source === "vk" ? "VK" : "Яндекс")).join(" и ")} сейчас недоступны. Показаны результаты остальных каталогов.`
-                  : null,
+            [
+                discoverData?.partialFailure || isDiscoverError
+                    ? "Часть онлайн-каталога временно недоступна. Доступные результаты сохранены."
+                    : null,
+                serviceNotice,
+            ]
+                .filter(Boolean)
+                .join(" ") || null,
+        retryCatalogSearch: async () => {
+            if (!hasSearched) return;
+            await Promise.allSettled([
+                refetchDiscover({ cancelRefetch: false }),
+                ...(serviceSearchEnabled
+                    ? [serviceCatalog.refetch({ cancelRefetch: false })]
+                    : []),
+            ]);
+        },
         libraryResults: effectiveLibraryResults || null,
         discoverResults,
         similarArtists,

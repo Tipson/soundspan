@@ -222,7 +222,11 @@ function spaceLaneArtists(songs: DailyMixCandidate[]): DailyMixCandidate[] {
 export class PersonalDailyMixService {
     private readonly cache = new Map<
         string,
-        { expiresAt: number; result: Promise<{ mixes: PersonalDailyMix[] }> }
+        {
+            expiresAt: number;
+            result: Promise<{ mixes: PersonalDailyMix[] }>;
+            partialCompleted?: boolean;
+        }
     >();
 
     constructor(private readonly dependencies: PersonalDailyMixDependencies) {}
@@ -379,7 +383,12 @@ export class PersonalDailyMixService {
                     nativeTracks as unknown as RecommendationCandidate[],
                     false,
                 );
-                if (this.cache.get(key) !== cached)
+                // Waiters share this completed partial even though it is not
+                // retained for a later request. A newer replacement still wins.
+                if (
+                    this.cache.get(key) !== cached &&
+                    !(cached.partialCompleted && !this.cache.has(key))
+                )
                     return this.getMixes(userId);
                 if (
                     current.fresh.length + current.fallback.length ===
@@ -435,8 +444,10 @@ export class PersonalDailyMixService {
                         }
                     }),
                 );
-                if (!cacheable && this.cache.get(key)?.result === result)
+                if (!cacheable && this.cache.get(key)?.result === result) {
+                    this.cache.get(key)!.partialCompleted = true;
                     this.cache.delete(key);
+                }
                 return { mixes: served };
             });
         this.cache.set(key, { expiresAt: now + CACHE_TTL_MS, result });
@@ -459,7 +470,7 @@ export class PersonalDailyMixService {
         nativeProfile?: NativePersonalProfile,
     ): Promise<{ mixes: PersonalDailyMix[]; cacheable: boolean }> {
         const day = Math.floor(generatedAtMs / 86_400_000);
-        let nativeDegraded = (nativeProfile?.degradedSources.length ?? 0) > 0;
+        let sourcesDegraded = (nativeProfile?.degradedSources.length ?? 0) > 0;
         const allowedArtist = (song: DailyMixCandidate) =>
             "source" in song || !suppressedArtists.has(artistKey(song.artist));
         const recentTimes = new Map<string, number>();
@@ -520,7 +531,7 @@ export class PersonalDailyMixService {
                                         [seed],
                                     );
                                 if (batch.degradedSources.length)
-                                    nativeDegraded = true;
+                                    sourcesDegraded = true;
                                 const rows = [
                                     ...batch.fresh,
                                     ...batch.fallback,
@@ -552,7 +563,18 @@ export class PersonalDailyMixService {
                                 direction.kind === "genre"
                                     ? await this.dependencies
                                           .loadGenreArtists(direction.label)
-                                          .catch(() => [])
+                                          .catch((error: unknown) => {
+                                              sourcesDegraded = true;
+                                              log.warn(
+                                                  "Daily mix genre lookup unavailable",
+                                                  {
+                                                      userId,
+                                                      direction: direction.key,
+                                                  },
+                                                  error,
+                                              );
+                                              return [];
+                                          })
                                     : [];
                             const genreArtists = catalogArtists.filter(
                                 (artist) =>
@@ -635,6 +657,7 @@ export class PersonalDailyMixService {
                                             );
                                             if (hasFreshPool(songs)) break;
                                         } catch (error) {
+                                            sourcesDegraded = true;
                                             log.warn(
                                                 "Daily mix seed unavailable",
                                                 {
@@ -647,6 +670,7 @@ export class PersonalDailyMixService {
                                     }
                                     if (hasFreshPool(songs)) break;
                                 } catch (error) {
+                                    sourcesDegraded = true;
                                     log.warn(
                                         "Daily mix seed unavailable",
                                         {
@@ -659,7 +683,7 @@ export class PersonalDailyMixService {
                             }
                             return distinct(songs);
                         } catch (error) {
-                            if (direction.nativeSeedId) nativeDegraded = true;
+                            sourcesDegraded = true;
                             log.warn(
                                 "Daily mix direction unavailable",
                                 {
@@ -715,17 +739,22 @@ export class PersonalDailyMixService {
             const newSongs = pool.filter(
                 (song) => !familiarIds.has(songIdentity(song)),
             );
-            // Native admission owns its ranking. Rotate only the legacy catalog
-            // lanes, keeping familiar/new quotas and fresh-before-recent ordering.
+            // Rotate within admitted lanes; preserve familiar/new quotas and
+            // fresh-before-recent ordering for every provider.
             const dailyLane = (songs: DailyMixCandidate[], lane: string) => {
-                if (direction.nativeSeedId) return songs;
                 const seedKey = JSON.stringify([
                     userId,
                     day,
                     direction.key,
                     lane,
                 ]);
-                const shuffled = seededShuffle(songs, seedKey);
+                const shuffled = direction.nativeSeedId
+                    ? rotateForDay(
+                          songs,
+                          day * 7,
+                          JSON.stringify([userId, direction.key, lane]),
+                      )
+                    : seededShuffle(songs, seedKey);
                 // Break allocation ties by seeded artist order, not artist-name
                 // alphabet. Otherwise >40 singleton artists keep the same songs.
                 const artistOrder = new Map(
@@ -794,7 +823,7 @@ export class PersonalDailyMixService {
                 },
             ];
         });
-        return { mixes, cacheable: !nativeDegraded };
+        return { mixes, cacheable: !sourcesDegraded };
     }
 }
 

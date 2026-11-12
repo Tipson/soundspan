@@ -207,8 +207,16 @@ export class RecommendationFeatureStore {
                       ),
                   )
                 : Promise.resolve([]),
-            this.dependencies.loadLikedEmbeddings?.(userId) ??
-                Promise.resolve([]),
+            this.dependencies.loadLikedEmbeddings
+                ? this.dependencies
+                      .loadLikedEmbeddings(userId)
+                      .catch((error) => {
+                          log.warn("Liked audio anchors unavailable", {
+                              error,
+                          });
+                          return [];
+                      })
+                : Promise.resolve([]),
             this.dependencies.loadDislikedEmbeddings
                 ? this.dependencies
                       .loadDislikedEmbeddings(userId)

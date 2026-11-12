@@ -191,6 +191,7 @@ export function WithDiscover<TBase extends ApiClientConstructor>(Base: TBase) {
                 type === "music" && scope !== "all" ? `&scope=${scope}` : "";
             return this.request<{
                 results: ApiData[];
+                partialFailure?: boolean;
                 aliasInfo: {
                     original: string;
                     canonical: string;

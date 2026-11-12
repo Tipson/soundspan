@@ -191,6 +191,42 @@ describe("search discover compatibility", () => {
         );
     });
 
+    it("treats unknown source configuration as partial and does not reuse a disabled-source cache", async () => {
+        mockGetSystemSettings.mockRejectedValueOnce(
+            new Error("settings unavailable"),
+        );
+        mockSearchArtists.mockResolvedValue([]);
+        mockSearchTracks.mockResolvedValue([
+            {
+                type: "track",
+                id: "metadata",
+                name: "Heat Waves",
+                artist: "Glass Animals",
+            },
+        ]);
+        mockRedisGet.mockResolvedValueOnce(
+            JSON.stringify({ results: [], aliasInfo: null }),
+        );
+        const first = createRes();
+        await discoverHandler(
+            { query: { q: "Glass Animals", type: "music" } } as any,
+            first,
+        );
+        expect(first.body.partialFailure).toBe(true);
+        expect(first.body.results).toHaveLength(1);
+        expect(mockRedisGet).not.toHaveBeenCalled();
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+        mockRedisGet.mockReset().mockResolvedValue(null);
+        const second = createRes();
+        await discoverHandler(
+            { query: { q: "Glass Animals", type: "music" } } as any,
+            second,
+        );
+        expect(second.body.partialFailure).toBeUndefined();
+        expect(mockYtMusicDiscoverySearch).toHaveBeenCalledTimes(1);
+        expect(mockRedisSetEx).toHaveBeenCalledTimes(1);
+    });
+
     it("skips library artist lookup when discover artist list is empty", async () => {
         mockSearchArtists.mockResolvedValue([]);
         mockSearchTracks.mockResolvedValue([
@@ -332,7 +368,62 @@ describe("search discover compatibility", () => {
                 expect.objectContaining({ youtubeVideoId: "youtube001" }),
             ]),
         );
+        expect(res.body.partialFailure).toBe(true);
         expect(mockRedisSetEx).not.toHaveBeenCalled();
+    });
+
+    it("marks metadata-only provider failure and recovers exact IDs on the next search", async () => {
+        mockSearchArtists.mockResolvedValue([]);
+        mockSearchTracks.mockResolvedValue([
+            {
+                type: "track",
+                id: "metadata",
+                name: "Heat Waves",
+                artist: "Glass Animals",
+            },
+        ]);
+        mockYtMusicDiscoverySearch.mockRejectedValueOnce(
+            new Error("provider unavailable"),
+        );
+        const first = createRes();
+        await discoverHandler(
+            { query: { q: "Glass Animals", type: "music" } } as any,
+            first,
+        );
+        expect(first.body.partialFailure).toBe(true);
+        expect(first.body.results).toEqual([
+            expect.objectContaining({ id: "metadata" }),
+        ]);
+        expect(first.body.results[0].youtubeVideoId).toBeUndefined();
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+        mockYtMusicDiscoverySearch.mockResolvedValueOnce({
+            tracks: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "mRD0-GxqHVo",
+                    title: "Heat Waves",
+                    artistName: "Glass Animals",
+                    albumTitle: null,
+                    durationSec: 180,
+                    thumbnailUrl: null,
+                    raw: {},
+                },
+            ],
+            albums: [],
+            artists: [],
+            failedFilters: [],
+        });
+        const second = createRes();
+        await discoverHandler(
+            { query: { q: "Glass Animals", type: "music" } } as any,
+            second,
+        );
+        expect(second.body.partialFailure).toBeUndefined();
+        expect(second.body.results).toEqual([
+            expect.objectContaining({ youtubeVideoId: "mRD0-GxqHVo" }),
+        ]);
+        expect(mockRedisSetEx).toHaveBeenCalledTimes(1);
     });
 
     it("serves track view from the playable catalog without waiting for Last.fm metadata", async () => {

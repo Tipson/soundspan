@@ -1496,6 +1496,7 @@ describe("search route runtime behavior", () => {
         expect(res.body).toEqual({
             results: [{ type: "track", id: "track-2", name: "Song B" }],
             aliasInfo: null,
+            partialFailure: true,
         });
         expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
