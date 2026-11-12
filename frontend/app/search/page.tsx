@@ -467,7 +467,7 @@ export default function SearchPage() {
                             type="button"
                             onClick={() => void retryCatalogSearch()}
                             disabled={isDiscoverSearching}
-                            className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
+                            className="min-h-11 max-w-full rounded-lg px-3 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
                         >
                             {isDiscoverSearching ? "Ищем…" : "Повторить поиск"}
                         </button>
