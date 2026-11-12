@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Space retries of aborted remote-preference transactions with short bounded exponential jitter, preserving the three-attempt limit and latest-intent ordering during rapid concurrent feedback.
 - Apply the shared Unicode and whitespace artist identity rules to daily mixes, so equivalent provider credits cannot split repeated dislikes or bypass artist suppression.
 - Bound music-source connection reads by each caller's acquisition deadline and cancellation. Coalesce only the pending read, retain credential-revocation fencing, and keep stream lifetime independent of the connection-check timer.
 - Keep the partial-search retry action within narrow screens when text is enlarged, allowing its label to wrap without reducing the touch target.

@@ -99,43 +99,52 @@ export function createMusicSourceResolver(options: Options) {
     const active = new Map<string, number>();
     const controllers = new Map<MusicSource, Set<AbortController>>();
     let revision = 0;
+    type ConnectionOutcome =
+        | { connections: MusicSourceAdapter[] }
+        | { error: unknown };
     let connectionRead:
-        | { revision: number; result: Promise<MusicSourceAdapter[]> }
+        | { revision: number; waiters: Set<(outcome: ConnectionOutcome) => void> }
         | undefined;
+    function startConnectionRead() {
+        const read = {
+            revision,
+            waiters: new Set<(outcome: ConnectionOutcome) => void>(),
+        };
+        connectionRead = read;
+        const finish = (outcome: ConnectionOutcome) => {
+            if (connectionRead === read) connectionRead = undefined;
+            for (const settle of read.waiters) settle(outcome);
+            read.waiters.clear();
+        };
+        void Promise.resolve()
+            .then(() => options.connections())
+            .then(
+                (connections) => finish({ connections }),
+                (error: unknown) => finish({ error }),
+            );
+        return read;
+    }
     /** Coalesce only the pending service-config read; each caller retains its own deadline. */
     function readConnections(signal: AbortSignal): Promise<MusicSourceAdapter[]> {
         signal.throwIfAborted();
-        if (!connectionRead) {
-            const read = {
-                revision,
-                result: Promise.resolve().then(() => options.connections()),
-            };
-            connectionRead = read;
-            const retire = () => {
-                if (connectionRead === read) connectionRead = undefined;
-            };
-            void read.result.then(retire, retire);
-        }
-        const read = connectionRead;
+        const read = connectionRead ?? startConnectionRead();
         return new Promise((resolve, reject) => {
             const abort = () => {
+                read.waiters.delete(settle);
                 signal.removeEventListener("abort", abort);
                 reject(signal.reason);
             };
+            const settle = (outcome: ConnectionOutcome) => {
+                read.waiters.delete(settle);
+                signal.removeEventListener("abort", abort);
+                if (signal.aborted) reject(signal.reason);
+                else if ("error" in outcome) reject(outcome.error);
+                else if (read.revision !== revision)
+                    reject(new MusicSourceError("lease_expired"));
+                else resolve(outcome.connections);
+            };
+            read.waiters.add(settle);
             signal.addEventListener("abort", abort, { once: true });
-            void read.result.then(
-                (connections) => {
-                    signal.removeEventListener("abort", abort);
-                    if (signal.aborted) reject(signal.reason);
-                    else if (read.revision !== revision)
-                        reject(new MusicSourceError("lease_expired"));
-                    else resolve(connections);
-                },
-                (error: unknown) => {
-                    signal.removeEventListener("abort", abort);
-                    reject(signal.aborted ? signal.reason : error);
-                },
-            );
         });
     }
     function lifetime(provider: MusicSource, parent: AbortSignal) {

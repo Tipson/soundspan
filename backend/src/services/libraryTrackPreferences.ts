@@ -360,6 +360,12 @@ async function runRemotePreferenceTransaction<T>(
             ) {
                 throw error;
             }
+            // A serialization abort rolled this transaction back. Give the
+            // winning writer time to commit instead of exhausting all attempts
+            // immediately on the same contended intent row.
+            const delayMs =
+                25 * 2 ** (attempt - 1) + Math.floor(Math.random() * 25);
+            await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
         }
     }
     throw new Error(

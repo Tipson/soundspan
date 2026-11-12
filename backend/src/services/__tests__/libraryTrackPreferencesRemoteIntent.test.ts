@@ -360,3 +360,49 @@ describe("remote track preference latest-intent ordering", () => {
         expect(result.dislikedAt).toBeNull();
     });
 });
+
+describe("remote preference contention recovery", () => {
+    beforeEach(() => {
+        jest.resetAllMocks();
+        jest.useFakeTimers();
+        jest.spyOn(Math, "random").mockReturnValue(0);
+        mockPrisma.remotePreferenceIntent.upsert.mockResolvedValue({});
+    });
+    afterEach(() => {
+        jest.restoreAllMocks();
+        jest.useRealTimers();
+    });
+
+    it("lets the concurrent writer finish before retrying an intent reservation", async () => {
+        const busyUntil = Date.now() + 20;
+        mockPrisma.$transaction.mockImplementation(async (operation: (tx: typeof mockPrisma) => Promise<unknown>) => {
+            if (Date.now() < busyUntil) throw { code: "P2034" };
+            return operation(mockPrisma);
+        });
+        const result = reserveRemoteTrackPreferenceIntent({ userId: USER_ID, reference: REFERENCE, requestedAt: new Date() }).then(() => true, error => error);
+        await jest.advanceTimersByTimeAsync(200);
+        expect(await result).toBe(true);
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+        expect(mockPrisma.remotePreferenceIntent.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it("retains the three-attempt bound for a persistently conflicting transaction", async () => {
+        const failure = { code: "P2034" };
+        mockPrisma.$transaction.mockRejectedValue(failure);
+        const result = reserveRemoteTrackPreferenceIntent({ userId: USER_ID, reference: REFERENCE, requestedAt: new Date() }).catch(error => error);
+        await jest.advanceTimersByTimeAsync(200);
+        expect(await result).toBe(failure);
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
+        expect(mockPrisma.remotePreferenceIntent.upsert).not.toHaveBeenCalled();
+    });
+
+    it("does not delay or retry a permanent transaction failure", async () => {
+        const failure = new Error("permission denied");
+        mockPrisma.$transaction.mockRejectedValue(failure);
+        const result = reserveRemoteTrackPreferenceIntent({ userId: USER_ID, reference: REFERENCE, requestedAt: new Date() }).catch(error => error);
+        await jest.advanceTimersByTimeAsync(0);
+        expect(await result).toBe(failure);
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+});
