@@ -10,6 +10,7 @@ import 'package:soundspan/core/session/session_broker_entrypoint.dart';
 import 'package:soundspan/playback/playback_controller.dart';
 import 'package:soundspan/playback/playback_engine.dart';
 import 'package:soundspan/playback/soundspan_audio_handler.dart';
+import 'package:soundspan/playback/platform_playback_guard.dart';
 
 import '../test/support/media_fixtures.dart';
 import 'support/synthetic_audio.dart';
@@ -20,12 +21,11 @@ Future<void> sessionBrokerMain() => runSessionBroker();
 
 Future<void> waitFor(
   PlaybackController controller,
-  bool Function(QueueSnapshot) predicate,
-) async {
+  bool Function(QueueSnapshot) predicate, {
+  Duration timeout = const Duration(seconds: 20),
+}) async {
   if (predicate(controller.snapshot)) return;
-  await controller.snapshots
-      .firstWhere(predicate)
-      .timeout(const Duration(seconds: 20));
+  await controller.snapshots.firstWhere(predicate).timeout(timeout);
 }
 
 void main() {
@@ -39,7 +39,14 @@ void main() {
           Uri.parse('https://synthetic-audio.invalid'),
         );
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-        final bytes = syntheticWav();
+        const focusOnly = bool.fromEnvironment('FOCUS_FIXTURE');
+        const trackSeconds = int.fromEnvironment(
+          'BACKGROUND_TRACK_SECONDS',
+          defaultValue: 3,
+        );
+        final bytes = syntheticWav(
+          duration: Duration(seconds: focusOnly ? 30 : trackSeconds),
+        );
         var reads = 0;
         final requests = server.listen((request) async {
           reads++;
@@ -88,6 +95,7 @@ void main() {
           ),
         );
         final controller = concrete.controller;
+        await controller.dispatch(const SetVolume(0));
         final audible = <String>{};
         final completions = <int, int>{};
         final terminalPositions = <Duration>[];
@@ -123,7 +131,37 @@ void main() {
             ReplaceQueue(entries, fence: authority.requireFence()),
           );
           debugPrint('T04_BACKGROUND_READY');
-          await waitFor(controller, (_) => audible.length >= 4);
+          if (focusOnly) {
+            await waitFor(
+              controller,
+              (s) => s.position > const Duration(milliseconds: 300),
+            );
+            debugPrint('T04_EXPECT_FOCUS_LOSS');
+            await waitFor(controller, (s) => s.focusSuspended);
+            expect(controller.snapshot.playingIntent, true);
+            expect(controller.snapshot.audible, false);
+            expect(await PlatformPlaybackGuard.readAndroidForeground(), true);
+            final paused = controller.snapshot.position;
+            debugPrint('T04_FOCUS_PAUSED_FOREGROUND');
+            await waitFor(
+              controller,
+              (s) =>
+                  !s.focusSuspended &&
+                  s.audible &&
+                  s.position > paused + const Duration(milliseconds: 300),
+            );
+            expect(await PlatformPlaybackGuard.readAndroidForeground(), true);
+            expect(controller.snapshot.failure, isNull);
+            debugPrint('T04_FOCUS_RESUMED_PASS');
+            await system.stop();
+            expect(revokes.length, resolves.length);
+            return;
+          }
+          await waitFor(
+            controller,
+            (_) => audible.length >= 4,
+            timeout: const Duration(seconds: 60),
+          );
           expect(resolves.length, greaterThanOrEqualTo(4));
           expect(reads, greaterThanOrEqualTo(4));
           expect(completions.length, greaterThanOrEqualTo(3));

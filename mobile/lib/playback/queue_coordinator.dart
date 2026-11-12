@@ -71,6 +71,8 @@ final class QueueCoordinator implements PlaybackController {
   Duration _requestedPosition = Duration.zero;
   int _seekRevision = 0;
   bool _focusSuspended = false;
+  Timer? _playStartTimer;
+  Duration _playStartPosition = Duration.zero;
   int get intentRevision => _intentRevision;
   @override
   QueueSnapshot get snapshot => QueueSnapshot(
@@ -432,6 +434,7 @@ final class QueueCoordinator implements PlaybackController {
         _position = target;
         _requestedPosition = target;
         _seekRevision++;
+        if (_playStartTimer != null) _playStartPosition = target;
         _publish(PlaybackEventKind.seek);
         if (_preparingGeneration == _generation) return;
         await engine.seek(target);
@@ -522,6 +525,7 @@ final class QueueCoordinator implements PlaybackController {
         _repeat = command.repeat;
         _publish();
       case Pause():
+        _cancelPlayStartWatchdog();
         _naturalContinuation = null;
         _intent = false;
         _audible = false;
@@ -571,6 +575,7 @@ final class QueueCoordinator implements PlaybackController {
     String id, {
     Duration initialPosition = Duration.zero,
   }) async {
+    _cancelPlayStartWatchdog();
     final old = _current;
     _current = id;
     final generation = ++_generation;
@@ -588,12 +593,23 @@ final class QueueCoordinator implements PlaybackController {
     _failure = null;
     _processing = PlaybackProcessing.loading;
     _publish(PlaybackEventKind.transition, old);
-    final stop = engine.stop();
-    await previousResource?.revoke();
-    await stop;
-    if (!_valid(generation, fence)) return;
     PreparedAudio? resource;
+    var handedToQueue = false;
+    var abandoned = false;
+    final preparationClock = Stopwatch()..start();
+    Future<T> withinDeadline<T>(Future<T> Function() operation) {
+      final remaining = prepareTimeout - preparationClock.elapsed;
+      if (remaining <= Duration.zero) {
+        throw TimeoutException('Media preparation timed out');
+      }
+      return operation().timeout(remaining);
+    }
+
     try {
+      final stop = engine.stop();
+      await withinDeadline(() async => previousResource?.revoke());
+      await withinDeadline(() => stop);
+      if (!_valid(generation, fence)) return;
       final entry = _entries.firstWhere((e) => e.entryId == id);
       if (!entry.track.playable) {
         throw const AppFailure(
@@ -601,38 +617,34 @@ final class QueueCoordinator implements PlaybackController {
           message: 'Запись недоступна',
         );
       }
-      var abandoned = false;
-      final preparing = prepare(entry, fence).then((value) {
-        if (abandoned) unawaited(value.revoke());
-        return value;
-      });
-      resource = await preparing.timeout(
-        prepareTimeout,
-        onTimeout: () {
-          abandoned = true;
-          throw TimeoutException('Media preparation timed out');
-        },
+      final prepared = await withinDeadline(
+        () => prepare(entry, fence).then((value) {
+          if (abandoned) unawaited(value.revoke());
+          return value;
+        }),
       );
+      resource = prepared;
       if (!_valid(generation, fence)) {
         await resource.revoke();
         return;
       }
       _resource = resource;
-      await authority.assertCurrent(fence);
+      handedToQueue = true;
+      await withinDeadline(() => authority.assertCurrent(fence));
       if (!_valid(generation, fence)) {
-        await resource.revoke();
+        // A replacement/Clear already released the source owned by the queue.
         return;
       }
-      await engine.load(resource.uri, generation);
+      await withinDeadline(() => engine.load(prepared.uri, generation));
       if (!_valid(generation, fence)) return;
-      await engine.setVolume(_volume);
+      await withinDeadline(() => engine.setVolume(_volume));
       if (!_valid(generation, fence)) return;
       int? appliedRevision;
       do {
         final revision = _seekRevision;
         final target = _requestedPosition;
         if (target > Duration.zero || appliedRevision != null) {
-          await engine.seek(target);
+          await withinDeadline(() => engine.seek(target));
         }
         if (!_valid(generation, fence)) return;
         appliedRevision = revision;
@@ -641,10 +653,11 @@ final class QueueCoordinator implements PlaybackController {
       _preparingGeneration = null;
       _processing = PlaybackProcessing.ready;
       _publish();
-      if (_intent) await _play(generation, fence);
+      if (_intent) await withinDeadline(() => _play(generation, fence));
     } catch (error) {
+      abandoned = true;
       if (!_valid(generation, fence)) {
-        await resource?.revoke();
+        if (!handedToQueue) await resource?.revoke();
         return;
       }
       await resource?.revoke();
@@ -653,30 +666,90 @@ final class QueueCoordinator implements PlaybackController {
       if (error is AppFailure && error.code == 'session_revoked') {
         await _clear();
       } else {
-        _fail();
+        _fail(
+          failure: error is TimeoutException
+              ? const AppFailure(
+                  code: 'playback_prepare_timeout',
+                  message: 'Не удалось подготовить запись. Повторите попытку',
+                  retryable: true,
+                )
+              : error is AppFailure
+              ? error
+              : null,
+        );
       }
     }
   }
 
   Future<void> _play(int generation, SessionFence fence) async {
     if (_focusSuspended) return;
+    final revision = _intentRevision;
+    final startClock = Stopwatch()..start();
+    final startBudget = prepareTimeout < const Duration(seconds: 10)
+        ? prepareTimeout
+        : const Duration(seconds: 10);
     try {
-      await authority.assertCurrent(fence);
-      if (!_valid(generation, fence) || !_intent || _focusSuspended) return;
+      await authority.assertCurrent(fence).timeout(startBudget);
+      if (!_valid(generation, fence) ||
+          revision != _intentRevision ||
+          !_intent ||
+          _focusSuspended) {
+        return;
+      }
     } catch (error) {
-      if (_generation != generation || _fence != fence || _disposed) return;
+      if (_generation != generation ||
+          _fence != fence ||
+          _disposed ||
+          revision != _intentRevision ||
+          !_intent ||
+          _focusSuspended) {
+        return;
+      }
       if (error is AppFailure && error.code == 'session_revoked') {
         await _clear();
       } else {
-        _fail();
+        _fail(
+          failure: error is TimeoutException
+              ? const AppFailure(
+                  code: 'playback_start_timeout',
+                  message: 'Воспроизведение не началось. Повторите попытку',
+                  retryable: true,
+                )
+              : error is AppFailure
+              ? error
+              : null,
+        );
       }
       return;
     }
+    _cancelPlayStartWatchdog();
+    _playStartPosition = _position;
+    _playStartTimer = Timer(startBudget - startClock.elapsed, () {
+      _playStartTimer = null;
+      if (!_valid(generation, fence) ||
+          revision != _intentRevision ||
+          !_intent ||
+          _focusSuspended) {
+        return;
+      }
+      _fail(
+        failure: const AppFailure(
+          code: 'playback_start_timeout',
+          message: 'Воспроизведение не началось. Повторите попытку',
+          retryable: true,
+        ),
+      );
+    });
     unawaited(
       engine.play().catchError((Object _) {
         if (_valid(generation, fence)) _fail();
       }),
     );
+  }
+
+  void _cancelPlayStartWatchdog() {
+    _playStartTimer?.cancel();
+    _playStartTimer = null;
   }
 
   /// Native refusal recovery retains the exact queue and position. Admission
@@ -713,6 +786,7 @@ final class QueueCoordinator implements PlaybackController {
   }
 
   void _fail({AppFailure? failure}) {
+    _cancelPlayStartWatchdog();
     _naturalContinuation = null;
     _preparingGeneration = null;
     ++_generation;
@@ -787,6 +861,7 @@ final class QueueCoordinator implements PlaybackController {
       return;
     }
     if (event.processing == PlaybackProcessing.completed) {
+      _cancelPlayStartWatchdog();
       _position = event.position;
       _duration = event.duration ?? _duration;
       _buffer = event.bufferedPosition;
@@ -806,6 +881,13 @@ final class QueueCoordinator implements PlaybackController {
         _intent &&
         !_focusSuspended &&
         event.processing == PlaybackProcessing.ready;
+    // A silent refusal must retain its deadline. just_audio's public position
+    // can be extrapolated; this guard does not diagnose a hung native Play RPC.
+    if (_audible &&
+        event.position >
+            _playStartPosition + const Duration(milliseconds: 150)) {
+      _cancelPlayStartWatchdog();
+    }
     _publish(
       buffering ? PlaybackEventKind.buffering : PlaybackEventKind.position,
     );
@@ -813,6 +895,7 @@ final class QueueCoordinator implements PlaybackController {
 
   /// Focus pauses preserve user intent; resume needs the exact saved revision.
   Future<void> suspendForFocus({bool resumeOnGain = true}) async {
+    _cancelPlayStartWatchdog();
     _focusSuspended = resumeOnGain;
     if (!resumeOnGain) {
       _intent = false;
@@ -845,6 +928,7 @@ final class QueueCoordinator implements PlaybackController {
   }
 
   Future<void> _clear() async {
+    _cancelPlayStartWatchdog();
     _focusSuspended = false;
     _naturalContinuation = null;
     _preparingGeneration = null;

@@ -162,7 +162,7 @@ void main() {
       if (name.startsWith('matrix-home-')) {
         final viewport =
             Offset.zero & (view.physicalSize / view.devicePixelRatio);
-        for (final label in ['История прослушивания', 'Профиль']) {
+        for (final label in ['История прослушивания', 'Настройки']) {
           final action = find.byTooltip(label);
           expect(action, findsOneWidget);
           expect(
@@ -644,7 +644,7 @@ void main() {
         await tap(find.text('Разделы: Поиск'));
         await tap(find.text('Главная').last);
         await frames.device();
-        await tap(find.byTooltip('Профиль'));
+        await tap(find.byTooltip('Настройки'));
         await tap(find.text('Воспроизведение').first);
         await tap(find.text('Высокое · 320 кбит/с'));
         await until(
@@ -684,7 +684,7 @@ void main() {
         return;
       }
       if (const bool.fromEnvironment('T24_ROUTE_DIAG')) {
-        await tap(find.text('Моя музыка').last);
+        await tap(find.text('Медиатека').last);
         await until(
           () => session!.library.state.collection.playlists.isNotEmpty,
           'Library loaded',
@@ -714,7 +714,7 @@ void main() {
       expect(app.playback.snapshot.failure, isNull);
       expect(session!.player.failure, isNull);
       expect(session!.player.preference.failure, isNull);
-      await tap(find.text('Открыть очередь'));
+      await tap(find.byTooltip('Открыть очередь'));
       await capture('07a-queue-390');
       await back();
       await tap(find.text('Текст').first);
@@ -774,7 +774,7 @@ void main() {
       await capture('08-search-ime-390');
       await back();
       await capture('09-search-results-390');
-      await tap(find.text('Моя музыка').last);
+      await tap(find.text('Медиатека').last);
       await until(
         () => session!.library.state.collection.playlists.isNotEmpty,
         'Library HTTP response',
@@ -841,7 +841,7 @@ void main() {
       await tap(find.text('Загрузки').last);
       await capture('13-downloads-390');
       await tap(find.text('Главная').last);
-      await tap(find.byTooltip('Профиль'));
+      await tap(find.byTooltip('Настройки'));
       await capture('14-settings-390');
       await tap(find.text('Профиль').first);
       await tester.enterText(

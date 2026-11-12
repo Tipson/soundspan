@@ -26,11 +26,14 @@ import '../playback/local_first_preparation.dart';
 import '../playback/loudness_gain_policy.dart';
 import '../playback/native_loudness_controller.dart';
 import '../playback/media_gateway.dart';
+import '../playback/next_track_warmup.dart';
 import '../playback/notification_artwork_bridge.dart';
 import '../playback/playback_controller.dart';
 import '../playback/playback_engine.dart';
 import '../playback/playback_reporter.dart';
 import '../playback/playback_resolver.dart';
+import '../playback/protected_audio_warmup.dart';
+import '../playback/resolved_media.dart';
 import '../playback/queue_checkpoint_observer.dart';
 import '../playback/queue_coordinator.dart';
 import '../playback/queue_snapshot_store.dart';
@@ -65,6 +68,7 @@ final class NativeOwnerServices implements AppOwnerScope {
   late final DownloadRepository downloads;
   late final ArtworkRepository artwork;
   late final MediaGateway gateway;
+  NextTrackWarmup? _warmup;
   late final WaveContinuation wave;
   late final PlaybackReporter reporter;
   late final FeedbackOutbox outbox;
@@ -150,6 +154,7 @@ final class NativeOwnerServices implements AppOwnerScope {
     void closeMediaAdmission() {
       if (!policy.networkAllowed) {
         _networkRevision++;
+        _warmup?.cancelNetwork();
         unawaited(gateway.revoke(fence));
       }
     }
@@ -222,6 +227,13 @@ final class NativeOwnerServices implements AppOwnerScope {
       authority: authority,
     );
     _retire.add(wave.dispose);
+    _warmup = NextTrackWarmup(
+      controller: playback,
+      authority: authority,
+      networkAllowed: () => _current && policy.networkAllowed,
+      warm: _warmNext,
+    );
+    _retire.add(_warmup!.close);
     reporter = PlaybackReporter(
       controller: playback,
       repository: recommendations,
@@ -253,6 +265,7 @@ final class NativeOwnerServices implements AppOwnerScope {
 
   Future<void> _offline(SessionFence original) async {
     if (original != fence || !_current) throw _stale;
+    _warmup?.cancelNetwork();
     artwork.cancelNetwork();
     await Future.wait<void>([
       _json.cancelPending(),
@@ -403,6 +416,58 @@ final class NativeOwnerServices implements AppOwnerScope {
     return operation;
   }
 
+  List<String> _qualityOrder(String selected) => [
+    selected,
+    'original',
+    'high',
+    'medium',
+    'low',
+    'lossless',
+    'HIGH',
+    'MEDIUM',
+    'LOW',
+    'LOSSLESS',
+  ];
+
+  Future<void> _warmNext(
+    QueueEntry entry,
+    SessionFence original,
+    MediaCancellation cancellation,
+  ) async {
+    final revision = _networkRevision;
+    final selected = quality.value;
+    void check() {
+      cancellation.check();
+      if (!_current ||
+          original != fence ||
+          revision != _networkRevision ||
+          selected != quality.value) {
+        throw mediaCancelled;
+      }
+      policy.requireNetwork();
+    }
+
+    check();
+    for (final candidate in _qualityOrder(selected).toSet()) {
+      final ready = await downloads.openReady(
+        entry.track.ref,
+        candidate,
+        original,
+      );
+      check();
+      if (ready != null) return;
+    }
+    await ProtectedAudioWarmup(
+      resolver: PlaybackResolver(
+        transport: transport,
+        authority: authority,
+        quality: selected,
+      ),
+      fetcher: gateway.fetcher,
+      requireNetwork: check,
+    ).warm(entry.track.ref, original, cancellation);
+  }
+
   Future<PreparedAudio> _prepare(QueueEntry entry) async {
     final networkRevision = _networkRevision;
     await _guard();
@@ -410,18 +475,7 @@ final class NativeOwnerServices implements AppOwnerScope {
     final preparation = LocalFirstPreparation(
       authority: authority,
       policy: policy,
-      qualities: () => [
-        selected,
-        'original',
-        'high',
-        'medium',
-        'low',
-        'lossless',
-        'HIGH',
-        'MEDIUM',
-        'LOW',
-        'LOSSLESS',
-      ],
+      qualities: () => _qualityOrder(selected),
       openReady: (ref, candidate, original) async {
         final file = await downloads.openReady(ref, candidate, original);
         if (file == null) return null;

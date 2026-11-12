@@ -156,9 +156,9 @@ final class NativeAppResources {
         androidNotificationChannelId: 'ru.agentik007.soundspan.playback',
         androidNotificationChannelName: 'Воспроизведение музыки',
         androidNotificationIcon: 'drawable/ic_stat_soundspan',
-        // Keep the paused media notification, but release foreground priority
-        // and the plugin's CPU wake lock until playback resumes.
-        androidStopForegroundOnPause: true,
+        // Android needs foreground status for background focus-gain resume.
+        // The local Android module releases its CPU wake lock while paused.
+        androidStopForegroundOnPause: false,
       ),
     );
   }

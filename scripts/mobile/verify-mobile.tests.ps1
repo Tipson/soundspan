@@ -3,7 +3,9 @@ $helper = Join-Path $PSScriptRoot 'verify-mobile.ps1'
 if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'RED: mobile verification helper is not implemented' }
 $module = Import-Module (Join-Path $PSScriptRoot 'release-tools.psm1') -Force -PassThru
 $environment = 'D:\CodexData\outputs\soundspan\mobile-app-20261015\mobile-env.ps1'
-$environmentHash = '2552A7942415DD8246A94F8ABF71B990AA75F15ECBD6D70B737A54F08D35077C'
+# Test the selected fixture environment, not a stale historical output digest.
+# The mismatch case below still verifies fail-closed admission before loading it.
+$environmentHash = (Get-FileHash -LiteralPath $environment).Hash
 $fixture = 'D:\CodexData\temp\mobile-verification-tests-' + [guid]::NewGuid().ToString('N')
 $null = Assert-SafeDPath $fixture 'D:\CodexData\temp'
 $null = New-Item -ItemType Directory -Path $fixture

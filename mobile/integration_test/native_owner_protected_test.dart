@@ -105,6 +105,7 @@ void main() {
             unauthorized = 0,
             refreshed = 0,
             ranges = 0,
+            warmPrefixes = 0,
             waves = 0,
             plays = 0;
         final failures = <Object>[];
@@ -191,6 +192,7 @@ void main() {
                 refreshed++;
               }
               final range = request.headers.value('range');
+              if (range == 'bytes=0-65535') warmPrefixes++;
               var start = 0, end = audio.length - 1;
               if (range != null) {
                 ranges++;
@@ -284,6 +286,8 @@ void main() {
           expect(expired, greaterThan(0));
           expect(unauthorized, 1);
           expect(refreshed, greaterThan(0));
+          await _wait(() => warmPrefixes > 0);
+          expect(playback.snapshot.currentEntryId, entries.first.entryId);
           await playback.handler.seek(const Duration(seconds: 10));
           await _wait(
             () => playback.snapshot.position >= const Duration(seconds: 10),
@@ -312,7 +316,7 @@ void main() {
           );
           expect(failures, isEmpty);
           debugPrint(
-            'NATIVE_OWNER_TLS_PASS expired=$expired unauthorized=$unauthorized refreshed=$refreshed ranges=$ranges wavePages=$waves localNotificationArt=1 serviceNext=1 UIWidgets=0',
+            'NATIVE_OWNER_TLS_PASS expired=$expired unauthorized=$unauthorized refreshed=$refreshed ranges=$ranges warmPrefixes=$warmPrefixes wavePages=$waves localNotificationArt=1 serviceNext=1 UIWidgets=0',
           );
         } finally {
           if (app != null) {

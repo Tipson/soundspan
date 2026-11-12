@@ -1,0 +1,210 @@
+{
+    "package": "audio_service",
+    "version": "0.18.19",
+    "url": "https://pub.dev/packages/audio_service/versions/0.18.19",
+    "license": "MIT",
+    "scope": "Android implementation only; hosted Dart/iOS dependency remains pinned",
+    "patch": "exitPlayingState releases the CPU wake lock independently of foreground status",
+    "upstreamFiles": [
+        {
+            "path": "build.gradle.kts",
+            "sha256": "6dbea445b85a3bed8a241823461cb23a6acaca2eeedd5bb5e98d1a9b8d3f1cdc"
+        },
+        {
+            "path": "gradle/wrapper/gradle-wrapper.properties",
+            "sha256": "efa4245a68c56c8bb873611ade567981727262d994b419f77d1be873ad6ffd02"
+        },
+        {
+            "path": "gradle.properties",
+            "sha256": "3c1fc1d9cad8765e2b44821c4774644b590bb58ecab6beb4bae2470ece0175be"
+        },
+        {
+            "path": "settings.gradle.kts",
+            "sha256": "949153b8bd1710e3178968032b72ff99b45e2f4d3f3a0ce929f87cdfe6519e6e"
+        },
+        {
+            "path": "src/main/AndroidManifest.xml",
+            "sha256": "bfe643676c7bfecf2683b1ad8044a754bc53141c9e4fc6714ad58c1530937b6d"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/AudioProcessingState.java",
+            "sha256": "c1deed698e77883fc2b3c1efecdd159894ceb4b72a868d1fc71bb97ce3617377"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/AudioService.java",
+            "sha256": "538dc027311ea070eea883f6dbf6b0e339c6c609cf6b395d018e359caea36938"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/AudioServiceActivity.java",
+            "sha256": "4bf3674ac3484a8d9d9ae5690692849368fd14fbbf4998ee458e6f642ee039f8"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/AudioServiceConfig.java",
+            "sha256": "85a280bf8ad1507a7228473c3bb1606284f8c17b0ddc91aec7f62982af47c5d9"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/AudioServiceFragmentActivity.java",
+            "sha256": "80c159e42cdba5077ca4c7d961a79e4dc31cbaf4412910b97682c57ffeb3f7c9"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/AudioServicePlugin.java",
+            "sha256": "afd40121a51d32ac4aed3b8142897e62460b57524df0ecdd0bfc97313262b1e0"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/CustomMediaAction.java",
+            "sha256": "589709a69ae2ae44718fd5575c71e085e5d3b56584806a5ac7647821855af3e8"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/MediaButton.java",
+            "sha256": "9557657688418b02fe2cf633d65b35fd51f163dff2b8ad67d0f8cedd430a7cbf"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/MediaButtonReceiver.java",
+            "sha256": "546dc6106f2920129d5e1c6eaaf5cd7856845f56f71028e48a8579dc8280e7e9"
+        },
+        {
+            "path": "src/main/java/com/ryanheise/audioservice/MediaControl.java",
+            "sha256": "a193bc77b42439cdf749b1298e655339e742d07694b728ee5e8423cbaca0a295"
+        },
+        {
+            "path": "src/main/res/drawable-hdpi/audio_service_fast_forward.png",
+            "sha256": "35e2bd70cbd4eb81fac0ae26c0d2fadd04a3e909f45c31acf08dc0c089b26afc"
+        },
+        {
+            "path": "src/main/res/drawable-hdpi/audio_service_fast_rewind.png",
+            "sha256": "479b3404b26c4850da21741553fbd1049eb1807454102a4ffa4cb23d9120b0c7"
+        },
+        {
+            "path": "src/main/res/drawable-hdpi/audio_service_pause.png",
+            "sha256": "863bd248afdb619930952198b7a555a31eb15c749d0e4b0f121bcf88240ebb66"
+        },
+        {
+            "path": "src/main/res/drawable-hdpi/audio_service_play_arrow.png",
+            "sha256": "23a4f509b5d428c713cc52417249ccea8ebd519e31b5632639bae1eedc5a36f7"
+        },
+        {
+            "path": "src/main/res/drawable-hdpi/audio_service_skip_next.png",
+            "sha256": "480f567ccb9d0bffeff0476883a99e74aff1f58e4720d0807cb23fb982ee05f5"
+        },
+        {
+            "path": "src/main/res/drawable-hdpi/audio_service_skip_previous.png",
+            "sha256": "0c96daf5b300d6e12d6567fbe1448aa4fc866a87633fcae6bd4caa3e718fe023"
+        },
+        {
+            "path": "src/main/res/drawable-hdpi/audio_service_stop.png",
+            "sha256": "1ff6b6dae3a87e542d28b2f3aebdb18fe16e5ea7c203f715c8c27606da53af66"
+        },
+        {
+            "path": "src/main/res/drawable-mdpi/audio_service_fast_forward.png",
+            "sha256": "e3cf6310fdb117fd358f7884f40294a622009a91cb8e66a2ae269c740b9d4754"
+        },
+        {
+            "path": "src/main/res/drawable-mdpi/audio_service_fast_rewind.png",
+            "sha256": "f940e2ec96e028d09a1dfadf9ecba9883080f14b55593945ef48f850e6d73c53"
+        },
+        {
+            "path": "src/main/res/drawable-mdpi/audio_service_pause.png",
+            "sha256": "30c905b7bc1e45850fb11e5d2c8c62084f30321018513e5ca4000bc5de19b680"
+        },
+        {
+            "path": "src/main/res/drawable-mdpi/audio_service_play_arrow.png",
+            "sha256": "c2ca162726e16546203137a500740f4e38c23438c584c6d771db823143f133f6"
+        },
+        {
+            "path": "src/main/res/drawable-mdpi/audio_service_skip_next.png",
+            "sha256": "8efd583b968d92b27ebb034ef0db3a213bbed0982ff05e20875793aafb2fb6e2"
+        },
+        {
+            "path": "src/main/res/drawable-mdpi/audio_service_skip_previous.png",
+            "sha256": "b447a13d27c6297e8b861a6f8a2d7a751859f016143690e6d2734f2134ef5b28"
+        },
+        {
+            "path": "src/main/res/drawable-mdpi/audio_service_stop.png",
+            "sha256": "cda1351e37680de3d2dc9e44bfbd3240b34bd641cfa314f6dd723311cfc0305d"
+        },
+        {
+            "path": "src/main/res/drawable-xhdpi/audio_service_fast_forward.png",
+            "sha256": "282ec622750625727522065f23749c16f8a047fe8b5aeb422fb80947bc9b7bff"
+        },
+        {
+            "path": "src/main/res/drawable-xhdpi/audio_service_fast_rewind.png",
+            "sha256": "024b35f62c62e80818b6cfca27b29cd9138b4bea79bb9858c8a520d3a664944b"
+        },
+        {
+            "path": "src/main/res/drawable-xhdpi/audio_service_pause.png",
+            "sha256": "1f98a50b019309e53d7f604dc0ca454fc3d1bcf44b9c84fa9b142cea06c2b852"
+        },
+        {
+            "path": "src/main/res/drawable-xhdpi/audio_service_play_arrow.png",
+            "sha256": "1d98d2d7cf0bdd8c1114eccb583eed008878e28fe0a0624fad9aed1b5f6acecd"
+        },
+        {
+            "path": "src/main/res/drawable-xhdpi/audio_service_skip_next.png",
+            "sha256": "62f7fe4984dd82205e9c2be8ddd1364f73bcd385ca37b37c0fda9adbf8301227"
+        },
+        {
+            "path": "src/main/res/drawable-xhdpi/audio_service_skip_previous.png",
+            "sha256": "6c404d7dca1a0bb459b20c50cfd1794b8bd01339c4ab2b529d6ea97e3cf5e737"
+        },
+        {
+            "path": "src/main/res/drawable-xhdpi/audio_service_stop.png",
+            "sha256": "b1670cb37bc0b2adeb68efd396683883016ff4a25d6c64aaac6950851f26c2e9"
+        },
+        {
+            "path": "src/main/res/drawable-xxhdpi/audio_service_fast_forward.png",
+            "sha256": "1b5cda8e57fec23f3b6950e0a36075ec69339f729f8604eda5b04e67bf93a8c8"
+        },
+        {
+            "path": "src/main/res/drawable-xxhdpi/audio_service_fast_rewind.png",
+            "sha256": "262326542dbb4899b534dd4fba427bd740ff67c3b768922fe7facad884212b06"
+        },
+        {
+            "path": "src/main/res/drawable-xxhdpi/audio_service_pause.png",
+            "sha256": "8f3d3f9e819f9e8ad56974609c8947ef2cafecf53a06ee4bcdc5d7622f3bbf2c"
+        },
+        {
+            "path": "src/main/res/drawable-xxhdpi/audio_service_play_arrow.png",
+            "sha256": "9dff6cab4e68440772fb1b0802f151ac50b5e98087c62c15f123ac85a0843ce3"
+        },
+        {
+            "path": "src/main/res/drawable-xxhdpi/audio_service_skip_next.png",
+            "sha256": "ca7ce674081a4362c4ab73b44dcdbb0f86b5260f6b1d6841b528366607ad73dc"
+        },
+        {
+            "path": "src/main/res/drawable-xxhdpi/audio_service_skip_previous.png",
+            "sha256": "1b4df1110917c2a88c9559b1bfd0dcb1b81a9724adbca5073105ae4f0222854c"
+        },
+        {
+            "path": "src/main/res/drawable-xxhdpi/audio_service_stop.png",
+            "sha256": "ad85bcdb158b5c53eba2a09d87efd0a1781764f5a8e881246842b7e8f7610576"
+        },
+        {
+            "path": "src/main/res/drawable-xxxhdpi/audio_service_fast_forward.png",
+            "sha256": "43775750c14aad142df0ad9a2d2fe836a01c9fa29ed738dc1e4ba8a0f46609e6"
+        },
+        {
+            "path": "src/main/res/drawable-xxxhdpi/audio_service_fast_rewind.png",
+            "sha256": "ac74a6e154794271feecb9e0508e79197a933250b96eee86f8f261fde60753a3"
+        },
+        {
+            "path": "src/main/res/drawable-xxxhdpi/audio_service_pause.png",
+            "sha256": "83e76638f27ded9d93a05bda5fc47ee6ac4efb1d6ba00f2de725ec6d0a5d8d73"
+        },
+        {
+            "path": "src/main/res/drawable-xxxhdpi/audio_service_play_arrow.png",
+            "sha256": "930cf4a6b6d33e694c9bfb392106216fcdf99b59737e9f000b343cea72d52607"
+        },
+        {
+            "path": "src/main/res/drawable-xxxhdpi/audio_service_skip_next.png",
+            "sha256": "85b5ad72aa20313caa77e964c42bc4e3ccbbee01c6dc65eee2917cb14f25006b"
+        },
+        {
+            "path": "src/main/res/drawable-xxxhdpi/audio_service_skip_previous.png",
+            "sha256": "602261a9880406393db4b29b7a6894b5f44a9ab7046fba79b9598e6635feef24"
+        },
+        {
+            "path": "src/main/res/drawable-xxxhdpi/audio_service_stop.png",
+            "sha256": "971447f07522f9e8b6b0a417aee9f4e54bff19bce592bec045ef3c53a6c048a0"
+        }
+    ]
+}

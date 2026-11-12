@@ -28,8 +28,8 @@ if ($version.flutterVersion -ne '3.47.7' -or $version.dartSdkVersion -ne '3.13.5
 $lock = Join-Path $source 'mobile/pubspec.lock'
 if ((Get-FileHash $lock).Hash -ne '01A909137D3B91DF57DAEC2581772AE2D745CE76DA6736BA00562CA870FDEA32') { throw 'Pinned pub lock mismatch' }
 $pinnedInputs = @{
-    'mobile/pubspec.yaml' = 'EDB42E626E2D36310C1B772D09EC40F5793C373E2A396F174439A684AB09DB10'
-    'mobile/android/settings.gradle.kts' = '016759283E88ADE6EBA92910583FEEEF88B962839B957AA414296AFD2952D122'
+    'mobile/pubspec.yaml' = '9A1C0C04A79C37C87AF0B669F05021A7EF7AAB4CC00FE3DACAFE70A3C7A2CE01'
+    'mobile/android/settings.gradle.kts' = '3D6A3541F66484EE1AB8D46B78AE3CC197635BF529BF0C299FE09C9EF3D2406C'
     'mobile/android/gradle/wrapper/gradle-wrapper.properties' = 'B690D26223576FE4E63889FAD9A00DF81945CB870B9476CC5A563152A1A88A74'
 }
 foreach ($inputPath in $pinnedInputs.Keys) {
@@ -38,7 +38,7 @@ foreach ($inputPath in $pinnedInputs.Keys) {
 $buildTools = Join-Path $env:ANDROID_HOME 'build-tools/36.0.0'
 $metadata = Read-SigningMetadata $SigningMetadata
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$name = "soundspan-0.1.8+11-$($ExpectedSourceCommit.Substring(0,12))-$stamp"
+$name = "soundspan-0.1.9+12-$($ExpectedSourceCommit.Substring(0,12))-$stamp"
 $apkOut = Join-Path $output "$name.apk"
 $reportOut = Join-Path $output "$name.json"
 Assert-NewOutput $apkOut
@@ -51,7 +51,7 @@ try {
         $dirty = Invoke-CheckedNative 'git' @('-C',$source,'status','--porcelain','--untracked-files=all','--','mobile','scripts/mobile','.gitignore')
         if (-not [string]::IsNullOrWhiteSpace($dirty)) { throw 'Mobile release inputs must be committed and clean' }
         $free = (Get-PSDrive D).Free
-        if ($free -lt 6GB) { throw 'Release requires at least 6 GiB free on D' }
+        if ($free -lt (20GB + 6GB)) { throw 'Release requires a 20 GiB reserve plus a 6 GiB build budget on D' }
         & (Join-Path $PSScriptRoot 'verify-mobile.ps1') -ToolEnvironment $ToolEnvironment -ToolEnvironmentSha256 $ToolEnvironmentSha256
         if ($LASTEXITCODE -ne 0) { throw "Mobile verification failed: $LASTEXITCODE" }
         # Regenerate the release plugin registry before exposing signing secrets.

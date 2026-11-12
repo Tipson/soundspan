@@ -22,7 +22,7 @@ $script:passed = 0
 # boundaries and host admission; retain actual ordering and failure branches.
 $sandbox = New-Module -ScriptBlock {
     function Import-Module { param($Name, [switch]$Force); if ((Split-Path $Name -Leaf) -ne 'release-tools.psm1') { throw 'Unexpected module import' } }
-    function Get-PSDrive { param($Name); if ($Name -ne 'D') { throw 'Unexpected drive' }; [pscustomobject]@{ Free = 10GB } }
+    function Get-PSDrive { param($Name); if ($Name -ne 'D') { throw 'Unexpected drive' }; [pscustomobject]@{ Free = if ($env:SOUNDSPAN_RELEASE_TEST_CASE -eq 'disk-low') { 21GB } else { 30GB } } }
     function Read-SigningMetadata { param($Path); [pscustomobject]@{ certificateSha256 = ('A' * 64) } }
     function Invoke-CheckedNative {
         param($Executable, $Arguments)
@@ -87,6 +87,11 @@ function Assert-UnsignedFailure($Result, [string]$Message) {
     if ($Result.error -notlike "*$Message*" -or 'signing' -in $Result.events -or @($Result.events | Where-Object { $_ -like 'signed:*' }).Count -gt 0) { throw "Failure did not block signing: $($Result.error); $($Result.events -join '; ')" }
 }
 try {
+    Check 'physical reserve plus build budget blocks release before verification or signing' {
+        $result = Invoke-Case 'disk-low'
+        Assert-UnsignedFailure $result 'reserve'
+        if ($result.events.Count -ne 0) { throw 'Low storage started verification or configuration' }
+    }
     Check 'strict verification precedes unsigned release configuration and signed no-pub assembly' {
         $result = Invoke-Case 'success'
         $expected = @(
