@@ -56,7 +56,7 @@ final class WaveContinuation {
   int? _lineage;
   int? _inFlight;
   int? _applying;
-  String? _pendingReplacementEntry;
+  Set<String> _pendingReplacementEntries = const {};
   int? _pendingReplacementLineage;
   int _emptyPages = 0;
   bool _disposed = false;
@@ -110,7 +110,7 @@ final class WaveContinuation {
     if (current.lineage != _lineage) {
       // ReplaceQueue publishes its admitted queue before awaiting source
       // preparation. A newer explicit Apply may supersede that preparation.
-      if (current.currentEntryId == _pendingReplacementEntry &&
+      if (_pendingReplacementEntries.contains(current.currentEntryId) &&
           current.lineage == (_pendingReplacementLineage ?? -2) + 1 &&
           current.fence == fence) {
         _lineage = current.lineage;
@@ -199,6 +199,12 @@ final class WaveContinuation {
       );
       if (!_valid(revision, lineage, fence)) return;
       final current = controller.snapshot;
+      final context = PlayContext(
+        surface: PlaySurface.wave,
+        waveMode: selection.mode,
+        recommendationGenerationId: page.generationId,
+        recommendationSessionId: session,
+      );
       final existing = replace
           ? {
               if (current.currentEntry != null)
@@ -206,7 +212,12 @@ final class WaveContinuation {
             }
           : current.entries.map((e) => e.track.ref.identityKey).toSet();
       final tracks = page.tracks
-          .where((t) => t.playable && existing.add(t.ref.identityKey))
+          .where(
+            (t) =>
+                t.playable &&
+                current.allowsRecommendation(t.ref, context) &&
+                existing.add(t.ref.identityKey),
+          )
           .take(25)
           .toList();
       if (tracks.isEmpty) {
@@ -221,46 +232,51 @@ final class WaveContinuation {
           );
           return;
         }
-        _emptyPages++;
-        _status(
-          _emptyPages >= 2 || page.nextCursor == null
-              ? WaveStatus.exhausted
-              : WaveStatus.active,
-          cursor: page.nextCursor,
-          generation: page.generationId,
-        );
+        _consumeEmptyPage(page);
         return;
       }
-      _emptyPages = 0;
-      final entries = controller.createEntries(
-        tracks,
-        PlayContext(
-          surface: PlaySurface.wave,
-          waveMode: selection.mode,
-          recommendationGenerationId: page.generationId,
-          recommendationSessionId: session,
-        ),
-      );
+      final entries = controller.createEntries(tracks, context);
       _applying = revision;
       if (replace) {
-        _pendingReplacementEntry = entries.first.entryId;
+        _pendingReplacementEntries = entries.map((e) => e.entryId).toSet();
         _pendingReplacementLineage = lineage;
         await controller.dispatch(
-          ReplaceQueue(entries, fence: fence, expectedLineage: lineage),
+          ReplaceQueue(
+            entries,
+            fence: fence,
+            expectedLineage: lineage,
+            automaticRecommendation: true,
+          ),
         );
       } else {
         await controller.dispatch(
-          Enqueue(entries, fence: fence, expectedLineage: lineage),
+          Enqueue(
+            entries,
+            fence: fence,
+            expectedLineage: lineage,
+            automaticRecommendation: true,
+          ),
         );
       }
       if (revision != _revision || !authority.isCurrent(fence) || _disposed) {
         return;
       }
       final applied = controller.snapshot;
-      if (applied.fence != fence ||
-          !applied.entries.any((e) => e.entryId == entries.first.entryId)) {
+      final submittedIds = entries.map((e) => e.entryId).toSet();
+      final admitted = applied.entries.any(
+        (entry) => submittedIds.contains(entry.entryId),
+      );
+      if (applied.fence != fence || !admitted) {
         if (applied.lineage != lineage) {
           detach();
+          return;
+        }
+        if (applied.fence == fence &&
+            entries.every(
+              (entry) =>
+                  !applied.allowsRecommendation(entry.track.ref, entry.context),
+            )) {
+          _consumeEmptyPage(page);
           return;
         }
         _status(
@@ -273,6 +289,11 @@ final class WaveContinuation {
         );
         return;
       }
+      if (applied.lineage != lineage + (replace ? 1 : 0)) {
+        detach();
+        return;
+      }
+      _emptyPages = 0;
       _lineage = applied.lineage;
       _needsReplacement = false;
       _publish(
@@ -316,6 +337,17 @@ final class WaveContinuation {
         }
       }
     }
+  }
+
+  void _consumeEmptyPage(RecommendationPage page) {
+    _emptyPages++;
+    _status(
+      _emptyPages >= 2 || page.nextCursor == null
+          ? WaveStatus.exhausted
+          : WaveStatus.active,
+      cursor: page.nextCursor,
+      generation: page.generationId,
+    );
   }
 
   Future<void> dispose() async {

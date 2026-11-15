@@ -122,12 +122,16 @@ final class PreferenceController extends ChangeNotifier {
     // Captured synchronously, before either network or another selected entry.
     final captured = playback?.snapshot;
     final slot = _slots.putIfAbsent(ref.identityKey, _PreferenceSlot.new);
-    final pending = _PreferenceIntent(signal);
+    final pending = _PreferenceIntent(signal, captured);
     slot.revision++;
     slot.pending.add(pending);
     slot.state = PreferenceState(signal: signal, pending: true);
     _publish(ref.identityKey);
-    if (signal == PreferenceSignal.dislike &&
+    final visibleSignal = slot.state.signal ?? signal;
+    if (captured?.currentEntry?.context.recommendationScopeKey != null) {
+      unawaited(_updateTail(ref, visibleSignal, captured));
+    } else if (signal == PreferenceSignal.dislike &&
+        visibleSignal == PreferenceSignal.dislike &&
         captured?.fence == fence &&
         captured?.currentEntry?.track.ref == ref &&
         _skippedSelections.add((
@@ -188,6 +192,11 @@ final class PreferenceController extends ChangeNotifier {
           pending: slot.pending.isNotEmpty,
         );
         _publish(ref.identityKey);
+        await _updateTail(
+          ref,
+          slot.state.signal ?? PreferenceSignal.clear,
+          intent.captured,
+        );
         // Notification can synchronously dispose/revoke this controller. Only
         // an admitted owner may enqueue device work after the server confirms.
         if (isCurrent && !_applied.isClosed) {
@@ -209,6 +218,11 @@ final class PreferenceController extends ChangeNotifier {
             failure: collectionFailure(error),
           );
           _publish(ref.identityKey);
+          await _updateTail(
+            ref,
+            slot.state.signal ?? PreferenceSignal.clear,
+            intent.captured,
+          );
         }
         if (!intent.done.isCompleted) intent.done.completeError(error);
       }
@@ -226,6 +240,40 @@ final class PreferenceController extends ChangeNotifier {
       message: 'Предпочтение для этой записи недоступно.',
     ),
   };
+
+  Future<void> _updateTail(
+    TrackRef ref,
+    PreferenceSignal signal,
+    QueueSnapshot? captured,
+  ) async {
+    if (!isCurrent || playback == null || captured?.fence != fence) return;
+    final context = captured!.currentEntry?.context;
+    final scope = context?.recommendationScopeKey;
+    if (scope == null) return;
+    try {
+      final advance =
+          signal == PreferenceSignal.dislike &&
+          captured.currentEntry?.track.ref == ref;
+      await playback!.dispatch(
+        SetRecommendationExclusion(
+          ref,
+          fence: fence,
+          expectedLineage: captured.lineage,
+          recommendationScope: scope,
+          exclude: signal == PreferenceSignal.dislike,
+          advanceEntryId: advance ? captured.currentEntryId : null,
+          advanceGeneration: advance ? captured.generation : null,
+        ),
+      );
+    } catch (error) {
+      // Queue edits and preference persistence report failures independently.
+      if (isCurrent) {
+        _playbackFailure = collectionFailure(error);
+        notifyListeners();
+      }
+    }
+  }
+
   String _path(TrackRef ref) =>
       '/api/library/${ref is LibraryTrackRef ? 'tracks' : 'remote-tracks'}/${Uri.encodeComponent(_serverId(ref))}/preference';
   Future<ApiResponse> _request(
@@ -312,7 +360,8 @@ final class _PreferenceSlot {
 }
 
 final class _PreferenceIntent {
-  _PreferenceIntent(this.signal);
+  _PreferenceIntent(this.signal, this.captured);
   final PreferenceSignal signal;
+  final QueueSnapshot? captured;
   final done = Completer<void>();
 }

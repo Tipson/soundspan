@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Remove disliked exact recordings from the upcoming recommendation queue and pending refills, retaining the current position, manual playlists and owner boundaries. Preserve exclusions through queue checkpoints and repeat mode; Undo permits future admission without restoring removed occurrences.
 - Explain a Wave preparation timeout without replacing the current queue. Preserve classified network failures and server retry metadata while keeping unexpected exception details private.
 - Attach anonymous playback-run and per-dispatch correlation to Play and engagement requests, preserving older feedback outbox entries, cancellation and authentication retry behavior.
 - Confirm Android playback against the exact native decoder source instead of an extrapolated position. Bound account admission from collection playback, fence acknowledgements across audio-focus attempts, and cancel speculative resolver sockets independently. Explain unavailable search rows and allow an exact fresh search.

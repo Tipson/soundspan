@@ -68,6 +68,7 @@ void main() {
         [entry('wave-late')],
         fence: authority.requireFence(),
         expectedLineage: lineage,
+        automaticRecommendation: true,
       ),
     );
     expect(queue.snapshot.entries.map((e) => e.entryId), ['manual']);
@@ -80,6 +81,7 @@ void main() {
         [entry('wave-late')],
         fence: authority.requireFence(),
         expectedLineage: lineage,
+        automaticRecommendation: true,
       ),
     );
     await pumpEventQueue();
@@ -99,6 +101,7 @@ void main() {
         [entry('refill')],
         fence: authority.requireFence(),
         expectedLineage: lineage,
+        automaticRecommendation: true,
       ),
     );
     await pumpEventQueue();
@@ -155,6 +158,7 @@ void main() {
         [entry('late-start')],
         fence: state.fence!,
         expectedLineage: state.lineage,
+        automaticRecommendation: true,
       ),
     );
     authority.pendingAdmissions.single.complete();

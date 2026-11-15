@@ -9,6 +9,7 @@ import '../core/session/session_authority.dart';
 import 'playback_controller.dart';
 import 'playback_engine.dart';
 import 'native_loudness_controller.dart';
+import 'recommendation_queue_policy.dart';
 
 /// One service-owned occurrence queue; widgets only send commands.
 final class QueueCoordinator implements PlaybackController {
@@ -57,6 +58,12 @@ final class QueueCoordinator implements PlaybackController {
   int _queueEpoch = 0;
   int _queueBoundary = 0;
   int _intentRevision = 0;
+  final _recommendationExclusions = <String, Set<String>>{};
+  final _closedRecommendationScopes = <String>{};
+  static const _maxRecommendationExclusions =
+      RecommendationQueuePolicy.maxExclusions;
+  int _recommendationIntentSequence = 0;
+  final _recommendationIntents = <String, int>{};
   // Runtime-only permission from a natural Wave end; never restored/persisted.
   ({
     SessionFence fence,
@@ -94,6 +101,8 @@ final class QueueCoordinator implements PlaybackController {
     failure: _failure,
     generation: _generation,
     lineage: _queueEpoch,
+    recommendationExclusions: _recommendationExclusions,
+    closedRecommendationScopes: _closedRecommendationScopes,
   );
   @override
   Stream<QueueSnapshot> get snapshots => _snapshots.stream;
@@ -146,12 +155,20 @@ final class QueueCoordinator implements PlaybackController {
       _fence == fence &&
       authority.isCurrent(fence);
 
-  bool _matchesLineage(SessionFence fence, int lineage) =>
+  bool _ownsLineage(SessionFence fence, int lineage) =>
       !_disposed &&
       authority.isCurrent(fence) &&
       _queueEpoch == lineage &&
-      (_fence == fence || (_fence == null && _entries.isEmpty)) &&
-      _pendingManualReplacementIntent != _replacementIntent;
+      (_fence == fence || (_fence == null && _entries.isEmpty));
+
+  bool _matchesLineage(
+    SessionFence fence,
+    int lineage, {
+    bool allowPendingManual = false,
+  }) =>
+      _ownsLineage(fence, lineage) &&
+      (allowPendingManual ||
+          _pendingManualReplacementIntent != _replacementIntent);
 
   /// Releases only this exact local decoder source, retaining paused metadata.
   /// The caller must block new preparations of this file until deletion finishes.
@@ -229,15 +246,49 @@ final class QueueCoordinator implements PlaybackController {
   @override
   Future<void> dispatch(PlaybackCommand command) async {
     if (_disposed) throw StateError('Playback disposed');
+    if ((command is ReplaceQueue &&
+            command.automaticRecommendation &&
+            command.expectedLineage == null) ||
+        (command is Enqueue &&
+            command.automaticRecommendation &&
+            command.expectedLineage == null)) {
+      throw ArgumentError('Automatic recommendations need a captured lineage');
+    }
     if (command is ReplaceQueue &&
         command.expectedLineage != null &&
-        !_matchesLineage(command.fence, command.expectedLineage!)) {
+        !_matchesLineage(
+          command.fence,
+          command.expectedLineage!,
+          allowPendingManual: !command.automaticRecommendation,
+        )) {
       return;
     }
     if (command is Enqueue &&
         command.expectedLineage != null &&
-        !_matchesLineage(command.fence, command.expectedLineage!)) {
+        !_matchesLineage(
+          command.fence,
+          command.expectedLineage!,
+          allowPendingManual: !command.automaticRecommendation,
+        )) {
       return;
+    }
+    int? recommendationIntent;
+    if (command is SetRecommendationExclusion) {
+      if ((command.advanceEntryId == null) !=
+              (command.advanceGeneration == null) ||
+          (!command.exclude && command.advanceEntryId != null)) {
+        throw ArgumentError(
+          'A guarded negative advance needs its original run',
+        );
+      }
+      if (!_matchesLineage(command.fence, command.expectedLineage) ||
+          _currentRecommendationScope != command.recommendationScope) {
+        return;
+      }
+      // Reserve before admission: a later clear/negative invalidates a command
+      // even while its authoritative owner check is still in flight.
+      recommendationIntent = ++_recommendationIntentSequence;
+      _recommendationIntents[command.ref.identityKey] = recommendationIntent;
     }
     int? replacementIntent;
     Stopwatch? replacementClock;
@@ -264,13 +315,13 @@ final class QueueCoordinator implements PlaybackController {
       }
       replacementIntent = ++_replacementIntent;
       _naturalContinuation = null;
-      if (command.expectedLineage == null) {
+      if (!command.automaticRecommendation) {
         _pendingManualReplacementIntent = replacementIntent;
       }
       replacementClock = Stopwatch()..start();
     }
     if (command is Enqueue &&
-        command.expectedLineage == null &&
+        !command.automaticRecommendation &&
         authority.isCurrent(command.fence)) {
       _naturalContinuation = null;
     }
@@ -322,6 +373,38 @@ final class QueueCoordinator implements PlaybackController {
         _intent = false;
         _audible = false;
         _failure = null;
+        final restoredScopes = _entries
+            .map((entry) => entry.context.recommendationScopeKey)
+            .whereType<String>()
+            .toSet();
+        _recommendationExclusions.removeWhere(
+          (scope, _) => !restoredScopes.contains(scope),
+        );
+        _closedRecommendationScopes.retainAll(restoredScopes);
+        var exclusionCount = _recommendationExclusions.values.fold(
+          0,
+          (sum, refs) => sum + refs.length,
+        );
+        for (final entry in restored.recommendationExclusions.entries) {
+          if (!restoredScopes.contains(entry.key)) continue;
+          final refs = _recommendationExclusions.putIfAbsent(
+            entry.key,
+            () => <String>{},
+          );
+          for (final ref in entry.value) {
+            if (refs.contains(ref)) continue;
+            if (exclusionCount >= _maxRecommendationExclusions) {
+              _closedRecommendationScopes.add(entry.key);
+              break;
+            }
+            refs.add(ref);
+            exclusionCount++;
+          }
+        }
+        _closedRecommendationScopes.addAll(
+          restored.closedRecommendationScopes.intersection(restoredScopes),
+        );
+        _pruneExcludedFuture();
         _publish(PlaybackEventKind.transition, oldEntry);
         final stopped = engine.stop();
         await oldResource?.revoke();
@@ -335,11 +418,20 @@ final class QueueCoordinator implements PlaybackController {
           await authority.assertCurrent(fence).timeout(budget);
         } catch (error) {
           if (error is TimeoutException) {
+            // This intent has finished admission. Its own manual marker must
+            // not make a still-current fenced timeout look superseded.
+            if (_pendingManualReplacementIntent == replacementIntent) {
+              _pendingManualReplacementIntent = null;
+            }
             if (_disposed ||
                 _replacementIntent != replacementIntent ||
                 !authority.isCurrent(fence) ||
                 (command.expectedLineage != null &&
-                    !_matchesLineage(fence, command.expectedLineage!))) {
+                    !_matchesLineage(
+                      fence,
+                      command.expectedLineage!,
+                      allowPendingManual: !command.automaticRecommendation,
+                    ))) {
               return;
             }
             throw const AppFailure(
@@ -348,7 +440,7 @@ final class QueueCoordinator implements PlaybackController {
               retryable: true,
             );
           }
-          if (command.expectedLineage != null) return;
+          if (command.automaticRecommendation) return;
           rethrow;
         } finally {
           if (_pendingManualReplacementIntent == replacementIntent) {
@@ -359,23 +451,55 @@ final class QueueCoordinator implements PlaybackController {
             _replacementIntent != replacementIntent ||
             !authority.isCurrent(fence) ||
             (command.expectedLineage != null &&
-                !_matchesLineage(fence, command.expectedLineage!))) {
+                !_matchesLineage(
+                  fence,
+                  command.expectedLineage!,
+                  allowPendingManual: !command.automaticRecommendation,
+                ))) {
           return;
         }
         if (command.entries.isEmpty) {
           await _clear();
           return;
         }
+        final admission = snapshot;
+        final incoming = !command.automaticRecommendation
+            ? command.entries
+            : command.entries
+                  .where(
+                    (entry) => admission.allowsRecommendation(
+                      entry.track.ref,
+                      entry.context,
+                    ),
+                  )
+                  .toList();
+        if (incoming.isEmpty) return;
+        if (!command.automaticRecommendation) {
+          _recommendationExclusions.clear();
+          _closedRecommendationScopes.clear();
+        } else {
+          final scopes = incoming
+              .map((entry) => entry.context.recommendationScopeKey)
+              .whereType<String>()
+              .toSet();
+          _recommendationExclusions.removeWhere(
+            (scope, _) => !scopes.contains(scope),
+          );
+          _closedRecommendationScopes.retainAll(scopes);
+        }
         ++_queueEpoch;
         ++_queueBoundary;
-        _entries = List.of(command.entries);
+        _entries = List.of(incoming);
         _fence = fence;
         _order = _entries.map((e) => e.entryId).toList();
         if (_shuffle) _order.shuffle(_random);
         _intent = command.play;
         _intentRevision++;
+        final initial = command.initialEntryId;
         await _select(
-          command.initialEntryId ?? _entries.first.entryId,
+          initial != null && _entries.any((entry) => entry.entryId == initial)
+              ? initial
+              : _entries.first.entryId,
           preparationClock: replacementClock,
         );
       case Enqueue():
@@ -383,14 +507,18 @@ final class QueueCoordinator implements PlaybackController {
         try {
           await authority.assertCurrent(command.fence);
         } catch (_) {
-          if (command.expectedLineage != null) return;
+          if (command.automaticRecommendation) return;
           rethrow;
         }
         if (_disposed ||
             _queueBoundary != boundary ||
             !authority.isCurrent(command.fence) ||
             (command.expectedLineage != null &&
-                !_matchesLineage(command.fence, command.expectedLineage!))) {
+                !_matchesLineage(
+                  command.fence,
+                  command.expectedLineage!,
+                  allowPendingManual: !command.automaticRecommendation,
+                ))) {
           return;
         }
         if (_fence != null && _fence != command.fence) {
@@ -399,11 +527,26 @@ final class QueueCoordinator implements PlaybackController {
             message: 'Сессия завершена',
           );
         }
+        _validate([..._entries, ...command.entries]);
+        final admission = snapshot;
+        final incoming = !command.automaticRecommendation
+            ? command.entries
+            : command.entries
+                  .where(
+                    (entry) => admission.allowsRecommendation(
+                      entry.track.ref,
+                      entry.context,
+                    ),
+                  )
+                  .toList();
+        if (incoming.isEmpty) return;
+        if (!command.automaticRecommendation) {
+          _recommendationExclusions.clear();
+          _closedRecommendationScopes.clear();
+        }
         if (_entries.isEmpty) {
-          if (command.entries.isEmpty) return;
-          _validate(command.entries);
-          if (command.expectedLineage == null) ++_queueEpoch;
-          _entries = List.of(command.entries);
+          if (!command.automaticRecommendation) ++_queueEpoch;
+          _entries = List.of(incoming);
           _fence = command.fence;
           _order = _entries.map((e) => e.entryId).toList();
           if (_shuffle) _order.shuffle(_random);
@@ -412,15 +555,13 @@ final class QueueCoordinator implements PlaybackController {
           await _select(_entries.first.entryId);
           return;
         }
-        _validate([..._entries, ...command.entries]);
-        if (command.entries.isEmpty) return;
-        if (command.expectedLineage == null) ++_queueEpoch;
-        _entries.addAll(command.entries);
-        final ids = command.entries.map((e) => e.entryId).toList();
+        if (!command.automaticRecommendation) ++_queueEpoch;
+        _entries.addAll(incoming);
+        final ids = incoming.map((e) => e.entryId).toList();
         if (_shuffle) ids.shuffle(_random);
         _order.addAll(ids);
         final continuation = _naturalContinuation;
-        if (command.expectedLineage != null &&
+        if (command.automaticRecommendation &&
             continuation != null &&
             _valid(continuation.generation, continuation.fence) &&
             continuation.fence == command.fence &&
@@ -435,6 +576,80 @@ final class QueueCoordinator implements PlaybackController {
           await _select(ids.first);
         } else {
           _publish();
+        }
+      case SetRecommendationExclusion():
+        try {
+          try {
+            await authority.assertCurrent(command.fence);
+          } catch (_) {
+            return;
+          }
+          bool latest() =>
+              _recommendationIntents[command.ref.identityKey] ==
+                  recommendationIntent &&
+              _matchesLineage(command.fence, command.expectedLineage) &&
+              _currentRecommendationScope == command.recommendationScope;
+          if (!latest()) return;
+          final current = snapshot.currentEntry;
+          final scope = current?.context.recommendationScopeKey;
+          final index = _order.indexOf(_current ?? '');
+          if (scope == null || index < 0) return;
+          if (!command.exclude) {
+            _recommendationExclusions[scope]?.remove(command.ref.identityKey);
+            _publish();
+            return;
+          }
+          final total = _recommendationExclusions.values.fold(
+            0,
+            (sum, refs) => sum + refs.length,
+          );
+          if (total >= _maxRecommendationExclusions &&
+              !(_recommendationExclusions[scope]?.contains(
+                    command.ref.identityKey,
+                  ) ??
+                  false)) {
+            _closedRecommendationScopes.add(scope);
+          } else {
+            _recommendationExclusions
+                .putIfAbsent(scope, () => <String>{})
+                .add(command.ref.identityKey);
+          }
+          final future = _order.skip(index + 1).toSet();
+          final removed = _entries
+              .where(
+                (entry) =>
+                    future.contains(entry.entryId) &&
+                    entry.track.ref == command.ref &&
+                    entry.context.recommendationScopeKey == scope,
+              )
+              .map((entry) => entry.entryId)
+              .toSet();
+          _entries.removeWhere((entry) => removed.contains(entry.entryId));
+          _order.removeWhere(removed.contains);
+          _publish();
+          if (latest() &&
+              command.advanceEntryId != null &&
+              _current == command.advanceEntryId &&
+              _generation == command.advanceGeneration) {
+            ++_replacementIntent;
+            _naturalContinuation = null;
+            // Selection starts synchronously; provider preparation remains
+            // service-owned and must not delay preference ACK/clear delivery.
+            final advancing = _advance(completion: false);
+            final generation = _generation;
+            unawaited(
+              advancing.catchError((Object error) {
+                if (_valid(generation, command.fence)) {
+                  _fail(failure: error is AppFailure ? error : null);
+                }
+              }),
+            );
+          }
+        } finally {
+          if (_recommendationIntents[command.ref.identityKey] ==
+              recommendationIntent) {
+            _recommendationIntents.remove(command.ref.identityKey);
+          }
         }
       case PlayEntry():
         if (!_entries.any((e) => e.entryId == command.entryId)) {
@@ -592,6 +807,29 @@ final class QueueCoordinator implements PlaybackController {
       case Clear():
         break;
     }
+  }
+
+  String? get _currentRecommendationScope => _entries
+      .where((entry) => entry.entryId == _current)
+      .firstOrNull
+      ?.context
+      .recommendationScopeKey;
+
+  void _pruneExcludedFuture() {
+    final index = _order.indexOf(_current ?? '');
+    if (index < 0) return;
+    final admission = snapshot;
+    final future = _order.skip(index + 1).toSet();
+    final removed = _entries
+        .where(
+          (entry) =>
+              future.contains(entry.entryId) &&
+              !admission.allowsRecommendation(entry.track.ref, entry.context),
+        )
+        .map((entry) => entry.entryId)
+        .toSet();
+    _entries.removeWhere((entry) => removed.contains(entry.entryId));
+    _order.removeWhere(removed.contains);
   }
 
   Future<void> _select(
@@ -894,17 +1132,29 @@ final class QueueCoordinator implements PlaybackController {
   Future<void> _advance({required bool completion}) async {
     if (_current == null) return;
     final index = _order.indexOf(_current!);
-    if (completion && _repeat == QueueRepeat.one) {
+    final admission = snapshot;
+    final byId = {for (final entry in _entries) entry.entryId: entry};
+    bool allowed(String id) {
+      final entry = byId[id];
+      return entry != null &&
+          admission.allowsRecommendation(entry.track.ref, entry.context);
+    }
+
+    if (completion && _repeat == QueueRepeat.one && allowed(_current!)) {
       await _select(_current!);
       return;
     }
-    if (index + 1 < _order.length) {
-      await _select(_order[index + 1]);
+    final next = _order.skip(index + 1).where(allowed).firstOrNull;
+    if (next != null) {
+      await _select(next);
       return;
     }
     if (_repeat == QueueRepeat.all) {
-      await _select(_order.first);
-      return;
+      final first = _order.where(allowed).firstOrNull;
+      if (first != null) {
+        await _select(first);
+        return;
+      }
     }
     final allowContinuation =
         completion &&
@@ -1027,6 +1277,9 @@ final class QueueCoordinator implements PlaybackController {
     final resource = _resource;
     _resource = null;
     _entries = [];
+    _recommendationExclusions.clear();
+    _closedRecommendationScopes.clear();
+    _recommendationIntents.clear();
     _order = [];
     _current = null;
     _fence = null;

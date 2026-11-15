@@ -4,6 +4,7 @@ import '../core/model/owner_key.dart';
 import '../core/storage/music_codec.dart';
 import '../core/storage/owner_store.dart';
 import 'queue_snapshot.dart';
+import 'recommendation_queue_policy.dart';
 
 /// One service-owned writer, called directly by the ordered snapshot observer.
 /// Captures JSON before the first await and serializes save/load/clear in call
@@ -20,10 +21,12 @@ final class QueueSnapshotStore {
   static const maxPayloadBytes = 4 * 1024 * 1024;
   static const _namespace = 'queue';
   static const _key = 'snapshot';
+  static const _policyKey = 'recommendation-policy';
 
   /// Checkpoints portable metadata only. Failure never claims a durable save.
   Future<void> save(QueueSnapshot snapshot, SessionFence fence) {
     final Map<String, Object?> payload;
+    final Map<String, Object?>? policy;
     try {
       if (snapshot.fence != null && snapshot.fence != fence) {
         throw ArgumentError('Queue snapshot belongs to another session');
@@ -44,14 +47,19 @@ final class QueueSnapshotStore {
         'volume': snapshot.volume,
       };
       _decode(payload, fence);
+      policy = RecommendationQueuePolicy.encode(snapshot);
     } catch (error, stack) {
       return Future<void>.error(error, stack);
     }
     return _ordered(
-      () => _owners.transaction(
-        fence,
-        (tx) => tx.write(_namespace, _key, payload),
-      ),
+      () => _owners.transaction(fence, (tx) async {
+        await tx.write(_namespace, _key, payload);
+        if (policy == null) {
+          await tx.remove(_namespace, _policyKey);
+        } else {
+          await tx.write(_namespace, _policyKey, policy);
+        }
+      }),
     );
   }
 
@@ -70,8 +78,17 @@ final class QueueSnapshotStore {
         // Confine this catch to reading; admission errors still propagate.
         return null;
       }
+      if (payload == null) return null;
+      Object? policy;
       try {
-        return payload == null ? null : _decode(payload, fence);
+        policy = await tx.read(_namespace, _policyKey);
+      } on FormatException {
+        policy = const {'invalid': true};
+      } on ArgumentError {
+        policy = const {'invalid': true};
+      }
+      try {
+        return _decode(payload, fence, policy);
       } on FormatException {
         return null;
       }
@@ -79,7 +96,10 @@ final class QueueSnapshotStore {
   });
 
   Future<void> clear(SessionFence fence) => _ordered(
-    () => _owners.transaction(fence, (tx) => tx.remove(_namespace, _key)),
+    () => _owners.transaction(fence, (tx) async {
+      await tx.remove(_namespace, _key);
+      await tx.remove(_namespace, _policyKey);
+    }),
   );
 
   Future<T> _ordered<T>(Future<T> Function() operation) {
@@ -90,7 +110,11 @@ final class QueueSnapshotStore {
     return next;
   }
 
-  QueueSnapshot _decode(Map<String, Object?> row, SessionFence fence) {
+  QueueSnapshot _decode(
+    Map<String, Object?> row,
+    SessionFence fence, [
+    Object? policyRow,
+  ]) {
     const keys = {
       'version',
       'entries',
@@ -153,6 +177,7 @@ final class QueueSnapshotStore {
       _ => _invalid(),
     };
     if (utf8.encode(jsonEncode(row)).length > maxPayloadBytes) _invalid();
+    final policy = RecommendationQueuePolicy.decode(policyRow, entries);
     return QueueSnapshot(
       entries: entries,
       effectiveOrder: rawOrder.cast<String>(),
@@ -163,6 +188,8 @@ final class QueueSnapshotStore {
       shuffle: shuffle,
       repeat: repeat,
       volume: volume.toDouble(),
+      recommendationExclusions: policy.exclusions,
+      closedRecommendationScopes: policy.closedScopes,
       // Playback intent/resources/failure/generation deliberately use safe
       // defaults. Restored service admission belongs to the T04 command.
     );

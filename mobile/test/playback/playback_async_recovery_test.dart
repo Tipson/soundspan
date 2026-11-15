@@ -97,6 +97,7 @@ void main() {
           [waveEntry('fresh')],
           fence: captured.fence!,
           expectedLineage: captured.lineage,
+          automaticRecommendation: true,
         ),
       );
       await pumpEventQueue();
@@ -266,6 +267,7 @@ void main() {
           [waveEntry('fresh')],
           fence: captured.fence!,
           expectedLineage: captured.lineage,
+          automaticRecommendation: true,
         ),
       );
       expect(queue.snapshot.currentEntryId, 'fresh');
@@ -326,6 +328,7 @@ void main() {
             [waveEntry('fresh')],
             fence: captured.fence!,
             expectedLineage: captured.lineage,
+            automaticRecommendation: true,
           ),
         );
         expect(engine.plays, 1);
@@ -366,6 +369,7 @@ void main() {
         [waveEntry('fresh')],
         fence: fence,
         expectedLineage: queue.snapshot.lineage,
+        automaticRecommendation: true,
       ),
     );
     expect(engine.loaded, isEmpty);

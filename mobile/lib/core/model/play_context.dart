@@ -15,4 +15,15 @@ final class PlayContext {
   final WaveMode? waveMode;
   final String? recommendationGenerationId;
   final String? recommendationSessionId;
+
+  /// A Wave session spans page generations; other feeds use their generation.
+  String? get recommendationScopeKey {
+    final session = recommendationSessionId;
+    if (session != null && session.isNotEmpty) return 'session:$session';
+    final generation = recommendationGenerationId;
+    if (generation != null && generation.isNotEmpty) {
+      return 'generation:$generation';
+    }
+    return null;
+  }
 }

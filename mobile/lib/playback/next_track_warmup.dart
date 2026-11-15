@@ -47,13 +47,21 @@ final class NextTrackWarmup {
     final fence = state.fence;
     final index = state.effectiveOrder.indexOf(state.currentEntryId ?? '');
     final order = state.effectiveOrder;
+    final byId = {for (final entry in state.entries) entry.entryId: entry};
+    bool allowed(String id) {
+      final entry = byId[id];
+      return entry != null &&
+          entry.track.playable &&
+          state.allowsRecommendation(entry.track.ref, entry.context);
+    }
+
     final next =
         index < 0 || order.length < 2 || state.repeat == QueueRepeat.one
         ? null
-        : index + 1 < order.length
-        ? order[index + 1]
+        : order.skip(index + 1).where(allowed).firstOrNull != null
+        ? order.skip(index + 1).where(allowed).first
         : state.repeat == QueueRepeat.all
-        ? order.first
+        ? order.where(allowed).firstOrNull
         : null;
     final entry = state.entries.where((e) => e.entryId == next).firstOrNull;
     final _WarmKey? key =

@@ -613,6 +613,7 @@ final class MemoryOwnerStore implements OwnerStore {
   MemoryOwnerStore(this.active);
   SessionFence active;
   final records = <OwnerKey, Map<String, Object?>>{};
+  final policies = <OwnerKey, Map<String, Object?>>{};
   Completer<void>? _pause;
   Completer<void>? entered;
   Object? failure;
@@ -647,7 +648,7 @@ final class MemoryOwnerStore implements OwnerStore {
       final fail = failure;
       failure = null;
       if (fail != null) throw fail;
-      final transaction = _MemoryTransaction(records, fence.owner);
+      final transaction = _MemoryTransaction(records, policies, fence.owner);
       transaction.readFailure = readFailure;
       readFailure = null;
       return await operation(transaction);
@@ -658,12 +659,14 @@ final class MemoryOwnerStore implements OwnerStore {
 }
 
 final class _MemoryTransaction implements OwnerTransaction {
-  _MemoryTransaction(this.rows, this.owner);
+  _MemoryTransaction(this.rows, this.policies, this.owner);
   final Map<OwnerKey, Map<String, Object?>> rows;
+  final Map<OwnerKey, Map<String, Object?>> policies;
   final OwnerKey owner;
   Object? readFailure;
   void _scope(String namespace, String key) {
-    if (namespace != 'queue' || key != 'snapshot') {
+    if (namespace != 'queue' ||
+        (key != 'snapshot' && key != 'recommendation-policy')) {
       throw StateError('wrong durable namespace');
     }
   }
@@ -672,7 +675,7 @@ final class _MemoryTransaction implements OwnerTransaction {
   Future<Map<String, Object?>?> read(String namespace, String key) async {
     _scope(namespace, key);
     if (readFailure != null) throw readFailure!;
-    return rows[owner];
+    return (key == 'snapshot' ? rows : policies)[owner];
   }
 
   @override
@@ -682,13 +685,16 @@ final class _MemoryTransaction implements OwnerTransaction {
     Map<String, Object?> value,
   ) async {
     _scope(namespace, key);
-    rows[owner] = OwnerRecord(key: key, value: value).value;
+    (key == 'snapshot' ? rows : policies)[owner] = OwnerRecord(
+      key: key,
+      value: value,
+    ).value;
   }
 
   @override
   Future<void> remove(String namespace, String key) async {
     _scope(namespace, key);
-    rows.remove(owner);
+    (key == 'snapshot' ? rows : policies).remove(owner);
   }
 
   @override
