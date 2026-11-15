@@ -133,15 +133,13 @@ For features or fixes involving APIs, auth, routing/proxying, or external client
 
 If behavior differs between AIO and split deployments, call it out explicitly in the PR description and docs.
 
-## CI Quality Visibility (Non-Blocking by Default)
+## CI Quality Checks
 
-This repo now includes a dedicated **Quality Visibility** workflow:
+The **Quality Visibility** workflow (`.github/workflows/quality-visibility.yml`) runs blocking checks alongside configurable visibility jobs:
 
-- Workflow: `.github/workflows/quality-visibility.yml`
-- Purpose: give ongoing visibility into tests and coverage without blocking day-to-day development
-- Signals:
-    - Backend Jest test run + coverage summary + coverage artifact upload
-    - Frontend lint/build checks, targeted unit coverage, and component tests; frontend typecheck runs as a separate visibility job
+- Blocking jobs: **Backend Tests + Coverage**, **Backend Typecheck**, **Frontend Typecheck**, **Enforcement Gates**, **Enforcement Gates Build**, and **Python Quality**.
+- Visibility jobs: **Backend PostgreSQL Integration**, **Frontend Quality Visibility** (lint, build, targeted unit coverage, and component tests), **Python Sidecar Tests**, and **Helm Chart Visibility**. These jobs allow failures by default; `CI_NON_BLOCKING_TEST_VISIBILITY=false` makes them blocking.
+- Required status checks in branch protection are configured separately.
 
 ### Backend coverage artifacts
 
@@ -159,26 +157,18 @@ The workflow summary includes:
 - lowest-coverage files
 - zero-percent coverage file list
 
-### Current mode vs future gate mode
+### Backend coverage gate defaults
 
-By default this workflow is **non-blocking**.
+The backend coverage-summary gate is enabled by default (`CI_ENFORCE_TEST_GATE=true`). Repository variables override its thresholds:
 
-You can switch to stricter behavior with repository variables:
+| Repository variable | Default minimum |
+| --- | --- |
+| `COVERAGE_LINE_MIN` | 94% |
+| `COVERAGE_BRANCH_MIN` | 83% |
+| `COVERAGE_FUNCTION_MIN` | 93% |
+| `COVERAGE_STATEMENT_MIN` | 93% |
 
-- `CI_NON_BLOCKING_TEST_VISIBILITY=false` to make job failures blocking
-- `CI_ENFORCE_TEST_GATE=true` to enforce numeric coverage thresholds
-- Optional threshold vars:
-    - `COVERAGE_LINE_MIN`
-    - `COVERAGE_BRANCH_MIN`
-    - `COVERAGE_FUNCTION_MIN`
-    - `COVERAGE_STATEMENT_MIN`
-
-Recommended rollout:
-
-1. Keep visibility-only mode while stabilizing coverage.
-2. Set thresholds gradually.
-3. Make visibility workflow blocking.
-4. Add required status checks in branch protection for release branches/tags.
+`CI_ENFORCE_TEST_GATE=false` disables the summary threshold gate; backend test failures remain blocking. `CI_NON_BLOCKING_TEST_VISIBILITY` does not control the backend test job. `BACKEND_COVERAGE_MAX_WORKERS` defaults to `6`.
 
 ## AWM Repo Contract
 
