@@ -248,8 +248,8 @@ RUN npm run build
 # The entrypoint needs the Prisma CLI at runtime. Reclassify its already-locked
 # version before pruning, without resolving or importing a different release.
 RUN --mount=type=cache,id=soundspan-npm,target=/root/.npm,sharing=locked \
-    PRISMA_VERSION=$(node -p "require('./node_modules/prisma/package.json').version") && \
-    npm install --save-prod --save-exact --package-lock-only --ignore-scripts --offline --no-audit --no-fund prisma@"$PRISMA_VERSION" && \
+    node -e "const fs = require('node:fs'); const pkg = require('./package.json'); const lock = require('./package-lock.json'); const version = require('prisma/package.json').version; if (lock.packages['node_modules/prisma'].version !== version) throw new Error('Installed Prisma CLI differs from the lock'); pkg.dependencies.prisma = version; delete pkg.devDependencies.prisma; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 4) + '\n');" && \
+    npm install --package-lock-only --ignore-scripts --offline --no-audit --no-fund && \
     npm prune --omit=dev --offline --no-audit --no-fund && \
     node -e "const { Prisma } = require('@prisma/client'); const packageVersion = require('@prisma/client/package.json').version; if (Prisma.prismaVersion.client !== packageVersion) throw new Error('Prisma runtime and generated client versions differ'); const models = new Map(Prisma.dmmf.datamodel.models.map((model) => [model.name, model])); for (const name of ['RemotePreferenceIntent', 'SavedMusicEntity']) if (!models.has(name)) throw new Error('Generated Prisma client is missing ' + name); const play = models.get('Play'); for (const name of ['completionRatio', 'waveMode']) if (!play?.fields.some((field) => field.name === name)) throw new Error('Generated Prisma Play model is missing ' + name)"
 
