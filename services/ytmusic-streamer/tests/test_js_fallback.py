@@ -5,7 +5,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from types import ModuleType, SimpleNamespace
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from yt_dlp.utils import DownloadError
@@ -172,6 +172,10 @@ def test_cancelled_active_worker_retains_solver_slot_until_it_exits(fallback: Mo
             raise TimeoutError("test solver was not released")
         return "abandoned"
 
+    def replacement() -> str:
+        replacement_started.set()
+        return "replacement"
+
     with ThreadPoolExecutor(max_workers=2) as workers:
         first = workers.submit(
             fallback.run_with_js_fallback,
@@ -187,7 +191,7 @@ def test_cancelled_active_worker_retains_solver_slot_until_it_exits(fallback: Mo
             second = workers.submit(
                 fallback.run_with_js_fallback,
                 _primary_failure,
-                lambda: replacement_started.set() or "replacement",
+                replacement,
                 label="second",
                 deadline=time.monotonic() + 2,
                 priority=lambda: 2,
@@ -272,7 +276,7 @@ def test_stream_paths_use_exactly_one_opt_in_client_recovery(
         def __enter__(self) -> Any:
             return self
 
-        def __exit__(self, *_args: Any) -> bool:
+        def __exit__(self, *_args: Any) -> Literal[False]:
             return False
 
         def extract_info(self, _url: str, *, download: bool) -> dict[str, Any]:
@@ -321,7 +325,7 @@ def test_metadata_recovery_keeps_original_request_deadline(
         def __enter__(self) -> Any:
             return self
 
-        def __exit__(self, *_args: Any) -> bool:
+        def __exit__(self, *_args: Any) -> Literal[False]:
             return False
 
         def extract_info(self, *_args: Any, **_kwargs: Any) -> Any:

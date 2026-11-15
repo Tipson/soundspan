@@ -4,12 +4,15 @@ import queue
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, cast
 
 import pytest
 
 
 @pytest.mark.parametrize("fails", [False, True])
-def test_resolver_binds_priority_and_restores_thread_context(monkeypatch, fails):
+def test_resolver_binds_priority_and_restores_thread_context(
+    monkeypatch: pytest.MonkeyPatch, fails: bool
+) -> None:
     from types import SimpleNamespace
 
     import ytmusic_stream as stream
@@ -21,7 +24,7 @@ def test_resolver_binds_priority_and_restores_thread_context(monkeypatch, fails)
         startup_timing=SpoolStartupTiming(),
     )
 
-    def resolve(*_args):
+    def resolve(*_args: Any) -> dict[str, str]:
         assert stream._extract_pacer._priority()() == 2
         if fails:
             raise ValueError("controlled")
@@ -30,9 +33,13 @@ def test_resolver_binds_priority_and_restores_thread_context(monkeypatch, fails)
     monkeypatch.setattr(stream, "_get_stream_url_sync", resolve)
     if fails:
         with pytest.raises(ValueError):
-            stream._resolve_progressive_spool_plan_sync("test", "HIGH", session)
+            stream._resolve_progressive_spool_plan_sync(
+                "test", "HIGH", cast(stream._SpoolSession, session)
+            )
     else:
-        assert stream._resolve_progressive_spool_plan_sync("test", "HIGH", session)
+        assert stream._resolve_progressive_spool_plan_sync(
+            "test", "HIGH", cast(stream._SpoolSession, session)
+        )
     assert stream._extract_pacer._priority()() == 0
 
 

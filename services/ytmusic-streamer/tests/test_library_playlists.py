@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import gc
 import threading
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, cast
@@ -714,7 +714,12 @@ class TestLibraryPlaylists:
         monkeypatch.setattr(app, "BROWSE_TIMEOUT", 0.05)
         monkeypatch.setattr(app, "_LIBRARY_PLAYLIST_PROVIDER_TIMEOUT_GRACE_SECONDS", 0)
         loop.set_exception_handler(record_exception)
-        request = asyncio.create_task(library_playlist_provider_runner("owner", 10))
+        request = asyncio.create_task(
+            cast(
+                Coroutine[Any, Any, list[dict[str, Any]]],
+                library_playlist_provider_runner("owner", 10),
+            )
+        )
         try:
             await asyncio.wait_for(started.wait(), timeout=2)
             if abandonment == "cancel":

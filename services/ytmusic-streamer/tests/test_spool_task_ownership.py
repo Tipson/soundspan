@@ -6,10 +6,10 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Literal, cast
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from yt_dlp.utils import DownloadError
 
 
@@ -50,7 +50,7 @@ def actual_spool_downloader(monkeypatch: pytest.MonkeyPatch) -> Any:
     server_thread.start()
     local_url = f"http://127.0.0.1:{server.server_port}/audio.webm"
 
-    class LocalYoutubeIE(InfoExtractor):
+    class LocalYoutubeIE(InfoExtractor):  # type: ignore[misc,no-any-unimported]  # Upstream is untyped.
         IE_NAME = "youtube"
         _VALID_URL = r"https://music\.youtube\.com/watch\?v=(?P<id>[A-Za-z0-9_-]{11})"
 
@@ -104,7 +104,7 @@ def actual_spool_downloader(monkeypatch: pytest.MonkeyPatch) -> Any:
                 state.entered.set()
                 if not state.release.wait(timeout=3):
                     raise TimeoutError("loopback reader was not released")
-                result = original_read(*args, **kwargs)
+                result = cast(bytes, original_read(*args, **kwargs))
                 state.offset = state.body_at
                 return result
 
@@ -140,7 +140,7 @@ async def test_shared_actual_downloader_acquires_before_first_body_progress(
     state.recovery = recovery
 
     def now() -> float:
-        return time.monotonic() + state.offset
+        return time.monotonic() + cast(float, state.offset)
 
     monkeypatch.setattr(stream, "time", SimpleNamespace(**{**vars(time), "monotonic": now}))
     monkeypatch.setattr(fallback, "time", SimpleNamespace(monotonic=now))
@@ -165,7 +165,7 @@ async def test_shared_actual_downloader_acquires_before_first_body_progress(
         second_deadline = now() + stream.YTMUSIC_SPOOL_TIMEOUT
         second = asyncio.create_task(
             stream._await_spool_task_for_request(
-                key, task, ConnectedRequest(), deadline=second_deadline
+                key, task, cast(Request, ConnectedRequest()), deadline=second_deadline
             )
         )
         await asyncio.sleep(0)
@@ -206,7 +206,7 @@ def test_actual_late_metadata_does_not_start_any_transfer(
     state.release.set()
 
     def now() -> float:
-        return time.monotonic() + state.offset
+        return time.monotonic() + cast(float, state.offset)
 
     monkeypatch.setattr(stream, "time", SimpleNamespace(**{**vars(time), "monotonic": now}))
     monkeypatch.setattr(fallback, "time", SimpleNamespace(monotonic=now))
@@ -299,7 +299,9 @@ async def test_abandoned_spool_waiter_does_not_relog_owned_failure(abandonment: 
             assert expired.value.status_code == 504
         assert not owned.done()
         release.set()
-        assert await asyncio.gather(owned, return_exceptions=True) == [failure]
+        outcomes = await asyncio.gather(owned, return_exceptions=True)
+        assert len(outcomes) == 1
+        assert outcomes[0] is failure
         ready = asyncio.Event()
         loop.call_soon(ready.set)
         await ready.wait()
@@ -361,7 +363,7 @@ async def test_coalesced_spool_separates_acquisition_and_transfer_lifetimes(
     class Extractor:
         def __init__(self, options: dict[str, Any]) -> None:
             self.options = options
-            self.before_download = []
+            self.before_download: list[Any] = []
 
         def add_post_processor(self, processor: Any, *, when: str) -> None:
             assert when == "before_dl"
@@ -370,7 +372,7 @@ async def test_coalesced_spool_separates_acquisition_and_transfer_lifetimes(
         def __enter__(self) -> Any:
             return self
 
-        def __exit__(self, *_args: Any) -> bool:
+        def __exit__(self, *_args: Any) -> Literal[False]:
             return False
 
         def extract_info(self, _url: str, *, download: bool) -> dict[str, Any]:
@@ -416,7 +418,7 @@ async def test_coalesced_spool_separates_acquisition_and_transfer_lifetimes(
         second_deadline = now() + stream.YTMUSIC_SPOOL_TIMEOUT
         second = asyncio.create_task(
             stream._await_spool_task_for_request(
-                key, task, ConnectedRequest(), deadline=second_deadline
+                key, task, cast(Request, ConnectedRequest()), deadline=second_deadline
             )
         )
         await asyncio.sleep(0)

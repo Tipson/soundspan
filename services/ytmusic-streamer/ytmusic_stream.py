@@ -821,17 +821,18 @@ def _bind_spool_transfer_phase(ydl: Any, cancel_event: threading.Event | None) -
     """
     from yt_dlp.postprocessor import PostProcessor
 
-    phase = getattr(_spool_worker_context, "transfer_phase", None)
+    phase = cast(_SpoolTransferPhase | None, getattr(_spool_worker_context, "transfer_phase", None))
     if phase is None:
         return
+    active_phase: _SpoolTransferPhase = phase
 
-    class SpoolTransferPP(PostProcessor):
+    class SpoolTransferPP(PostProcessor):  # type: ignore[misc,no-any-unimported]  # Upstream is untyped.
         def run(self, information: JsonObject) -> tuple[list[str], JsonObject]:
             if cancel_event is not None and cancel_event.is_set():
                 raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
-            if time.monotonic() >= phase.acquisition_deadline:
+            if time.monotonic() >= active_phase.acquisition_deadline:
                 raise ExtractionAbandoned("Stream acquisition expired before download started")
-            phase.started.set()
+            active_phase.started.set()
             return [], information
 
     ydl.add_post_processor(SpoolTransferPP(), when="before_dl")
