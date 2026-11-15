@@ -287,8 +287,10 @@ async def test_remote_analysis_spool_does_not_claim_playback_priority(
             *,
             playback: bool = False,
             cancel_event: threading.Event | None = None,
+            deadline: float | None = None,
         ) -> Any:
             _ = cancel_event
+            assert deadline is not None
             priorities.append(playback)
             return operation()
 

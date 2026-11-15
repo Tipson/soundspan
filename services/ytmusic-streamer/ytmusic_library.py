@@ -143,14 +143,33 @@ async def shutdown_library_playlist_provider() -> None:
 async def _run_library_playlist_provider(user_id: str, limit: int) -> list[JsonObject]:
     """Await dedicated provider work while retaining timed-out executor jobs."""
     job = _submit_library_playlist_provider_job(user_id, limit)
+    waiter: _LibraryPlaylistProviderJob = asyncio.get_running_loop().create_future()
+
+    def forward_outcome(completed_job: _LibraryPlaylistProviderJob) -> None:
+        if waiter.done():
+            return
+        if completed_job.cancelled():
+            waiter.cancel()
+            return
+        error = completed_job.exception()
+        if error is not None:
+            waiter.set_exception(error)
+        else:
+            waiter.set_result(completed_job.result())
+
+    # Only the request's proxy is cancelled by its deadline. The registry owns
+    # the worker and observes its outcome even after every caller has left.
+    job.add_done_callback(forward_outcome)
     deadline = asyncio.timeout(BROWSE_TIMEOUT + _LIBRARY_PLAYLIST_PROVIDER_TIMEOUT_GRACE_SECONDS)
     try:
         async with deadline:
-            return await asyncio.shield(job)
+            return await waiter
     except TimeoutError as error:
         if deadline.expired():
             raise _LibraryPlaylistProviderDeadlineError from error
         raise
+    finally:
+        job.remove_done_callback(forward_outcome)
 
 
 async def _reserve_library_playlist_slot(

@@ -75,11 +75,11 @@ PROXY_AUDIO_FORMAT_SELECTORS = {
 # now PO-token-gated by YouTube and returns no usable progressive audio
 # formats for many videos, so the selectors above match nothing and yt-dlp
 # raises "Requested format is not available" (surfacing as a 502 on
-# /yt/info). "android_vr" and "android_music" still serve the DASH audio
-# formats anonymously; listing both lets yt-dlp fall through if one breaks.
+# /yt/info). "android_vr" serves DASH audio without a JavaScript player.
+# Keep names covered by the installed extractor's client-registry check.
 # NOTE: this is the regular-YouTube client. The music.youtube.com stream
 # paths manage their independently verified client set in ytmusic_stream.py.
-YT_PLAYER_CLIENTS = ["android_vr", "android_music"]
+YT_PLAYER_CLIENTS = ["android_vr"]
 
 
 class _WarningLogger(Protocol):
@@ -265,6 +265,7 @@ def build_audio_download_opts(
             "Referer": "https://www.youtube.com/",
         },
         "extractor_args": {"youtube": {"player_client": YT_PLAYER_CLIENTS}},
+        "js_runtimes": {},
     }
     if progress_hook is not None:
         options["progress_hooks"] = [progress_hook]

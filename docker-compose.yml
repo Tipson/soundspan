@@ -486,6 +486,7 @@ services:
             YTMUSIC_STREAM_CACHE_MAX: ${YTMUSIC_STREAM_CACHE_MAX:-1024}
             YTMUSIC_YTDLP_SOCKET_TIMEOUT: ${YTMUSIC_YTDLP_SOCKET_TIMEOUT:-20}
             YTMUSIC_YTDLP_EXTRACT_CONCURRENCY: ${YTMUSIC_YTDLP_EXTRACT_CONCURRENCY:-2}
+            YTMUSIC_JS_CLIENT_FALLBACK: ${YTMUSIC_JS_CLIENT_FALLBACK:-0}
         volumes:
             - ytmusic_data:/data
             # Shared with the backend (read-write) so YouTube URL downloads

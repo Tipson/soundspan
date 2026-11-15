@@ -514,7 +514,8 @@ def test_music_extraction_keeps_a_low_resolution_combined_fallback(
     options = stream_module._build_ytmusic_stream_options("HIGH")
 
     assert options["format"].endswith("/b[height<=360]/b")
-    assert options["extractor_args"]["youtube"]["player_client"] == ["default"]
+    assert options["extractor_args"]["youtube"]["player_client"] == ["default", "-tv_samsung"]
+    assert options["js_runtimes"] == {}
 
 
 def _mp4_box(kind: bytes, payload: bytes = b"") -> bytes:

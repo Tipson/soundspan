@@ -1,7 +1,7 @@
 fastapi>=0.141.1
 uvicorn>=0.52.4
 ytmusicapi>=1.12.2
-yt-dlp[default]>=2026.8.19
+yt-dlp[default]>=2026.10.26
 # The Brotli decoder security fix is required even when yt-dlp accepts an older extra.
 brotli>=1.2.1
 # Exclude the compromised emSign root from the CA bundle used by HTTP clients.

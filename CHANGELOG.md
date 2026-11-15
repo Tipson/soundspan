@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Keep ordinary YouTube extraction free of JavaScript solvers. Offer an opt-in, single-slot recovery that preserves extraction priority, cancellation and worker leases; retain a started transfer beyond its acquisition window and refuse recovery for terminal delivery failures.
 - Correlate Play and engagement requests across native dispatch, the streaming proxy and API stages. Distinguish cancellation, an uncertain write, a confirmed commit and late completion; keep incident evidence visible at the default production log level without recording user or track identifiers in metrics.
 - Open background queues from Admin with short, dashboard-only browser access. Require current administrator rights and live shared-state grants, revoke scoped access on identified logout or account switch, and preserve ordinary web and native authentication.
 - Use patched Node 24.22.3, Next 16.4.6, sharp 0.35.5, Brotli 1.2.1 and certifi runtimes. Keep AIO application dependencies tied to this checkout's lockfiles instead of replacing them with an older release tree.

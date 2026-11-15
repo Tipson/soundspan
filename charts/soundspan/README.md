@@ -329,6 +329,8 @@ runtime uses `2`). It bounds combined playback and metadata extraction. Increase
 concurrency only with a measured memory budget; quality-badge reads use cached
 download metadata and do not launch additional extraction.
 
+`ytmusicStreamer.env.YTMUSIC_JS_CLIENT_FALLBACK` defaults to `null`, which omits the variable and leaves the code default disabled. Set it to `"1"` to opt into the bounded JavaScript-client recovery described above. The template's existing environment-map rendering handles explicit values; no new render path is required.
+
 When `ytmusicStreamer.enabled` is true, the streamer pod also mounts the
 chart's music volume at `/music` (controlled by
 `ytmusicStreamer.musicMount.enabled`, default `true`). This is required for

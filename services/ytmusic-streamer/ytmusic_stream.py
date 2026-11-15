@@ -33,6 +33,7 @@ from yt_download import (
 )
 from ytmusic_client import _get_ytmusic
 from ytmusic_extraction_budget import ExtractionAbandoned, ExtractionBudget
+from ytmusic_js_fallback import SpoolLimitExceeded, javascript_options, run_with_js_fallback
 from ytmusic_po_fallback import FallbackDeferred, PoFallback, primary_options, token_options
 from ytmusic_priority_pacer import PriorityRatePacer
 from ytmusic_runtime import (
@@ -190,7 +191,14 @@ _spool_worker_context: threading.local = threading.local()
 
 
 def _pacing_cancelled() -> bool:
-    """Read cancellation only from the calling extraction thread's session."""
+    """Read cancellation and absolute deadlines from the calling worker's owner."""
+    metadata_cancel = getattr(_metadata_worker_context, "cancelled", None)
+    if metadata_cancel is not None and metadata_cancel.is_set():
+        return True
+    for context in (_metadata_worker_context, _spool_worker_context):
+        deadline = getattr(context, "deadline", None)
+        if isinstance(deadline, (int, float)) and time.monotonic() >= deadline:
+            return True
     session = getattr(_spool_worker_context, "session", None)
     return bool(session is not None and session.cancel_event.is_set())
 
@@ -200,6 +208,15 @@ _provider_challenge_cooldown_until = 0.0
 _provider_challenge_failures = 0
 _po_fallback = PoFallback()
 _metadata_worker_context = threading.local()
+
+
+@dataclass
+class _SpoolTransferPhase:
+    """Keep one worker's fixed acquisition and transfer bounds across joined callers."""
+
+    acquisition_deadline: float
+    started: threading.Event
+    download_deadline: float | None = None
 
 
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -228,7 +245,7 @@ _PERMANENT_UNAVAILABLE_PATTERNS = (
 # their format tables; yt-dlp can then select an android_vr URL that resolves
 # successfully but returns HTTP 403 when its bytes are downloaded. The default
 # client produced a complete spool for the same production track.
-_YTMUSIC_PLAYER_CLIENTS = ["default"]
+_YTMUSIC_PLAYER_CLIENTS = ["default", "-tv_samsung"]
 # Keep per-track fragment fan-out modest while shortening complete-file spool time.
 _SPOOL_FRAGMENT_CONCURRENCY = 4
 _SPOOL_QUALITY_ALTERNATION = "|".join(
@@ -773,6 +790,53 @@ def _extract_with_manifest_fallback(ydl: Any, url: str, options: JsonObject) -> 
         return fallback.extract_info(url, download=False)
 
 
+def _owned_extraction_deadline(*, download: bool) -> float:
+    """Reuse the worker owner's absolute deadline across all recovery attempts."""
+    for context in (_metadata_worker_context, _spool_worker_context):
+        deadline = getattr(context, "deadline", None)
+        if isinstance(deadline, (int, float)):
+            return deadline
+    return time.monotonic() + (YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT if download else EXTRACT_TIMEOUT)
+
+
+def _begin_spool_download_attempt() -> None:
+    """A new ordinary/PO/JS attempt must still fit the original acquisition window."""
+    phase = getattr(_spool_worker_context, "transfer_phase", None)
+    if phase is not None:
+        phase.started.clear()
+    deadline = (
+        phase.acquisition_deadline
+        if phase is not None
+        else _owned_extraction_deadline(download=True)
+    )
+    if time.monotonic() >= deadline:
+        raise ExtractionAbandoned("Stream extraction deadline exceeded")
+
+
+def _bind_spool_transfer_phase(ydl: Any, cancel_event: threading.Event | None) -> None:
+    """Enter transfer at yt-dlp's before_dl stage, after bounded metadata work.
+
+    A downloader progress callback follows its first body read, which may cross
+    the acquisition deadline while staying within socket/download limits.
+    """
+    from yt_dlp.postprocessor import PostProcessor
+
+    phase = getattr(_spool_worker_context, "transfer_phase", None)
+    if phase is None:
+        return
+
+    class SpoolTransferPP(PostProcessor):
+        def run(self, information: JsonObject) -> tuple[list[str], JsonObject]:
+            if cancel_event is not None and cancel_event.is_set():
+                raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+            if time.monotonic() >= phase.acquisition_deadline:
+                raise ExtractionAbandoned("Stream acquisition expired before download started")
+            phase.started.set()
+            return [], information
+
+    ydl.add_post_processor(SpoolTransferPP(), when="before_dl")
+
+
 def _extract_with_po_fallback(
     operation: Callable[[], T],
     url: str,
@@ -781,39 +845,137 @@ def _extract_with_po_fallback(
     *,
     download: bool,
     cancel_event: threading.Event | None = None,
+    deadline: float | None = None,
+    check_result: Callable[[], None] | None = None,
 ) -> T:
     """Keep the optional single PO probe within existing deadlines and worker slots."""
     import yt_dlp
 
-    deadline = time.monotonic() + (YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT if download else EXTRACT_TIMEOUT)
+    if deadline is None:
+        deadline = _owned_extraction_deadline(download=download)
+    completed = False
 
     def check() -> None:
+        if completed and check_result is not None:
+            check_result()
+            return
+        if time.monotonic() >= deadline:
+            raise ExtractionAbandoned("Stream extraction deadline exceeded")
+        metadata_cancel = getattr(_metadata_worker_context, "cancelled", None)
+        if metadata_cancel is not None and metadata_cancel.is_set():
+            raise ExtractionAbandoned("Stream extraction request was abandoned")
         if (cancel_event is not None and cancel_event.is_set()) or _pacing_cancelled():
             raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
-        metadata_cancel = getattr(_metadata_worker_context, "cancelled", None)
-        if (
-            metadata_cancel is not None and metadata_cancel.is_set()
-        ) or time.monotonic() >= deadline:
-            raise ExtractionAbandoned("Stream extraction deadline exceeded")
+
+    def primary() -> T:
+        nonlocal completed
+        check()
+        result = operation()
+        completed = True
+        return result
 
     def probe() -> T:
+        nonlocal completed
+        completed = False
+        if download:
+            _begin_spool_download_attempt()
         _wait_for_provider(video_id)
         check()
         log.info("Trying one anonymous PO recovery for %s", video_id)
         with yt_dlp.YoutubeDL(token_options(options)) as fallback:
+            if download:
+                _bind_spool_transfer_phase(fallback, cancel_event)
             result = fallback.extract_info(url, download=download)
-        check()
         if not result:
             raise ValueError("Empty PO recovery result")
+        completed = True
+        check()
         log.info("Anonymous PO extraction recovered for %s", video_id)
         return cast(T, result)
 
     try:
-        result = _po_fallback.run(operation, probe, check=check)
+        result = _po_fallback.run(primary, probe, check=check)
         check()
         return result
     except FallbackDeferred as error:
         raise _provider_challenge_http_error(video_id, error.retry_after) from None
+
+
+def _extract_with_client_recovery(
+    operation: Callable[[], T],
+    url: str,
+    options: JsonObject,
+    video_id: str,
+    *,
+    download: bool,
+    cancel_event: threading.Event | None = None,
+) -> T:
+    """Keep PO and one opt-in solver recovery within the actual worker's lease."""
+    import yt_dlp
+
+    deadline = _owned_extraction_deadline(download=download)
+    session = getattr(_spool_worker_context, "session", None)
+    cancelled = cancel_event or getattr(_metadata_worker_context, "cancelled", None)
+    if cancelled is None and session is not None:
+        cancelled = session.cancel_event
+
+    def check() -> None:
+        if time.monotonic() >= deadline:
+            raise ExtractionAbandoned("Stream extraction deadline exceeded")
+        if (cancelled is not None and cancelled.is_set()) or _pacing_cancelled():
+            if download:
+                raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+            raise ExtractionAbandoned("Stream extraction request was abandoned")
+
+    def check_completed() -> None:
+        phase = getattr(_spool_worker_context, "transfer_phase", None)
+        if download and phase is not None and phase.started.is_set():
+            if cancelled is not None and cancelled.is_set():
+                raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+            if phase.download_deadline is None:
+                check()
+                return
+            if time.monotonic() > phase.download_deadline:
+                raise SpoolLimitExceeded("YouTube Music spool download timeout exceeded")
+            return
+        check()
+
+    def recover() -> T:
+        if download:
+            _begin_spool_download_attempt()
+        _wait_for_provider(video_id)
+        check()
+        with yt_dlp.YoutubeDL(javascript_options(options, spool=download)) as fallback:
+            if download:
+                _bind_spool_transfer_phase(fallback, cancelled)
+            result = fallback.extract_info(url, download=download)
+        if not result:
+            raise ValueError("Empty JavaScript recovery result")
+        return cast(T, result)
+
+    return run_with_js_fallback(
+        lambda: _extract_with_po_fallback(
+            operation,
+            url,
+            options,
+            video_id,
+            download=download,
+            cancel_event=cancel_event,
+            deadline=deadline,
+            check_result=check_completed,
+        ),
+        recover,
+        label=video_id,
+        deadline=deadline,
+        cancel_event=cancelled,
+        priority=(
+            session.current_priority
+            if session is not None
+            else getattr(_spool_worker_context, "priority", None)
+        ),
+        check=check,
+        check_result=check_completed,
+    )
 
 
 def _extract_stream_info(
@@ -855,7 +1017,7 @@ def _extract_stream_info(
                     )
                 return _extract_with_manifest_fallback(ydl, url, ydl_opts)
 
-            info = _extract_with_po_fallback(primary, url, ydl_opts, video_id, download=False)
+            info = _extract_with_client_recovery(primary, url, ydl_opts, video_id, download=False)
             if not info:
                 raise ValueError("No info extracted")
             selected = _selected_audio_stream(cast(JsonObject, info))
@@ -956,6 +1118,7 @@ def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> JsonObject:
             "Referer": "https://www.youtube.com/",
         },
         "extractor_args": {"youtube": {"player_client": YT_PLAYER_CLIENTS}},
+        "js_runtimes": {},
     }
     return _extract_stream_info(
         f"yt:{video_id}:{quality}",
@@ -988,6 +1151,7 @@ def _build_ytmusic_stream_options(quality: str) -> JsonObject:
         "quiet": True,
         "no_warnings": True,
         "extract_flat": False,
+        "js_runtimes": {},
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
         "http_headers": {
             "User-Agent": _USER_AGENT,
@@ -1026,20 +1190,23 @@ async def _extract_yt_dlp_bounded(
     if not _metadata_admission.acquire(blocking=False):
         raise HTTPException(status_code=503, detail="YouTube metadata queue is full")
     cancelled = threading.Event()
+    deadline = time.monotonic() + EXTRACT_TIMEOUT
 
     def operation() -> JsonObject:
         _metadata_worker_context.cancelled = cancelled
+        _metadata_worker_context.deadline = deadline
         try:
             return func(*args)
         finally:
             _metadata_worker_context.cancelled = None
+            _metadata_worker_context.deadline = None
 
     try:
         worker = _yt_dlp_extract_executor.submit(
             _extraction_budget.run,
             operation,
             cancel_event=cancelled,
-            deadline=time.monotonic() + EXTRACT_TIMEOUT,
+            deadline=deadline,
         )
     except BaseException:
         _metadata_admission.release()
@@ -1812,6 +1979,9 @@ def _build_spool_progress_hook(
     progress events. ``socket_timeout`` bounds individual stalled reads during
     extraction and download.
     """
+    phase = getattr(_spool_worker_context, "transfer_phase", None)
+    if phase is not None and phase.download_deadline is None:
+        phase.download_deadline = started_at + YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT
 
     def enforce_spool_limits(status: JsonObject) -> None:
         if cancel_event is not None and cancel_event.is_set():
@@ -1819,11 +1989,11 @@ def _build_spool_progress_hook(
         downloaded_bytes = status.get("downloaded_bytes", 0)
         byte_limit = _spool_track_byte_limit()
         if isinstance(downloaded_bytes, int) and downloaded_bytes > byte_limit:
-            raise RuntimeError(
+            raise SpoolLimitExceeded(
                 f"YouTube Music spool downloaded bytes exceeded {byte_limit} byte limit"
             )
         if time.monotonic() - started_at > YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT:
-            raise RuntimeError(
+            raise SpoolLimitExceeded(
                 "YouTube Music spool download timeout exceeded "
                 f"{YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT:g} seconds"
             )
@@ -1863,7 +2033,7 @@ def _build_ytmusic_spool_options(
                 "player_client": _YTMUSIC_PLAYER_CLIENTS,
             },
         },
-        "js_runtimes": {"deno": {}},
+        "js_runtimes": {},
     }
 
 
@@ -1890,7 +2060,7 @@ def _extract_spool_with_retry(
 ) -> JsonObject:
     """Wrap the format retry with at most one challenge recovery, not nested retries."""
     options = primary_options(options)
-    return _extract_with_po_fallback(
+    return _extract_with_client_recovery(
         lambda: _extract_spool_format_retry(video_id, options, cancel_event),
         f"https://music.youtube.com/watch?v={video_id}",
         options,
@@ -1909,8 +2079,10 @@ def _extract_spool_format_retry(
     for attempt in range(2):
         if cancel_event is not None and cancel_event.is_set():
             raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+        _begin_spool_download_attempt()
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
+                _bind_spool_transfer_phase(ydl, cancel_event)
                 info = ydl.extract_info(
                     f"https://music.youtube.com/watch?v={video_id}", download=True
                 )
@@ -2013,6 +2185,11 @@ def _run_spool_download_sync(
 ) -> tuple[str, str]:
     """Bind one event-loop session to its executor thread without changing writers."""
     _spool_worker_context.session = session
+    previous_phase = getattr(_spool_worker_context, "transfer_phase", None)
+    _spool_worker_context.transfer_phase = _SpoolTransferPhase(
+        acquisition_deadline=_owned_extraction_deadline(download=True),
+        started=threading.Event(),
+    )
     try:
         if progressive_plan is not None or progressive_only:
             return _download_ytmusic_spool_sync(
@@ -2023,6 +2200,7 @@ def _run_spool_download_sync(
             )
         return _download_ytmusic_spool_sync(video_id, quality)
     finally:
+        _spool_worker_context.transfer_phase = previous_phase
         with suppress(AttributeError):
             del _spool_worker_context.session
 
@@ -2038,21 +2216,32 @@ async def _download_ytmusic_spool_bounded(
     loop = asyncio.get_running_loop()
     cancel_event = _spool_cancel_events.get(f"{video_id}:{quality}")
     priority = session.current_priority if session is not None else None
+    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
 
     def run_extraction(
         operation: Callable[[], tuple[str, str] | _ProgressiveSpoolPlan | None],
     ) -> Any:
-        if priority is None:
+        previous_deadline = getattr(_spool_worker_context, "deadline", None)
+        previous_priority = getattr(_spool_worker_context, "priority", None)
+        _spool_worker_context.deadline = deadline
+        _spool_worker_context.priority = priority or (lambda: 2 if playback else 0)
+        try:
+            if priority is None:
+                return _extraction_budget.run(
+                    operation,
+                    playback=playback,
+                    cancel_event=cancel_event,
+                    deadline=deadline,
+                )
             return _extraction_budget.run(
                 operation,
-                playback=playback,
                 cancel_event=cancel_event,
+                deadline=deadline,
+                priority=_spool_worker_context.priority,
             )
-        return _extraction_budget.run(
-            operation,
-            cancel_event=cancel_event,
-            priority=priority,
-        )
+        finally:
+            _spool_worker_context.deadline = previous_deadline
+            _spool_worker_context.priority = previous_priority
 
     async def resolve_progressive_plan(
         active_session: _SpoolSession,
@@ -2130,6 +2319,8 @@ async def _download_ytmusic_spool_bounded(
             ),
         )
     except (ExtractionAbandoned, _SpoolDownloadCancelled) as error:
+        if (cancel_event is None or not cancel_event.is_set()) and time.monotonic() >= deadline:
+            raise HTTPException(status_code=504, detail="Stream extraction timed out") from error
         raise HTTPException(status_code=499, detail="Client disconnected") from error
 
 
@@ -2320,11 +2511,28 @@ async def _await_spool_task(
     task: asyncio.Task[tuple[str, str]], *, deadline: float | None = None
 ) -> tuple[str, str]:
     """Await one shared spool task without allowing a waiter to cancel it."""
+    waiter: asyncio.Future[tuple[str, str]] = asyncio.get_running_loop().create_future()
+
+    def forward_outcome(completed: asyncio.Task[tuple[str, str]]) -> None:
+        if waiter.done():
+            return
+        if completed.cancelled():
+            waiter.cancel()
+            return
+        error = completed.exception()
+        if error is not None:
+            waiter.set_exception(error)
+        else:
+            waiter.set_result(completed.result())
+
+    task.add_done_callback(forward_outcome)
     try:
         timeout = YTMUSIC_SPOOL_TIMEOUT if deadline is None else max(0, deadline - time.monotonic())
-        return await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+        return await asyncio.wait_for(waiter, timeout=timeout)
     except TimeoutError as error:
         raise HTTPException(status_code=504, detail="YouTube Music spool timed out") from error
+    finally:
+        task.remove_done_callback(forward_outcome)
 
 
 async def _await_spool_task_for_request(
@@ -2910,6 +3118,7 @@ async def yt_video_info(url: str = Query(...)) -> JsonObject:
         "no_warnings": True,
         "extract_flat": False,
         "skip_download": True,
+        "js_runtimes": {},
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
         "http_headers": {
             "User-Agent": _USER_AGENT,
@@ -3006,6 +3215,7 @@ async def yt_playlist_info(url: str = Query(...)) -> JsonObject:
         "no_warnings": True,
         "extract_flat": "in_playlist",
         "skip_download": True,
+        "js_runtimes": {},
         "playlistend": YT_PLAYLIST_MAX_ENTRIES + 1,
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
         "http_headers": {

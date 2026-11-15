@@ -129,6 +129,8 @@ def test_public_bootstrap_always_closes_its_scoped_client(monkeypatch, fails):
 def test_capture_is_instance_local_and_only_success_is_retained(monkeypatch):
     import ytmusic_anonymous_context as module
 
+    # Exercise the reviewed legacy branch; upgraded runtimes keep the ordinary path.
+    monkeypatch.setattr(module, "__version__", "2026.08.19")
     context = module.VisitorContext()
     monkeypatch.setattr(module, "_context", context)
     options = {"quiet": True, "format": "ba/bestaudio/b[height<=360]/b"}
@@ -145,7 +147,7 @@ def test_capture_is_instance_local_and_only_success_is_retained(monkeypatch):
         assert not isinstance(separate.get_info_extractor("Youtube"), module._CapturingYoutubeIE)
 
 
-@pytest.mark.parametrize("boundary", ["account", "version"])
+@pytest.mark.parametrize("boundary", ["account", "version", "upgraded-runtime"])
 def test_account_and_unknown_version_use_only_ordinary_path(monkeypatch, boundary):
     import ytmusic_anonymous_context as module
 
@@ -154,6 +156,9 @@ def test_account_and_unknown_version_use_only_ordinary_path(monkeypatch, boundar
     monkeypatch.setattr(module, "_context", context)
     if boundary == "version":
         monkeypatch.setattr(module, "__version__", "unknown")
+    elif boundary == "account":
+        # Isolate the account guard from the independent version guard.
+        monkeypatch.setattr(module, "__version__", "2026.08.19")
     options = {"quiet": True, "format": "ba[abr<=256]/ba/b[height<=360]/b"}
     with yt_dlp.YoutubeDL(options) as ydl:
         if boundary == "account":
@@ -219,6 +224,8 @@ def test_audio_extractor_omits_caption_work_without_altering_audio(monkeypatch):
 def test_fast_context_lookup_keeps_original_fallback(monkeypatch, mode):
     import ytmusic_anonymous_context as module
 
+    # The private fast path is intentionally limited to this reviewed release.
+    monkeypatch.setattr(module, "__version__", "2026.08.19")
     context = module.VisitorContext()
     if not mode.startswith("bootstrap"):
         context.put("anonymous-only")

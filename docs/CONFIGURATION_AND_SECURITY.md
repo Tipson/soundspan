@@ -209,6 +209,10 @@ See the [`OIDC_SSO.md` topology matrix](OIDC_SSO.md#deployment-topology) for sup
 - Credentials are only decrypted for active sidecar operations
 - TIDAL tokens are refreshed automatically and re-encrypted when needed
 
+YouTube Music extraction keeps JavaScript runtimes disabled on the ordinary path and excludes `tv_samsung`. `YTMUSIC_JS_CLIENT_FALLBACK=1` opts into one JavaScript-player recovery for an eligible extraction failure. The recovery requires the packaged Deno/EJS runtime and runs under one process-wide solver slot. Metadata, new ordinary/PO/JS attempts and slot admission share the original acquisition deadline; joined callers never renew it. A transfer already started within that window retains its own fixed download-progress budget and cancellation checks, while each caller keeps its own lease deadline. Current playback has priority over preload and background work. The solver slot remains occupied until its actual worker exits, even if the HTTP caller has stopped waiting. Slot admission waits at most 15 seconds. Leave the flag disabled until memory and real play/next/seek behavior have been measured on the intended deployment.
+
+The acquisition boundary is the downloader's `before_dl` stage, after metadata processing and before media transfer. Its first progress event follows a body read and does not determine whether acquisition finished in time. Typed yt-dlp request failures and flattened HTTP 4xx/5xx failures are terminal for JavaScript recovery.
+
 ## Federation Credential Security
 
 - Instance links use dedicated `Authorization: Bearer` credentials. They do not reuse user JWTs or API keys and never establish a user identity on the host.

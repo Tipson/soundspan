@@ -676,6 +676,99 @@ class TestLibraryPlaylists:
             executor.shutdown()
 
     @pytest.mark.anyio
+    @pytest.mark.parametrize("abandonment", ["timeout", "cancel"])
+    async def test_late_provider_failure_is_owned_after_request_abandonment(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        library_playlist_provider_runner: Callable[[str, int], Awaitable[list[dict[str, Any]]]],
+        abandonment: str,
+    ) -> None:
+        """Abandoned requests retain admission until real work and its outcome settle."""
+        import app
+
+        loop = asyncio.get_running_loop()
+        started = asyncio.Event()
+        settled = asyncio.Event()
+        release = threading.Event()
+        executor = _CapturingThreadPoolExecutor(1, "test-late-library-provider")
+        original_handler = loop.get_exception_handler()
+        exception_contexts: list[dict[str, Any]] = []
+
+        def record_exception(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
+            exception_contexts.append(context)
+            if original_handler is None:
+                loop.default_exception_handler(context)
+            else:
+                original_handler(loop, context)
+
+        def blocked_provider(_user_id: str, _limit: int) -> list[dict[str, Any]]:
+            loop.call_soon_threadsafe(started.set)
+            _wake_event_loop(loop)
+            if not release.wait(timeout=2):
+                raise TimeoutError("test worker was not released")
+            raise RuntimeError("owned late provider failure")
+
+        monkeypatch.setattr(app, "_library_playlist_provider_executor", executor)
+        monkeypatch.setattr(app, "_call_library_playlist_provider", blocked_provider)
+        monkeypatch.setattr(app, "LIBRARY_PLAYLIST_PROVIDER_CONCURRENCY", 1)
+        monkeypatch.setattr(app, "BROWSE_TIMEOUT", 0.05)
+        monkeypatch.setattr(app, "_LIBRARY_PLAYLIST_PROVIDER_TIMEOUT_GRACE_SECONDS", 0)
+        loop.set_exception_handler(record_exception)
+        request = asyncio.create_task(library_playlist_provider_runner("owner", 10))
+        try:
+            await asyncio.wait_for(started.wait(), timeout=2)
+            if abandonment == "cancel":
+                request.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await request
+            else:
+                with pytest.raises(TimeoutError):
+                    await request
+            await _wait_for_ready_queue_turn()
+            assert len(app._library_playlist_provider_jobs) == 1
+            with pytest.raises(HTTPException) as saturated:
+                await library_playlist_provider_runner("overflow", 10)
+            assert saturated.value.status_code == 503
+            assert len(executor.jobs) == 1
+
+            job = next(iter(app._library_playlist_provider_jobs))
+            job.add_done_callback(lambda _job: settled.set())
+            executor.wake_job_on_completion(loop, 0)
+            release.set()
+            await asyncio.wait_for(settled.wait(), timeout=2)
+            await _wait_for_ready_queue_turn()
+            assert app._library_playlist_provider_jobs == set()
+            assert exception_contexts == []
+        finally:
+            release.set()
+            if not request.done():
+                request.cancel()
+            await asyncio.gather(request, return_exceptions=True)
+            executor.shutdown()
+            loop.set_exception_handler(original_handler)
+
+    @pytest.mark.anyio
+    async def test_provider_exception_reaches_its_active_caller(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        library_playlist_provider_runner: Callable[[str, int], Awaitable[list[dict[str, Any]]]],
+    ) -> None:
+        """Observing a registry-owned outcome must not swallow the caller's exception."""
+        import app
+
+        failure = RuntimeError("active provider failure")
+
+        def fail_provider(_user_id: str, _limit: int) -> list[dict[str, Any]]:
+            raise failure
+
+        monkeypatch.setattr(app, "_call_library_playlist_provider", fail_provider)
+        with pytest.raises(RuntimeError) as received:
+            await library_playlist_provider_runner("owner", 10)
+        assert received.value is failure
+        await _wait_for_ready_queue_turn()
+        assert app._library_playlist_provider_jobs == set()
+
+    @pytest.mark.anyio
     async def test_shutdown_drains_blocked_provider_and_rejects_new_admission(
         self,
         monkeypatch: pytest.MonkeyPatch,

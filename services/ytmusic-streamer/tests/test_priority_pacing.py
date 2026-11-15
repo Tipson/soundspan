@@ -2,6 +2,7 @@
 
 import queue
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -33,6 +34,24 @@ def test_resolver_binds_priority_and_restores_thread_context(monkeypatch, fails)
     else:
         assert stream._resolve_progressive_spool_plan_sync("test", "HIGH", session)
     assert stream._extract_pacer._priority()() == 0
+
+
+@pytest.mark.parametrize("reason", ["cancel", "deadline"])
+def test_metadata_owner_abandonment_stops_real_pacing(monkeypatch, reason):
+    """An abandoned metadata worker must not consume the next paced provider request."""
+    import ytmusic_stream as stream
+    from ytmusic_extraction_budget import ExtractionAbandoned
+
+    if reason == "cancel":
+        cancelled = threading.Event()
+        cancelled.set()
+        monkeypatch.setattr(stream._metadata_worker_context, "cancelled", cancelled, raising=False)
+    else:
+        monkeypatch.setattr(
+            stream._metadata_worker_context, "deadline", time.monotonic() - 1, raising=False
+        )
+    with pytest.raises(ExtractionAbandoned):
+        stream._extract_pacer.wait()
 
 
 @pytest.mark.parametrize("reason", ["cancel", "deadline"])
