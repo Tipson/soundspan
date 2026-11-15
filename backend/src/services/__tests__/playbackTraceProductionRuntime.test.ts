@@ -39,8 +39,14 @@ describe("play request evidence with production logging", () => {
         expect(info).not.toHaveBeenCalled();
         expect(warn).toHaveBeenCalledTimes(2);
         expect(warn.mock.calls.map((args) => args[2])).toEqual([
-            expect.objectContaining({ outcome: "cancelled", writeState: "inflight" }),
-            expect.objectContaining({ outcome: "late_success", writeState: "committed" }),
+            expect.objectContaining({
+                outcome: "cancelled",
+                writeState: "inflight",
+            }),
+            expect.objectContaining({
+                outcome: "late_success",
+                writeState: "committed",
+            }),
         ]);
     });
 

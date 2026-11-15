@@ -954,9 +954,10 @@ test("single-track actions can protect an automatic ready copy", async () => {
             ) as HTMLButtonElement
         ).click(),
     );
-    const keep = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button')].find(
-        (button) =>
-            button.textContent?.includes("Сохранить на этом устройстве"),
+    const keep = [
+        ...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button'),
+    ].find((button) =>
+        button.textContent?.includes("Сохранить на этом устройстве"),
     ) as HTMLButtonElement;
     assert.ok(keep);
     assert.equal(keep.disabled, false);

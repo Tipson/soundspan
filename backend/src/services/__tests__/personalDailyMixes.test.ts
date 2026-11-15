@@ -646,42 +646,47 @@ describe("PersonalDailyMixService", () => {
         [" Ibrahim Maalouf ", "IBRAHIM MAALOUF"],
         ["Ibrahim\t Maalouf", "Ibrahim Maalouf"],
         ["Ｉｂｒａｈｉｍ Ｍａａｌｏｕｆ", "Ibrahim Maalouf"],
-    ])("combines two distinct current dislikes for equivalent artist credits %p / %p", async (firstArtist, secondArtist) => {
-        jest.mocked(prisma.dislikedEntity.findMany).mockResolvedValueOnce([
-            { entityId: "yt:first" },
-            { entityId: "yt:second" },
-            { entityId: "yt:single" },
-            { entityId: "yt:duplicate" },
-        ] as never);
-        jest.mocked(prisma.trackYtMusic.findMany).mockResolvedValueOnce([
-            { videoId: "first", artist: firstArtist },
-            { videoId: "second", artist: secondArtist },
-            { videoId: "single", artist: "Single Artist" },
-            { videoId: "duplicate", artist: "Single Artist" },
-            { videoId: "duplicate", artist: "Single Artist" },
-        ] as never);
-        const liveDependencies = (
-            personalDailyMixService as unknown as {
-                dependencies: PersonalDailyMixDependencies;
-            }
-        ).dependencies;
+    ])(
+        "combines two distinct current dislikes for equivalent artist credits %p / %p",
+        async (firstArtist, secondArtist) => {
+            jest.mocked(prisma.dislikedEntity.findMany).mockResolvedValueOnce([
+                { entityId: "yt:first" },
+                { entityId: "yt:second" },
+                { entityId: "yt:single" },
+                { entityId: "yt:duplicate" },
+            ] as never);
+            jest.mocked(prisma.trackYtMusic.findMany).mockResolvedValueOnce([
+                { videoId: "first", artist: firstArtist },
+                { videoId: "second", artist: secondArtist },
+                { videoId: "single", artist: "Single Artist" },
+                { videoId: "duplicate", artist: "Single Artist" },
+                { videoId: "duplicate", artist: "Single Artist" },
+            ] as never);
+            const liveDependencies = (
+                personalDailyMixService as unknown as {
+                    dependencies: PersonalDailyMixDependencies;
+                }
+            ).dependencies;
 
-        const result =
-            await liveDependencies.loadSuppressedArtistKeys("user-1");
+            const result =
+                await liveDependencies.loadSuppressedArtistKeys("user-1");
 
-        expect(result).toEqual(new Set(["ibrahim maalouf", "single artist"]));
-        expect(prisma.dislikedEntity.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: expect.objectContaining({
-                    userId: "user-1",
-                    entityType: "track",
-                    entityId: { startsWith: "yt:" },
-                    dislikedAt: { gte: expect.any(Date) },
+            expect(result).toEqual(
+                new Set(["ibrahim maalouf", "single artist"]),
+            );
+            expect(prisma.dislikedEntity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        userId: "user-1",
+                        entityType: "track",
+                        entityId: { startsWith: "yt:" },
+                        dislikedAt: { gte: expect.any(Date) },
+                    }),
+                    take: 100,
                 }),
-                take: 100,
-            }),
-        );
-    });
+            );
+        },
+    );
 
     it("does not suppress one disliked song, missing metadata, or unknown artists", async () => {
         jest.mocked(prisma.dislikedEntity.findMany).mockResolvedValueOnce([
@@ -710,42 +715,46 @@ describe("PersonalDailyMixService", () => {
         "Ibrahim Maalouf",
         "Ibrahim\t Maalouf",
         "Ｉｂｒａｈｉｍ Ｍａａｌｏｕｆ",
-    ])("excludes equivalent suppressed credit %p from daily radio and familiar songs", async (artist) => {
-        const service = new PersonalDailyMixService(
-            Object.assign(
-                dependencies({
-                    loadDirections: async () => [
-                        { key: "jazz", label: "Джаз", query: "jazz music" },
-                    ],
-                    loadFamiliar: async () => [
-                        song("known-blocked", artist),
-                    ],
-                    getRadio: async () => [
-                        ...radio("blocked", "Ibrahim Maalouf").map((track) => ({
-                            ...track,
-                            artist,
-                        })),
-                        ...radio("fresh", "Jazz Artist"),
-                    ],
-                }),
-                {
-                    loadSuppressedArtistKeys: async () =>
-                        new Set(["ibrahim maalouf"]),
-                },
-            ),
-        );
+    ])(
+        "excludes equivalent suppressed credit %p from daily radio and familiar songs",
+        async (artist) => {
+            const service = new PersonalDailyMixService(
+                Object.assign(
+                    dependencies({
+                        loadDirections: async () => [
+                            { key: "jazz", label: "Джаз", query: "jazz music" },
+                        ],
+                        loadFamiliar: async () => [
+                            song("known-blocked", artist),
+                        ],
+                        getRadio: async () => [
+                            ...radio("blocked", "Ibrahim Maalouf").map(
+                                (track) => ({
+                                    ...track,
+                                    artist,
+                                }),
+                            ),
+                            ...radio("fresh", "Jazz Artist"),
+                        ],
+                    }),
+                    {
+                        loadSuppressedArtistKeys: async () =>
+                            new Set(["ibrahim maalouf"]),
+                    },
+                ),
+            );
 
-        const result = await service.getMixes("user-1");
+            const result = await service.getMixes("user-1");
 
-        expect(result.mixes).toHaveLength(1);
-        expect(result.mixes[0].tracks).toHaveLength(40);
-        expect(
-            result.mixes[0].tracks.some(
-                (track) =>
-                    track.artist.name === artist,
-            ),
-        ).toBe(false);
-    });
+            expect(result.mixes).toHaveLength(1);
+            expect(result.mixes[0].tracks).toHaveLength(40);
+            expect(
+                result.mixes[0].tracks.some(
+                    (track) => track.artist.name === artist,
+                ),
+            ).toBe(false);
+        },
+    );
 
     it("does not use a suppressed selected or familiar artist as a direction or genre seed", async () => {
         const searchSongs = jest.fn(async (_userId: string, query: string) => [

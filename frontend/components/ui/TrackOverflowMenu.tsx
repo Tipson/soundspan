@@ -253,7 +253,10 @@ export function TrackOverflowMenu({
             }
         };
         const handleScroll = (event: Event) => {
-            if (!(event.target instanceof Node) || !popupRef.current?.contains(event.target))
+            if (
+                !(event.target instanceof Node) ||
+                !popupRef.current?.contains(event.target)
+            )
                 setIsOpen(false);
         };
         const handleResize = () => setIsOpen(false);
@@ -531,9 +534,9 @@ export function TrackOverflowMenu({
                                 bottom: "auto",
                                 margin: 0,
                                 width: "max-content",
-                            minWidth: popupPosition
-                                ? Math.min(220, popupPosition.maxWidth)
-                                : "min(220px, calc(100vw - 16px))",
+                                minWidth: popupPosition
+                                    ? Math.min(220, popupPosition.maxWidth)
+                                    : "min(220px, calc(100vw - 16px))",
                                 maxWidth:
                                     popupPosition?.maxWidth ??
                                     "calc(100vw - 16px)",

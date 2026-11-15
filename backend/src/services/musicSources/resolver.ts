@@ -103,7 +103,10 @@ export function createMusicSourceResolver(options: Options) {
         | { connections: MusicSourceAdapter[] }
         | { error: unknown };
     let connectionRead:
-        | { revision: number; waiters: Set<(outcome: ConnectionOutcome) => void> }
+        | {
+              revision: number;
+              waiters: Set<(outcome: ConnectionOutcome) => void>;
+          }
         | undefined;
     function startConnectionRead() {
         const read = {
@@ -125,7 +128,9 @@ export function createMusicSourceResolver(options: Options) {
         return read;
     }
     /** Coalesce only the pending service-config read; each caller retains its own deadline. */
-    function readConnections(signal: AbortSignal): Promise<MusicSourceAdapter[]> {
+    function readConnections(
+        signal: AbortSignal,
+    ): Promise<MusicSourceAdapter[]> {
         signal.throwIfAborted();
         const read = connectionRead ?? startConnectionRead();
         return new Promise((resolve, reject) => {
@@ -411,10 +416,11 @@ export function createMusicSourceResolver(options: Options) {
                 throw new MusicSourceError("lease_expired");
             }
             const generation = revision;
-            const source = (await readConnections(AbortSignal.any([
-                signal,
-                AbortSignal.timeout(16_000),
-            ]))).find(
+            const source = (
+                await readConnections(
+                    AbortSignal.any([signal, AbortSignal.timeout(16_000)]),
+                )
+            ).find(
                 (s) =>
                     s.provider === lease.provider &&
                     s.enabled &&

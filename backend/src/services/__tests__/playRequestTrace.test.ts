@@ -3,7 +3,10 @@ import type { Request, Response } from "express";
 import { createPlayRequestTrace } from "../playRequestTrace";
 
 describe("play request stage attribution", () => {
-    function fixture(diagnostic = false, headers: Record<string, unknown> = {}) {
+    function fixture(
+        diagnostic = false,
+        headers: Record<string, unknown> = {},
+    ) {
         let now = 0;
         const records: any[] = [];
         const logs: any[] = [];
@@ -116,7 +119,9 @@ describe("play request stage attribution", () => {
         f.trace.respond();
         f.advance(42);
         f.response.writeHead(200);
-        expect(f.records.find((row) => row.stage === "response_headers")).toMatchObject({durationMs: 42});
+        expect(
+            f.records.find((row) => row.stage === "response_headers"),
+        ).toMatchObject({ durationMs: 42 });
     });
 
     it("times independent stages and never includes paths or arbitrary IDs in metric records", async () => {
@@ -154,25 +159,43 @@ describe("play request stage attribution", () => {
     });
 
     it("omits oversized, array and control-character client correlation", () => {
-        const f = fixture(false, {"x-soundspan-playback-run": "x".repeat(65), "x-soundspan-play-attempt": ["trace", "secret"]});
+        const f = fixture(false, {
+            "x-soundspan-playback-run": "x".repeat(65),
+            "x-soundspan-play-attempt": ["trace", "secret"],
+        });
         f.response.emit("finish");
         expect(f.logs[0].playbackRunId).toBeUndefined();
         expect(f.logs[0].clientAttemptId).toBeUndefined();
-        const control = fixture(false, {"x-soundspan-play-attempt": "trace\r\nsecret"});
+        const control = fixture(false, {
+            "x-soundspan-play-attempt": "trace\r\nsecret",
+        });
         control.response.emit("finish");
         expect(control.logs[0].clientAttemptId).toBeUndefined();
-        expect(JSON.stringify([...f.logs, ...control.logs])).not.toContain("secret");
+        expect(JSON.stringify([...f.logs, ...control.logs])).not.toContain(
+            "secret",
+        );
     });
 
     it("retains late write failure as unknown after the client has closed", async () => {
         const f = fixture();
         let fail!: (error: Error) => void;
-        const write = f.trace.write(() => new Promise((_, reject) => {fail = reject;}));
+        const write = f.trace.write(
+            () =>
+                new Promise((_, reject) => {
+                    fail = reject;
+                }),
+        );
         f.response.emit("close");
         fail(new Error("fixture failure"));
         await expect(write).rejects.toThrow("fixture failure");
-        expect(f.records.at(-1)).toMatchObject({stage: "db_acquire_write", outcome: "late_error", writeState: "unknown"});
-        expect(f.records.filter((row) => row.stage === "request")).toHaveLength(1);
+        expect(f.records.at(-1)).toMatchObject({
+            stage: "db_acquire_write",
+            outcome: "late_error",
+            writeState: "unknown",
+        });
+        expect(f.records.filter((row) => row.stage === "request")).toHaveLength(
+            1,
+        );
     });
 
     it.each([

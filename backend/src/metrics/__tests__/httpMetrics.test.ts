@@ -10,8 +10,20 @@ describe("HTTP request metrics", () => {
     it("records a closed response once as cancelled rather than a successful default status", async () => {
         const registry = new Registry();
         const { middleware } = createHttpRequestMetrics(registry);
-        const res = Object.assign(new EventEmitter(), { statusCode: 200, writableFinished: false });
-        middleware({method: "GET", originalUrl: "/api/library", baseUrl: "", route: {path: "/api/library"}} as Request, res as unknown as Response, () => {});
+        const res = Object.assign(new EventEmitter(), {
+            statusCode: 200,
+            writableFinished: false,
+        });
+        middleware(
+            {
+                method: "GET",
+                originalUrl: "/api/library",
+                baseUrl: "",
+                route: { path: "/api/library" },
+            } as Request,
+            res as unknown as Response,
+            () => {},
+        );
         res.emit("close");
         res.emit("finish");
         const exposition = await registry.metrics();
@@ -25,13 +37,17 @@ describe("HTTP request metrics", () => {
         const app = express();
         app.use(middleware);
         app.patch("/api/plays/:playId/engagement", async (_req, res) => {
-            await playRequestTrace(res).write(async () => ({count: 1}));
-            res.json({success: true});
+            await playRequestTrace(res).write(async () => ({ count: 1 }));
+            res.json({ success: true });
         });
-        const response = await request(app).patch("/api/plays/private-play-id/engagement");
+        const response = await request(app).patch(
+            "/api/plays/private-play-id/engagement",
+        );
         expect(response.headers["x-soundspan-play-write"]).toBe("committed");
         const exposition = await registry.metrics();
-        expect(exposition).toContain('request_kind="engagement",path_kind="regular",stage="db_acquire_write"');
+        expect(exposition).toContain(
+            'request_kind="engagement",path_kind="regular",stage="db_acquire_write"',
+        );
         expect(exposition).not.toContain("private-play-id");
     });
     it("exports play stages with finite labels across unique client IDs", async () => {

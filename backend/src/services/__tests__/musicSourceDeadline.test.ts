@@ -64,9 +64,15 @@ describe("music source resolution time budget", () => {
         const connections = new Promise<MusicSourceAdapter[]>((resolve) => {
             complete = resolve;
         });
-        const resolver = createMusicSourceResolver({ connections: () => connections });
+        const resolver = createMusicSourceResolver({
+            connections: () => connections,
+        });
         let failure: unknown;
-        const result = resolver.resolve("listener", recording, new AbortController().signal).catch(error => { failure = error; });
+        const result = resolver
+            .resolve("listener", recording, new AbortController().signal)
+            .catch((error) => {
+                failure = error;
+            });
         try {
             await jest.advanceTimersByTimeAsync(16_000);
             expect(failure).toMatchObject({ name: "TimeoutError" });
@@ -81,12 +87,25 @@ describe("music source resolution time budget", () => {
     it("cancels one waiter without cancelling or duplicating the shared connection read", async () => {
         const ready = source("vk");
         const completions: Array<(sources: MusicSourceAdapter[]) => void> = [];
-        const connections = jest.fn(() => new Promise<MusicSourceAdapter[]>((resolve) => { completions.push(resolve); }));
+        const connections = jest.fn(
+            () =>
+                new Promise<MusicSourceAdapter[]>((resolve) => {
+                    completions.push(resolve);
+                }),
+        );
         const resolver = createMusicSourceResolver({ connections });
         const cancelled = new AbortController();
         let failure: unknown;
-        const first = resolver.resolve("first", recording, cancelled.signal).catch(error => { failure = error; });
-        const second = resolver.resolve("second", recording, new AbortController().signal);
+        const first = resolver
+            .resolve("first", recording, cancelled.signal)
+            .catch((error) => {
+                failure = error;
+            });
+        const second = resolver.resolve(
+            "second",
+            recording,
+            new AbortController().signal,
+        );
         await jest.advanceTimersByTimeAsync(0);
         cancelled.abort();
         await jest.advanceTimersByTimeAsync(0);
@@ -105,12 +124,33 @@ describe("music source resolution time budget", () => {
     it("cancels a stalled lease connection check before opening any stream", async () => {
         const ready = source("vk");
         let complete!: (sources: MusicSourceAdapter[]) => void;
-        const connections = jest.fn().mockResolvedValueOnce([ready]).mockImplementationOnce(() => new Promise<MusicSourceAdapter[]>((resolve) => { complete = resolve; }));
+        const connections = jest
+            .fn()
+            .mockResolvedValueOnce([ready])
+            .mockImplementationOnce(
+                () =>
+                    new Promise<MusicSourceAdapter[]>((resolve) => {
+                        complete = resolve;
+                    }),
+            );
         const resolver = createMusicSourceResolver({ connections });
-        const lease = await resolver.resolve("listener", recording, new AbortController().signal);
+        const lease = await resolver.resolve(
+            "listener",
+            recording,
+            new AbortController().signal,
+        );
         const cancelled = new AbortController();
         let failure: unknown;
-        const stream = resolver.open("listener", lease!.leaseId, { range: "bytes=0-0" }, cancelled.signal).catch(error => { failure = error; });
+        const stream = resolver
+            .open(
+                "listener",
+                lease!.leaseId,
+                { range: "bytes=0-0" },
+                cancelled.signal,
+            )
+            .catch((error) => {
+                failure = error;
+            });
         await jest.advanceTimersByTimeAsync(0);
         cancelled.abort();
         await jest.advanceTimersByTimeAsync(0);
@@ -127,11 +167,18 @@ describe("music source resolution time budget", () => {
     it("does not start extra database reads while timed-out callers wait for the same pending read", async () => {
         const ready = source("vk");
         let complete!: (sources: MusicSourceAdapter[]) => void;
-        const pending = new Promise<MusicSourceAdapter[]>((resolve) => { complete = resolve; });
-        const connections = jest.fn().mockReturnValueOnce(pending).mockResolvedValue([ready]);
+        const pending = new Promise<MusicSourceAdapter[]>((resolve) => {
+            complete = resolve;
+        });
+        const connections = jest
+            .fn()
+            .mockReturnValueOnce(pending)
+            .mockResolvedValue([ready]);
         const resolver = createMusicSourceResolver({ connections });
         for (let i = 0; i < 4; i += 1) {
-            const result = resolver.resolve("listener", recording, new AbortController().signal).catch(error => error);
+            const result = resolver
+                .resolve("listener", recording, new AbortController().signal)
+                .catch((error) => error);
             await jest.advanceTimersByTimeAsync(16_000);
             expect(await result).toMatchObject({ name: "TimeoutError" });
             expect(connections).toHaveBeenCalledTimes(1);
@@ -139,7 +186,13 @@ describe("music source resolution time budget", () => {
         }
         complete([ready]);
         await jest.advanceTimersByTimeAsync(0);
-        expect(await resolver.resolve("listener", recording, new AbortController().signal)).toMatchObject({ provider: "vk" });
+        expect(
+            await resolver.resolve(
+                "listener",
+                recording,
+                new AbortController().signal,
+            ),
+        ).toMatchObject({ provider: "vk" });
         expect(connections).toHaveBeenCalledTimes(2);
         expect(ready.search).toHaveBeenCalledTimes(1);
     });
@@ -147,20 +200,35 @@ describe("music source resolution time budget", () => {
     it("rejects an old pending configuration for waiters on either side of credential revocation", async () => {
         const ready = source("vk");
         let complete!: (sources: MusicSourceAdapter[]) => void;
-        const pending = new Promise<MusicSourceAdapter[]>((resolve) => { complete = resolve; });
-        const connections = jest.fn().mockReturnValueOnce(pending).mockResolvedValue([ready]);
+        const pending = new Promise<MusicSourceAdapter[]>((resolve) => {
+            complete = resolve;
+        });
+        const connections = jest
+            .fn()
+            .mockReturnValueOnce(pending)
+            .mockResolvedValue([ready]);
         const resolver = createMusicSourceResolver({ connections });
-        const first = resolver.resolve("first", recording, new AbortController().signal).catch(error => error);
+        const first = resolver
+            .resolve("first", recording, new AbortController().signal)
+            .catch((error) => error);
         await jest.advanceTimersByTimeAsync(0);
         resolver.revokeProvider("vk");
-        const second = resolver.resolve("second", recording, new AbortController().signal).catch(error => error);
+        const second = resolver
+            .resolve("second", recording, new AbortController().signal)
+            .catch((error) => error);
         await jest.advanceTimersByTimeAsync(0);
         complete([ready]);
         expect(await first).toMatchObject({ code: "lease_expired" });
         expect(await second).toMatchObject({ code: "lease_expired" });
         expect(ready.search).not.toHaveBeenCalled();
         expect(resolver.health().leases).toBe(0);
-        expect(await resolver.resolve("listener", recording, new AbortController().signal)).toMatchObject({ provider: "vk" });
+        expect(
+            await resolver.resolve(
+                "listener",
+                recording,
+                new AbortController().signal,
+            ),
+        ).toMatchObject({ provider: "vk" });
         expect(connections).toHaveBeenCalledTimes(2);
     });
 

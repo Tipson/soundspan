@@ -108,7 +108,10 @@ collectDefaultMetrics({
 });
 
 const httpMetricsOptions: HttpRequestMetricsOptions = {};
-const httpMetrics = createHttpRequestMetrics(metricsRegistry, httpMetricsOptions);
+const httpMetrics = createHttpRequestMetrics(
+    metricsRegistry,
+    httpMetricsOptions,
+);
 
 /** Inject the shared playback logger from the API composition root, without config side effects in metrics consumers. */
 export function initializePlayRequestTraceLogger(
