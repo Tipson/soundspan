@@ -285,15 +285,24 @@ final class WaveContinuation {
           generationId: page.generationId,
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (_valid(revision, lineage, fence)) {
         _status(
           WaveStatus.error,
-          failure: const AppFailure(
-            code: 'wave_request_failed',
-            message: 'Не удалось продолжить Волну',
-            retryable: true,
-          ),
+          failure: switch (error) {
+            AppFailure(statusCode: 504) => const AppFailure(
+              code: 'wave_request_timeout',
+              message: 'Волна не успела подготовиться. Попробуйте ещё раз',
+              retryable: true,
+              statusCode: 504,
+            ),
+            AppFailure() => error,
+            _ => const AppFailure(
+              code: 'wave_request_failed',
+              message: 'Не удалось продолжить Волну',
+              retryable: true,
+            ),
+          },
         );
       }
     } finally {

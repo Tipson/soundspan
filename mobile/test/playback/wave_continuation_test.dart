@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soundspan/core/model/app_failure.dart';
 import 'package:soundspan/core/model/owner_key.dart';
 import 'package:soundspan/core/model/track_ref.dart';
 import 'package:soundspan/core/network/api_transport.dart';
@@ -19,6 +20,86 @@ import '../support/auth_fakes.dart' show ScriptedJsonClient;
 import '../support/wave_reporting_fixtures.dart';
 
 void main() {
+  test(
+    'Wave explains an API deadline without replacing the current queue',
+    () async {
+      final authority = await mediaAuthority(Uri.parse('https://report.test'));
+      final controller = ReportingController();
+      final before = controller.snapshot;
+      final transport = ControlledTransport()
+        ..respond = (_) async => const ApiResponse(504, {
+          'code': 'RADIO_REQUEST_TIMEOUT',
+          'error': 'upstream body must not become user-facing text',
+        });
+      final wave = WaveContinuation(
+        controller: controller,
+        repository: RecommendationRepository(transport: transport),
+        authority: authority,
+      );
+      addTearDown(() async {
+        await wave.dispose();
+        await controller.dispose();
+      });
+      await wave.start(const WaveSelection(), authority.requireFence());
+      expect(wave.state.status, WaveStatus.error);
+      expect(wave.state.failure?.code, 'wave_request_timeout');
+      expect(wave.state.failure?.statusCode, 504);
+      expect(wave.state.failure?.retryable, true);
+      expect(
+        wave.state.failure?.message,
+        'Волна не успела подготовиться. Попробуйте ещё раз',
+      );
+      expect(controller.snapshot, same(before));
+    },
+  );
+
+  test(
+    'Wave keeps classified network failure and server-directed holdoff',
+    () async {
+      for (final failure in [
+        failureForStatus(429, retryAfter: const Duration(seconds: 23)),
+        const AppFailure(
+          code: 'network_timeout',
+          message: 'Время подключения истекло',
+          retryable: true,
+        ),
+      ]) {
+        final authority = await mediaAuthority(
+          Uri.parse('https://report.test'),
+        );
+        final controller = ReportingController();
+        final transport = ControlledTransport()
+          ..respond = (_) async => throw failure;
+        final wave = WaveContinuation(
+          controller: controller,
+          repository: RecommendationRepository(transport: transport),
+          authority: authority,
+        );
+        await wave.start(const WaveSelection(), authority.requireFence());
+        expect(wave.state.failure, same(failure));
+        await wave.dispose();
+        await controller.dispose();
+      }
+    },
+  );
+
+  test('Wave never displays an unclassified exception body', () async {
+    final authority = await mediaAuthority(Uri.parse('https://report.test'));
+    final controller = ReportingController();
+    final transport = ControlledTransport()
+      ..respond = (_) async => throw StateError('Bearer private_secret');
+    final wave = WaveContinuation(
+      controller: controller,
+      repository: RecommendationRepository(transport: transport),
+      authority: authority,
+    );
+    await wave.start(const WaveSelection(), authority.requireFence());
+    expect(wave.state.failure?.message, 'Не удалось продолжить Волну');
+    expect(wave.state.failure?.message.contains('private_secret'), false);
+    await wave.dispose();
+    await controller.dispose();
+  });
+
   for (final action in [
     'natural',
     'pause-before-end',

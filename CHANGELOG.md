@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Explain a Wave preparation timeout without replacing the current queue. Preserve classified network failures and server retry metadata while keeping unexpected exception details private.
 - Attach anonymous playback-run and per-dispatch correlation to Play and engagement requests, preserving older feedback outbox entries, cancellation and authentication retry behavior.
 - Confirm Android playback against the exact native decoder source instead of an extrapolated position. Bound account admission from collection playback, fence acknowledgements across audio-focus attempts, and cancel speculative resolver sockets independently. Explain unavailable search rows and allow an exact fresh search.
 - Bound Android source preparation, decoder loading and playback admission, retain specific retryable source errors, and ignore interrupted native loads after the queue releases their source. Prewarm one upcoming recording after playback progresses, using a bounded audio prefix without a second decoder or a playback-history event. Cancel speculative work when playback, ownership or network admission changes.
