@@ -38,6 +38,8 @@ COPY services/ytmusic-streamer/requirements-exempt.txt ./requirements-exempt.txt
 RUN sed -n 's/^\([A-Za-z0-9._-]\+==[^ \\]\+\).*$/\1/p' requirements.lock > /tmp/lock-constraints.txt \
     && pip install --no-cache-dir -c /tmp/lock-constraints.txt -r requirements-exempt.txt \
     && pip check \
+    && python3 -c "import brotli; from importlib.metadata import version; versions = (version('Brotli'), brotli.__version__); assert all(tuple(map(int, value.split('.'))) >= (1, 2, 1) for value in versions), 'Brotli >= 1.2.1 is required for CVE-2026-111497'" \
+    && python3 -c "import certifi; from importlib.metadata import version; versions = (version('certifi'), certifi.__version__); assert all(tuple(map(int, value.split('.'))) >= (2026, 10, 19) for value in versions), 'certifi >= 2026.10.19 is required for GHSA-6q48-6c7w-9gw2'" \
     && rm /tmp/lock-constraints.txt
 
 # pip is build-time tooling only; removing it from the runtime image drops

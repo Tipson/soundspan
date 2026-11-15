@@ -1,5 +1,5 @@
 # Stage 1: Dependencies
-FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848 AS deps
+FROM node:24.22.3-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS deps
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ RUN --mount=type=cache,id=soundspan-npm-frontend,target=/root/.npm,sharing=locke
 RUN npx tsc -p /packages/media-metadata-contract/tsconfig.json
 
 # Stage 2: Builder
-FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848 AS builder
+FROM node:24.22.3-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS builder
 
 WORKDIR /app
 
@@ -60,7 +60,7 @@ RUN rm -rf /app/.next/cache
 
 # Install runtime dependencies into an empty layer. Pruning the builder's
 # node_modules would copy up thousands of files on overlay filesystems.
-FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848 AS runtime-deps
+FROM node:24.22.3-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS runtime-deps
 WORKDIR /app
 COPY --from=deps /packages/media-metadata-contract /packages/media-metadata-contract
 COPY package*.json ./
@@ -68,7 +68,7 @@ RUN --mount=type=cache,id=soundspan-npm-frontend,target=/root/.npm,sharing=locke
     npm ci --omit=dev --legacy-peer-deps --prefer-offline --no-audit --no-fund
 
 # Stage 3: Production (Hardened)
-FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848
+FROM node:24.22.3-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
 
 WORKDIR /app
 

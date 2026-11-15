@@ -821,52 +821,36 @@ test("12. Prisma CLI stages copy relative prisma.config.ts imports", () => {
     }
 });
 
-test("12a. AIO preserves its generated Prisma client when replacing backend dependencies", () => {
-    const instructions = readRepoFile("Dockerfile")
+test("12a. AIO keeps its own locked dependencies and checks the generated Prisma client", () => {
+    const dockerfile = readRepoFile("Dockerfile");
+    const instructions = dockerfile
         .replace(/\\\r?\n\s*/g, " ")
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean);
-    const officialDependenciesIndex = instructions.findIndex((instruction) =>
-        /^COPY\s+--from=official_artifacts\s+\/app\/backend\/node_modules\/?\s+\/app\/backend\/node_modules\/?$/i.test(
-            instruction,
-        ),
+    // External artifact stages may supply models, never the application's
+    // node_modules: that would silently replace the versions just built.
+    const externalArtifacts = dockerfileStages(dockerfile).filter(
+        (stage) =>
+            isExternalImage(stage.base) &&
+            !/^(?:RUN|COPY|ADD)\s/im.test(stage.text),
     );
-
-    assert.notEqual(
-        officialDependenciesIndex,
-        -1,
-        "Dockerfile: expected the pinned official backend dependency replacement",
-    );
-
-    const generatedClientStash = instructions
-        .slice(0, officialDependenciesIndex)
-        .map((instruction) =>
-            instruction.match(
-                /\bmv\s+\/app\/backend\/node_modules\/\.prisma\s+(\S+)/i,
-            ),
-        )
-        .find(Boolean)?.[1];
-
+    for (const instruction of instructions) {
+        const source = instruction.match(/^COPY\s+--from=(\S+)\s+(.+)$/i);
+        if (
+            !source ||
+            !externalArtifacts.some((stage) => stage.name === source[1])
+        ) {
+            continue;
+        }
+        assert.doesNotMatch(
+            source[2],
+            /(?:^|[\s/])node_modules(?:[\s/]|$)/,
+            "AIO app dependencies must use this checkout's lock, not external artifacts",
+        );
+    }
     assert.ok(
-        generatedClientStash,
-        "Dockerfile: stash the schema-specific .prisma client before replacing backend node_modules",
-    );
-
-    const runtimeInstructions = instructions.slice(
-        officialDependenciesIndex + 1,
-    );
-    assert.ok(
-        runtimeInstructions.some((instruction) =>
-            new RegExp(
-                `\\bmv\\s+${generatedClientStash.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s+\\/app\\/backend\\/node_modules\\/\\.prisma\\b`,
-                "i",
-            ).test(instruction),
-        ),
-        "Dockerfile: restore the generated .prisma client after the official dependency replacement",
-    );
-    assert.ok(
-        runtimeInstructions.some(
+        instructions.some(
             (instruction) =>
                 /^RUN\s+/i.test(instruction) &&
                 instruction.includes("@prisma/client") &&

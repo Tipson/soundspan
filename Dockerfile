@@ -4,7 +4,7 @@
 
 FROM ghcr.io/soundspan/soundspan:2.6.1@sha256:0fd938950efefc8ded020f847cd2a9317303c0d26a483b70a9c1407452623f8f AS official_artifacts
 
-FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848
+FROM node:24.22.3-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
 
 # Add the PostgreSQL 16 repository and install runtime dependencies in one layer.
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
@@ -244,14 +244,13 @@ COPY backend/src ./src
 COPY backend/tsconfig.json ./
 RUN npm run build
 
-# Replace build dependencies with the exact runtime dependency tree from the
-# pinned official release while keeping the schema-specific Prisma client that
-# was generated from this checkout.
-RUN mv /app/backend/node_modules/.prisma /tmp/backend-generated-prisma && \
-    rm -rf /app/backend/node_modules
-COPY --from=official_artifacts /app/backend/node_modules/ /app/backend/node_modules/
-RUN rm -rf /app/backend/node_modules/.prisma && \
-    mv /tmp/backend-generated-prisma /app/backend/node_modules/.prisma && \
+# Keep this checkout's locked runtime tree and schema-specific Prisma client.
+# The entrypoint needs the Prisma CLI at runtime. Reclassify its already-locked
+# version before pruning, without resolving or importing a different release.
+RUN --mount=type=cache,id=soundspan-npm,target=/root/.npm,sharing=locked \
+    PRISMA_VERSION=$(node -p "require('./node_modules/prisma/package.json').version") && \
+    npm install --save-prod --save-exact --package-lock-only --ignore-scripts --offline --no-audit --no-fund prisma@"$PRISMA_VERSION" && \
+    npm prune --omit=dev --offline --no-audit --no-fund && \
     node -e "const { Prisma } = require('@prisma/client'); const packageVersion = require('@prisma/client/package.json').version; if (Prisma.prismaVersion.client !== packageVersion) throw new Error('Prisma runtime and generated client versions differ'); const models = new Map(Prisma.dmmf.datamodel.models.map((model) => [model.name, model])); for (const name of ['RemotePreferenceIntent', 'SavedMusicEntity']) if (!models.has(name)) throw new Error('Generated Prisma client is missing ' + name); const play = models.get('Play'); for (const name of ['completionRatio', 'waveMode']) if (!play?.fields.some((field) => field.name === name)) throw new Error('Generated Prisma Play model is missing ' + name)"
 
 COPY backend/docker-entrypoint.sh ./
@@ -288,10 +287,9 @@ RUN npm run build
 # uses the plain-JS server-proxy and Next compiles proxy.ts during build.
 RUN npm run test:config:runtime
 
-# Replace build dependencies with the exact official runtime tree and remove
-# the Next.js build cache, which is not needed at runtime.
-RUN rm -rf /app/frontend/node_modules .next/cache
-COPY --from=official_artifacts /app/frontend/node_modules/ /app/frontend/node_modules/
+# Keep the Next runtime that produced this build, using this checkout's lock.
+RUN npm prune --omit=dev --legacy-peer-deps --offline --no-audit --no-fund && \
+    rm -rf .next/cache
 
 # ============================================
 # SECURITY HARDENING

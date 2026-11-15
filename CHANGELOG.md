@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Use patched Node 24.22.3, Next 16.4.6, sharp 0.35.5, Brotli 1.2.1 and certifi runtimes. Keep AIO application dependencies tied to this checkout's lockfiles instead of replacing them with an older release tree.
 - Normalize artist names and album paths in linear time on long whitespace inputs, preserving matching results and recommendation identity keys.
 - Space retries of aborted remote-preference transactions with short bounded exponential jitter, preserving the three-attempt limit and latest-intent ordering during rapid concurrent feedback.
 - Apply the shared Unicode and whitespace artist identity rules to daily mixes, so equivalent provider credits cannot split repeated dislikes or bypass artist suppression.
