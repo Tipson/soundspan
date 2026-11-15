@@ -14,6 +14,14 @@ import { config } from "../../config";
 import { runDummyBcrypt } from "../../utils/dummyCredential";
 import { sendRouteError } from "../../utils/routeErrorResponse";
 import { sendLoginSuccess, verifyLoginSecondFactor } from "./shared";
+import {
+    queueDashboardCookieName,
+    queueDashboardCookieOptions,
+    dashboardBindingCookieName,
+    dashboardBindingCookieOptions,
+} from "../../middleware/queueDashboardCookie";
+import { dashboardSessions } from "../../utils/dashboardSessionState";
+import { getDashboardRevocationContext } from "../../utils/dashboardSessionContext";
 
 const loginSchema = z.object({
     username: z.string().min(1),
@@ -121,9 +129,36 @@ export default function registerLocalCredentialRoutes(router: Router): void {
      *         description: Logged out successfully
      */
     // POST /auth/logout - JWT is stateless, logout is handled client-side
-    router.post("/logout", (req, res) => {
-        // With JWT, logout is handled by client removing the token
-        // No server-side session to destroy
+    router.post("/logout", async (req, res) => {
+        // Ordinary access/refresh JWTs remain stateless. Clear the separate
+        // browser dashboard cookie so another tab cannot keep using it.
+        res.clearCookie(
+            queueDashboardCookieName(config.secureCookies),
+            queueDashboardCookieOptions(config.secureCookies),
+        );
+        const context = getDashboardRevocationContext(
+            req,
+            config.secureCookies,
+        );
+        res.clearCookie(
+            dashboardBindingCookieName(config.secureCookies),
+            dashboardBindingCookieOptions(config.secureCookies),
+        );
+        try {
+            await dashboardSessions.revoke(
+                context.bindingId,
+                context.credentialHash,
+            );
+        } catch (error) {
+            logger
+                .child("QueueDashboard")
+                .warn("Logout could not revoke dashboard access", error);
+            return sendRouteError(
+                res,
+                503,
+                "Dashboard access revocation unavailable; local logout can continue",
+            );
+        }
         res.json({ message: "Logged out" });
     });
 

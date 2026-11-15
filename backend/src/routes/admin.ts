@@ -1,5 +1,25 @@
 import { Router } from "express";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import {
+    generateQueueDashboardToken,
+    requireAdmin,
+    requireAuth,
+    requireInteractiveSession,
+    verifyAccessToken,
+} from "../middleware/auth";
+import {
+    queueDashboardCookieName,
+    queueDashboardCookieOptions,
+    QUEUE_DASHBOARD_TTL_SECONDS,
+    dashboardBindingCookieName,
+    dashboardBindingCookieOptions,
+    DASHBOARD_BINDING_TTL_SECONDS,
+    readDashboardBinding,
+    hashDashboardBearer,
+} from "../middleware/queueDashboardCookie";
+import { dashboardSessions } from "../utils/dashboardSessionState";
+import { getDashboardRevocationContext } from "../utils/dashboardSessionContext";
+import { randomBytes } from "node:crypto";
+import { sendRouteError } from "../utils/routeErrorResponse";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import {
@@ -16,6 +36,275 @@ import {
 
 const router = Router();
 
+/**
+ * @openapi
+ * /api/admin/queues/binding:
+ *   post:
+ *     summary: Prepare a non-authenticating browser binding for the queue dashboard
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       204:
+ *         description: Browser binding prepared; no dashboard credential is issued
+ *       401:
+ *         description: Interactive authentication required
+ *       403:
+ *         description: Administrator access required or too many active bindings
+ *       503:
+ *         description: Dashboard state unavailable
+ */
+router.post(
+    "/queues/binding",
+    requireInteractiveSession,
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+        const header = req.headers.authorization;
+        if (!req.user || !header?.startsWith("Bearer "))
+            return sendRouteError(
+                res,
+                401,
+                "Interactive authentication required",
+            );
+        let access: ReturnType<typeof verifyAccessToken>;
+        try {
+            access = verifyAccessToken(header.slice(7));
+        } catch {
+            return sendRouteError(
+                res,
+                401,
+                "Interactive authentication required",
+            );
+        }
+        if (typeof access.tokenVersion !== "number")
+            return sendRouteError(
+                res,
+                401,
+                "Interactive authentication required",
+            );
+        try {
+            const previousId = readDashboardBinding(req, config.secureCookies);
+            if (previousId) {
+                const previous = await dashboardSessions.read(previousId);
+                if (
+                    previous?.ownerId === req.user.id &&
+                    previous.tokenVersion === access.tokenVersion
+                ) {
+                    // Do not re-send a binding cookie: a delayed bootstrap must not
+                    // restore an old binding after logout cleared the browser.
+                    return res.status(204).end();
+                }
+                await dashboardSessions.revoke(previousId, null, false);
+            }
+            const bindingId = randomBytes(24).toString("hex");
+            const created = await dashboardSessions.bootstrap(bindingId, {
+                ownerId: req.user.id,
+                tokenVersion: access.tokenVersion,
+                epoch: randomBytes(24).toString("hex"),
+                grantNonce: null,
+                bearerHash: hashDashboardBearer(header.slice(7)),
+            });
+            if (!created)
+                return sendRouteError(
+                    res,
+                    403,
+                    "Dashboard binding limit reached; end dashboard access and retry",
+                );
+            res.cookie(
+                dashboardBindingCookieName(config.secureCookies),
+                bindingId,
+                {
+                    ...dashboardBindingCookieOptions(config.secureCookies),
+                    maxAge: DASHBOARD_BINDING_TTL_SECONDS * 1000,
+                },
+            );
+            res.setHeader("Cache-Control", "no-store");
+            return res.status(204).end();
+        } catch (error) {
+            logger
+                .child("QueueDashboard")
+                .warn("Binding could not be created", error);
+            return sendRouteError(
+                res,
+                503,
+                "Dashboard session state unavailable",
+            );
+        }
+    },
+);
+
+/**
+ * @openapi
+ * /api/admin/queues/session:
+ *   post:
+ *     summary: Create a short administrator session limited to the queue dashboard
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard cookie set; response contains expiresIn in seconds
+ *       401:
+ *         description: Interactive authentication required
+ *       403:
+ *         description: Administrator session required; API keys are not accepted
+ *       503:
+ *         description: Authentication backend unavailable
+ */
+router.post(
+    "/queues/session",
+    requireInteractiveSession,
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+        if (!req.user || !req.headers.authorization?.startsWith("Bearer ")) {
+            return sendRouteError(
+                res,
+                401,
+                "Interactive authentication required",
+            );
+        }
+        let access: ReturnType<typeof verifyAccessToken>;
+        try {
+            access = verifyAccessToken(req.headers.authorization.slice(7));
+        } catch {
+            return sendRouteError(
+                res,
+                401,
+                "Interactive authentication required",
+            );
+        }
+        try {
+            const bindingId = readDashboardBinding(req, config.secureCookies);
+            if (!bindingId)
+                return sendRouteError(res, 401, "Dashboard binding required");
+            const binding = await dashboardSessions.read(bindingId);
+            if (
+                !binding ||
+                binding.ownerId !== req.user.id ||
+                binding.tokenVersion !== access.tokenVersion
+            ) {
+                return sendRouteError(
+                    res,
+                    401,
+                    "Dashboard binding expired; reopen the panel",
+                );
+            }
+            const user = await prisma.user.findUnique({
+                where: { id: req.user.id },
+                select: {
+                    id: true,
+                    role: true,
+                    tokenVersion: true,
+                    pendingDeletionAt: true,
+                },
+            });
+            if (
+                !user ||
+                user.role !== "admin" ||
+                user.pendingDeletionAt ||
+                access.userId !== user.id ||
+                access.tokenVersion !== user.tokenVersion
+            ) {
+                return sendRouteError(res, 403, "Admin access required");
+            }
+            const nonce = randomBytes(24).toString("hex");
+            const grantedNonce = await dashboardSessions.mint(
+                bindingId,
+                binding,
+                nonce,
+                hashDashboardBearer(req.headers.authorization.slice(7)),
+            );
+            if (!grantedNonce) {
+                return sendRouteError(
+                    res,
+                    401,
+                    "Dashboard access was ended; reopen the panel",
+                );
+            }
+            res.cookie(
+                queueDashboardCookieName(config.secureCookies),
+                generateQueueDashboardToken(user, {
+                    bindingId,
+                    epoch: binding.epoch,
+                    nonce: grantedNonce,
+                }),
+                {
+                    ...queueDashboardCookieOptions(config.secureCookies),
+                    maxAge: QUEUE_DASHBOARD_TTL_SECONDS * 1000,
+                },
+            );
+            res.setHeader("Cache-Control", "no-store");
+            return res.json({ expiresIn: QUEUE_DASHBOARD_TTL_SECONDS });
+        } catch (error) {
+            logger
+                .child("QueueDashboard")
+                .warn("Session could not be created", error);
+            return sendRouteError(
+                res,
+                503,
+                "Authentication service unavailable",
+            );
+        }
+    },
+);
+
+/**
+ * @openapi
+ * /api/admin/queues/session:
+ *   delete:
+ *     summary: Clear the browser's queue dashboard session
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       204:
+ *         description: Dashboard cookie cleared
+ *       401:
+ *         description: Interactive authentication required
+ *       403:
+ *         description: Administrator session required; API keys are not accepted
+ */
+router.delete(
+    "/queues/session",
+    requireInteractiveSession,
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+        const context = getDashboardRevocationContext(
+            req,
+            config.secureCookies,
+        );
+        res.clearCookie(
+            queueDashboardCookieName(config.secureCookies),
+            queueDashboardCookieOptions(config.secureCookies),
+        );
+        res.clearCookie(
+            dashboardBindingCookieName(config.secureCookies),
+            dashboardBindingCookieOptions(config.secureCookies),
+        );
+        res.setHeader("Cache-Control", "no-store");
+        try {
+            await dashboardSessions.revoke(context.bindingId, null, false);
+        } catch (error) {
+            logger
+                .child("QueueDashboard")
+                .warn("Access could not be ended", error);
+            return sendRouteError(
+                res,
+                503,
+                "Dashboard session state unavailable",
+            );
+        }
+        return res.status(204).end();
+    },
+);
+
+// Bull Board is mounted separately after queue initialization. Only its prefix
+// bypasses this router's ordinary bearer/API-key guard; its dedicated guard
+// authenticates every HTML, asset and action request at the final mount.
+router.use("/queues", (_req, _res, next) => next("router"));
 router.use(requireAuth, requireAdmin);
 
 // Per-model row fetchers for the secrets-status check. Keyed by the same model

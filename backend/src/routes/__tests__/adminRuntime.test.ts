@@ -3,6 +3,11 @@ import { Request, Response } from "express";
 jest.mock("../../middleware/auth", () => ({
     requireAuth: (_req: Request, _res: Response, next: () => void) => next(),
     requireAdmin: (_req: Request, _res: Response, next: () => void) => next(),
+    requireInteractiveSession: (
+        _req: Request,
+        _res: Response,
+        next: () => void,
+    ) => next(),
 }));
 
 jest.mock("../../utils/logger", () => ({
@@ -48,7 +53,10 @@ jest.mock("../../workers/queues", () => ({
 }));
 
 jest.mock("../../config", () => ({
-    config: { workers: { trackRemovalRetentionDays: 90 } },
+    config: {
+        workers: { trackRemovalRetentionDays: 90 },
+        streaming: { traceEnabled: false },
+    },
 }));
 
 import router from "../admin";

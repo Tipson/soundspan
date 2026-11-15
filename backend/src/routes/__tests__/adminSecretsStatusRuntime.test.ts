@@ -9,6 +9,11 @@ process.env.SETTINGS_ENCRYPTION_KEY =
 jest.mock("../../middleware/auth", () => ({
     requireAuth: (_req: Request, _res: Response, next: () => void) => next(),
     requireAdmin: (_req: Request, _res: Response, next: () => void) => next(),
+    requireInteractiveSession: (
+        _req: Request,
+        _res: Response,
+        next: () => void,
+    ) => next(),
 }));
 
 jest.mock("../../utils/logger", () => ({

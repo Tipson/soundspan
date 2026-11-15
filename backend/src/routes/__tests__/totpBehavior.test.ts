@@ -142,6 +142,12 @@ function createRes() {
             res.body = payload;
             return res;
         }),
+        clearCookie: jest.fn(function (
+            _name: string,
+            _options?: import("express").CookieOptions,
+        ) {
+            return res;
+        }),
     };
     return res;
 }

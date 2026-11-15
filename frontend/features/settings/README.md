@@ -21,6 +21,7 @@ Start-here guide for `frontend/features/settings`.
 | `components/sections/APIKeysSection.tsx` | components |
 | `components/sections/AudiobookshelfSection.tsx` | components |
 | `components/sections/CacheSection.tsx` | components |
+| `components/sections/QueueDashboardSection.tsx` | short administrator-only browser access to the server's background queues |
 | `components/sections/OnlineAnalysisProgress.tsx` | shared canonical audio analysis coverage; administrator-only read-only polling |
 | `components/sections/DownloadPreferencesSection.tsx` | components |
 | `components/sections/DeviceOfflineSettingsSection.tsx` | per-device offline automation controls |
@@ -87,6 +88,19 @@ Start-here guide for `frontend/features/settings`.
   windows. Quota checks include rejected reservations and are not a success count.
   No active embedding space or unavailable telemetry is displayed as unknown,
   never as a successful zero. Dashboard reads do not schedule analysis.
+
+- Background Tasks opens the queue dashboard through the API boundary after
+  preparing a non-authenticating HttpOnly browser binding at `/api` and then
+  creating a 15-minute grant restricted to `/api/admin/queues`. The grant's
+  owner/version/epoch/nonce must match live shared Redis state. Mint does not
+  recreate revoked or missing bindings. Access/refresh JWT contracts are unchanged.
+  The separate tab has no opener and its URL never contains credentials.
+  End Access revokes the scoped grant and clears both cookies. Successful sign-in
+  and identified web logout also revoke it; offline logout does not confirm
+  server-side revocation. A late bootstrap alone is not a credential; account
+  generation and cancellation prevent its stale follow-up mint. API keys
+  cannot create this interactive session. Cookie-backed queue actions require
+  same-origin Fetch Metadata from a supported browser.
 
 - Playback Sources and YouTube Music configure worldwide search, provider
   recommendations, and streaming. Source order is a priority list; disabled or

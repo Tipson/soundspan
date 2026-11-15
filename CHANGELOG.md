@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Open background queues from Admin with short, dashboard-only browser access. Require current administrator rights and live shared-state grants, revoke scoped access on identified logout or account switch, and preserve ordinary web and native authentication.
 - Use patched Node 24.22.3, Next 16.4.6, sharp 0.35.5, Brotli 1.2.1 and certifi runtimes. Keep AIO application dependencies tied to this checkout's lockfiles instead of replacing them with an older release tree.
 - Normalize artist names and album paths in linear time on long whitespace inputs, preserving matching results and recommendation identity keys.
 - Space retries of aborted remote-preference transactions with short bounded exponential jitter, preserving the three-attempt limit and latest-intent ordering during rapid concurrent feedback.

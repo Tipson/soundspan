@@ -131,9 +131,11 @@ function createResponse() {
         body: unknown;
         status: jest.Mock;
         json: jest.Mock;
+        clearCookie: jest.Mock;
     } = {
         statusCode: 200,
         body: undefined,
+        clearCookie: jest.fn(() => response),
         status: jest.fn((statusCode: number) => {
             response.statusCode = statusCode;
             return response;

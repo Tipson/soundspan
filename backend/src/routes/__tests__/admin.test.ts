@@ -56,6 +56,11 @@ mockLogger.child.mockReturnValue(mockLogger);
 jest.mock("../../middleware/auth", () => ({
     requireAuth: mockRequireAuth,
     requireAdmin: mockRequireAdmin,
+    requireInteractiveSession: (
+        _req: Request,
+        _res: Response,
+        next: NextFunction,
+    ) => next(),
 }));
 
 jest.mock("../../utils/db", () => ({

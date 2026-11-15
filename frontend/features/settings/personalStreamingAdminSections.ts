@@ -15,6 +15,7 @@ const PERSONAL_STREAMING_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         id: "cache",
         label: adminActivityRu.admin.sidebar.cacheAutomation,
     },
+    { id: "queue-dashboard", label: "Фоновые задачи" },
     {
         id: "library-safety",
         label: adminActivityRu.admin.sidebar.librarySafety,

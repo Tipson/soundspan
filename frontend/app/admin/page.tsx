@@ -65,6 +65,14 @@ const LibrarySafetySection = dynamic(
     { loading: renderSectionFallback },
 );
 
+const QueueDashboardSection = dynamic(
+    () =>
+        import("@/features/settings/components/sections/QueueDashboardSection").then(
+            (mod) => mod.QueueDashboardSection,
+        ),
+    { loading: renderSectionFallback },
+);
+
 const TestApplicationsSection = dynamic(
     () =>
         import("@/features/settings/components/sections/TestApplicationsSection").then(
@@ -246,6 +254,8 @@ export default function AdminPage() {
                     settings={systemSettings}
                     onUpdate={updateSystemSettings}
                 />
+
+                <QueueDashboardSection />
 
                 <LibrarySafetySection
                     settings={systemSettings}

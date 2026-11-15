@@ -1,4 +1,8 @@
-import { ApiClientCore, type ApiData } from "./api/core";
+import {
+    ApiClientCore,
+    SupersededAuthSessionError,
+    type ApiData,
+} from "./api/core";
 import { WithAuth } from "./api/auth";
 import { WithAudiobooks } from "./api/audiobooks";
 import { WithAudius } from "./api/audius";
@@ -584,7 +588,48 @@ class ApiClient extends WithMusicSources(
             ),
         ),
     ),
-) {}
+) {
+    /** Creates a short cookie session limited to the administrator queue panel. */
+    async createQueueDashboardSession(
+        signal?: AbortSignal,
+    ): Promise<{ expiresIn: number }> {
+        const generation = this.getSessionGeneration();
+        await this.request<void>("/admin/queues/binding", {
+            method: "POST",
+            signal,
+        });
+        if (this.getSessionGeneration() !== generation)
+            throw new SupersededAuthSessionError();
+        if (signal?.aborted)
+            throw new DOMException("Dashboard opening cancelled", "AbortError");
+        const result = await this.request<unknown>("/admin/queues/session", {
+            method: "POST",
+            signal,
+        });
+        if (
+            result === null ||
+            typeof result !== "object" ||
+            !("expiresIn" in result) ||
+            typeof result.expiresIn !== "number" ||
+            !Number.isInteger(result.expiresIn) ||
+            result.expiresIn < 1 ||
+            result.expiresIn > 900
+        ) {
+            throw new Error("Invalid queue dashboard session response");
+        }
+        return { expiresIn: result.expiresIn };
+    }
+
+    /** Clears the browser's dashboard cookie without exposing its token. */
+    async endQueueDashboardSession(): Promise<void> {
+        await this.request<void>("/admin/queues/session", { method: "DELETE" });
+    }
+
+    /** Returns the configured API dashboard URL without credentials or parameters. */
+    getQueueDashboardUrl(): string {
+        return this.toAbsoluteApiUrl("/api/admin/queues");
+    }
+}
 
 // Create a singleton instance without passing baseUrl - it will be determined dynamically
 export const api = new ApiClient();

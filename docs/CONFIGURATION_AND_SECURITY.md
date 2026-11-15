@@ -142,20 +142,24 @@ labels.
 
 ## Authentication and Credential Security
 
-Every authenticated request uses an explicit credential transport — there is no cookie-session authentication, so an ambient cookie cannot silently take precedence over a bearer token or API key and the API has no ambient-cookie CSRF credential surface. The HTTP-only OIDC flow-binding cookie remains; it binds a login transaction to its initiating browser and does not authenticate API requests.
+The first-party API uses explicit credential transport. Its narrow browser-cookie exception is the administrator queue dashboard at `/api/admin/queues`: a 15-minute HttpOnly, SameSite=Strict grant cookie authenticates only that dashboard's HTML, assets and actions, together with a matching non-authenticating browser binding. A bearer header takes precedence there; API keys are rejected. Dashboard tokens cannot authenticate general API, media or refresh requests. The HTTP-only OIDC flow-binding cookie binds a login transaction to its initiating browser and does not authenticate API requests.
 
 | Surface | Credential transport | Lifetime | Revocation path |
 | ------- | -------------------- | -------- | --------------- |
 | Web UI and first-party API | `Authorization: Bearer` JWT access token plus refresh token in the refresh request body | Access: 24 hours. Refresh: 30 days. | A self-service password change or administrator-set password increments `tokenVersion`, invalidating outstanding access and refresh JWTs. Ordinary logout removes the current browser's tokens only; there is no separate logout-all-devices endpoint. |
 | OpenSubsonic `/rest` | Per-request token plus salt, password transport, or an `ssap_` app password; API keys use the separate `apiKey` parameter | The token is a per-request digest with no independent server-side lifetime. App-password credentials remain valid until revoked. The legacy dedicated Subsonic password is deprecated: it cannot be set from Settings, but direct API updates remain possible and existing stored values are honored. | Revoke an app password individually. Account password changes and administrator-set passwords clear any legacy dedicated Subsonic password. |
 | External API clients | `X-API-Key` header | 90 days from creation | Delete the API key. |
+| Administrator queue dashboard | Explicit administrator bearer, or an audience/type-bound grant cookie with path `/api/admin/queues` and its matching non-authenticating binding cookie with path `/api` | Grant: 15 minutes; binding/state: at most 24 hours. Ordinary access-token refresh retains the binding. | Current role, `tokenVersion`, account existence and pending deletion are checked on every request. Cookie access also requires the live Redis owner/version/epoch/nonce. End Access, successful sign-in and identified web logout revoke scoped grants and clear browser cookies. Ordinary access/refresh JWTs are not globally revoked. |
 | Federation peer API | Dedicated opaque `Authorization: Bearer` peer credential | No automatic expiry. | Rotate the credential, revoke the peer, or delete the peer. |
 | Internal sidecar requests | `x-internal-secret` header | No automatic expiry. | Rotate `INTERNAL_API_SECRET` across the backend and sidecars, then restart them. |
 
 - Token refresh uses `/api/auth/refresh`.
 - `SESSION_SECRET` remains required as the JWT signing fallback when `JWT_SECRET` is unset.
 - Encryption key validity is checked at startup.
-- Secure OIDC flow cookies default on when `NODE_ENV=production` and can be overridden with `SECURE_COOKIES`. The OIDC flow cookie drops its `__Host-` prefix when secure cookies are off.
+- Secure OIDC and queue-dashboard cookies default on when `NODE_ENV=production` and can be overridden with `SECURE_COOKIES`. HTTP-only LAN deployments explicitly set `SECURE_COOKIES=false`. Forwarded request headers do not change this policy. The OIDC flow cookie uses `__Host-`; the path-restricted dashboard cookie uses `__Secure-`. These prefixes are omitted when secure cookies are off.
+- Dashboard cookie mutations additionally require `Sec-Fetch-Site: same-origin`, preventing actions from sibling origins as well as cross-site pages. Supported browsers send this header on dashboard XHR; clients without it can view the panel but receive 403 for cookie-backed actions. Opening a dashboard on a configured sibling API hostname keeps its own XHR same-origin. Cross-site cookie deployments are not supported.
+- Dashboard opening first prepares a non-authenticating binding, then mints a credential through an atomic compare-and-set against that binding. Mint never recreates missing state. Logout/account switching prevents a delayed mint from restoring an old grant; a late binding response alone cannot authorize anything, and the frontend suppresses a stale follow-up mint after logout or cancellation.
+- Dashboard state lives in shared Redis; raw bearer credentials are not stored. Missing state, including Redis data loss, refuses old grant cookies. An explicit Open can prepare a fresh binding. Redis operations have a 1.5-second deadline; an unavailable dashboard returns 503. Clean music sign-in has no dashboard-state dependency. A sign-in carrying an existing binding or previous administrator bearer must first revoke its scoped grants; failure is reported rather than claimed as a completed account switch. Offline logout and an unsuccessful revocation response do not confirm server-side revocation; the app still removes local credentials.
 
 ## Reverse Proxy Trust and Rate Limits
 
@@ -223,7 +227,7 @@ treat a linked peer as trusted and limit admin access accordingly.
 ## Webhook and Admin Security
 
 - Lidarr webhook signatures are supported and should be configured
-- Bull Board (`/api/admin/queues`) requires authenticated admin access
+- Bull Board (`/api/admin/queues`) opens from Admin → Background Tasks. Creating or ending its session requires an interactive administrator bearer token; ordinary users and API keys are refused. Other `/api/admin` routes retain their ordinary authentication guard and do not accept the dashboard cookie.
 - Swagger docs: the UI at `/api/docs` is always accessible; the raw spec at `/api/docs.json` requires auth in production unless `DOCS_PUBLIC=true`
 
 ## Optional VPN Notes

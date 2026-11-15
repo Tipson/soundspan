@@ -9,6 +9,16 @@ import { encrypt, decrypt } from "../../utils/encryption";
 import { timingSafeCompare } from "../../utils/timingSafe";
 import type { LoginUser } from "../../services/oidcAccountResolution";
 import { hasErrorCode } from "../../utils/prismaErrors";
+import { config } from "../../config";
+import {
+    queueDashboardCookieName,
+    queueDashboardCookieOptions,
+    dashboardBindingCookieName,
+    dashboardBindingCookieOptions,
+} from "../../middleware/queueDashboardCookie";
+import { dashboardSessions } from "../../utils/dashboardSessionState";
+import { getDashboardRevocationContext } from "../../utils/dashboardSessionContext";
+import { sendRouteError } from "../../utils/routeErrorResponse";
 
 async function verifyTotpToken(
     secret: string,
@@ -99,7 +109,46 @@ async function verifyLoginSecondFactor(
         : { kind: "invalid", message: "Invalid 2FA token" };
 }
 
-function sendLoginSuccess(res: Response, user: LoginUser): Response {
+async function sendLoginSuccess(
+    res: Response,
+    user: LoginUser,
+): Promise<Response> {
+    // A fresh sign-in must not inherit a previous account's dashboard session,
+    // including when its earlier offline logout could not reach this server.
+    res.clearCookie(
+        queueDashboardCookieName(config.secureCookies),
+        queueDashboardCookieOptions(config.secureCookies),
+    );
+    const context = getDashboardRevocationContext(
+        res.req,
+        config.secureCookies,
+    );
+    res.clearCookie(
+        dashboardBindingCookieName(config.secureCookies),
+        dashboardBindingCookieOptions(config.secureCookies),
+    );
+    // A binding or previous administrator bearer identifies privileged state.
+    // Clean sign-in has neither and does not acquire a Redis dependency.
+    if (context.bindingId || context.credentialHash) {
+        try {
+            await dashboardSessions.revoke(
+                context.bindingId,
+                context.credentialHash,
+            );
+        } catch (error) {
+            logger
+                .child("QueueDashboard")
+                .warn(
+                    "Account switch could not revoke dashboard access",
+                    error,
+                );
+            return sendRouteError(
+                res,
+                503,
+                "Dashboard access revocation unavailable; retry sign-in",
+            );
+        }
+    }
     return res.json({
         token: generateToken(user),
         refreshToken: generateRefreshToken(user),

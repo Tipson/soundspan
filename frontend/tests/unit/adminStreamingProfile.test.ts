@@ -11,6 +11,7 @@ test("админка показывает защиту медиатеки без
         "youtube-music-admin",
         "ai-services",
         "cache",
+        "queue-dashboard",
         "library-safety",
         "test-applications",
         "users",

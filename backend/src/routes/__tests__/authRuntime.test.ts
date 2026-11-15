@@ -178,6 +178,7 @@ function createRes() {
     const res: any = {
         statusCode: 200,
         body: undefined as unknown,
+        clearCookie: jest.fn(() => res),
         status: jest.fn(function (code: number) {
             res.statusCode = code;
             return res;
@@ -791,6 +792,27 @@ describe("auth routes runtime", () => {
             );
         },
     );
+
+    it("a new web login clears a previous account's dashboard cookie", async () => {
+        const response = await request(routeApp)
+            .post("/login")
+            .set("X-Forwarded-For", "198.51.100.200")
+            .send({ username: "alice", password: "valid-password" });
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual(
+            expect.objectContaining({
+                token: "jwt-access",
+                refreshToken: "jwt-refresh",
+            }),
+        );
+        expect(response.headers["set-cookie"]).toEqual(
+            expect.arrayContaining([
+                expect.stringContaining(
+                    "soundspan-queues=; Path=/api/admin/queues; Expires=Thu, 01 Jan 1970",
+                ),
+            ]),
+        );
+    });
 
     it("handles logout and refresh-token validation paths", async () => {
         const logoutRes = createRes();

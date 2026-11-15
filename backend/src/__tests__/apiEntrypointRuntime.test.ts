@@ -218,6 +218,8 @@ describe("api entrypoint runtime behavior", () => {
 
         const requireAuth = jest.fn((_req, _res, next) => next?.());
         const requireAdmin = jest.fn((_req, _res, next) => next?.());
+        const dashboardAccess = jest.fn((_req, _res, next) => next?.());
+        const createQueueDashboardAccess = jest.fn(() => dashboardAccess);
         const errorHandler = jest.fn((_err, _req, _res, _next) => undefined);
         const authLimiter = "auth-limiter";
         const refreshLimiter = "refresh-limiter";
@@ -237,6 +239,7 @@ describe("api entrypoint runtime behavior", () => {
             socketKeepAliveDelayMs: 30_000,
             databaseUrl: "postgresql://user:secret@db:5432/soundspan",
             redisUrl: "redis://redis:6379/0",
+            secureCookies: true,
             docsPublic: false,
             metrics: { token: "metrics-token", publicAccess: false },
             streaming: { traceEnabled: false },
@@ -330,6 +333,7 @@ describe("api entrypoint runtime behavior", () => {
         jest.doMock("../middleware/auth", () => ({
             requireAuth,
             requireAdmin,
+            createQueueDashboardAccess,
         }));
         jest.doMock("../middleware/rateLimiter", () => ({
             authLimiter,
@@ -409,6 +413,8 @@ describe("api entrypoint runtime behavior", () => {
             ExpressAdapter,
             requireAuth,
             requireAdmin,
+            dashboardAccess,
+            createQueueDashboardAccess,
             shutdownWorkers,
             shutdownSchedulerClaimRedis,
             shutdownUmapProjection,
@@ -921,10 +927,13 @@ describe("api entrypoint runtime behavior", () => {
         expect(queuesCall).toBeDefined();
         expect(queuesCall!.slice(1)).toEqual([
             "admin-surface-limiter",
-            mocks.requireAuth,
-            mocks.requireAdmin,
+            mocks.dashboardAccess,
             "bull-router",
         ]);
+        expect(mocks.createQueueDashboardAccess).toHaveBeenCalledWith(
+            true,
+            expect.anything(),
+        );
     });
 
     it.each([false, true])(

@@ -605,6 +605,27 @@ describe("OIDC auth routes", () => {
         expect(replay.statusCode).toBe(401);
     });
 
+    it.each([
+        `${"soundspan_oidc_flow"}=${FLOW_BINDING}; ${Array.from({ length: 64 }, (_, index) => `extra${index}=x`).join("; ")}`,
+        `soundspan_oidc_flow=${FLOW_BINDING}; soundspan_oidc_flow=${FLOW_BINDING}`,
+    ])(
+        "rejects an ambiguous or over-count OIDC binding header",
+        async (cookie) => {
+            values.set("oidc:pending:state-1", {
+                nonce: "nonce-1",
+                codeVerifier: "verifier-1",
+                returnTo: "/library",
+                bindingHash: FLOW_BINDING_HASH,
+            });
+            const req = callbackRequest();
+            req.headers = { cookie };
+            const res = createRes();
+            await getHandler("/oidc/callback", "get")(req, res);
+            expect(res.redirectUrl).toBe("/login?ssoError=invalid_state");
+            expect(handleCallback).not.toHaveBeenCalled();
+        },
+    );
+
     it("absolutizes the SSO exchange-code callback target", async () => {
         mockConfig.oidc.webBaseUrl = "https://music.example";
         values.set("oidc:pending:state-1", {

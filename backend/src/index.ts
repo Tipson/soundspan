@@ -75,7 +75,8 @@ import { createServer } from "http";
 import type { Socket } from "net";
 import { errorHandler } from "./middleware/errorHandler";
 import { createFeatureDisabledHandler } from "./utils/featureGate";
-import { requireAuth, requireAdmin } from "./middleware/auth";
+import { requireAuth, createQueueDashboardAccess } from "./middleware/auth";
+import { dashboardSessions } from "./utils/dashboardSessionState";
 import { createDependencyReadinessTracker } from "./utils/dependencyReadiness";
 import { isSecretsDbOnlyEnabled } from "./config/secretsPolicy";
 import {
@@ -687,8 +688,7 @@ httpServer.listen(config.port, "0.0.0.0", async () => {
         app.use(
             "/api/admin/queues",
             adminSurfaceLimiter,
-            requireAuth,
-            requireAdmin,
+            createQueueDashboardAccess(config.secureCookies, dashboardSessions),
             serverAdapter.getRouter(),
         );
         logger.debug(

@@ -34,6 +34,7 @@ import { putOnce, takeOnce } from "../../utils/redisKv";
 import { timingSafeCompare } from "../../utils/timingSafe";
 import { runDummyBcrypt } from "../../utils/dummyCredential";
 import { sendRouteError } from "../../utils/routeErrorResponse";
+import { readCookie } from "../../utils/cookies";
 import {
     hasErrorCode,
     oidcLog,
@@ -44,8 +45,6 @@ import {
 const OIDC_PENDING_TTL_SECONDS = 600;
 const OIDC_EXCHANGE_TTL_SECONDS = 60;
 const OIDC_FLOW_COOKIE_BASE_NAME = "soundspan_oidc_flow";
-const MAX_COOKIE_HEADER_LENGTH = 4096;
-const MAX_COOKIE_COUNT = 64;
 const opaqueValueSchema = z
     .string()
     .min(1)
@@ -164,14 +163,7 @@ function clearFlowBindingCookie(res: Response): void {
 }
 
 function readFlowBindingCookie(req: Request): string | null {
-    const header = req.headers.cookie;
-    if (!header || header.length > MAX_COOKIE_HEADER_LENGTH) return null;
-    const cookies = header.split(";").slice(0, MAX_COOKIE_COUNT);
-    for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split("=", 2);
-        if (name === flowCookieName() && value) return value;
-    }
-    return null;
+    return readCookie(req, flowCookieName());
 }
 
 function hasMatchingFlowBinding(req: Request, bindingHash: string): boolean {
