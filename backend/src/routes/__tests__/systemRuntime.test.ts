@@ -19,6 +19,11 @@ jest.mock("../../services/featureDetection", () => ({
 
 jest.mock("../../utils/db", () => ({
     prisma: {
+        user: {
+            findUniqueOrThrow: jest
+                .fn()
+                .mockResolvedValue({ playHistoryEpoch: 0 }),
+        },
         systemSettings: {
             findUnique: jest.fn(),
         },
@@ -27,6 +32,7 @@ jest.mock("../../utils/db", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        playCreation: { newCreationsEnabled: false, replaySupported: false },
         loudnessTargetLufs: -18,
         features: {
             audioAnalysis: true,
@@ -58,6 +64,7 @@ function createRes() {
     const res: any = {
         statusCode: 200,
         body: undefined as unknown,
+        setHeader: jest.fn(),
         status: jest.fn(function (code: number) {
             res.statusCode = code;
             return res;
@@ -98,6 +105,12 @@ describe("system routes runtime", () => {
             autoPlaylists: true,
             loudnessTargetLufs: -18,
             audius: false,
+            playCreation: expect.objectContaining({
+                version: 1,
+                ownerHistoryEpoch: 0,
+                newCreationsEnabled: false,
+                replaySupported: false,
+            }),
         });
     });
 

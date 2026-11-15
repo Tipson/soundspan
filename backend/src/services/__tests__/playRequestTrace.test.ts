@@ -3,6 +3,28 @@ import type { Request, Response } from "express";
 import { createPlayRequestTrace } from "../playRequestTrace";
 
 describe("play request stage attribution", () => {
+    it("observes a transactional write only from its first mutation through outer commit", () => {
+        const f = fixture();
+        f.advance(5);
+        const observation = f.trace.beginWrite();
+        f.advance(10);
+        f.response.emit("close");
+        expect(f.records.at(-1)).toMatchObject({
+            stage: "request",
+            writeState: "inflight",
+        });
+        observation.committed();
+        observation.failed();
+        expect(
+            f.records.filter((row) => row.stage === "db_acquire_write"),
+        ).toEqual([
+            expect.objectContaining({
+                outcome: "late_success",
+                writeState: "committed",
+                durationMs: 10,
+            }),
+        ]);
+    });
     function fixture(
         diagnostic = false,
         headers: Record<string, unknown> = {},

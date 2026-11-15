@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Provide a disabled-by-default, owner-scoped Play create/replay protocol with immutable request receipts, atomic exposure attribution, monotonic progress and history-clear epochs. Keep legacy keyless playback compatible; retain additive schema and receipt expiry floors while client delivery remains gated.
 - Keep ordinary YouTube extraction free of JavaScript solvers. Offer an opt-in, single-slot recovery that preserves extraction priority, cancellation and worker leases; retain a started transfer beyond its acquisition window and refuse recovery for terminal delivery failures.
 - Correlate Play and engagement requests across native dispatch, the streaming proxy and API stages. Distinguish cancellation, an uncertain write, a confirmed commit and late completion; keep incident evidence visible at the default production log level without recording user or track identifiers in metrics.
 - Open background queues from Admin with short, dashboard-only browser access. Require current administrator rights and live shared-state grants, revoke scoped access on identified logout or account switch, and preserve ordinary web and native authentication.

@@ -4,6 +4,7 @@ import { requireAuth } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { config } from "../config";
+import { playAccounting } from "../services/playAccounting";
 
 const router = Router();
 
@@ -66,8 +67,11 @@ const router = Router();
 router.get("/features", requireAuth, async (req, res) => {
     try {
         const features = await featureDetection.getFeatures();
+        const playCreation = await playAccounting.capabilities(req.user!.id);
+        res.setHeader("Cache-Control", "private, no-store");
         res.json({
             ...features,
+            playCreation,
             audioAnalysis: config.features.audioAnalysis,
             discovery: config.features.discovery,
             autoPlaylists: config.features.autoPlaylists,

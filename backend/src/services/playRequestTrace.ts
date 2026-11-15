@@ -33,6 +33,7 @@ export interface PlayStageSample {
 export interface PlayRequestTrace {
     measure<T>(stage: PlayRequestStage, work: () => Promise<T> | T): Promise<T>;
     write<T>(work: () => Promise<T>): Promise<T>;
+    beginWrite(): { committed(): void; failed(): void };
     authenticated(): void;
     respond(): void;
 }
@@ -58,7 +59,7 @@ export function createPlayRequestTrace(
 ): PlayRequestTrace | undefined {
     const path = (req.originalUrl || req.path).split("?")[0];
     const requestKind =
-        req.method === "POST" && /^\/api\/plays\/?$/.test(path)
+        req.method === "POST" && /^\/api\/plays(?:\/idempotent)?\/?$/.test(path)
             ? "create"
             : req.method === "PATCH" &&
                 /^\/api\/plays\/[^/]+\/engagement\/?$/.test(path)
@@ -124,18 +125,39 @@ export function createPlayRequestTrace(
                 throw error;
             }
         },
-        async write(work) {
+        beginWrite() {
             writeState = "inflight";
-            return trace.measure("db_acquire_write", async () => {
-                try {
-                    const result = await work();
-                    writeState = "committed";
-                    return result;
-                } catch (error) {
-                    writeState = "unknown";
-                    throw error;
-                }
-            });
+            activeStage = "db_acquire_write";
+            const since = now();
+            let ended = false;
+            const end = (committed: boolean) => {
+                if (ended) return;
+                ended = true;
+                writeState = committed ? "committed" : "unknown";
+                emit(
+                    "db_acquire_write",
+                    terminal
+                        ? committed
+                            ? "late_success"
+                            : "late_error"
+                        : committed
+                          ? "success"
+                          : "error",
+                    since,
+                );
+            };
+            return { committed: () => end(true), failed: () => end(false) };
+        },
+        async write(work) {
+            const observation = trace.beginWrite();
+            try {
+                const result = await work();
+                observation.committed();
+                return result;
+            } catch (error) {
+                observation.failed();
+                throw error;
+            }
         },
         respond() {
             if (terminal) return;
@@ -178,6 +200,7 @@ export function createPlayRequestTrace(
 const unobservedTrace: PlayRequestTrace = {
     measure: async (_stage, work) => work(),
     write: async (work) => work(),
+    beginWrite: () => ({ committed: () => {}, failed: () => {} }),
     authenticated: () => {},
     respond: () => {},
 };

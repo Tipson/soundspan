@@ -61,6 +61,14 @@ jest.mock("../../services/recommendations/exposureStore", () => ({
     },
 }));
 
+jest.mock("../../services/playAccounting", () => ({
+    playAccounting: {
+        clearHistory: jest.fn(),
+        updateEngagement: jest.fn().mockResolvedValue(null),
+        createOrReplay: jest.fn(),
+    },
+}));
+import { playAccounting } from "../../services/playAccounting";
 import router from "../plays";
 import { prisma } from "../../utils/db";
 import { resolveRemoteTrackMetadataForRequest } from "../../services/remoteTrackMetadataResolver";
@@ -78,7 +86,7 @@ const mockTrackYtMusicUpsert = prisma.trackYtMusic.upsert as jest.Mock;
 const mockPlayCreate = prisma.play.create as jest.Mock;
 const mockPlayFindMany = prisma.play.findMany as jest.Mock;
 const mockPlayCount = prisma.play.count as jest.Mock;
-const mockPlayDeleteMany = prisma.play.deleteMany as jest.Mock;
+const mockPlayDeleteMany = playAccounting.clearHistory as jest.Mock;
 const mockResolveRemoteTrackMetadataForRequest =
     resolveRemoteTrackMetadataForRequest as jest.Mock;
 const mockForwardScrobbleIsolated = forwardScrobbleIsolated as jest.Mock;
@@ -220,9 +228,7 @@ describe("plays history compatibility", () => {
 
         await clearHistoryHandler(req, res);
 
-        expect(mockPlayDeleteMany).toHaveBeenCalledWith({
-            where: { userId: "user-1" },
-        });
+        expect(mockPlayDeleteMany).toHaveBeenCalledWith("user-1", "all");
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
             success: true,
@@ -244,15 +250,7 @@ describe("plays history compatibility", () => {
         await clearHistoryHandler(req, res);
 
         expect(mockPlayDeleteMany).toHaveBeenCalledTimes(1);
-        expect(mockPlayDeleteMany.mock.calls[0][0].where).toEqual(
-            expect.objectContaining({
-                userId: "user-1",
-                playedAt: expect.objectContaining({
-                    gte: expect.any(Date),
-                    lte: expect.any(Date),
-                }),
-            }),
-        );
+        expect(mockPlayDeleteMany).toHaveBeenCalledWith("user-1", "30d");
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
             success: true,

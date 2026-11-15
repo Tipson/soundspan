@@ -12,6 +12,11 @@ const mockForwardReference = jest.fn();
 const mockAttribute = jest.fn();
 const mockEnsureRemote = jest.fn();
 const mockResolveRemote = jest.fn();
+jest.mock("../../config", () => ({
+    config: {
+        playCreation: { newCreationsEnabled: false, replaySupported: false },
+    },
+}));
 
 jest.mock("../../middleware/auth", () => ({
     requireAuth: (req: Request, res: Response, next: NextFunction) => {

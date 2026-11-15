@@ -932,6 +932,11 @@ export const config = {
     // Coarse feature flags for ML/recommendation subsystems.
     // Existing analysis defaults remain enabled; optional integrations opt in.
     // Operators can override them through the Helm chart's config.features.
+    playCreation: {
+        // No activation surface before external delivery and client phase gates.
+        newCreationsEnabled: false,
+        replaySupported: false,
+    },
     features: {
         // Audio analysis queueing/consumption (Essentia + CLAP vibe embeddings)
         audioAnalysis: parseEnvBool(process.env.AUDIO_ANALYSIS_ENABLED, true),

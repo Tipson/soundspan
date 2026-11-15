@@ -68,6 +68,8 @@ const admin: User = {
     username: "admin",
     role: "admin",
     tokenVersion: 2,
+    playHistoryEpoch: 0,
+    playReceiptPrunedThrough: null,
     displayName: null,
     email: null,
     passwordHash: null,

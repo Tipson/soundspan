@@ -38,6 +38,11 @@ jest.mock("../../services/featureDetection", () => ({
 
 jest.mock("../../utils/db", () => ({
     prisma: {
+        user: {
+            findUniqueOrThrow: jest
+                .fn()
+                .mockResolvedValue({ playHistoryEpoch: 0 }),
+        },
         systemSettings: {
             findUnique: jest.fn(),
         },
@@ -46,6 +51,7 @@ jest.mock("../../utils/db", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        playCreation: { newCreationsEnabled: false, replaySupported: false },
         loudnessTargetLufs: -18,
         features: {
             audioAnalysis: true,
@@ -119,6 +125,12 @@ describe("system routes integration", () => {
             federation: true,
             loudnessTargetLufs: -18,
             audius: true,
+            playCreation: expect.objectContaining({
+                version: 1,
+                ownerHistoryEpoch: 0,
+                newCreationsEnabled: false,
+                replaySupported: false,
+            }),
         });
         expect(mockGetFeatures).toHaveBeenCalledTimes(1);
     });

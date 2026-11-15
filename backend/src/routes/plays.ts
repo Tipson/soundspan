@@ -27,98 +27,19 @@ import {
     playRequestTrace,
     type PlayRequestTrace,
 } from "../services/playRequestTrace";
+import { playAccounting } from "../services/playAccounting";
+import {
+    classifyPlayAccountingFailure,
+    playPayloadSchema,
+    playEngagementSchema,
+    monotonicEngagementFilter,
+} from "../services/playAccountingProtocol";
 
 const router = Router();
 
 router.use(requireAuth);
 
-const playContextSchema = z.enum([
-    "wave",
-    "home",
-    "search",
-    "playlist",
-    "album",
-    "artist",
-    "library",
-]);
-const waveModeSchema = z.enum(["for-you", "new", "familiar"]);
-const playOutcomeSchema = z.enum([
-    "meaningful",
-    "completed",
-    "skipped",
-    "failed",
-]);
-const PLAY_OUTCOMES_BY_PRIORITY = [
-    "failed",
-    "skipped",
-    "meaningful",
-    "completed",
-] as const;
-
-const playSchema = z
-    .object({
-        trackId: z.string().optional(),
-        tidalTrackId: z.number().int().positive().optional(),
-        youtubeVideoId: z.string().trim().min(1).optional(),
-        musicSourceRecording: musicSourcePlayRecordingSchema.optional(),
-        title: z.string().trim().min(1).optional(),
-        artist: z.string().trim().min(1).optional(),
-        album: z.string().trim().min(1).optional(),
-        duration: z.number().int().nonnegative().optional(),
-        thumbnailUrl: z.string().trim().min(1).optional(),
-        playContext: playContextSchema.optional(),
-        waveMode: waveModeSchema.optional(),
-        recommendationGenerationId: z
-            .string()
-            .trim()
-            .min(1)
-            .max(128)
-            .optional(),
-        recommendationSessionId: z.string().trim().min(1).max(128).optional(),
-    })
-    .superRefine((data, ctx) => {
-        const providedIdentifiers = [
-            data.trackId ? 1 : 0,
-            data.tidalTrackId ? 1 : 0,
-            data.youtubeVideoId ? 1 : 0,
-            data.musicSourceRecording ? 1 : 0,
-        ].reduce((sum, value) => sum + value, 0);
-        if (
-            providedIdentifiers !== 1 ||
-            (data.musicSourceRecording && data.trackId !== undefined)
-        ) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["trackId"],
-                message: "Exactly one track identifier required",
-            });
-        }
-
-        const isRemote = Boolean(data.tidalTrackId || data.youtubeVideoId);
-        if (isRemote) {
-            if (
-                !data.title ||
-                !data.artist ||
-                !data.album ||
-                data.duration === undefined
-            ) {
-                ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
-                    path: ["title"],
-                    message:
-                        "Remote play logging requires title, artist, album, and duration",
-                });
-            }
-        }
-    });
-
-const playEngagementSchema = z
-    .object({
-        listenedSeconds: z.number().finite().min(0).max(86_400),
-        completionRatio: z.number().finite().min(0).max(1),
-        outcome: playOutcomeSchema,
-    })
-    .strict();
+const playSchema = playPayloadSchema;
 
 async function recommendationContextData(
     userId: string,
@@ -156,6 +77,7 @@ async function attributeRecommendationPlayback(
         userId: string;
         identity: RecommendationPlaybackIdentity;
         playedAt: Date;
+        playId?: string;
         listenedSeconds: number | null;
         completionRatio: number | null;
         outcome: string | null;
@@ -169,6 +91,7 @@ async function attributeRecommendationPlayback(
                 userId: input.userId,
                 ...input.identity,
                 playedAt: input.playedAt,
+                playId: input.playId,
                 listenedSeconds: input.listenedSeconds,
                 completionRatio: input.completionRatio,
                 outcome: input.outcome,
@@ -184,78 +107,6 @@ async function attributeRecommendationPlayback(
             error,
         });
     }
-}
-
-function equalProgressOutcomeFilter(
-    outcome: z.infer<typeof playOutcomeSchema>,
-) {
-    const outcomeIndex = PLAY_OUTCOMES_BY_PRIORITY.indexOf(outcome);
-    return {
-        OR: [
-            { outcome: null },
-            {
-                outcome: {
-                    in: PLAY_OUTCOMES_BY_PRIORITY.slice(0, outcomeIndex + 1),
-                },
-            },
-        ],
-    };
-}
-
-function monotonicEngagementFilter(
-    engagement: z.infer<typeof playEngagementSchema>,
-) {
-    return {
-        AND: [
-            {
-                OR: [
-                    { completionRatio: null },
-                    {
-                        completionRatio: {
-                            lte: engagement.completionRatio,
-                        },
-                    },
-                ],
-            },
-            {
-                OR: [
-                    { listenedSeconds: null },
-                    {
-                        listenedSeconds: {
-                            lte: engagement.listenedSeconds,
-                        },
-                    },
-                ],
-            },
-            {
-                OR: [
-                    { completionRatio: null },
-                    {
-                        completionRatio: {
-                            lt: engagement.completionRatio,
-                        },
-                    },
-                    { listenedSeconds: null },
-                    {
-                        listenedSeconds: {
-                            lt: engagement.listenedSeconds,
-                        },
-                    },
-                    {
-                        AND: [
-                            {
-                                completionRatio: engagement.completionRatio,
-                            },
-                            {
-                                listenedSeconds: engagement.listenedSeconds,
-                            },
-                            equalProgressOutcomeFilter(engagement.outcome),
-                        ],
-                    },
-                ],
-            },
-        ],
-    };
 }
 
 const playHistoryRangeSchema = z.enum(["7d", "30d", "365d", "all"]);
@@ -393,18 +244,7 @@ router.delete("/history", async (req, res) => {
         }
 
         const range = parsed.data;
-        const where =
-            range === "all"
-                ? { userId }
-                : {
-                      userId,
-                      playedAt: {
-                          gte: getHistoryRangeStart(range),
-                          lte: new Date(),
-                      },
-                  };
-
-        const result = await prisma.play.deleteMany({ where });
+        const result = await playAccounting.clearHistory(userId, range);
 
         res.json({
             success: true,
@@ -412,6 +252,13 @@ router.delete("/history", async (req, res) => {
             deletedCount: result.count,
         });
     } catch (error) {
+        const classified = classifyPlayAccountingFailure(error);
+        if (classified) {
+            if (classified.status === 503) res.setHeader("Retry-After", "1");
+            return res
+                .status(classified.status)
+                .json({ error: classified.code, code: classified.code });
+        }
         logger.error("Clear play history error:", error);
         res.status(500).json({ error: "Failed to clear play history" });
     }
@@ -573,10 +420,82 @@ router.delete("/history", async (req, res) => {
  *         description: Track not found
  */
 // POST /plays
+router.post("/idempotent", async (req, res) => {
+    const trace = playRequestTrace(res);
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+        const payload = await trace.measure("validation", () =>
+            playPayloadSchema.parse(req.body),
+        );
+        if (req.headers?.["x-soundspan-diagnostic"] === "playback") {
+            return res
+                .status(400)
+                .json({ error: "play_creation_diagnostic_not_supported" });
+        }
+        const response = await playAccounting.createOrReplay(
+            req.user!.id,
+            req.body?.clientPlaybackId,
+            payload,
+            async () => {
+                if (payload.musicSourceRecording) return {};
+                const resolved = await trace.measure("metadata", () =>
+                    resolveRemoteTrackMetadataForRequest({
+                        provider: "youtube",
+                        userId: req.user!.id,
+                        videoId: payload.youtubeVideoId!,
+                        metadata: {
+                            title: payload.title,
+                            artist: payload.artist,
+                            album: payload.album,
+                            duration: payload.duration,
+                            thumbnailUrl: payload.thumbnailUrl,
+                        },
+                    }),
+                );
+                const identity = await trace.measure("identity", () =>
+                    trackMappingService.ensureRemoteTrack({
+                        provider: "youtube",
+                        videoId: payload.youtubeVideoId!,
+                        ...resolved,
+                    }),
+                );
+                return { trackYtMusicId: identity.id };
+            },
+            () => trace.beginWrite(),
+        );
+        trace.respond();
+        return res.json(response);
+    } catch (error) {
+        const classified = classifyPlayAccountingFailure(error);
+        if (classified) {
+            if (classified.status === 503) res.setHeader("Retry-After", "1");
+            return res
+                .status(classified.status)
+                .json({ error: classified.code, code: classified.code });
+        }
+        if (error instanceof z.ZodError)
+            return res
+                .status(400)
+                .json({ error: "Invalid request", details: error.issues });
+        logger.error("Idempotent play creation failed", {
+            errorType: error instanceof Error ? error.name : "unknown",
+        });
+        return sendInternalRouteError(res, "Failed to log play");
+    }
+});
+
 router.post("/", async (req, res) => {
     const trace = playRequestTrace(res);
     try {
         const userId = req.user!.id;
+        if (
+            req.body &&
+            Object.prototype.hasOwnProperty.call(req.body, "clientPlaybackId")
+        ) {
+            return res
+                .status(400)
+                .json({ error: "play_creation_versioned_path_required" });
+        }
         const requestedTrackId =
             req.body && typeof req.body === "object"
                 ? (req.body as { trackId?: unknown }).trackId
@@ -647,6 +566,7 @@ router.post("/", async (req, res) => {
                         providerTrackId: recording.id,
                     },
                     playedAt,
+                    playId: play.id,
                     listenedSeconds: null,
                     completionRatio: null,
                     outcome: null,
@@ -700,6 +620,7 @@ router.post("/", async (req, res) => {
                         providerTrackId: payload.trackId,
                     },
                     playedAt,
+                    playId: play.id,
                     listenedSeconds: null,
                     completionRatio: null,
                     outcome: null,
@@ -772,6 +693,7 @@ router.post("/", async (req, res) => {
                     providerTrackId: payload.youtubeVideoId!,
                 },
                 playedAt,
+                playId: play.id,
                 listenedSeconds: null,
                 completionRatio: null,
                 outcome: null,
@@ -875,6 +797,16 @@ router.patch("/:playId/engagement", async (req, res) => {
     }
 
     try {
+        const keyedResult = await playAccounting.updateEngagement(
+            req.user!.id,
+            playId.data,
+            engagement.data,
+            () => trace.beginWrite(),
+        );
+        if (keyedResult) {
+            trace.respond();
+            return res.json(keyedResult);
+        }
         const result = await trace.write(() =>
             prisma.play.updateMany({
                 where: {
@@ -950,6 +882,7 @@ router.patch("/:playId/engagement", async (req, res) => {
                     userId: req.user!.id,
                     identity,
                     playedAt: attributedPlay.playedAt,
+                    playId: playId.data,
                     listenedSeconds: engagement.data.listenedSeconds,
                     completionRatio: engagement.data.completionRatio,
                     outcome: engagement.data.outcome,
@@ -961,6 +894,15 @@ router.patch("/:playId/engagement", async (req, res) => {
         trace.respond();
         return res.json({ success: true });
     } catch (error) {
+        const classified = classifyPlayAccountingFailure(error);
+        if (classified) {
+            if (classified.status === 404)
+                return res.status(404).json({ error: "Play not found" });
+            if (classified.status === 503) res.setHeader("Retry-After", "1");
+            return res
+                .status(classified.status)
+                .json({ error: classified.code, code: classified.code });
+        }
         logger.error("Update play engagement error:", error);
         return sendInternalRouteError(res, "Failed to update engagement");
     }

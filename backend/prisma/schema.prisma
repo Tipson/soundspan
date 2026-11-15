@@ -39,6 +39,8 @@ model User {
   profilePicture            Bytes?
   moodMixParams             Json?
   tokenVersion              Int                        @default(0)
+  playHistoryEpoch          Int                        @default(0)
+  playReceiptPrunedThrough  DateTime?
   pendingDeletionAt         DateTime?
   createdAt                 DateTime                   @default(now())
   appPasswords              AppPassword[]
@@ -58,6 +60,7 @@ model User {
   listeningState            ListeningState[]
   notifications             Notification[]
   plays                     Play[]
+  playCreationReceipts      PlayCreationReceipt[]
   playbackStates            PlaybackState[]
   playlists                 Playlist[]
   trackRatings              TrackRating[]
@@ -684,6 +687,28 @@ model TranscodedFile {
   @@index([lastAccessed])
 }
 
+enum LocalPlayAttributionState {
+  LEGACY
+  APPLIED
+  NO_TARGET
+}
+
+/// Durable owner/key tombstone. A null Play reference never authorizes recreation.
+model PlayCreationReceipt {
+  userId           String
+  clientPlaybackId String
+  requestHash      String?
+  issuedAt         DateTime
+  expiresAt        DateTime
+  deletedAt        DateTime?
+  playId           String?   @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  play             Play?     @relation(fields: [playId], references: [id], onDelete: SetNull)
+
+  @@id([userId, clientPlaybackId])
+  @@index([userId, expiresAt])
+}
+
 model Play {
   id                         String                    @id @default(cuid())
   userId                     String
@@ -703,6 +728,10 @@ model Play {
   engagementUpdatedAt        DateTime?
   recommendationGenerationId String?
   recommendationSessionId    String?
+  localAttributionState      LocalPlayAttributionState @default(LEGACY)
+  attributedExposureId       String?
+  attributedExposure         RecommendationExposure?   @relation(fields: [attributedExposureId], references: [id], onDelete: SetNull)
+  creationReceipt            PlayCreationReceipt?
   track                      Track?                    @relation(fields: [trackId], references: [id], onDelete: SetNull)
   trackTidal                 TrackTidal?               @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
   trackYtMusic               TrackYtMusic?             @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
@@ -712,6 +741,7 @@ model Play {
 
   @@index([userId, playedAt])
   @@index([trackId])
+  @@index([attributedExposureId])
   @@index([trackTidalId])
   @@index([trackYtMusicId])
   @@index([trackMusicSourceId])
@@ -1809,6 +1839,10 @@ model RecommendationExposure {
   listenedSeconds      Float?
   completionRatio      Float?
   outcome              String?
+  /// Projection order is server Play creation time, then Play ID; never progress.
+  lastPlayAt           DateTime?
+  lastPlayId           String?
+  attributedPlays      Play[]
   generation           RecommendationGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
   user                 User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   canonicalRecording   CanonicalRecording?      @relation(fields: [canonicalRecordingId], references: [id], onDelete: SetNull)

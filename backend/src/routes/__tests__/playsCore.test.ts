@@ -80,19 +80,43 @@ jest.mock("../../services/recommendations/exposureStore", () => ({
 }));
 
 import { prisma as prismaClient } from "../../utils/db";
+jest.mock("../../services/playAccounting", () => ({
+    playAccounting: {
+        clearHistory: jest.fn(),
+        updateEngagement: jest.fn().mockResolvedValue(null),
+        createOrReplay: jest.fn(),
+    },
+}));
+import { playAccounting } from "../../services/playAccounting";
+import { PlayAccountingError } from "../../services/playAccountingProtocol";
 import router from "../plays";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
 
 const app = createRouteTestApp("/api/plays", router);
 
 describe("plays routes integration", () => {
+    it("maps a foreign or missing accounting Play to the existing 404 contract", async () => {
+        (playAccounting.updateEngagement as jest.Mock).mockRejectedValueOnce(
+            new PlayAccountingError(404, "play_not_found"),
+        );
+        const response = await request(app)
+            .patch("/api/plays/foreign/engagement")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                listenedSeconds: 10,
+                completionRatio: 0.1,
+                outcome: "skipped",
+            });
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual({ error: "Play not found" });
+    });
     const mockTrackFindUnique = prismaClient.track.findUnique as jest.Mock;
     const mockPlayCreate = prismaClient.play.create as jest.Mock;
     const mockPlayUpdateMany = prismaClient.play.updateMany as jest.Mock;
     const mockPlayFindFirst = prismaClient.play.findFirst as jest.Mock;
     const mockPlayFindMany = prismaClient.play.findMany as jest.Mock;
     const mockPlayCount = prismaClient.play.count as jest.Mock;
-    const mockPlayDeleteMany = prismaClient.play.deleteMany as jest.Mock;
+    const mockPlayDeleteMany = playAccounting.clearHistory as jest.Mock;
     const mockRecommendationGenerationFindFirst = prismaClient
         .recommendationGeneration.findFirst as jest.Mock;
 
@@ -301,6 +325,7 @@ describe("plays routes integration", () => {
         });
         expect(mockAttributePlayback).toHaveBeenCalledWith({
             userId: "user-1",
+            playId: "play-1",
             provider: "library",
             providerTrackId: "track-1",
             playedAt: expect.any(Date),
@@ -404,6 +429,7 @@ describe("plays routes integration", () => {
         });
         expect(mockAttributePlayback).toHaveBeenCalledWith({
             userId: "user-1",
+            playId: "play-1",
             provider: "youtube",
             providerTrackId: "video-1",
             playedAt: new Date("2026-09-01T10:00:00Z"),
@@ -859,15 +885,7 @@ describe("plays routes integration", () => {
             range: "7d",
             deletedCount: 14,
         });
-        expect(mockPlayDeleteMany).toHaveBeenCalledWith({
-            where: expect.objectContaining({
-                userId: "user-1",
-                playedAt: expect.objectContaining({
-                    gte: expect.any(Date),
-                    lte: expect.any(Date),
-                }),
-            }),
-        });
+        expect(mockPlayDeleteMany).toHaveBeenCalledWith("user-1", "7d");
     });
 
     it("returns 500 responses when database operations fail", async () => {

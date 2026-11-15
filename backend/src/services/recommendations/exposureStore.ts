@@ -1,3 +1,4 @@
+import { projectPlaybackAttribution } from "./playAttribution";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/db";
 import {
@@ -56,6 +57,7 @@ interface GenerationCreateInput {
 }
 
 interface PlaybackAttributionInput {
+    playId?: string;
     userId: string;
     provider: string;
     providerTrackId: string;
@@ -68,7 +70,7 @@ interface PlaybackAttributionInput {
 
 type ExposureOutcomeUpdate = Pick<
     PlaybackAttributionInput,
-    "playedAt" | "listenedSeconds" | "completionRatio" | "outcome"
+    "playedAt" | "listenedSeconds" | "completionRatio" | "outcome" | "playId"
 >;
 
 interface ViewedTrackIdentity {
@@ -295,6 +297,7 @@ export class RecommendationExposureStore {
             input.playedAt,
         );
         await this.dependencies.updateExposure(exposure.id, {
+            ...(input.playId ? { playId: input.playId } : {}),
             playedAt: input.playedAt,
             listenedSeconds: input.listenedSeconds,
             completionRatio: input.completionRatio,
@@ -510,9 +513,11 @@ export const recommendationExposureStore = new RecommendationExposureStore({
         });
     },
     updateExposure: async (id, data) => {
-        await prisma.recommendationExposure.update({
-            where: { id },
-            data,
+        const { playId, ...outcome } = data;
+        await projectPlaybackAttribution(prisma, {
+            exposureId: id,
+            ...outcome,
+            playId: playId ?? "",
         });
     },
 });
