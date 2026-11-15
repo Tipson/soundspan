@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../core/model/owner_key.dart';
 import '../core/network/network_policy.dart';
+import '../core/network/api_transport.dart';
 import '../core/session/session_authority.dart';
 import '../features/recommendations/recommendation_repository.dart';
 import 'feedback_outbox.dart';
@@ -183,7 +184,11 @@ final class PlaybackReporter {
       await authority.assertCurrent(run.fence);
       if (_disposed || !authority.isCurrent(run.fence)) return;
       networkPolicy.requireNetwork();
-      run.playId = await repository.startPlay(run.entry, run.fence);
+      run.playId = await repository.startPlay(
+        run.entry,
+        run.fence,
+        playbackRunId: run.traceId,
+      );
       if (_disposed || !authority.isCurrent(run.fence)) return;
       run.createState = PlayCreateState.known;
       _status(run);
@@ -226,7 +231,12 @@ final class PlaybackReporter {
       return;
     }
     try {
-      await outbox.enqueue(run.playId!, engagement, run.fence);
+      await outbox.enqueue(
+        run.playId!,
+        engagement,
+        run.fence,
+        playbackRunId: run.traceId,
+      );
       if (authority.isCurrent(run.fence)) await outbox.flush(run.fence);
     } catch (_) {
       _status(run, error: 'play_engagement_store_failed');
@@ -254,6 +264,7 @@ final class _Run {
   final QueueEntry entry;
   final SessionFence fence;
   final int generation;
+  final String traceId = newPlaybackTraceId();
   PlaybackEvent last;
   double listened = 0;
   double lastQueued = 0;

@@ -3,6 +3,7 @@ import 'dart:async';
 import '../core/model/owner_key.dart';
 import '../core/model/app_failure.dart';
 import '../core/network/network_policy.dart';
+import '../core/network/api_transport.dart';
 import '../core/session/session_authority.dart';
 import '../core/storage/owner_store.dart';
 import '../features/recommendations/recommendation_repository.dart';
@@ -31,8 +32,9 @@ final class FeedbackOutbox {
   Future<void> enqueue(
     String playId,
     PlayEngagement engagement,
-    SessionFence fence,
-  ) async {
+    SessionFence fence, {
+    String? playbackRunId,
+  }) async {
     if (playId.isEmpty || playId.length > 512) {
       throw ArgumentError('Invalid known play ID');
     }
@@ -57,6 +59,9 @@ final class FeedbackOutbox {
         'ackVersion': old?['ackVersion'] ?? 0,
         'version': ((old?['version'] as int?) ?? 0) + 1,
         'nextAttemptAtUtc': old?['nextAttemptAtUtc'] ?? 0,
+        if (normalizePlaybackTraceId(old?['playbackRunId'] ?? playbackRunId)
+            case final String traceId)
+          'playbackRunId': traceId,
       });
       return true;
     });
@@ -146,6 +151,7 @@ final class FeedbackOutbox {
             row.key,
             PlayEngagement.fromJson(reserved),
             fence,
+            playbackRunId: normalizePlaybackTraceId(reserved['playbackRunId']),
           );
         } catch (error) {
           // A dirty wakeup is new work, not permission for an immediate retry

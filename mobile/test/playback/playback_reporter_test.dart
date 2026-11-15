@@ -68,6 +68,11 @@ void main() {
         .where((request) => request.method == ApiMethod.patch)
         .toList();
     expect(sent.length, 2);
+    final createdRun = transport.requests
+        .firstWhere((r) => r.path == '/api/plays')
+        .playbackRunId;
+    expect(createdRun, matches(RegExp(r'^[A-Za-z0-9_-]{1,64}$')));
+    expect(sent.map((r) => r.playbackRunId), everyElement(createdRun));
     expect(sent.last.body, {
       'listenedSeconds': 200,
       'completionRatio': 1,

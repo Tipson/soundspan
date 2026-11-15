@@ -1,10 +1,22 @@
 import 'dart:convert';
+import 'dart:math';
 
 import '../model/app_failure.dart';
 import '../model/owner_key.dart';
 import 'request_cancellation.dart';
 
 enum ApiMethod { get, post, put, patch, delete }
+
+/// Fresh anonymous correlation for a logical run or one network dispatch.
+String newPlaybackTraceId() => base64Url
+    .encode(List<int>.generate(24, (_) => Random.secure().nextInt(256)))
+    .replaceAll('=', '');
+
+/// Invalid trace metadata is omitted without affecting playback or admission.
+String? normalizePlaybackTraceId(Object? value) =>
+    value is String && RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(value)
+    ? value
+    : null;
 
 /// Strict HTTPS origin normalization. No URL credentials, suffix host aliases,
 /// paths, fragments or query strings are accepted at the server boundary.
@@ -38,9 +50,11 @@ final class ApiRequest {
     Map<String, Object?>? body,
     this.authenticated = true,
     this.cancellation,
+    String? playbackRunId,
   }) : origin = normalizeServerOrigin(origin),
        query = Map.unmodifiable(query),
-       body = body == null ? null : _freezeBody(body) {
+       body = body == null ? null : _freezeBody(body),
+       playbackRunId = normalizePlaybackTraceId(playbackRunId) {
     if (!path.startsWith('/api/') ||
         path.contains(RegExp(r'[\\?#\x00-\x20\x7f]')) ||
         path.contains('//') ||
@@ -80,6 +94,9 @@ final class ApiRequest {
   final Map<String, Object?>? body;
   final bool authenticated;
   final RequestCancellation? cancellation;
+
+  /// Optional playback correlation; never authorizes or deduplicates a write.
+  final String? playbackRunId;
   Uri get uri => origin
       .resolve(path)
       .replace(queryParameters: query.isEmpty ? null : query);

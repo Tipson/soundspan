@@ -13,6 +13,49 @@ import '../support/fake_tls_server.dart';
 
 void main() {
   test(
+    'play correlation reaches TLS headers with a fresh dispatch attempt',
+    () async {
+      final runs = <String?>[];
+      final attempts = <String?>[];
+      final source = await FakeTlsServer.start((request) async {
+        runs.add(request.headers.value('X-Soundspan-Playback-Run'));
+        attempts.add(request.headers.value('X-Soundspan-Play-Attempt'));
+        expect(
+          request.headers.value(HttpHeaders.authorizationHeader),
+          'Bearer exact-origin',
+        );
+        request.response.headers.contentType = ContentType.json;
+        request.response.write('{"id":"play-1"}');
+        await request.response.close();
+      });
+      addTearDown(source.close);
+      final client = DartJsonHttpClient(securityContext: source.clientContext);
+      addTearDown(client.close);
+      final request = ApiRequest(
+        origin: source.origin,
+        method: ApiMethod.post,
+        path: '/api/plays',
+        playbackRunId: 'run_stable',
+      );
+      await client.send(request, accessToken: 'exact-origin');
+      await client.send(request, accessToken: 'exact-origin');
+      await client.send(
+        ApiRequest(
+          origin: source.origin,
+          method: ApiMethod.post,
+          path: '/api/plays',
+          playbackRunId: 'invalid\r\nsecret',
+        ),
+        accessToken: 'exact-origin',
+      );
+      expect(runs, ['run_stable', 'run_stable', null]);
+      expect(attempts[0], matches(RegExp(r'^[A-Za-z0-9_-]{1,64}$')));
+      expect(attempts[1], isNot(attempts[0]));
+      expect(attempts[2], isNull);
+      expect(request.toString(), isNot(contains('run_stable')));
+    },
+  );
+  test(
     'invite registration uses explicit public POST without an access grant',
     () async {
       var calls = 0;

@@ -199,6 +199,15 @@ final class DartJsonHttpClient implements JsonHttpClient {
     request.followRedirects = false;
     request.maxRedirects = 0;
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    if (input.authenticated &&
+        input.playbackRunId != null &&
+        ((input.method == ApiMethod.post && input.path == '/api/plays') ||
+            (input.method == ApiMethod.patch &&
+                RegExp(r'^/api/plays/[^/]+/engagement$')
+                    .hasMatch(input.path)))) {
+      request.headers.set('X-Soundspan-Playback-Run', input.playbackRunId!);
+      request.headers.set('X-Soundspan-Play-Attempt', newPlaybackTraceId());
+    }
     if (token != null) {
       if (!input.authenticated ||
           token.isEmpty ||

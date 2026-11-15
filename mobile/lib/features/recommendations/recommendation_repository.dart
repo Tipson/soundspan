@@ -163,13 +163,18 @@ class RecommendationRepository {
     response.requireSuccess();
   }
 
-  Future<String> startPlay(QueueEntry entry, SessionFence fence) async {
+  Future<String> startPlay(
+    QueueEntry entry,
+    SessionFence fence, {
+    String? playbackRunId,
+  }) async {
     networkPolicy.requireNetwork();
     final response = await transport.send(
       ApiRequest(
         origin: fence.owner.serverOrigin,
         method: ApiMethod.post,
         path: '/api/plays',
+        playbackRunId: playbackRunId,
         body: playStartBody(entry),
       ),
       fence: fence,
@@ -183,14 +188,16 @@ class RecommendationRepository {
   Future<void> updatePlay(
     String playId,
     PlayEngagement engagement,
-    SessionFence fence,
-  ) async {
+    SessionFence fence, {
+    String? playbackRunId,
+  }) async {
     networkPolicy.requireNetwork();
     final response = await transport.send(
       ApiRequest(
         origin: fence.owner.serverOrigin,
         method: ApiMethod.patch,
         path: '/api/plays/${Uri.encodeComponent(playId)}/engagement',
+        playbackRunId: playbackRunId,
         body: engagement.toJson(),
       ),
       fence: fence,
