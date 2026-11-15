@@ -505,6 +505,84 @@ test("first-byte timeout answers 504 UPSTREAM_TIMEOUT and aborts the upstream re
     );
 });
 
+test("play proxy correlates bounded stages without recording body or URL secrets", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const rows: Array<Record<string, unknown>> = [];
+    const logger = {
+        error: () => {},
+        info: (_event: string, fields: Record<string, unknown>) =>
+            rows.push(fields),
+    };
+    const handler = createFirstByteTimeoutProxyReqHandler({
+        name: "api-proxy",
+        logger,
+        env: { STREAMING_TRACE_LOGS: "true" },
+    });
+    const proxyReq = createFakeProxyReq();
+    const res = createFakeResponse();
+    handler(
+        proxyReq,
+        {
+            method: "POST",
+            url: "/api/plays?token=never-log",
+            headers: {
+                "x-soundspan-playback-run": "run_1",
+                "x-soundspan-play-attempt": "attempt_1",
+                authorization: "Bearer never-log",
+            },
+        },
+        res,
+    );
+    proxyReq.emit("response", {
+        statusCode: 200,
+        headers: { "x-soundspan-play-trace": "api_request_1" },
+    });
+    Object.defineProperty(res, "writableFinished", { value: true });
+    for (const close of res.closeHandlers) close();
+    assert.deepEqual(
+        rows.map((row) => row.stage),
+        ["dispatch", "upstream_headers", "response_close"],
+    );
+    assert.equal(rows[0].playbackRunId, "run_1");
+    assert.equal(rows[1].apiRequestId, "api_request_1");
+    assert.equal(rows[1].routeClass, "/api/plays");
+    assert.doesNotMatch(JSON.stringify(rows), /never-log|token|authorization/);
+});
+
+test("play proxy timeout and late headers remain distinct with tracing disabled", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const rows: Array<Record<string, unknown>> = [];
+    const handler = createFirstByteTimeoutProxyReqHandler({
+        name: "api-proxy",
+        logger: {
+            error: (_event: string, fields?: Record<string, unknown>) => {
+                if (fields) rows.push(fields);
+            },
+        },
+        env: {},
+    });
+    const proxyReq = createFakeProxyReq();
+    const res = createFakeResponse();
+    handler(
+        proxyReq,
+        {
+            method: "PATCH",
+            url: "/api/plays/private-play/engagement",
+            headers: { "x-soundspan-playback-run": "x".repeat(500) },
+        },
+        res,
+    );
+    t.mock.timers.tick(20000);
+    proxyReq.emit("response", { statusCode: 200, headers: {} });
+    assert.deepEqual(
+        rows.map((row) => row.outcome),
+        ["timeout", "late_headers"],
+    );
+    assert.equal(rows[0].routeClass, "/api/plays/:playId/engagement");
+    assert.equal(rows[0].playbackRunId, undefined);
+    assert.doesNotMatch(JSON.stringify(rows), /private-play|xxxxx/);
+});
+
 test("authenticated API proxy streams image bytes while forwarding only header auth", async () => {
     let upstreamRequest:
         | {

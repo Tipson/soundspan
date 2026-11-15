@@ -1,4 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
+import express from "express";
+import { Registry } from "prom-client";
+import { createHttpRequestMetrics } from "../../metrics/httpMetrics";
 import request from "supertest";
 
 const AUTH_HEADER = "x-test-auth";
@@ -109,6 +112,55 @@ describe("plays routes integration", () => {
         mockPlayDeleteMany.mockResolvedValue({ count: 0 });
         mockRecommendationGenerationFindFirst.mockResolvedValue(null);
         mockAttributePlayback.mockResolvedValue(undefined);
+    });
+
+    it("measures the regular committed write and awaited attribution separately", async () => {
+        const registry = new Registry();
+        const stageApp = express();
+        stageApp.use(express.json());
+        stageApp.use(createHttpRequestMetrics(registry).middleware);
+        stageApp.use("/api/plays", router);
+        mockPlayCreate.mockImplementation(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 15));
+            return { id: "play-1" };
+        });
+        mockAttributePlayback.mockImplementation(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        });
+        const response = await request(stageApp)
+            .post("/api/plays")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({ trackId: "track-1" });
+        expect(response.status).toBe(200);
+        expect(response.headers["x-soundspan-play-write"]).toBe("committed");
+        const exposition = await registry.metrics();
+        expect(exposition).toContain(
+            'stage="db_acquire_write",outcome="success",write_state="committed"',
+        );
+        expect(exposition).toContain(
+            'stage="attribution",outcome="success",write_state="committed"',
+        );
+        expect(exposition).not.toContain("user-1");
+    });
+
+    it("observes isolated attribution failure without changing the committed response", async () => {
+        const registry = new Registry();
+        const stageApp = express();
+        stageApp.use(express.json());
+        stageApp.use(createHttpRequestMetrics(registry).middleware);
+        stageApp.use("/api/plays", router);
+        mockAttributePlayback.mockRejectedValue(
+            new Error("fixture unavailable"),
+        );
+        const response = await request(stageApp)
+            .post("/api/plays")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({ trackId: "track-1" });
+        expect(response.status).toBe(200);
+        expect(response.headers["x-soundspan-play-write"]).toBe("committed");
+        expect(await registry.metrics()).toContain(
+            'stage="attribution",outcome="error",write_state="committed"',
+        );
     });
 
     it("requires auth for all mounted plays routes", async () => {

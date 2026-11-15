@@ -23,6 +23,10 @@ import {
     musicSourcePlayRecordingSchema,
     normalizeMusicSourcePlaySnapshot,
 } from "../services/musicSourcePlaySnapshot";
+import {
+    playRequestTrace,
+    type PlayRequestTrace,
+} from "../services/playRequestTrace";
 
 const router = Router();
 
@@ -147,25 +151,31 @@ interface RecommendationPlaybackIdentity {
     providerTrackId: string;
 }
 
-async function attributeRecommendationPlayback(input: {
-    userId: string;
-    identity: RecommendationPlaybackIdentity;
-    playedAt: Date;
-    listenedSeconds: number | null;
-    completionRatio: number | null;
-    outcome: string | null;
-    generationId?: string | null;
-}): Promise<void> {
+async function attributeRecommendationPlayback(
+    input: {
+        userId: string;
+        identity: RecommendationPlaybackIdentity;
+        playedAt: Date;
+        listenedSeconds: number | null;
+        completionRatio: number | null;
+        outcome: string | null;
+        generationId?: string | null;
+    },
+    trace?: PlayRequestTrace,
+): Promise<void> {
     try {
-        await recommendationExposureStore.attributePlayback({
-            userId: input.userId,
-            ...input.identity,
-            playedAt: input.playedAt,
-            listenedSeconds: input.listenedSeconds,
-            completionRatio: input.completionRatio,
-            outcome: input.outcome,
-            generationId: input.generationId,
-        });
+        const attribute = () =>
+            recommendationExposureStore.attributePlayback({
+                userId: input.userId,
+                ...input.identity,
+                playedAt: input.playedAt,
+                listenedSeconds: input.listenedSeconds,
+                completionRatio: input.completionRatio,
+                outcome: input.outcome,
+                generationId: input.generationId,
+            });
+        if (trace) await trace.measure("attribution", attribute);
+        else await attribute();
     } catch (error) {
         logger.warn("Recommendation playback attribution failed", {
             userId: input.userId,
@@ -412,7 +422,7 @@ router.delete("/history", async (req, res) => {
  * /api/plays:
  *   post:
  *     summary: Log a new play for a track
- *     description: X-Soundspan-Diagnostic playback validates the payload but returns a diagnostic ID without storing playback or forwarding scrobbles.
+ *     description: X-Soundspan-Diagnostic playback validates the payload but returns a diagnostic ID without storing playback or forwarding scrobbles. Optional X-Soundspan-Playback-Run and X-Soundspan-Play-Attempt headers carry anonymous correlation IDs matching [A-Za-z0-9_-] with at most 64 characters. Correlation is not authentication or idempotency support.
  *     parameters:
  *       - in: header
  *         name: X-Soundspan-Diagnostic
@@ -543,7 +553,18 @@ router.delete("/history", async (req, res) => {
  *                     enum: [for-you, new, familiar]
  *     responses:
  *       200:
- *         description: Play logged successfully
+ *         description: Play write acknowledged, independently of final listened engagement
+ *         headers:
+ *           X-Soundspan-Play-Trace:
+ *             description: API request correlation ID
+ *             schema:
+ *               type: string
+ *               maxLength: 64
+ *           X-Soundspan-Play-Write:
+ *             description: Observed Prisma write state, not a listened or idempotency capability
+ *             schema:
+ *               type: string
+ *               enum: [not_started, inflight, committed, unknown]
  *       400:
  *         description: Invalid request body
  *       401:
@@ -553,6 +574,7 @@ router.delete("/history", async (req, res) => {
  */
 // POST /plays
 router.post("/", async (req, res) => {
+    const trace = playRequestTrace(res);
     try {
         const userId = req.user!.id;
         const requestedTrackId =
@@ -571,15 +593,17 @@ router.post("/", async (req, res) => {
         ) {
             return res.status(400).json({ error: "retired_provider" });
         }
-        const payload = playSchema.parse(req.body);
+        const payload = await trace.measure("validation", () =>
+            playSchema.parse(req.body),
+        );
         // Explicit per-request diagnostics, never infer testing from fast skips.
         // Do not create a Play, attribute exposure, resolve metadata or scrobble.
         if (req.headers?.["x-soundspan-diagnostic"] === "playback") {
+            trace.respond();
             return res.json({ id: "diagnostic-playback", diagnostic: true });
         }
-        const recommendationContext = await recommendationContextData(
-            userId,
-            payload,
+        const recommendationContext = await trace.measure("context", () =>
+            recommendationContextData(userId, payload),
         );
 
         if (payload.musicSourceRecording) {
@@ -587,66 +611,78 @@ router.post("/", async (req, res) => {
             const playedAt = new Date();
             // The shared row is an identity namespace only. Client-claimed metadata
             // belongs to this owner's Play and never enters canonical or scrobble writers.
-            const play = await prisma.$transaction(async (transaction) => {
-                const identity = await transaction.trackMusicSource.upsert({
-                    where: {
-                        provider_providerTrackId: {
+            const play = await trace.write(() =>
+                prisma.$transaction(async (transaction) => {
+                    const identity = await transaction.trackMusicSource.upsert({
+                        where: {
+                            provider_providerTrackId: {
+                                provider: recording.provider,
+                                providerTrackId: recording.id,
+                            },
+                        },
+                        update: { providerTrackId: recording.id },
+                        create: {
                             provider: recording.provider,
                             providerTrackId: recording.id,
                         },
-                    },
-                    update: { providerTrackId: recording.id },
-                    create: {
+                    });
+                    return transaction.play.create({
+                        data: {
+                            userId,
+                            trackMusicSourceId: identity.id,
+                            musicSourceRecording: recording,
+                            source:
+                                recording.provider === "vk" ? "VK" : "YANDEX",
+                            playedAt,
+                            ...recommendationContext,
+                        },
+                    });
+                }),
+            );
+            await attributeRecommendationPlayback(
+                {
+                    userId,
+                    identity: {
                         provider: recording.provider,
                         providerTrackId: recording.id,
                     },
-                });
-                return transaction.play.create({
-                    data: {
-                        userId,
-                        trackMusicSourceId: identity.id,
-                        musicSourceRecording: recording,
-                        source: recording.provider === "vk" ? "VK" : "YANDEX",
-                        playedAt,
-                        ...recommendationContext,
-                    },
-                });
-            });
-            await attributeRecommendationPlayback({
-                userId,
-                identity: {
-                    provider: recording.provider,
-                    providerTrackId: recording.id,
+                    playedAt,
+                    listenedSeconds: null,
+                    completionRatio: null,
+                    outcome: null,
+                    generationId:
+                        recommendationContext.recommendationGenerationId,
                 },
-                playedAt,
-                listenedSeconds: null,
-                completionRatio: null,
-                outcome: null,
-                generationId: recommendationContext.recommendationGenerationId,
-            });
+                trace,
+            );
+            trace.respond();
             return res.json(play);
         }
 
         if (payload.trackId) {
             // Verify local track exists
-            const track = await prisma.track.findUnique({
-                where: { id: payload.trackId, ...TRACK_VISIBLE_WHERE },
-            });
+            const track = await trace.measure("track_lookup", () =>
+                prisma.track.findUnique({
+                    where: { id: payload.trackId, ...TRACK_VISIBLE_WHERE },
+                }),
+            );
 
             if (!track) {
                 return res.status(404).json({ error: "Track not found" });
             }
 
             const playedAt = new Date();
-            const play = await prisma.play.create({
-                data: {
-                    userId,
-                    trackId: payload.trackId,
-                    source: "LIBRARY",
-                    playedAt,
-                    ...recommendationContext,
-                },
-            });
+            const play = await trace.write(() =>
+                prisma.play.create({
+                    data: {
+                        userId,
+                        trackId: payload.trackId!,
+                        source: "LIBRARY",
+                        playedAt,
+                        ...recommendationContext,
+                    },
+                }),
+            );
 
             forwardTrackReferenceIsolated({
                 userId,
@@ -656,53 +692,64 @@ router.post("/", async (req, res) => {
                 reference: { source: "local", id: payload.trackId },
             });
 
-            await attributeRecommendationPlayback({
-                userId,
-                identity: {
-                    provider: "library",
-                    providerTrackId: payload.trackId,
+            await attributeRecommendationPlayback(
+                {
+                    userId,
+                    identity: {
+                        provider: "library",
+                        providerTrackId: payload.trackId,
+                    },
+                    playedAt,
+                    listenedSeconds: null,
+                    completionRatio: null,
+                    outcome: null,
+                    generationId:
+                        recommendationContext.recommendationGenerationId,
                 },
-                playedAt,
-                listenedSeconds: null,
-                completionRatio: null,
-                outcome: null,
-                generationId: recommendationContext.recommendationGenerationId,
-            });
+                trace,
+            );
 
+            trace.respond();
             return res.json(play);
         }
 
-        const resolvedMetadata = await resolveRemoteTrackMetadataForRequest({
-            provider: "youtube",
-            userId,
-            videoId: payload.youtubeVideoId!,
-            metadata: {
-                title: payload.title,
-                artist: payload.artist,
-                album: payload.album,
-                duration: payload.duration,
-                thumbnailUrl: payload.thumbnailUrl,
-            },
-        });
-        const ensured = await trackMappingService.ensureRemoteTrack({
-            provider: "youtube",
-            videoId: payload.youtubeVideoId!,
-            title: resolvedMetadata.title,
-            artist: resolvedMetadata.artist,
-            album: resolvedMetadata.album,
-            duration: resolvedMetadata.duration,
-            thumbnailUrl: resolvedMetadata.thumbnailUrl,
-        });
-        const playedAt = new Date();
-        const play = await prisma.play.create({
-            data: {
+        const resolvedMetadata = await trace.measure("metadata", () =>
+            resolveRemoteTrackMetadataForRequest({
+                provider: "youtube",
                 userId,
-                trackYtMusicId: ensured.id,
-                source: "YOUTUBE_MUSIC",
-                playedAt,
-                ...recommendationContext,
-            },
-        });
+                videoId: payload.youtubeVideoId!,
+                metadata: {
+                    title: payload.title,
+                    artist: payload.artist,
+                    album: payload.album,
+                    duration: payload.duration,
+                    thumbnailUrl: payload.thumbnailUrl,
+                },
+            }),
+        );
+        const ensured = await trace.measure("identity", () =>
+            trackMappingService.ensureRemoteTrack({
+                provider: "youtube",
+                videoId: payload.youtubeVideoId!,
+                title: resolvedMetadata.title,
+                artist: resolvedMetadata.artist,
+                album: resolvedMetadata.album,
+                duration: resolvedMetadata.duration,
+                thumbnailUrl: resolvedMetadata.thumbnailUrl,
+            }),
+        );
+        const playedAt = new Date();
+        const play = await trace.write(() =>
+            prisma.play.create({
+                data: {
+                    userId,
+                    trackYtMusicId: ensured.id,
+                    source: "YOUTUBE_MUSIC",
+                    playedAt,
+                    ...recommendationContext,
+                },
+            }),
+        );
 
         forwardScrobbleIsolated({
             userId,
@@ -717,19 +764,23 @@ router.post("/", async (req, res) => {
             },
         });
 
-        await attributeRecommendationPlayback({
-            userId,
-            identity: {
-                provider: "youtube",
-                providerTrackId: payload.youtubeVideoId!,
+        await attributeRecommendationPlayback(
+            {
+                userId,
+                identity: {
+                    provider: "youtube",
+                    providerTrackId: payload.youtubeVideoId!,
+                },
+                playedAt,
+                listenedSeconds: null,
+                completionRatio: null,
+                outcome: null,
+                generationId: recommendationContext.recommendationGenerationId,
             },
-            playedAt,
-            listenedSeconds: null,
-            completionRatio: null,
-            outcome: null,
-            generationId: recommendationContext.recommendationGenerationId,
-        });
+            trace,
+        );
 
+        trace.respond();
         return res.json(play);
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -747,7 +798,7 @@ router.post("/", async (req, res) => {
  * /api/plays/{playId}/engagement:
  *   patch:
  *     summary: Record the final playback outcome used by recommendations
- *     description: X-Soundspan-Diagnostic playback validates the payload and acknowledges it without changing engagement or recommendation attribution.
+ *     description: X-Soundspan-Diagnostic playback validates the payload and acknowledges it without changing engagement or recommendation attribution. Optional X-Soundspan-Playback-Run and X-Soundspan-Play-Attempt headers carry anonymous correlation IDs matching [A-Za-z0-9_-] with at most 64 characters. Response correlation does not authorize retries.
  *     tags: [Plays]
  *     security:
  *       - apiKeyAuth: []
@@ -784,6 +835,17 @@ router.post("/", async (req, res) => {
  *     responses:
  *       200:
  *         description: Engagement recorded
+ *         headers:
+ *           X-Soundspan-Play-Trace:
+ *             description: API request correlation ID
+ *             schema:
+ *               type: string
+ *               maxLength: 64
+ *           X-Soundspan-Play-Write:
+ *             description: Observed Prisma command completion; a stale PATCH can update no rows
+ *             schema:
+ *               type: string
+ *               enum: [not_started, inflight, committed, unknown]
  *       400:
  *         description: Invalid engagement payload
  *       401:
@@ -792,13 +854,11 @@ router.post("/", async (req, res) => {
  *         description: Play does not belong to the authenticated user
  */
 router.patch("/:playId/engagement", async (req, res) => {
-    const playId = z
-        .string()
-        .trim()
-        .min(1)
-        .max(128)
-        .safeParse(req.params.playId);
-    const engagement = playEngagementSchema.safeParse(req.body);
+    const trace = playRequestTrace(res);
+    const { playId, engagement } = await trace.measure("validation", () => ({
+        playId: z.string().trim().min(1).max(128).safeParse(req.params.playId),
+        engagement: playEngagementSchema.safeParse(req.body),
+    }));
     if (!playId.success || !engagement.success) {
         return res.status(400).json({
             error: "Invalid engagement",
@@ -810,46 +870,54 @@ router.patch("/:playId/engagement", async (req, res) => {
     }
 
     if (req.headers?.["x-soundspan-diagnostic"] === "playback") {
+        trace.respond();
         return res.json({ success: true, diagnostic: true });
     }
 
     try {
-        const result = await prisma.play.updateMany({
-            where: {
-                id: playId.data,
-                userId: req.user!.id,
-                ...monotonicEngagementFilter(engagement.data),
-            },
-            data: {
-                ...engagement.data,
-                engagementUpdatedAt: new Date(),
-            },
-        });
+        const result = await trace.write(() =>
+            prisma.play.updateMany({
+                where: {
+                    id: playId.data,
+                    userId: req.user!.id,
+                    ...monotonicEngagementFilter(engagement.data),
+                },
+                data: {
+                    ...engagement.data,
+                    engagementUpdatedAt: new Date(),
+                },
+            }),
+        );
         if (result.count === 0) {
-            const existing = await prisma.play.findFirst({
-                where: { id: playId.data, userId: req.user!.id },
-                select: { id: true },
-            });
+            const existing = await trace.measure("track_lookup", () =>
+                prisma.play.findFirst({
+                    where: { id: playId.data, userId: req.user!.id },
+                    select: { id: true },
+                }),
+            );
             if (!existing) {
                 return res.status(404).json({ error: "Play not found" });
             }
+            trace.respond();
             return res.json({ success: true, stale: true });
         }
-        const attributedPlay = await prisma.play.findFirst({
-            where: { id: playId.data, userId: req.user!.id },
-            select: {
-                trackId: true,
-                playedAt: true,
-                trackTidal: { select: { tidalId: true } },
-                trackYtMusic: { select: { videoId: true } },
-                trackMusicSource: {
-                    select: { provider: true, providerTrackId: true },
+        const attributedPlay = await trace.measure("track_lookup", () =>
+            prisma.play.findFirst({
+                where: { id: playId.data, userId: req.user!.id },
+                select: {
+                    trackId: true,
+                    playedAt: true,
+                    trackTidal: { select: { tidalId: true } },
+                    trackYtMusic: { select: { videoId: true } },
+                    trackMusicSource: {
+                        select: { provider: true, providerTrackId: true },
+                    },
+                    source: true,
+                    musicSourceRecording: true,
+                    recommendationGenerationId: true,
                 },
-                source: true,
-                musicSourceRecording: true,
-                recommendationGenerationId: true,
-            },
-        });
+            }),
+        );
         const directTrack = attributedPlay
             ? normalizeMusicSourcePlaySnapshot(attributedPlay)
             : null;
@@ -877,16 +945,20 @@ router.patch("/:playId/engagement", async (req, res) => {
                     }
                   : null;
         if (attributedPlay && identity) {
-            await attributeRecommendationPlayback({
-                userId: req.user!.id,
-                identity,
-                playedAt: attributedPlay.playedAt,
-                listenedSeconds: engagement.data.listenedSeconds,
-                completionRatio: engagement.data.completionRatio,
-                outcome: engagement.data.outcome,
-                generationId: attributedPlay.recommendationGenerationId,
-            });
+            await attributeRecommendationPlayback(
+                {
+                    userId: req.user!.id,
+                    identity,
+                    playedAt: attributedPlay.playedAt,
+                    listenedSeconds: engagement.data.listenedSeconds,
+                    completionRatio: engagement.data.completionRatio,
+                    outcome: engagement.data.outcome,
+                    generationId: attributedPlay.recommendationGenerationId,
+                },
+                trace,
+            );
         }
+        trace.respond();
         return res.json({ success: true });
     } catch (error) {
         logger.error("Update play engagement error:", error);

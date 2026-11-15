@@ -1,5 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { Histogram, type Registry } from "prom-client";
+import { createPlayRequestTrace } from "../services/playRequestTrace";
 
 const DEFAULT_MAX_ROUTE_CLASSES = 100;
 const HTTP_METHODS = new Set([
@@ -23,6 +24,8 @@ type HttpLabels = {
 /** Options controlling the bounded HTTP route vocabulary. */
 export interface HttpRequestMetricsOptions {
     maxRouteClasses?: number;
+    /** Optional shared playback logger, injected outside the metrics factory. */
+    playTraceLog?: (event: string, fields: Record<string, unknown>) => void;
 }
 
 /** Result of constructing isolated HTTP request instrumentation. */
@@ -88,17 +91,51 @@ export function createHttpRequestMetrics(
         buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
         registers: [registry],
     });
+    const playStages = new Histogram({
+        name: "soundspan_play_request_stage_seconds",
+        help: "Play API stage duration; db_acquire_write includes pool acquisition and commit. Acknowledged create is not listened engagement.",
+        labelNames: [
+            "request_kind",
+            "path_kind",
+            "stage",
+            "outcome",
+            "write_state",
+        ] as const,
+        buckets: [
+            0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30, 60,
+        ],
+        registers: [registry],
+    });
 
     const middleware = (
         req: Request,
         res: Response,
         next: NextFunction,
     ): void => {
+        createPlayRequestTrace(req, res, {
+            record: (sample) =>
+                playStages.observe(
+                    {
+                        request_kind: sample.requestKind,
+                        path_kind: sample.pathKind,
+                        stage: sample.stage,
+                        outcome: sample.outcome,
+                        write_state: sample.writeState,
+                    },
+                    sample.durationMs / 1000,
+                ),
+            log: options.playTraceLog,
+        });
         const startedAt = process.hrtime.bigint();
-        res.once("finish", () => {
+        let observed = false;
+        const observe = (cancelled: boolean) => {
+            if (observed) return;
+            observed = true;
             const method = methodClass(req.method);
             const routeClass = boundRouteClass(requestRoutePattern(req));
-            const responseClass = statusClass(res.statusCode);
+            const responseClass = cancelled
+                ? "cancelled"
+                : statusClass(res.statusCode);
             const cacheKey = `${method}\0${routeClass}\0${responseClass}`;
             let labels = labelCache.get(cacheKey);
             if (!labels) {
@@ -112,7 +149,9 @@ export function createHttpRequestMetrics(
             const durationSeconds =
                 Number(process.hrtime.bigint() - startedAt) / 1_000_000_000;
             histogram.observe(labels, durationSeconds);
-        });
+        };
+        res.once("finish", () => observe(false));
+        res.once("close", () => observe(!res.writableFinished));
         next();
     };
 

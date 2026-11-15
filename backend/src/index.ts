@@ -94,8 +94,10 @@ import { BRAND_API_DOCS_TITLE, BRAND_NAME } from "./config/brand";
 import {
     httpMetricsMiddleware,
     initializeFederationMetrics,
+    initializePlayRequestTraceLogger,
     metricsRegistry,
 } from "./metrics";
+import { logPlayRequestStage } from "./services/playbackTrace";
 import { createMetricsRouter } from "./metrics/endpoint";
 import { registerQueueMetrics } from "./metrics/queueMetrics";
 import { backfillFederationOutboundTokens } from "./services/federationCredentials";
@@ -206,6 +208,7 @@ app.use(
     }),
 );
 app.use(express.json({ limit: "1mb" })); // Increased from 100KB default to support large queue payloads
+initializePlayRequestTraceLogger(logPlayRequestStage);
 app.use(httpMetricsMiddleware);
 app.use(
     createMetricsRouter({

@@ -3,7 +3,10 @@ import {
     createDomainMetrics,
     type FederationSyncSkipReason,
 } from "./domainMetrics";
-import { createHttpRequestMetrics } from "./httpMetrics";
+import {
+    createHttpRequestMetrics,
+    type HttpRequestMetricsOptions,
+} from "./httpMetrics";
 import {
     createFederationMetrics,
     type FederationAuthFailureReason,
@@ -104,7 +107,16 @@ collectDefaultMetrics({
     register: metricsRegistry,
 });
 
-const httpMetrics = createHttpRequestMetrics(metricsRegistry);
+const httpMetricsOptions: HttpRequestMetricsOptions = {};
+const httpMetrics = createHttpRequestMetrics(metricsRegistry, httpMetricsOptions);
+
+/** Inject the shared playback logger from the API composition root, without config side effects in metrics consumers. */
+export function initializePlayRequestTraceLogger(
+    log: NonNullable<HttpRequestMetricsOptions["playTraceLog"]>,
+): void {
+    httpMetricsOptions.playTraceLog = log;
+}
+
 const domainMetrics = createDomainMetrics(metricsRegistry);
 const libraryHealthMetrics = createLibraryHealthMetrics(metricsRegistry);
 const providerMetrics = createProviderMetrics(metricsRegistry);

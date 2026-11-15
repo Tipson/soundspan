@@ -113,6 +113,9 @@ class PublicProbeTests(unittest.TestCase):
     def test_reads_radio_and_two_consecutive_ranges_without_history_requests(self):
         result = monitor.probe(self.config, "secret-token", "abcdefghijk")
         self.assertEqual(result["bytesRead"], 524288)
+        self.assertEqual(result["writePathStatus"], "unknown_not_probed")
+        self.assertEqual(set(result["stageTimingsMs"]), {"radio", "audio_initial", "audio_continuation"})
+        self.assertTrue(all(0 <= value < 60000 for value in result["stageTimingsMs"].values()))
         self.assertEqual(
             [item[1] for item in self.requests], [None, "bytes=0-262143", "bytes=262144-524287"]
         )
@@ -228,6 +231,7 @@ class IncidentTests(unittest.TestCase):
             result = self.tick()
         self.probe.assert_not_called()
         self.assertEqual(result["code"], "runtime_auth")
+        self.assertEqual(result["writePathStatus"], "unknown_not_probed")
         self.assertEqual(self.adapter.notify.call_count, 1)
 
     def test_failed_outage_delivery_is_retried_before_recovery(self):

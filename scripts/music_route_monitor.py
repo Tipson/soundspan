@@ -152,6 +152,7 @@ def _probe(config, token, seed):
     """
     deadline = time.monotonic() + config.timeout_seconds
     opener = build_opener(NoRedirect())
+    stage_timings = {}
 
     def request(path, max_bytes, byte_range=None):
         remaining = deadline - time.monotonic()
@@ -191,10 +192,12 @@ def _probe(config, token, seed):
         except (URLError, OSError, HTTPException):
             raise ProbeFailure("network") from None
 
+    stage_started = time.monotonic()
     status, headers, body = request(
         "/api/library/radio?" + urlencode({"type": "youtube", "value": seed, "limit": 5}),
         1024 * 1024,
     )
+    stage_timings["radio"] = round((time.monotonic() - stage_started) * 1000, 3)
     if status != 200 or headers.get_content_type() != "application/json":
         raise ProbeFailure("radio_response")
     try:
@@ -210,8 +213,12 @@ def _probe(config, token, seed):
     total = None
     for start in [0, CHUNK_BYTES]:
         end = start + CHUNK_BYTES - 1
+        stage_started = time.monotonic()
         status, headers, body = request(
             f"/api/ytmusic/stream-public/{seed}?quality=HIGH", CHUNK_BYTES, f"bytes={start}-{end}"
+        )
+        stage_timings["audio_initial" if start == 0 else "audio_continuation"] = round(
+            (time.monotonic() - stage_started) * 1000, 3
         )
         mime = headers.get_content_type()
         if status != 206 or not (
@@ -227,7 +234,13 @@ def _probe(config, token, seed):
         total = current_total
         if headers.get("Content-Length") != str(CHUNK_BYTES) or len(body) != CHUNK_BYTES:
             raise ProbeFailure("audio_body")
-    return {"bytesRead": CHUNK_BYTES * 2, "radioTracks": len(tracks)}
+    return {
+        "bytesRead": CHUNK_BYTES * 2,
+        "radioTracks": len(tracks),
+        "stageTimingsMs": stage_timings,
+        # A GET-only audio probe cannot establish Play persistence/attribution.
+        "writePathStatus": "unknown_not_probed",
+    }
 
 
 class RuntimeAdapter:
@@ -368,7 +381,11 @@ def tick(config, state_path, adapter, now, probe_fn=probe):
             "pending": [],
         }
     if state["runs"] and now < state["last_checked"] + config.interval_seconds:
-        return {"status": "cooldown", "pending": len(state["pending"])}
+        return {
+            "status": "cooldown",
+            "pending": len(state["pending"]),
+            "writePathStatus": "unknown_not_probed",
+        }
     code = None
     try:
         token = adapter.token(config.test_user_id)
@@ -413,6 +430,7 @@ def tick(config, state_path, adapter, now, probe_fn=probe):
         "pending": len(state["pending"]),
         "notificationFailed": notification_failed,
         **metrics,
+        "writePathStatus": "unknown_not_probed",
     }
 
 

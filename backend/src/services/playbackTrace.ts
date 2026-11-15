@@ -1,6 +1,7 @@
 import type { Request } from "express";
 import { logger } from "../utils/logger";
 import { config } from "../config";
+import type { PlayStageSample } from "./playRequestTrace";
 
 const playbackMetricLogger = logger.child("Playback.Metric");
 const playbackTraceLogger = logger.child("Playback.Trace");
@@ -57,4 +58,19 @@ export const logPlaybackTrace = (
         timestamp: new Date().toISOString(),
         ...fields,
     });
+};
+
+/** Emit anonymous stage samples with request-local, validated correlation only. */
+export const logPlayRequestStage = (
+    event: string,
+    fields: Record<string, unknown>,
+): void => {
+    const sample = fields as unknown as PlayStageSample;
+    // Production defaults to warn; keep incident and late completion evidence
+    // visible without enabling successful-request trace traffic.
+    if (sample.outcome !== "success") {
+        playbackMetricLogger.warn(event, fields);
+    } else {
+        logPlaybackTrace(event, fields);
+    }
 };

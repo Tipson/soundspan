@@ -287,6 +287,8 @@ describe("api entrypoint runtime behavior", () => {
         const metricsRegistry = { contentType: "text/plain" };
         const httpMetricsMiddleware = "http-metrics-middleware";
         const initializeFederationMetrics = jest.fn();
+        const initializePlayRequestTraceLogger = jest.fn();
+        const logPlayRequestStage = jest.fn();
         const shutdownWorkers = jest.fn(
             shutdownWorkersImpl || (async () => undefined),
         );
@@ -364,7 +366,11 @@ describe("api entrypoint runtime behavior", () => {
         jest.doMock("../metrics", () => ({
             httpMetricsMiddleware,
             initializeFederationMetrics,
+            initializePlayRequestTraceLogger,
             metricsRegistry,
+        }));
+        jest.doMock("../services/playbackTrace", () => ({
+            logPlayRequestStage,
         }));
         jest.doMock("../metrics/endpoint", () => ({ createMetricsRouter }));
         jest.doMock("../metrics/queueMetrics", () => ({
@@ -428,6 +434,8 @@ describe("api entrypoint runtime behavior", () => {
             metricsRouter,
             httpMetricsMiddleware,
             initializeFederationMetrics,
+            initializePlayRequestTraceLogger,
+            logPlayRequestStage,
             sessionMiddleware,
             redisStoreCtor,
         };
@@ -520,6 +528,17 @@ describe("api entrypoint runtime behavior", () => {
         );
         expect(mocks.app.use).toHaveBeenCalledWith("compression-middleware");
         expect(mocks.app.use).toHaveBeenCalledWith(mocks.httpMetricsMiddleware);
+        expect(mocks.initializePlayRequestTraceLogger).toHaveBeenCalledWith(
+            mocks.logPlayRequestStage,
+        );
+        const metricsMiddlewareIndex = mocks.app.use.mock.calls.findIndex(
+            (args: unknown[]) => args[0] === mocks.httpMetricsMiddleware,
+        );
+        expect(
+            mocks.initializePlayRequestTraceLogger.mock.invocationCallOrder[0],
+        ).toBeLessThan(
+            mocks.app.use.mock.invocationCallOrder[metricsMiddlewareIndex],
+        );
         expect(mocks.app.use).toHaveBeenCalledWith(mocks.metricsRouter);
         expect(mocks.initializeFederationMetrics).toHaveBeenCalledWith("api");
         expect(mocks.createMetricsRouter).toHaveBeenCalledWith({

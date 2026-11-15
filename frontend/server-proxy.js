@@ -123,17 +123,74 @@ function resolveProxyTimeoutMs(pathname, env = process.env) {
  * Once the upstream response starts, the timer is cancelled so streaming
  * responses are never cut off by this budget.
  *
- * @param {{ name: string, logger: { error: Function }, env?: Record<string, string | undefined> }} config
- * @returns {(proxyReq: import("http").ClientRequest, req: { method?: string, url?: string }, res: import("http").ServerResponse) => void}
+ * @param {{ name: string, logger: { error: Function, info?: Function, warn?: Function }, env?: Record<string, string | undefined> }} config
+ * @returns {(proxyReq: import("http").ClientRequest, req: { method?: string, url?: string, headers?: import("http").IncomingHttpHeaders }, res: import("http").ServerResponse) => void}
  */
 function createFirstByteTimeoutProxyReqHandler({ name, logger, env }) {
     return (proxyReq, req, res) => {
-        const timeoutMs = resolveProxyTimeoutMs(
-            getRequestPathname(req?.url),
-            env ?? process.env,
+        const activeEnv = env ?? process.env;
+        const pathname = getRequestPathname(req?.url);
+        const routeClass =
+            req?.method === "POST" && /^\/(?:api\/)?plays\/?$/.test(pathname)
+                ? "/api/plays"
+                : req?.method === "PATCH" &&
+                    /^\/(?:api\/)?plays\/[^/]+\/engagement\/?$/.test(pathname)
+                  ? "/api/plays/:playId/engagement"
+                  : null;
+        const validId = (value) =>
+            typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value)
+                ? value
+                : undefined;
+        const started = performance.now();
+        let timedOut = false;
+        let responseClosed = false;
+        let apiRequestId;
+        const traceEnabled = ["1", "true", "yes", "on"].includes(
+            String(activeEnv.STREAMING_TRACE_LOGS || "")
+                .trim()
+                .toLowerCase(),
         );
+        const trace = (stage, outcome, statusCode) => {
+            if (!routeClass || (outcome === "success" && !traceEnabled)) return;
+            const emit =
+                outcome === "success"
+                    ? logger.info
+                    : logger.warn || logger.error;
+            if (typeof emit !== "function") return;
+            try {
+                emit.call(logger, "playback.play.proxy", {
+                    routeClass,
+                    stage,
+                    outcome,
+                    pathKind:
+                        req?.headers?.["x-soundspan-diagnostic"] === "playback"
+                            ? "diagnostic"
+                            : "regular",
+                    playbackRunId: validId(
+                        req?.headers?.["x-soundspan-playback-run"],
+                    ),
+                    clientAttemptId: validId(
+                        req?.headers?.["x-soundspan-play-attempt"],
+                    ),
+                    apiRequestId,
+                    statusClass:
+                        Number.isInteger(statusCode) &&
+                        statusCode >= 100 &&
+                        statusCode < 600
+                            ? `${Math.floor(statusCode / 100)}xx`
+                            : "unknown",
+                    durationMs: Math.max(0, performance.now() - started),
+                });
+            } catch {
+                /* Tracing cannot alter streaming, authorization or aborts. */
+            }
+        };
+        trace("dispatch", "success");
+        const timeoutMs = resolveProxyTimeoutMs(pathname, activeEnv);
 
         const timer = setTimeout(() => {
+            timedOut = true;
+            trace("upstream_headers", "timeout", 504);
             const safeUrl = redactProxyLogValue(req?.url);
             logger.error(
                 `[${name}] ${req?.method} ${safeUrl} timed out after ${timeoutMs}ms waiting for the first upstream byte`,
@@ -164,12 +221,38 @@ function createFirstByteTimeoutProxyReqHandler({ name, logger, env }) {
 
         const clear = () => clearTimeout(timer);
         // First upstream byte arrived: streaming proceeds untimed.
-        proxyReq.on("response", clear);
+        proxyReq.on("response", (upstream) => {
+            clear();
+            apiRequestId = validId(
+                upstream?.headers?.["x-soundspan-play-trace"],
+            );
+            trace(
+                "upstream_headers",
+                timedOut || responseClosed ? "late_headers" : "success",
+                upstream?.statusCode,
+            );
+        });
         // Upstream failed some other way; the error handler owns the reply.
-        proxyReq.on("error", clear);
+        proxyReq.on("error", () => {
+            clear();
+            trace("upstream_error", "error");
+        });
         // Client response finished/aborted; nothing left to time.
         if (res && typeof res.on === "function") {
-            res.on("close", clear);
+            res.on("close", () => {
+                clear();
+                if (responseClosed) return;
+                responseClosed = true;
+                trace(
+                    "response_close",
+                    timedOut
+                        ? "timeout"
+                        : res.writableFinished
+                          ? "success"
+                          : "cancelled",
+                    res.statusCode,
+                );
+            });
         }
     };
 }

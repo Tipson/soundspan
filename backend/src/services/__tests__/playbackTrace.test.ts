@@ -105,4 +105,16 @@ describe("playback trace identity", () => {
         expect(playbackTrace.playbackTraceEnabled).toBe(false);
         expect(mockPlaybackTraceLogger.info).not.toHaveBeenCalled();
     });
+
+    it("retains cancelled and late completion evidence with verbose tracing disabled", async () => {
+        const playbackTrace = await import("../playbackTrace");
+        playbackTrace.logPlayRequestStage("playback.play.stage", {outcome: "success", stage: "validation"});
+        playbackTrace.logPlayRequestStage("playback.play.stage", {outcome: "cancelled", stage: "request", writeState: "inflight"});
+        playbackTrace.logPlayRequestStage("playback.play.stage", {outcome: "late_success", stage: "db_acquire_write", writeState: "committed"});
+        expect(mockPlaybackTraceLogger.info).not.toHaveBeenCalled();
+        expect(mockPlaybackMetricLogger.warn.mock.calls).toEqual([
+            ["playback.play.stage", {outcome: "cancelled", stage: "request", writeState: "inflight"}],
+            ["playback.play.stage", {outcome: "late_success", stage: "db_acquire_write", writeState: "committed"}],
+        ]);
+    });
 });
