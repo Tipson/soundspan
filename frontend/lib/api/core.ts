@@ -9,6 +9,7 @@ import {
     restorePlayCreateLoginFence,
     retirePlayCreateLoginFence,
 } from "../playCreateLoginFence";
+import { readPlayRetryAfterMs } from "../playCreateWire";
 
 const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
@@ -23,10 +24,59 @@ const INITIAL_PROACTIVE_REFRESH_BACKOFF_MS = 60_000;
 const MAX_PROACTIVE_REFRESH_BACKOFF_MS = 10 * 60_000;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
+/** Quoted extension values cannot supply the journal's required cache directives. */
+function hasPrivateNoStore(value: string | null): boolean {
+    if (!value) return false;
+    const directives: string[] = [];
+    let start = 0,
+        quoted = false,
+        escaped = false;
+    for (let index = 0; index < value.length; index++) {
+        const character = value[index];
+        if (quoted && escaped) {
+            escaped = false;
+            continue;
+        }
+        if (quoted && character === "\\") {
+            escaped = true;
+            continue;
+        }
+        if (character === '"') quoted = !quoted;
+        else if (character === "," && !quoted) {
+            directives.push(value.slice(start, index).trim().toLowerCase());
+            start = index + 1;
+        }
+    }
+    if (quoted || escaped) return false;
+    directives.push(value.slice(start).trim().toLowerCase());
+    return directives.includes("private") && directives.includes("no-store");
+}
+
 interface ApiError extends Error {
     status?: number;
     data?: Record<string, unknown>;
+    retryAfterMs?: number;
+    responseReceipt?: ApiResponseReceipt;
 }
+
+/** Safe journal response metadata captured at headers, before body or storage awaits. */
+export interface ApiResponseReceipt {
+    readonly status: number;
+    readonly receivedMonotonicMs: number;
+    readonly privateNoStore: boolean;
+    readonly retryAfterMs: number | null;
+}
+
+/** API-only options are removed before fetch; observers never join shared UI GETs. */
+export type ApiRequestOptions = RequestInit & {
+    silent404?: boolean;
+    _retryCount?: number;
+    _timeoutRetryCount?: number;
+    _authSessionGeneration?: number;
+    timeoutMs?: number;
+    retryOnTimeout?: boolean;
+    _onResponseReceipt?: (receipt: ApiResponseReceipt) => void;
+};
 
 /** A response from credentials that were replaced while it was in flight. */
 export class SupersededAuthSessionError extends Error {
@@ -679,14 +729,7 @@ export abstract class ApiClientCore {
 
     async request<T>(
         endpoint: string,
-        options: RequestInit & {
-            silent404?: boolean;
-            _retryCount?: number;
-            _timeoutRetryCount?: number;
-            _authSessionGeneration?: number;
-            timeoutMs?: number;
-            retryOnTimeout?: boolean;
-        } = {},
+        options: ApiRequestOptions = {},
     ): Promise<T> {
         const {
             silent404,
@@ -695,6 +738,7 @@ export abstract class ApiClientCore {
             _authSessionGeneration = this.sessionGeneration,
             timeoutMs = DEFAULT_API_TIMEOUT_MS,
             retryOnTimeout = true,
+            _onResponseReceipt,
             ...fetchOptions
         } = options;
         const headers: HeadersInit = {
@@ -714,7 +758,7 @@ export abstract class ApiClientCore {
         const isIdempotentMethod = method === "GET" || method === "HEAD";
         const isRetryAttempt = _retryCount > 0 || _timeoutRetryCount > 0;
         const inFlightGetKey =
-            method === "GET" && !isRetryAttempt
+            method === "GET" && !isRetryAttempt && !_onResponseReceipt
                 ? this.buildInFlightGetKey(
                       endpoint,
                       timeoutMs,
@@ -744,13 +788,38 @@ export abstract class ApiClientCore {
                         credentials: "include", // Still send cookies for backward compatibility
                     },
                     timeoutMs,
-                    async (response) => ({
-                        response,
-                        rawBody:
-                            response.status === 204 || response.status === 205
-                                ? ""
-                                : await response.text(),
-                    }),
+                    async (response) => {
+                        if (_onResponseReceipt) {
+                            const receivedMonotonicMs = performance.now();
+                            _onResponseReceipt(
+                                Object.freeze({
+                                    status: response.status,
+                                    receivedMonotonicMs,
+                                    privateNoStore: hasPrivateNoStore(
+                                        response.headers.get("Cache-Control"),
+                                    ),
+                                    retryAfterMs:
+                                        response.status === 429 ||
+                                        response.status === 503
+                                            ? readPlayRetryAfterMs(
+                                                  response.headers.get(
+                                                      "Retry-After",
+                                                  ),
+                                                  response.headers.get("Date"),
+                                              )
+                                            : null,
+                                }),
+                            );
+                        }
+                        return {
+                            response,
+                            rawBody:
+                                response.status === 204 ||
+                                response.status === 205
+                                    ? ""
+                                    : await response.text(),
+                        };
+                    },
                 );
                 response = received.response;
                 rawBody = received.rawBody;
@@ -779,7 +848,12 @@ export abstract class ApiClientCore {
             if (!response.ok) {
                 const error = (() => {
                     try {
-                        return JSON.parse(rawBody);
+                        const parsed: unknown = JSON.parse(rawBody);
+                        return parsed !== null &&
+                            typeof parsed === "object" &&
+                            !Array.isArray(parsed)
+                            ? (parsed as Record<string, unknown>)
+                            : { error: response.statusText };
                     } catch {
                         return { error: response.statusText };
                     }
@@ -797,7 +871,9 @@ export abstract class ApiClientCore {
                 const isAuthRequired =
                     response.status === 401 && error.code === "AUTH_REQUIRED";
                 const requestError = new Error(
-                    error.error || "An error occurred",
+                    typeof error.error === "string" && error.error
+                        ? error.error
+                        : response.statusText || "An error occurred",
                 );
                 (requestError as ApiError).status = response.status;
                 (requestError as ApiError).data = error;
@@ -865,6 +941,41 @@ export abstract class ApiClientCore {
             })
             .catch(() => undefined);
         return requestPromise;
+    }
+
+    /** A fresh request with bounded body consumption and no shared UI GET receipt. */
+    protected async requestWithReceipt<T>(
+        endpoint: string,
+        options: Omit<ApiRequestOptions, "_onResponseReceipt"> = {},
+    ): Promise<{ data: T; receipt: ApiResponseReceipt }> {
+        const captured: { receipt: ApiResponseReceipt | null } = {
+            receipt: null,
+        };
+        try {
+            const data = await this.request<T>(endpoint, {
+                ...options,
+                cache: "no-store",
+                _onResponseReceipt: (value) => {
+                    captured.receipt = value;
+                },
+            });
+            if (!captured.receipt)
+                throw new Error("API response receipt unavailable");
+            return { data, receipt: captured.receipt };
+        } catch (error) {
+            const observed = captured.receipt;
+            if (
+                error instanceof Error &&
+                observed &&
+                (observed.status === 429 || observed.status === 503) &&
+                (error as ApiError).status === observed.status
+            ) {
+                (error as ApiError).responseReceipt = observed;
+                if (observed.retryAfterMs !== null)
+                    (error as ApiError).retryAfterMs = observed.retryAfterMs;
+            }
+            throw error;
+        }
     }
 
     // Generic POST method for convenience

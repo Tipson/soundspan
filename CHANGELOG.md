@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Capture journal response timing before body processing and retain server retry metadata through malformed error bodies. Keep fresh reads independent of UI caching, parse cache directives outside quoted values, and validate exact Play acknowledgements and raw protocol fields.
 - Persist remote Play attempts and absolute engagement in an owner-fenced browser journal. Reserve requests atomically across tabs, retain final progress through delayed acknowledgements, bound recovery and honor durable retry holdoffs. Prepare fresh identity bindings with one bounded login-fence recovery; HTTP delivery and player activation remain gated.
 - Validate frozen remote Play payloads, canonical retry keys and fresh owner-bound capability receipts. Retain a private logical-login fence across reload and token refresh, rotate it before credential replacement, and reject stale or unavailable metadata without disrupting ordinary authentication. Browser journal delivery remains gated.
 - Keep API deadlines and upstream cancellation active until response bodies are consumed. Close unread refresh responses while preserving bounded read/auth retries, one-shot network behavior for mutations and existing session fences.

@@ -87,6 +87,19 @@ function replay(value: PlayCreateGrant, text: string, delta = 0) {
     });
 }
 
+test("own JSON prototype-name extras cannot pass DTO, policy or binding validation", () => {
+    const extra = <T extends object>(value: T): T => {
+        Object.defineProperty(value, "__proto__", {
+            value: { ignored: true },
+            enumerable: true,
+        });
+        return value;
+    };
+    assert.equal(project(extra(yt())), null);
+    assert.equal(readGrant(extra(cap()), binding, receipt), null);
+    assert.equal(readGrant(cap(), extra({ ...binding }), receipt), null);
+});
+
 test("YouTube projection trims accepted metadata, drops thumbnail and freezes the artifact", () => {
     const result = project({
         ...yt(),

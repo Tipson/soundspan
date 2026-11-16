@@ -132,7 +132,8 @@ function dataRecord(value: unknown): Record<string, unknown> | null {
         if (prototype !== null && prototype !== Object.prototype) return null;
         const result: Record<string, unknown> = Object.create(null);
         for (const key of Reflect.ownKeys(value)) {
-            if (typeof key !== "string") return null;
+            // Zod deliberately drops this key instead of reporting it as unknown.
+            if (typeof key !== "string" || key === "__proto__") return null;
             const descriptor = Object.getOwnPropertyDescriptor(value, key);
             if (
                 !descriptor ||
