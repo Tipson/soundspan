@@ -272,7 +272,7 @@ describe("radio facade membership and existing engine policy", () => {
                     },
                 ],
                 loadDislikedCanonicalKeys: async () =>
-                    new Set(["meta:dislikevid1:dislikevid1:180"]),
+                    new Set(["yt:dislikeVid1"]),
                 loadTasteContext: async () => ({
                     positiveCentroids: [],
                     negativeCentroids: [],

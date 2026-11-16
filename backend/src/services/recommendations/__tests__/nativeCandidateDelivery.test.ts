@@ -10,6 +10,7 @@ import { RecommendationEngine } from "../engine";
 import { RecommendationExposureStore } from "../exposureStore";
 import {
     findMappedCanonicalCandidates,
+    readCanonicalCandidateEvidence,
     CanonicalIdentityResolver,
 } from "../canonicalIdentity";
 import { toRadioContinuationTrack } from "../radioContinuation";
@@ -399,6 +400,11 @@ describe("native recommendation delivery", () => {
                     },
                 },
             ]);
+            const strict = await readCanonicalCandidateEvidence([track]);
+            expect(strict.recordings).toEqual([null]);
+            expect(strict.lookupFailures).toBe(0);
+            expect(strict.unavailableCandidateIndexes).toEqual(new Set());
+            mockMappingRows.mockClear();
             await expect(
                 findMappedCanonicalCandidates([track]),
             ).resolves.toEqual([

@@ -76,6 +76,9 @@ function fixture() {
         loadNoveltyExclusions: jest.fn(async () => new Set<string>()),
         loadDislikedIds: jest.fn(async () => new Set<string>()),
         loadSuppressedArtistKeys: jest.fn(async () => new Set<string>()),
+        filterCurrentFeedback: jest.fn(
+            async (_owner: string, tracks: WeeklyDiscoveryTrack[]) => tracks,
+        ),
         now: () => now,
     };
     return {
@@ -88,6 +91,57 @@ function fixture() {
 }
 
 describe("online weekly discoveries", () => {
+    it("re-admits saved tracks against current feedback without reranking, refill, or another generation", async () => {
+        const f = fixture();
+        const original = await f.service.getCurrent("alice");
+        const rejected = new Set([
+            original.tracks[1].id,
+            original.tracks[3].id,
+        ]);
+        f.dependencies.filterCurrentFeedback.mockImplementation(
+            async (owner, tracks) =>
+                owner === "alice"
+                    ? tracks.filter((entry) => !rejected.has(entry.id))
+                    : tracks,
+        );
+        const current = await f.service.getCurrent("alice");
+        const trace = Reflect.get(
+            globalThis,
+            "__DEV09_IDENTITY_FIXTURE_TRACE__",
+        );
+        if (typeof trace === "function")
+            trace({
+                kind: "saved-week-contract",
+                scenario: expect.getState().currentTestName,
+                userId: "alice",
+                requested: original.tracks.map((entry) => entry.id),
+                admitted: current.tracks.map((entry) => entry.id),
+                fixtureBlocked: current.tracks
+                    .filter((entry) => rejected.has(entry.id))
+                    .map((entry) => entry.id),
+                exact: null,
+                verified: null,
+                unresolved: null,
+                unavailable: null,
+            });
+        expect(current.tracks.map((entry) => entry.id)).toEqual(
+            original.tracks
+                .filter((entry) => !rejected.has(entry.id))
+                .map((entry) => entry.id),
+        );
+        expect(current.count).toBe(38);
+        expect(current.totalCount).toBe(38);
+        expect(f.dependencies.getCandidates).toHaveBeenCalledTimes(1);
+        expect(f.dependencies.store.save).toHaveBeenCalledTimes(1);
+        expect((await f.service.getCurrent("bob")).count).toBe(40);
+        f.dependencies.filterCurrentFeedback.mockResolvedValue([]);
+        const empty = await f.service.getCurrent("alice");
+        expect(empty.tracks).toEqual([]);
+        expect(empty.count).toBe(0);
+        expect(f.dependencies.getCandidates).toHaveBeenCalledTimes(2);
+        expect(f.dependencies.store.save).toHaveBeenCalledTimes(2);
+    });
+
     it("persists 40 tracks and one owned generation for the whole UTC week", async () => {
         const f = fixture();
         const first = await f.service.getCurrent("alice");

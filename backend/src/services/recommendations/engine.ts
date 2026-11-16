@@ -9,6 +9,7 @@ import {
 } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
 import type { RadioRequestExecution } from "./radioRequestExecution";
+import type { CurrentDislikeAdmission } from "./featureStore";
 import type { VerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
 import {
     hasNativeRecommendationIdentity,
@@ -44,6 +45,8 @@ export interface RecommendationCandidateBatch {
 export interface CanonicalRecommendationIdentity {
     id: string;
     canonicalKey: string;
+    /** Only persisted server evidence permits cross-provider negative feedback. */
+    verifiedCanonicalKey?: string;
 }
 
 export interface RecommendationTasteContext {
@@ -104,7 +107,16 @@ export interface RecommendationEngineDependencies {
         userId: string,
         now: Date,
     ) => Promise<RecommendationExposureSignal[]>;
-    loadDislikedCanonicalKeys: (userId: string) => Promise<ReadonlySet<string>>;
+    loadDislikedCanonicalKeys: (
+        userId: string,
+        candidates?: readonly RecommendationCandidate[],
+    ) => Promise<ReadonlySet<string>>;
+    /** Whole-profile current-pool admission; bounded availability is not negative taste. */
+    loadDislikeAdmission?: (
+        userId: string,
+        candidates: readonly RecommendationCandidate[],
+        check?: () => void,
+    ) => Promise<CurrentDislikeAdmission>;
     /** Exact owned native history, without requiring embeddings or a matching session. */
     loadVerifiedRepeatExclusions?: (
         userId: string,
@@ -164,6 +176,10 @@ const defaultMetricsRecorder: RecommendationEngineMetricsRecorder = {
 interface HybridContext {
     exposures: RecommendationExposureSignal[];
     dislikedCanonicalKeys: ReadonlySet<string>;
+    unavailableCanonicalKeys: ReadonlySet<string>;
+    unavailableCandidateReferences?: ReadonlySet<string>;
+    verifiedCanonicalKeys?: ReadonlyMap<string, string>;
+    admissionUnavailable: boolean;
     taste: RecommendationTasteContext;
     degradedSources: string[];
 }
@@ -332,11 +348,13 @@ export class RecommendationEngine {
             )!;
             return [{ ...fresh, lane: candidate.lane ?? fresh.lane }];
         });
+        const verifiedKeys = new Map<string, string>();
         let candidates = await this.resolveCanonicalCandidates(
             isWave
                 ? sourceCandidates.filter(isWaveMusicCandidate)
                 : sourceCandidates,
             degradedSources,
+            verifiedKeys,
         );
         if (this.dependencies.enrichCandidates && candidates.length > 0) {
             try {
@@ -373,15 +391,46 @@ export class RecommendationEngine {
         );
         // Safety/variety policy belongs to Wave itself, not only the hybrid
         // experiment arm. Never refill a short Wave with today's exposures.
-        const sharedContext = isWave
-            ? await this.loadHybridContext(request, startedAt)
-            : null;
+        const sharedContext = await this.loadHybridContext(request, startedAt, [
+            ...candidates,
+            ...pendingMoodCandidates,
+        ]);
+        const dislikes = sharedContext.dislikedCanonicalKeys;
+        const isDisliked = (candidate: RecommendationCandidate) => {
+            if (sharedContext.admissionUnavailable) return true;
+            if (
+                sharedContext.unavailableCandidateReferences?.has(
+                    `${candidate.source}:${candidate.id}`,
+                )
+            )
+                return true;
+            const verified = (
+                sharedContext.verifiedCanonicalKeys ?? verifiedKeys
+            ).get(`${candidate.source}:${candidate.id}`);
+            if (
+                verified &&
+                sharedContext.unavailableCanonicalKeys.has(verified)
+            )
+                return true;
+            return (
+                (verified !== undefined && dislikes.has(verified)) ||
+                [
+                    candidate.id,
+                    candidate.provider.youtubeVideoId
+                        ? `yt:${candidate.provider.youtubeVideoId}`
+                        : "",
+                    candidate.provider.youtubeVideoId ?? "",
+                    candidate.provider.tidalTrackId !== null
+                        ? `tidal:${candidate.provider.tidalTrackId}`
+                        : "",
+                ].some((key) => key && dislikes.has(key))
+            );
+        };
+        candidates = candidates.filter((candidate) => !isDisliked(candidate));
         if (sharedContext) {
             for (const source of sharedContext.degradedSources)
                 appendDegradedSource(degradedSources, source);
-            for (const key of sharedContext.dislikedCanonicalKeys)
-                excludes.add(key);
-            for (const exposure of sharedContext.exposures) {
+            for (const exposure of isWave ? sharedContext.exposures : []) {
                 if (
                     startedAt.getTime() - exposure.exposedAt.getTime() <
                     24 * 60 * 60 * 1_000
@@ -458,7 +507,9 @@ export class RecommendationEngine {
                 "source-listening-history",
             ].some((source) => degradedSources.includes(source))
                 ? baselineRank(
-                      pendingMoodCandidates,
+                      pendingMoodCandidates.filter(
+                          (candidate) => !isDisliked(candidate),
+                      ),
                       excludes,
                       MOOD_ANALYSIS_RESERVE_LIMIT,
                   )
@@ -506,7 +557,8 @@ export class RecommendationEngine {
                 sessionId: request.sessionId,
                 direction: request.intent.direction,
                 mood: request.intent.mood ?? null,
-                dislikedCanonicalKeys: hybridContext.dislikedCanonicalKeys,
+                // Hard negatives were admitted above with exact/verified edge proof.
+                dislikedCanonicalKeys: new Set(),
                 exposures: hybridContext.exposures,
                 positiveCentroids: hybridContext.taste.positiveCentroids,
                 negativeCentroids: hybridContext.taste.negativeCentroids,
@@ -601,6 +653,7 @@ export class RecommendationEngine {
     private async resolveCanonicalCandidates(
         candidates: readonly RecommendationCandidate[],
         degradedSources: string[],
+        verifiedKeys: Map<string, string>,
     ): Promise<RecommendationCandidate[]> {
         const resolved: RecommendationCandidate[] = [];
         let mapped: readonly (CanonicalRecommendationIdentity | null)[] = [];
@@ -634,6 +687,15 @@ export class RecommendationEngine {
             identities.forEach((identity, index) => {
                 const candidate = batch[index];
                 if (identity.status === "fulfilled" && identity.value) {
+                    if (
+                        identity.value.verifiedCanonicalKey ===
+                        identity.value.canonicalKey
+                    ) {
+                        verifiedKeys.set(
+                            `${candidate.source}:${candidate.id}`,
+                            identity.value.verifiedCanonicalKey,
+                        );
+                    }
                     resolved.push({
                         ...candidate,
                         canonicalRecordingId: identity.value.id,
@@ -659,10 +721,32 @@ export class RecommendationEngine {
     private async loadHybridContext(
         request: RecommendRequest,
         now: Date,
+        candidates?: readonly RecommendationCandidate[],
     ): Promise<HybridContext> {
+        const admission: Promise<{
+            dislikedKeys: ReadonlySet<string>;
+            unavailableCanonicalKeys: ReadonlySet<string>;
+            unavailableCandidateReferences?: ReadonlySet<string>;
+            verifiedCanonicalKeys?: ReadonlyMap<string, string>;
+            diagnostics?: { aliasLookupFailures?: number };
+        }> =
+            this.dependencies.loadDislikeAdmission && candidates
+                ? this.dependencies.loadDislikeAdmission(
+                      request.userId,
+                      candidates,
+                  )
+                : this.dependencies
+                      .loadDislikedCanonicalKeys(request.userId, candidates)
+                      .then((keys) => ({
+                          dislikedKeys: keys,
+                          unavailableCanonicalKeys: new Set<string>(),
+                      }));
         const [exposures, dislikes, taste] = await Promise.allSettled([
-            this.dependencies.loadRecentExposures(request.userId, now),
-            this.dependencies.loadDislikedCanonicalKeys(request.userId),
+            this.dependencies.mode === "baseline" &&
+            request.intent.surface !== "wave"
+                ? Promise.resolve<RecommendationExposureSignal[]>([])
+                : this.dependencies.loadRecentExposures(request.userId, now),
+            admission,
             this.dependencies.mode === "baseline" &&
             request.intent.surface !== "wave"
                 ? Promise.resolve<RecommendationTasteContext>({
@@ -677,6 +761,12 @@ export class RecommendationEngine {
         }
         if (dislikes.status === "rejected") {
             appendDegradedSource(degradedSources, "taste-dislikes");
+        } else if (
+            dislikes.value.unavailableCanonicalKeys.size > 0 ||
+            (dislikes.value.unavailableCandidateReferences?.size ?? 0) > 0 ||
+            (dislikes.value.diagnostics?.aliasLookupFailures ?? 0) > 0
+        ) {
+            appendDegradedSource(degradedSources, "dislike-identity-coverage");
         }
         if (taste.status === "rejected") {
             appendDegradedSource(degradedSources, "taste-profile");
@@ -688,7 +778,24 @@ export class RecommendationEngine {
         return {
             exposures: exposures.status === "fulfilled" ? exposures.value : [],
             dislikedCanonicalKeys:
-                dislikes.status === "fulfilled" ? dislikes.value : new Set(),
+                dislikes.status === "fulfilled"
+                    ? dislikes.value.dislikedKeys
+                    : new Set(),
+            unavailableCanonicalKeys:
+                dislikes.status === "fulfilled"
+                    ? dislikes.value.unavailableCanonicalKeys
+                    : new Set(),
+            verifiedCanonicalKeys:
+                dislikes.status === "fulfilled"
+                    ? dislikes.value.verifiedCanonicalKeys
+                    : undefined,
+            unavailableCandidateReferences:
+                dislikes.status === "fulfilled"
+                    ? dislikes.value.unavailableCandidateReferences
+                    : undefined,
+            admissionUnavailable:
+                Boolean(this.dependencies.loadDislikeAdmission) &&
+                dislikes.status === "rejected",
             taste:
                 taste.status === "fulfilled"
                     ? taste.value

@@ -66,6 +66,73 @@ function setup() {
 const flush = async () => {
     for (let i = 0; i < 30; i++) await Promise.resolve();
 };
+
+test.each(["timeout", "cancel"] as const)(
+    "typed feedback keeps the owner %s fence after a held read",
+    async (reason) => {
+        const { deps } = setup();
+        const held = deferred<void>();
+        const nextLookup = jest.fn();
+        const admission = jest.fn(
+            async (
+                owner: string,
+                _candidates: readonly RecommendationCandidate[],
+                check?: () => void,
+            ) => {
+                await held.promise;
+                check?.();
+                nextLookup(owner);
+                return {
+                    dislikedKeys: new Set<string>(),
+                    unavailableCanonicalKeys: new Set<string>(),
+                    verifiedCanonicalKeys: new Map<string, string>(),
+                    diagnostics: {
+                        requestedGroups: 0,
+                        unavailableGroups: 0,
+                        verifiedAliasReferences: 0,
+                        unresolvedReferences: 0,
+                    },
+                };
+            },
+        );
+        const service = new UnifiedRecommendationService({
+            ...deps,
+            loadDislikeAdmission: admission,
+        });
+        const controller = new AbortController();
+        const owner = observe(
+            service.recommendRadio(input, { signal: controller.signal }),
+        );
+        const other =
+            reason === "cancel"
+                ? observe(service.recommendRadio({ ...input, userId: "bob" }))
+                : null;
+        await flush();
+        if (reason === "timeout") await jest.advanceTimersByTimeAsync(13_000);
+        else controller.abort();
+        await flush();
+        const beforeRelease = { ...owner.state };
+        held.resolve(undefined);
+        await owner.done;
+        if (other) await other.done;
+        await flush();
+        expect(beforeRelease.error).toMatchObject({
+            code:
+                reason === "timeout"
+                    ? "RADIO_REQUEST_TIMEOUT"
+                    : "RADIO_REQUEST_CANCELLED",
+        });
+        expect(nextLookup.mock.calls.map(([user]) => user)).toEqual(
+            other ? ["bob"] : [],
+        );
+        for (const call of admission.mock.calls)
+            expect(call[2]).toEqual(expect.any(Function));
+        expect(deps.recordGeneration).toHaveBeenCalledTimes(other ? 1 : 0);
+        if (other)
+            expect(deps.recordGeneration.mock.calls[0][0].userId).toBe("bob");
+        expect(jest.getTimerCount()).toBe(0);
+    },
+);
 function observe<T>(promise: Promise<T>) {
     const state: { value?: T; error?: unknown; settled: boolean } = {
         settled: false,

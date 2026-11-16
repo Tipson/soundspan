@@ -20,9 +20,15 @@ import { nativeArtistCreditKey } from "./nativeSourceAdmission";
 import type { RadioRequestExecution } from "./radioRequestExecution";
 import type { RecommendationCandidate } from "./types";
 import {
+    findMappedCanonicalCandidates,
+    readCanonicalCandidateEvidence,
+    findVerifiedCanonicalReferences,
+    collectVerifiedCanonicalFeedbackAliases,
+    type CanonicalProviderReference,
+} from "./canonicalIdentity";
+import {
     isMusicSourceFeedbackReference,
     loadVerifiedLikedCanonicalIds,
-    loadVerifiedDislikedCanonicalKeys,
     loadVerifiedSeedCanonicalId,
     loadVerifiedSessionPlays,
 } from "./verifiedSourceFeedback";
@@ -36,6 +42,173 @@ const TASTE_LOOKBACK_DAYS = 180;
 const MAX_TASTE_ROWS = 500;
 const MAX_DISLIKES = 2_000;
 const log = logger.child("RecommendationFeatureStore");
+
+/** Ephemeral admission limits are separate from durable owner negative feedback. */
+export interface CurrentDislikeAdmission {
+    dislikedKeys: ReadonlySet<string>;
+    unavailableCanonicalKeys: ReadonlySet<string>;
+    unavailableCandidateReferences?: ReadonlySet<string>;
+    verifiedCanonicalKeys: ReadonlyMap<string, string>;
+    diagnostics: {
+        requestedGroups: number;
+        unavailableGroups: number;
+        verifiedAliasReferences: number;
+        unresolvedReferences: number;
+        aliasLookupFailures?: number;
+        forwardUnavailableReferences?: number;
+    };
+}
+
+/** Current-pool feedback admission; the legacy Set reader remains the centroid adapter. */
+export async function loadCurrentDislikeAdmission(
+    userId: string,
+    candidates: readonly RecommendationCandidate[],
+    check?: () => void,
+): Promise<CurrentDislikeAdmission> {
+    check?.();
+    if (candidates.length === 0)
+        return {
+            dislikedKeys: new Set(),
+            unavailableCanonicalKeys: new Set(),
+            verifiedCanonicalKeys: new Map(),
+            diagnostics: {
+                requestedGroups: 0,
+                unavailableGroups: 0,
+                verifiedAliasReferences: 0,
+                unresolvedReferences: 0,
+            },
+        };
+    let aliasLookupFailures = 0;
+    let hasOwnerFeedback = true;
+    const [feedback, mapping] = await Promise.allSettled([
+        loadDislikedCanonicalKeys(
+            userId,
+            candidates,
+            true,
+            check,
+            () => {
+                aliasLookupFailures += 1;
+            },
+            (present) => {
+                hasOwnerFeedback = present;
+            },
+        ),
+        readCanonicalCandidateEvidence(candidates, check),
+    ]);
+    check?.();
+    if (feedback.status === "rejected") throw feedback.reason;
+    const keys = new Set(feedback.value);
+    const mapped =
+        mapping.status === "fulfilled" ? mapping.value.recordings : [];
+    if (mapping.status === "rejected") aliasLookupFailures += 1;
+    else aliasLookupFailures += mapping.value.lookupFailures;
+    const unavailableCandidateReferences = new Set(
+        hasOwnerFeedback
+            ? candidates.flatMap((candidate, index) =>
+                  mapping.status === "rejected" ||
+                  mapping.value.unavailableCandidateIndexes.has(index)
+                      ? [`${candidate.source}:${candidate.id}`]
+                      : [],
+              )
+            : [],
+    );
+    const verifiedCanonicalKeys = new Map(
+        candidates.flatMap((candidate, index) =>
+            mapped[index]?.verifiedCanonicalKey
+                ? [
+                      [
+                          `${candidate.source}:${candidate.id}`,
+                          mapped[index]!.verifiedCanonicalKey!,
+                      ] as const,
+                  ]
+                : [],
+        ),
+    );
+    const groups = new Map(
+        mapped.flatMap((identity, index) => {
+            if (
+                !hasOwnerFeedback ||
+                !identity?.verifiedCanonicalKey ||
+                keys.has(identity.verifiedCanonicalKey)
+            )
+                return [];
+            const candidate = candidates[index];
+            if (
+                (candidate.source === "vk" || candidate.source === "yandex") &&
+                identity.verifiedCanonicalKey === `provider:${candidate.id}`
+            )
+                return [];
+            return [[identity.id, identity] as const];
+        }),
+    );
+    const coverage = await collectVerifiedCanonicalFeedbackAliases(
+        [...groups.values()],
+        check,
+    );
+    const unavailable = new Set(coverage.unavailableCanonicalKeys);
+    const refs = [
+        ...new Set(
+            [
+                ...coverage.referencesByCanonicalKey.values(),
+                ...coverage.uncertainReferencesByCanonicalKey.values(),
+            ].flatMap((values) => [...values]),
+        ),
+    ];
+    const owned = new Set<string>();
+    for (let offset = 0; offset < refs.length; offset += 250) {
+        check?.();
+        const ids = refs.slice(offset, offset + 250);
+        try {
+            const rows = await prisma.dislikedEntity.findMany({
+                where: { userId, entityType: "track", entityId: { in: ids } },
+                take: ids.length,
+                select: { entityId: true },
+            });
+            check?.();
+            for (const row of rows) owned.add(row.entityId);
+        } catch {
+            check?.();
+            const failed = new Set(ids);
+            for (const [key, values] of [
+                ...coverage.referencesByCanonicalKey,
+                ...coverage.uncertainReferencesByCanonicalKey,
+            ])
+                if ([...values].some((value) => failed.has(value)))
+                    unavailable.add(key);
+        }
+    }
+    for (const [key, values] of coverage.uncertainReferencesByCanonicalKey) {
+        if ([...values].some((value) => owned.has(value))) unavailable.add(key);
+    }
+    for (const [key, values] of coverage.referencesByCanonicalKey) {
+        if ([...values].some((value) => owned.has(value))) {
+            keys.add(key);
+            unavailable.delete(key);
+        }
+    }
+    return {
+        dislikedKeys: keys,
+        unavailableCanonicalKeys: unavailable,
+        unavailableCandidateReferences,
+        verifiedCanonicalKeys,
+        diagnostics: {
+            requestedGroups: groups.size,
+            unavailableGroups: new Set(
+                mapped
+                    .filter(
+                        (identity) =>
+                            identity?.verifiedCanonicalKey &&
+                            unavailable.has(identity.verifiedCanonicalKey),
+                    )
+                    .map((identity) => identity!.id),
+            ).size,
+            verifiedAliasReferences: coverage.verifiedAliasReferences,
+            unresolvedReferences: coverage.unresolvedReferences,
+            aliasLookupFailures: aliasLookupFailures + coverage.lookupFailures,
+            forwardUnavailableReferences: unavailableCandidateReferences.size,
+        },
+    };
+}
 
 export interface CanonicalFeatureRow {
     canonicalRecordingId: string;
@@ -72,7 +245,10 @@ interface RecommendationFeatureStoreDependencies {
     loadLikedEmbeddings?: (userId: string) => Promise<number[][]>;
     /** Current explicit dislikes with active canonical audio analysis. */
     loadDislikedEmbeddings?: (userId: string) => Promise<number[][]>;
-    loadDislikedCanonicalKeys: (userId: string) => Promise<string[]>;
+    loadDislikedCanonicalKeys: (
+        userId: string,
+        candidates?: readonly RecommendationCandidate[],
+    ) => Promise<string[]>;
     loadSeedCanonicalRecordingId: (seedId: string) => Promise<string | null>;
     loadSessionRows: (
         userId: string,
@@ -269,10 +445,18 @@ export class RecommendationFeatureStore {
         };
     }
 
-    async loadDislikedCanonicalKeys(userId: string): Promise<Set<string>> {
-        return new Set(
-            await this.dependencies.loadDislikedCanonicalKeys(userId),
-        );
+    async loadDislikedCanonicalKeys(
+        userId: string,
+        candidates?: readonly RecommendationCandidate[],
+    ): Promise<Set<string>> {
+        const keys =
+            candidates === undefined
+                ? await this.dependencies.loadDislikedCanonicalKeys(userId)
+                : await this.dependencies.loadDislikedCanonicalKeys(
+                      userId,
+                      candidates,
+                  );
+        return new Set(keys);
     }
 
     async loadSeedEmbedding(seedId: string): Promise<number[] | null> {
@@ -463,10 +647,9 @@ export async function loadLikedTasteEmbeddings(
 export async function loadDislikedTasteEmbeddings(
     userId: string,
 ): Promise<number[][]> {
-    const keys = [...new Set(await loadDislikedCanonicalKeys(userId))].slice(
-        0,
-        MAX_TASTE_ROWS,
-    );
+    const keys = [
+        ...new Set(await loadDislikedCanonicalKeys(userId, undefined, false)),
+    ].slice(0, MAX_TASTE_ROWS);
     if (keys.length === 0) return [];
     const recordings = await prisma.canonicalRecording.findMany({
         where: {
@@ -745,31 +928,40 @@ export async function loadSavedMoodCandidates(
             id.trim().replace(/^yt:/, "").trim(),
         ),
     );
-    const [repeat, disliked, suppressed, viewed, dislikedCanonicalKeys] =
-        await Promise.all([
-            loadYouTubeRepeatExclusions(userId, now),
-            loadDislikedYouTubeIds(
-                userId,
-                candidates.map((track) => track.youtubeVideoId!),
-            ),
-            loadSuppressedYouTubeArtists(userId, now),
-            loadRecentlyViewedCanonicalKeys(
-                userId,
-                candidates.map((track) => track.canonicalKey),
-                now,
-            ),
-            loadDislikedCanonicalKeys(userId),
-        ]);
+    const [
+        repeat,
+        disliked,
+        suppressed,
+        viewed,
+        dislikedCanonicalKeys,
+        candidateMappings,
+    ] = await Promise.all([
+        loadYouTubeRepeatExclusions(userId, now),
+        loadDislikedYouTubeIds(
+            userId,
+            candidates.map((track) => track.youtubeVideoId!),
+        ),
+        loadSuppressedYouTubeArtists(userId, now),
+        loadRecentlyViewedCanonicalKeys(
+            userId,
+            candidates.map((track) => track.canonicalKey),
+            now,
+        ),
+        loadDislikedCanonicalKeys(userId, undefined, true, check),
+        findMappedCanonicalCandidates(candidates, check),
+    ]);
     check();
     const dislikedCanonical = new Set(dislikedCanonicalKeys);
-    const eligible = candidates.filter((track) => {
+    const eligible = candidates.filter((track, index) => {
         const key = songRepeatKey(track.artist.name, track.title);
         return (
             isWaveMusicCandidate(track) &&
             matchesWaveMood(track, mood) &&
             !excluded.has(track.youtubeVideoId!) &&
             !viewed.has(track.canonicalKey) &&
-            !dislikedCanonical.has(track.canonicalKey) &&
+            !dislikedCanonical.has(
+                candidateMappings[index]?.verifiedCanonicalKey ?? "",
+            ) &&
             !disliked.has(track.youtubeVideoId!) &&
             !suppressed.has(
                 track.artist.name.trim().toLocaleLowerCase("en-US"),
@@ -979,82 +1171,165 @@ async function loadContextRows(
     });
 }
 
-async function loadDislikedCanonicalKeys(userId: string): Promise<string[]> {
-    const directKeys = await loadVerifiedDislikedCanonicalKeys(
-        userId,
-        MAX_DISLIKES,
-    );
+async function loadDislikedCanonicalKeys(
+    userId: string,
+    candidates?: readonly RecommendationCandidate[],
+    includeExact = true,
+    check?: () => void,
+    onAliasUnavailable?: () => void,
+    onOwnerFeedback?: (present: boolean) => void,
+): Promise<string[]> {
+    check?.();
+    if (candidates?.length === 0) return [];
     const dislikes = await prisma.dislikedEntity.findMany({
         where: {
             userId,
             entityType: "track",
-            NOT: [
-                { entityId: { startsWith: "vk:" } },
-                { entityId: { startsWith: "yandex:" } },
-            ],
         },
         orderBy: { dislikedAt: "desc" },
         take: MAX_DISLIKES,
         select: { entityId: true },
     });
-    if (dislikes.length === 0) return directKeys;
-    const localIds: string[] = [];
-    const youtubeVideoIds: string[] = [];
-    const tidalIds: number[] = [];
+    check?.();
+    // The history window bounds alias expansion, never exact current-pool bans.
+    const candidateRefs = [
+        ...new Set(
+            (candidates ?? []).flatMap((candidate) => [
+                candidate.id,
+                ...(candidate.provider.youtubeVideoId
+                    ? [
+                          `yt:${candidate.provider.youtubeVideoId}`,
+                          candidate.provider.youtubeVideoId,
+                      ]
+                    : []),
+                ...(candidate.provider.tidalTrackId !== null
+                    ? [`tidal:${candidate.provider.tidalTrackId}`]
+                    : []),
+            ]),
+        ),
+    ];
+    for (let offset = 0; offset < candidateRefs.length; offset += 250) {
+        check?.();
+        const ids = candidateRefs.slice(offset, offset + 250);
+        dislikes.push(
+            ...(await prisma.dislikedEntity.findMany({
+                where: { userId, entityType: "track", entityId: { in: ids } },
+                take: ids.length,
+                select: { entityId: true },
+            })),
+        );
+        check?.();
+    }
+    onOwnerFeedback?.(dislikes.length > 0);
+    const exact = new Set<string>();
+    const references: CanonicalProviderReference[] = [];
     for (const { entityId } of dislikes) {
-        if (isMusicSourceFeedbackReference(entityId)) continue;
-        if (entityId.startsWith("yt:")) {
-            youtubeVideoIds.push(entityId.slice(3));
+        if (entityId.startsWith("vk:")) {
+            const id = entityId.slice(3);
+            if (/^-?\d{1,20}_\d{1,20}$/.test(id)) {
+                exact.add(entityId);
+                references.push({ source: "vk", providerTrackId: id });
+            }
+        } else if (entityId.startsWith("yandex:")) {
+            const id = entityId.slice(7);
+            if (/^\d{1,20}$/.test(id)) {
+                exact.add(entityId);
+                references.push({ source: "yandex", providerTrackId: id });
+            }
+        } else if (isMusicSourceFeedbackReference(entityId)) continue;
+        else if (entityId.startsWith("yt:")) {
+            const id = entityId.slice(3);
+            if (id) {
+                exact.add(entityId);
+                references.push({ source: "youtube", providerTrackId: id });
+            }
         } else if (entityId.startsWith("tidal:")) {
             const tidalId = Number(entityId.slice(6));
             if (Number.isSafeInteger(tidalId) && tidalId > 0) {
-                tidalIds.push(tidalId);
+                exact.add(`tidal:${tidalId}`);
+                references.push({
+                    source: "tidal",
+                    providerTrackId: String(tidalId),
+                });
             }
         } else {
-            localIds.push(entityId);
-            youtubeVideoIds.push(entityId);
+            exact.add(entityId);
+            // Historical unprefixed IDs may name a library row or YouTube video.
+            exact.add(`yt:${entityId}`);
+            references.push(
+                { source: "library", providerTrackId: entityId },
+                { source: "youtube", providerTrackId: entityId },
+            );
         }
     }
-    if (localIds.length + youtubeVideoIds.length + tidalIds.length === 0)
-        return directKeys;
-    const mappings = await prisma.trackMapping.findMany({
-        where: {
-            stale: false,
-            canonicalRecordingId: { not: null },
-            OR: [
-                ...(localIds.length > 0 ? [{ trackId: { in: localIds } }] : []),
-                ...(youtubeVideoIds.length > 0
-                    ? [
-                          {
-                              trackYtMusic: {
-                                  is: { videoId: { in: youtubeVideoIds } },
-                              },
-                          },
-                      ]
-                    : []),
-                ...(tidalIds.length > 0
-                    ? [
-                          {
-                              trackTidal: {
-                                  is: { tidalId: { in: tidalIds } },
-                              },
-                          },
-                      ]
-                    : []),
-            ],
-        },
-        select: {
-            canonicalRecording: { select: { canonicalKey: true } },
-        },
-    });
+    let mappings: Awaited<ReturnType<typeof findVerifiedCanonicalReferences>> =
+        [];
+    try {
+        mappings = await findVerifiedCanonicalReferences(references, check);
+    } catch (error) {
+        check?.();
+        onAliasUnavailable?.();
+        // Optional alias evidence cannot erase already loaded exact feedback.
+        log.warn("Disliked recording alias evidence unavailable", { error });
+    }
     return [
-        ...directKeys,
+        ...(includeExact ? exact : []),
         ...mappings.flatMap((mapping) =>
-            mapping.canonicalRecording?.canonicalKey
-                ? [mapping.canonicalRecording.canonicalKey]
-                : [],
+            mapping ? [mapping.canonicalKey] : [],
         ),
     ];
+}
+
+/** Apply exact/verified feedback and local availability without modifying taste. */
+export function isCurrentDislikeAdmissionAllowed(
+    candidate: RecommendationCandidate,
+    snapshot: CurrentDislikeAdmission,
+): boolean {
+    if (
+        snapshot.unavailableCandidateReferences?.has(
+            `${candidate.source}:${candidate.id}`,
+        )
+    )
+        return false;
+    const verified = snapshot.verifiedCanonicalKeys.get(
+        `${candidate.source}:${candidate.id}`,
+    );
+    if (
+        verified &&
+        (snapshot.unavailableCanonicalKeys.has(verified) ||
+            snapshot.dislikedKeys.has(verified))
+    )
+        return false;
+    const exact = [
+        candidate.id,
+        candidate.provider.youtubeVideoId ?? "",
+        candidate.provider.youtubeVideoId
+            ? `yt:${candidate.provider.youtubeVideoId}`
+            : "",
+        candidate.provider.tidalTrackId !== null
+            ? `tidal:${candidate.provider.tidalTrackId}`
+            : "",
+    ];
+    return !exact.some((ref) => ref && snapshot.dislikedKeys.has(ref));
+}
+
+/** Readmit a saved finite list against current owner feedback, without reranking or writes. */
+export async function filterCurrentDislikedCandidates(
+    userId: string,
+    candidates: readonly RecommendationCandidate[],
+    check?: () => void,
+): Promise<RecommendationCandidate[]> {
+    check?.();
+    if (candidates.length === 0) return [];
+    const snapshot = await loadCurrentDislikeAdmission(
+        userId,
+        candidates,
+        check,
+    );
+    check?.();
+    return candidates.filter((candidate) =>
+        isCurrentDislikeAdmissionAllowed(candidate, snapshot),
+    );
 }
 
 function providerSeedIdentity(seedId: string): {

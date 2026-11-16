@@ -48,6 +48,8 @@ const key = (index: number) =>
 const canonicalId = (index: number) => `canonical-${index}`;
 const mapping = (index: number) => ({
     id: `mapping-${index}`,
+    source: "verified-source",
+    confidence: 1,
     trackMusicSource: storedNamespaces[index],
     canonicalRecordingId: canonicalId(index),
     canonicalRecording: {
@@ -155,14 +157,21 @@ describe("verified direct feedback reaches actual feature-store readers", () => 
     it("resolves direct dislikes to exact canonical keys without requiring an embedding", async () => {
         expect(
             await recommendationFeatureStore.loadDislikedCanonicalKeys("alice"),
-        ).toEqual(new Set(refs.map((_, index) => key(index))));
+        ).toEqual(
+            new Set(
+                refs.flatMap((ref, index) => [
+                    `${ref.provider}:${ref.id}`,
+                    key(index),
+                ]),
+            ),
+        );
         expect(
             await recommendationFeatureStore.loadDislikedCanonicalKeys("bob"),
         ).toEqual(new Set());
         expect(mockQueryRaw).not.toHaveBeenCalled();
         for (const [query] of mockMappings.mock.calls)
             expect(
-                query.where.canonicalRecording.is.embeddings,
+                query.where.canonicalRecording?.is?.embeddings,
             ).toBeUndefined();
     });
 
@@ -243,7 +252,13 @@ describe("verified direct feedback reaches actual feature-store readers", () => 
                 await recommendationFeatureStore.loadDislikedCanonicalKeys(
                     "alice",
                 ),
-            ).toEqual(new Set([key(1)]));
+            ).toEqual(
+                new Set(
+                    refs
+                        .map((ref) => `${ref.provider}:${ref.id}`)
+                        .concat(key(1)),
+                ),
+            );
             expect(
                 await recommendationFeatureStore.loadSeedEmbedding(
                     `vk:${refs[0].id}`,

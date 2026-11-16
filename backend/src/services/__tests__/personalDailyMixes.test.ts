@@ -41,6 +41,35 @@ const radio = (prefix: string, artist: string) =>
         song(`${prefix}-${index}`, `${artist} ${index % 6}`),
     );
 
+function observeDaily(
+    phase: string,
+    owner: string,
+    mixes: Array<{ tracks: Array<{ id: string }> }>,
+    blocked: ReadonlySet<string>,
+    candidates?: readonly { id: string }[],
+) {
+    const trace = Reflect.get(globalThis, "__DEV09_IDENTITY_FIXTURE_TRACE__");
+    if (typeof trace === "function")
+        trace({
+            kind: "composer-contract",
+            scenario: expect.getState().currentTestName,
+            phase,
+            userId: owner,
+            requested: candidates?.map((candidate) => candidate.id) ?? null,
+            admitted: mixes
+                .flatMap((mix) => mix.tracks)
+                .map((track) => track.id),
+            fixtureBlocked: mixes
+                .flatMap((mix) => mix.tracks)
+                .filter((track) => blocked.has(track.id))
+                .map((track) => track.id),
+            exact: null,
+            verified: null,
+            unresolved: null,
+            unavailable: null,
+        });
+}
+
 function dependencies(
     overrides: Partial<PersonalDailyMixDependencies> = {},
 ): PersonalDailyMixDependencies {
@@ -68,6 +97,219 @@ function dependencies(
 }
 
 describe("PersonalDailyMixService", () => {
+    it.each(["all", "one-direction", "diagnostic-only"] as const)(
+        "rebuilds after transient admission coverage recovers: %s",
+        async (outage) => {
+            let unavailable = true;
+            const admission = jest.fn(
+                async (
+                    _owner: string,
+                    candidates: readonly import("../recommendations/types").RecommendationCandidate[],
+                ) => ({
+                    dislikedKeys: new Set<string>(),
+                    unavailableCanonicalKeys: new Set<string>(),
+                    unavailableCandidateReferences: new Set<string>(
+                        unavailable
+                            ? candidates
+                                  .filter(
+                                      (candidate) =>
+                                          outage === "all" ||
+                                          (outage === "one-direction" &&
+                                              candidate.id.includes("rock")),
+                                  )
+                                  .map(
+                                      (candidate) =>
+                                          `${candidate.source}:${candidate.id}`,
+                                  )
+                            : [],
+                    ),
+                    verifiedCanonicalKeys: new Map<string, string>(),
+                    diagnostics: {
+                        requestedGroups: 0,
+                        unavailableGroups: 0,
+                        verifiedAliasReferences: 0,
+                        unresolvedReferences: 0,
+                        aliasLookupFailures: unavailable ? 1 : 0,
+                        forwardUnavailableReferences:
+                            unavailable && outage !== "diagnostic-only" ? 1 : 0,
+                    },
+                }),
+            );
+            const base = dependencies({ loadDislikeAdmission: admission });
+            const getRadio = jest.fn(base.getRadio);
+            const service = new PersonalDailyMixService({ ...base, getRadio });
+            const first = await service.getMixes("alice");
+            expect(first.mixes).toHaveLength(
+                outage === "all" ? 0 : outage === "one-direction" ? 1 : 2,
+            );
+            const reads = getRadio.mock.calls.length;
+            unavailable = false;
+            const recovered = await service.getMixes("alice");
+            expect(recovered.mixes).toHaveLength(2);
+            expect(
+                recovered.mixes.every((mix) => mix.tracks.length === 40),
+            ).toBe(true);
+            expect(getRadio.mock.calls.length).toBeGreaterThan(reads);
+            expect(admission).toHaveBeenCalledTimes(2);
+        },
+    );
+
+    it("keeps healthy unresolved metadata cacheable without changing the daily composition", async () => {
+        const base = dependencies({
+            loadDislikeAdmission: async () => ({
+                dislikedKeys: new Set<string>(),
+                unavailableCanonicalKeys: new Set<string>(),
+                verifiedCanonicalKeys: new Map<string, string>(),
+                diagnostics: {
+                    requestedGroups: 0,
+                    unavailableGroups: 0,
+                    verifiedAliasReferences: 0,
+                    unresolvedReferences: 5,
+                    aliasLookupFailures: 0,
+                    forwardUnavailableReferences: 0,
+                },
+            }),
+        });
+        const getRadio = jest.fn(base.getRadio);
+        const service = new PersonalDailyMixService({ ...base, getRadio });
+        const first = await service.getMixes("alice");
+        const reads = getRadio.mock.calls.length;
+        expect((await service.getMixes("alice")).mixes).toEqual(first.mixes);
+        expect(getRadio).toHaveBeenCalledTimes(reads);
+    });
+
+    it("applies verified cross-provider feedback before fill and on cached reads while isolating owners", async () => {
+        const blocked = new Set<string>(
+            Array.from({ length: 8 }, (_, index) => `yt:rock-${index}`),
+        );
+        const admission = jest.fn(
+            async (
+                owner: string,
+                candidates: readonly import("../recommendations/types").RecommendationCandidate[],
+            ) => ({
+                dislikedKeys: new Set(
+                    owner === "alice" ? ["verified:other-provider"] : [],
+                ),
+                unavailableCanonicalKeys: new Set<string>(),
+                verifiedCanonicalKeys: new Map(
+                    candidates
+                        .filter((candidate) => blocked.has(candidate.id))
+                        .map((candidate) => [
+                            `${candidate.source}:${candidate.id}`,
+                            "verified:other-provider",
+                        ]),
+                ),
+                diagnostics: {
+                    requestedGroups: 1,
+                    unavailableGroups: 0,
+                    verifiedAliasReferences: 1,
+                    unresolvedReferences: 0,
+                },
+            }),
+        );
+        const recorded = jest.fn(
+            async ({ mix }: RecordDailyMixGenerationInput) =>
+                `generation:${mix.key}`,
+        );
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDislikeAdmission: admission,
+                recordMixGeneration: recorded,
+            }),
+        );
+        const first = await service.getMixes("alice");
+        observeDaily(
+            "before-fill",
+            "alice",
+            first.mixes,
+            blocked,
+            admission.mock.calls.at(-1)?.[1],
+        );
+        expect(first.mixes.length).toBeGreaterThan(0);
+        expect(first.mixes.every((mix) => mix.tracks.length === 40)).toBe(true);
+        expect(
+            first.mixes
+                .flatMap((mix) => mix.tracks)
+                .some((track) => blocked.has(track.id)),
+        ).toBe(false);
+        const original = first.mixes[0].tracks.map((track) => track.id);
+        blocked.add(original[0]);
+        const recordsBefore = recorded.mock.calls.length;
+        const second = await service.getMixes("alice");
+        observeDaily(
+            "cached-read",
+            "alice",
+            second.mixes,
+            blocked,
+            admission.mock.calls.at(-1)?.[1],
+        );
+        expect(second.mixes[0].tracks.map((track) => track.id)).toEqual(
+            original.filter((id) => !blocked.has(id)),
+        );
+        expect(recorded).toHaveBeenCalledTimes(recordsBefore);
+        const bob = await service.getMixes("bob");
+        observeDaily(
+            "other-owner",
+            "bob",
+            bob.mixes,
+            new Set(),
+            admission.mock.calls.at(-1)?.[1],
+        );
+        expect(
+            bob.mixes
+                .flatMap((mix) => mix.tracks)
+                .some((track) => blocked.has(track.id)),
+        ).toBe(true);
+        expect(
+            admission.mock.calls.every(
+                ([, candidates]) => candidates.length <= 256,
+            ),
+        ).toBe(true);
+    });
+
+    it("propagates owned admission failure/cancellation and retries without retaining a failed composition", async () => {
+        let cancelled = true;
+        const admission = jest.fn(async () => {
+            if (cancelled) throw new Error("admission cancelled");
+            return {
+                dislikedKeys: new Set<string>(),
+                unavailableCanonicalKeys: new Set<string>(),
+                verifiedCanonicalKeys: new Map<string, string>(),
+                diagnostics: {
+                    requestedGroups: 0,
+                    unavailableGroups: 0,
+                    verifiedAliasReferences: 0,
+                    unresolvedReferences: 0,
+                },
+            };
+        });
+        const service = new PersonalDailyMixService(
+            dependencies({ loadDislikeAdmission: admission }),
+        );
+        const failure = await service.getMixes("alice").then(
+            () => null,
+            (error: unknown) => error,
+        );
+        expect(failure).toBeInstanceOf(Error);
+        expect(failure instanceof Error ? failure.message : null).toBe(
+            "admission cancelled",
+        );
+        cancelled = false;
+        expect((await service.getMixes("alice")).mixes.length).toBeGreaterThan(
+            0,
+        );
+        expect(admission).toHaveBeenCalledTimes(2);
+        cancelled = true;
+        await expect(service.getMixes("alice")).rejects.toThrow(
+            "admission cancelled",
+        );
+        cancelled = false;
+        expect((await service.getMixes("alice")).mixes.length).toBeGreaterThan(
+            0,
+        );
+        expect(admission).toHaveBeenCalledTimes(4);
+    });
+
     it("coalesces concurrent readers of an admitted native partial instead of rebuilding for each waiter", async () => {
         const now = new Date("2026-11-12T12:00:00Z");
         const native = (id: number) =>

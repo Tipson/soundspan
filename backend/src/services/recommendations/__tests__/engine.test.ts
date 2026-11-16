@@ -37,6 +37,7 @@ describe("unified recommendation engine", () => {
                 async (track: RecommendationCandidate) => ({
                     id: `canonical-${track.id}`,
                     canonicalKey: track.canonicalKey,
+                    verifiedCanonicalKey: track.canonicalKey,
                 }),
             ),
             loadRecentExposures: jest.fn().mockResolvedValue([

@@ -23,9 +23,16 @@ import {
 import {
     hasNativeRecommendationIdentity,
     readNativeRecommendationRecording,
+    toNativeRecommendationCandidate,
 } from "./recommendations/nativeCandidates";
 import { nativeArtistCreditKey } from "./recommendations/nativeSourceAdmission";
 import type { RecommendationCandidate } from "./recommendations/types";
+import {
+    loadCurrentDislikeAdmission,
+    isCurrentDislikeAdmissionAllowed,
+    type CurrentDislikeAdmission,
+} from "./recommendations/featureStore";
+import { providerTrackIdentityToCandidate } from "./recommendations/canonicalIdentity";
 import {
     buildRecommendationAlbumKey,
     normalizeRecommendationArtistKey,
@@ -72,6 +79,11 @@ export interface RecordDailyMixGenerationInput {
 }
 
 export interface PersonalDailyMixDependencies {
+    /** Current exact/verified feedback plus local identity availability, without taste mutation. */
+    loadDislikeAdmission?: (
+        userId: string,
+        candidates: readonly RecommendationCandidate[],
+    ) => Promise<CurrentDislikeAdmission>;
     loadDirections: (userId: string) => Promise<DailyMixDirection[]>;
     loadFamiliar: (userId: string) => Promise<DailyMixSong[]>;
     loadRecentlyPlayed: (userId: string) => Promise<RecentlyPlayedSong[]>;
@@ -165,6 +177,26 @@ function toTrack(song: DailyMixCandidate): PersonalizedTrack {
         streamSource: "youtube",
         youtubeVideoId: song.videoId,
         provider: { tidalTrackId: null, youtubeVideoId: song.videoId },
+    };
+}
+
+function feedbackCandidate(
+    track: PersonalizedTrack,
+): RecommendationCandidate | null {
+    if (track.source !== "youtube")
+        return toNativeRecommendationCandidate(
+            track.musicSourceRecording,
+            "daily-feedback",
+        );
+    return {
+        ...providerTrackIdentityToCandidate({
+            source: "youtube",
+            providerTrackId: track.youtubeVideoId,
+            title: track.title,
+            artist: track.artist.name,
+            duration: track.duration,
+        }),
+        id: track.id,
     };
 }
 
@@ -394,8 +426,8 @@ export class PersonalDailyMixService {
                     current.fresh.length + current.fallback.length ===
                     nativeTracks.length
                 )
-                    return composition;
-            } else return composition;
+                    return this.readmitCachedFeedback(userId, composition);
+            } else return this.readmitCachedFeedback(userId, composition);
         }
         if (cached && this.cache.get(key) === cached) this.cache.delete(key);
         const result = this.dependencies
@@ -458,6 +490,36 @@ export class PersonalDailyMixService {
             if (this.cache.get(key)?.result === result) this.cache.delete(key);
         });
         return result;
+    }
+
+    private async readmitCachedFeedback(
+        userId: string,
+        composition: { mixes: PersonalDailyMix[] },
+    ): Promise<{ mixes: PersonalDailyMix[] }> {
+        if (!this.dependencies.loadDislikeAdmission) return composition;
+        const candidates = composition.mixes
+            .flatMap((mix) => mix.tracks)
+            .flatMap((track) => feedbackCandidate(track) ?? []);
+        if (candidates.length === 0) return composition;
+        const feedback = await this.dependencies.loadDislikeAdmission(
+            userId,
+            candidates,
+        );
+        const allowed = new Set(
+            candidates
+                .filter((candidate) =>
+                    isCurrentDislikeAdmissionAllowed(candidate, feedback),
+                )
+                .map((candidate) => candidate.id),
+        );
+        return {
+            mixes: composition.mixes
+                .map((mix) => ({
+                    ...mix,
+                    tracks: mix.tracks.filter((track) => allowed.has(track.id)),
+                }))
+                .filter((mix) => mix.tracks.length > 0),
+        };
     }
 
     private async buildMixes(
@@ -709,6 +771,39 @@ export class PersonalDailyMixService {
             userId,
             allIds,
         );
+        const currentPool = distinct([...pools.flat(), ...familiar]);
+        const feedbackCandidates = currentPool.flatMap(
+            (song) => feedbackCandidate(toTrack(song)) ?? [],
+        );
+        const feedback =
+            this.dependencies.loadDislikeAdmission &&
+            feedbackCandidates.length > 0
+                ? await this.dependencies.loadDislikeAdmission(
+                      userId,
+                      feedbackCandidates,
+                  )
+                : null;
+        if (
+            feedback &&
+            (feedback.unavailableCanonicalKeys.size > 0 ||
+                (feedback.unavailableCandidateReferences?.size ?? 0) > 0 ||
+                feedback.diagnostics.unavailableGroups > 0 ||
+                (feedback.diagnostics.aliasLookupFailures ?? 0) > 0 ||
+                (feedback.diagnostics.forwardUnavailableReferences ?? 0) > 0)
+        )
+            sourcesDegraded = true;
+        const allowed = feedback
+            ? new Set(
+                  feedbackCandidates
+                      .filter((candidate) =>
+                          isCurrentDislikeAdmissionAllowed(candidate, feedback),
+                      )
+                      .map((candidate) => candidate.id),
+              )
+            : null;
+        const admitted = (song: DailyMixCandidate) =>
+            !allowed ||
+            allowed.has("source" in song ? song.id : `yt:${song.videoId}`);
         const oldestPlayFirst = (
             left: DailyMixCandidate,
             right: DailyMixCandidate,
@@ -720,6 +815,7 @@ export class PersonalDailyMixService {
             const pool = pools[index].filter(
                 (song) =>
                     !disliked.has(songIdentity(song)) &&
+                    admitted(song) &&
                     !usedAcrossMixes.has(compositionIdentity(song)),
             );
             if (pool.length < MIN_TRACKS) return [];
@@ -733,6 +829,7 @@ export class PersonalDailyMixService {
                         (!!direction.nativeSeedId &&
                             nativeAllowed.has(song.id))) &&
                     !disliked.has(songIdentity(song)) &&
+                    admitted(song) &&
                     !usedAcrossMixes.has(compositionIdentity(song)),
             );
             const familiarIds = new Set(familiarSongs.map(songIdentity));
@@ -839,6 +936,7 @@ function fromStoredTrack(track: {
 }
 
 export const personalDailyMixService = new PersonalDailyMixService({
+    loadDislikeAdmission: loadCurrentDislikeAdmission,
     nativeCandidates: personalNativeCandidateService,
     recordMixGeneration: async ({ userId, mix, generatedAt, latencyMs }) => {
         for (const track of mix.tracks) {

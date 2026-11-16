@@ -14,6 +14,7 @@ import { recommendationExposureStore } from "./exposureStore";
 import {
     recommendationFeatureStore,
     loadSavedMoodCandidates,
+    loadCurrentDislikeAdmission,
 } from "./featureStore";
 import { recommendationMoodEmbeddingStore } from "./moodEmbedding";
 import { recordingLanguageStore } from "./recordingLanguageRuntime";
@@ -144,8 +145,14 @@ export const unifiedRecommendationService = new UnifiedRecommendationService({
         recommendationFeatureStore.enrichCandidates(candidates),
     loadRecentExposures: (userId, now) =>
         recommendationExposureStore.loadRecent(userId, now),
-    loadDislikedCanonicalKeys: (userId) =>
-        recommendationFeatureStore.loadDislikedCanonicalKeys(userId),
+    loadDislikedCanonicalKeys: (userId, candidates) =>
+        candidates === undefined
+            ? recommendationFeatureStore.loadDislikedCanonicalKeys(userId)
+            : recommendationFeatureStore.loadDislikedCanonicalKeys(
+                  userId,
+                  candidates,
+              ),
+    loadDislikeAdmission: loadCurrentDislikeAdmission,
     loadVerifiedRepeatExclusions: loadVerifiedSourceRepeatExclusions,
     loadTasteContext: async (userId, request) => {
         const [taste, mood] = await Promise.all([

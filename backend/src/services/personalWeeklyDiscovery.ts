@@ -23,6 +23,8 @@ import {
 } from "./recommendations/personalNativeCandidates";
 import { toNativeRecommendationCandidate } from "./recommendations/nativeCandidates";
 import { nativeArtistCreditKey } from "./recommendations/nativeSourceAdmission";
+import { filterCurrentDislikedCandidates } from "./recommendations/featureStore";
+import { providerTrackIdentityToCandidate } from "./recommendations/canonicalIdentity";
 
 const log = logger.child("PersonalWeeklyDiscovery");
 const TARGET_TRACKS = 40;
@@ -46,6 +48,11 @@ export interface PersonalWeeklyDiscoveryDependencies {
     now(): Date;
     /** Fresh exact native feedback on finite candidates; saved week reads retain their stable listening order. */
     filterNativeCandidates?(
+        userId: string,
+        tracks: WeeklyDiscoveryTrack[],
+    ): Promise<WeeklyDiscoveryTrack[]>;
+    /** Current exact/verified feedback for a saved finite list, preserving listening order. */
+    filterCurrentFeedback?(
         userId: string,
         tracks: WeeklyDiscoveryTrack[],
     ): Promise<WeeklyDiscoveryTrack[]>;
@@ -118,12 +125,18 @@ export class PersonalWeeklyDiscoveryService {
                 ),
                 this.dependencies.loadSuppressedArtistKeys(userId),
             ]);
-            const current = this.dependencies.filterNativeCandidates
+            const nativeAdmitted = this.dependencies.filterNativeCandidates
                 ? await this.dependencies.filterNativeCandidates(
                       userId,
                       saved.tracks,
                   )
                 : saved.tracks;
+            const current = this.dependencies.filterCurrentFeedback
+                ? await this.dependencies.filterCurrentFeedback(
+                      userId,
+                      nativeAdmitted,
+                  )
+                : nativeAdmitted;
             tracks = current
                 .filter(
                     (t) =>
@@ -451,6 +464,33 @@ export const personalWeeklyDiscoveryService =
                 (track) =>
                     track.sourceType === "youtube" || allowed.has(track.id),
             );
+        },
+        filterCurrentFeedback: async (userId, tracks) => {
+            const candidates = tracks.flatMap((track) =>
+                track.sourceType === "youtube"
+                    ? [
+                          {
+                              ...providerTrackIdentityToCandidate({
+                                  source: "youtube",
+                                  providerTrackId: track.youtubeVideoId,
+                                  title: track.title,
+                                  artist: track.artist,
+                                  duration: track.duration,
+                              }),
+                              id: track.id,
+                          },
+                      ]
+                    : (toNativeRecommendationCandidate(
+                          track.musicSourceRecording,
+                          "saved-weekly-feedback",
+                      ) ?? []),
+            );
+            const admitted = await filterCurrentDislikedCandidates(
+                userId,
+                candidates,
+            );
+            const allowed = new Set(admitted.map((candidate) => candidate.id));
+            return tracks.filter((track) => allowed.has(track.id));
         },
         now: () => new Date(),
     });

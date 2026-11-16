@@ -63,6 +63,36 @@ function rawFeature(canonicalRecordingId: string, embedding: string | null) {
     };
 }
 
+function verifiedMapping(videoId: string, canonicalKey: string) {
+    return {
+        source: "manual",
+        confidence: 1,
+        trackYtMusic: {
+            videoId,
+            title: videoId,
+            artist: "Artist",
+            duration: 180,
+        },
+        trackTidal: {
+            tidalId: 42,
+            title: videoId,
+            artist: "Artist",
+            duration: 180,
+            isrc: "USABC2400001",
+        },
+        canonicalRecording: {
+            id: canonicalKey,
+            canonicalKey,
+            mergedIntoId: null,
+            identitySource: "import-isrc",
+            isrc: "USABC2400001",
+            title: videoId,
+            artist: "Artist",
+            duration: 180,
+        },
+    };
+}
+
 describe("default recommendation feature-store persistence", () => {
     beforeEach(() => {
         mockQueryRaw.mockReset();
@@ -122,9 +152,7 @@ describe("default recommendation feature-store persistence", () => {
             query.where.userId === "alice" ? [{ entityId: "yt:rejected" }] : [],
         );
         mockMappingFindMany.mockResolvedValue([
-            {
-                canonicalRecording: { canonicalKey: "meta:rejected" },
-            },
+            verifiedMapping("rejected", "meta:rejected"),
         ]);
         mockCanonicalFindMany.mockResolvedValue([{ id: "canonical-rejected" }]);
         mockQueryRaw.mockResolvedValue([
@@ -417,7 +445,7 @@ describe("default recommendation feature-store persistence", () => {
         ).toEqual([]);
     });
 
-    it("does not let another provider's canonical dislikes consume the fresh mood reserve", async () => {
+    it("does not turn metadata-only canonical collisions into cross-provider mood bans", async () => {
         const ids = Array.from(
             { length: 56 },
             (_, index) => `alias-${String(index).padStart(2, "0")}`,
@@ -433,8 +461,54 @@ describe("default recommendation feature-store persistence", () => {
         );
         const result = await loadSavedMoodCandidates("alice", "calm");
         expect(result.map((track) => track.youtubeVideoId)).toEqual(
-            ids.slice(8),
+            ids.slice(0, 48),
         );
+    });
+
+    it("removes a verified provider alias before filling the saved mood reserve", async () => {
+        const ids = Array.from(
+            { length: 50 },
+            (_, index) => `verified-alias-${index}`,
+        );
+        mockCanonicalFindMany.mockResolvedValue(ids.map((id) => moodRow(id)));
+        mockDislikedFindMany.mockImplementation(async (query) =>
+            query.where.entityId ? [] : [{ entityId: "tidal:42" }],
+        );
+        const id = ids[0];
+        mockMappingFindMany.mockResolvedValue([
+            {
+                source: "manual",
+                confidence: 1,
+                trackYtMusic: {
+                    videoId: id,
+                    title: `Song ${id}`,
+                    artist: `Artist ${id}`,
+                    duration: 180,
+                },
+                trackTidal: {
+                    tidalId: 42,
+                    title: `Song ${id}`,
+                    artist: `Artist ${id}`,
+                    duration: 180,
+                    isrc: "USABC2400001",
+                },
+                canonicalRecording: {
+                    id: `canonical-${id}`,
+                    canonicalKey: `canonical:${id}`,
+                    mergedIntoId: null,
+                    identitySource: "import-isrc",
+                    isrc: "USABC2400001",
+                    title: `Song ${id}`,
+                    artist: `Artist ${id}`,
+                    duration: 180,
+                },
+            },
+        ]);
+        const result = await loadSavedMoodCandidates("alice", "calm");
+        expect(
+            result.map((candidate) => candidate.youtubeVideoId),
+        ).not.toContain(id);
+        expect(result).toHaveLength(48);
     });
 
     it("returns untouched candidates when canonical identities are absent", async () => {
@@ -611,7 +685,7 @@ describe("default recommendation feature-store persistence", () => {
             { entityId: "local-track" },
         ]);
         mockMappingFindMany.mockResolvedValue([
-            { canonicalRecording: { canonicalKey: "mbid:one" } },
+            verifiedMapping("youtube-video", "mbid:one"),
             { canonicalRecording: null },
             { canonicalRecording: { canonicalKey: "" } },
         ]);
@@ -621,12 +695,20 @@ describe("default recommendation feature-store persistence", () => {
                 "dislike-user",
             );
 
-        expect(result).toEqual(new Set(["mbid:one"]));
+        expect(result).toEqual(
+            new Set([
+                "yt:youtube-video",
+                "tidal:123",
+                "local-track",
+                "yt:local-track",
+                "mbid:one",
+            ]),
+        );
         expect(mockMappingFindMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({
                     OR: expect.arrayContaining([
-                        { trackId: { in: ["local-track"] } },
+                        { track: { is: { id: { in: ["local-track"] } } } },
                         {
                             trackYtMusic: {
                                 is: {

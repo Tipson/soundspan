@@ -6,6 +6,7 @@ const mockFindMapped = jest.fn();
 const mockEnrichCandidates = jest.fn();
 const mockLoadRecent = jest.fn();
 const mockLoadDislikedCanonicalKeys = jest.fn();
+const mockLoadDislikeAdmission = jest.fn();
 const mockLoadSavedCanonicalKeys = jest.fn();
 const mockLoadTasteContext = jest.fn();
 const mockLoadSeedEmbedding = jest.fn();
@@ -53,6 +54,7 @@ jest.mock("../exposureStore", () => ({
     },
 }));
 jest.mock("../featureStore", () => ({
+    loadCurrentDislikeAdmission: mockLoadDislikeAdmission,
     recommendationFeatureStore: {
         enrichCandidates: mockEnrichCandidates,
         loadDislikedCanonicalKeys: mockLoadDislikedCanonicalKeys,
@@ -142,9 +144,13 @@ describe("recommendation runtime adapters", () => {
             check,
         );
         await capturedDependencies.loadDislikedCanonicalKeys("user-1");
+        await capturedDependencies.loadDislikedCanonicalKeys("user-1", [
+            candidate,
+        ]);
         await capturedDependencies.loadSavedCanonicalKeys("user-1", [
             candidate,
         ]);
+        await capturedDependencies.loadDislikeAdmission("user-1", [candidate]);
         await capturedDependencies.recordGeneration({ id: "generation" });
         await capturedDependencies.scheduleHotSet({ id: "candidate" });
 
@@ -157,6 +163,12 @@ describe("recommendation runtime adapters", () => {
             check,
         );
         expect(mockLoadDislikedCanonicalKeys).toHaveBeenCalledWith("user-1");
+        expect(mockLoadDislikeAdmission).toHaveBeenCalledWith("user-1", [
+            candidate,
+        ]);
+        expect(mockLoadDislikedCanonicalKeys).toHaveBeenCalledWith("user-1", [
+            candidate,
+        ]);
         expect(mockLoadSavedCanonicalKeys).toHaveBeenCalledWith("user-1", [
             candidate,
         ]);
