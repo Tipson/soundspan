@@ -398,6 +398,24 @@ test("PLAY_REQUESTED while already playing is a no-op", () => {
     assert.deepEqual(effects, []);
 });
 
+test("PLAY_REQUESTED after an explicit pause reasserts playback before the native pause callback", () => {
+    const paused = transitionNativeEngine(playingState(), {
+        type: "PAUSE_REQUESTED",
+        nowMs: 2_000,
+    });
+    const resumed = transitionNativeEngine(paused.state, {
+        type: "PLAY_REQUESTED",
+        currentTimeSec: 5,
+        nowMs: 2_001,
+    });
+
+    assert.equal(resumed.state.autoplay, true);
+    assert.equal(resumed.state.pauseClassification, null);
+    assert.ok(kinds(resumed.effects).includes("callPlay"));
+    assert.equal(kinds(resumed.effects).includes("applyLoad"), false);
+    assert.equal(kinds(resumed.effects).includes("reloadFromSource"), false);
+});
+
 test("PLAY_REQUESTED with no source is a no-op", () => {
     const { effects } = transitionNativeEngine(
         createInitialNativeEngineState(),
@@ -1091,6 +1109,28 @@ test("mid-playback transient error reloads from source at position, carrying the
     assert.equal(reload?.resumeAtSec, 77);
     assert.equal(reload?.resumePlaying, true);
     assert.equal(reload?.carryRetryBudget, true);
+});
+
+test("a transient error before the explicit pause callback cannot resume playback", () => {
+    const paused = transitionNativeEngine(playingState(), {
+        type: "PAUSE_REQUESTED",
+        nowMs: 5_000,
+    });
+    const failed = transitionNativeEngine(paused.state, {
+        type: "ELEMENT_ERROR",
+        mediaErrorCode: 2,
+        mediaErrorMessage: "connection interrupted after explicit pause",
+        isPageHidden: false,
+        currentTimeSec: 77,
+        nowMs: 5_001,
+    });
+    const reload = findEffect(failed.effects, "reloadFromSource");
+
+    assert.ok(reload);
+    assert.equal(reload.resumePlaying, false);
+    assert.equal(reload.resumeAtSec, 77);
+    assert.equal(reload.carryRetryBudget, true);
+    assert.equal(failed.state.automaticRetriesUsed, 1);
 });
 
 test("LOAD_REQUESTED with carryRetryBudget preserves the consumed retry budget", () => {

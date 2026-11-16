@@ -425,7 +425,14 @@ const handlePlayRequested = (
     state: State,
     event: Extract<NativeEnginePolicyEvent, { type: "PLAY_REQUESTED" }>,
 ): Transition => {
-    if (!state.hasSource || state.status === "playing") {
+    // Pause changes intent before its queued native callback changes status.
+    // A later Play must supersede that pending user pause.
+    if (
+        !state.hasSource ||
+        (state.status === "playing" &&
+            state.autoplay &&
+            state.pauseClassification !== "user")
+    ) {
         return noChange(state);
     }
     if (state.status === "error") {
@@ -731,7 +738,9 @@ const handleElementError = (
                 {
                     kind: "reloadFromSource",
                     resumeAtSec: event.currentTimeSec,
-                    resumePlaying: state.status === "playing",
+                    resumePlaying:
+                        state.pauseClassification !== "user" &&
+                        state.status === "playing",
                 },
                 {
                     kind: "telemetry",
@@ -775,8 +784,9 @@ const handleElementError = (
                     kind: "reloadFromSource",
                     resumeAtSec: event.currentTimeSec,
                     resumePlaying:
-                        state.status === "playing" ||
-                        (state.status === "loading" && state.autoplay),
+                        state.pauseClassification !== "user" &&
+                        (state.status === "playing" ||
+                            (state.status === "loading" && state.autoplay)),
                     carryRetryBudget: true,
                 },
                 {

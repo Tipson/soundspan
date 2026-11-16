@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Honor Play issued after an explicit Pause before the native pause callback arrives. Keep recovery reloads paused after an explicit user pause, preserving the current position and automatic retry budget.
 - Bind browser Play delivery to the authenticated player and confirmed engine starts. Preserve one listening session when past queue rows are removed or the upcoming queue changes; distinguish explicit duplicate starts and repeat, finalize before runtime retirement, and suspend delivery during history deletion. New collaborative sessions retain legacy delivery while remote solo journal creation remains capability-gated.
 - Deliver browser Play attempts through a bounded, owner-fenced coordinator and preserve absolute final engagement before creation acknowledgements. Recover admission after idle or network changes, retain live checkpoints through failed history clears, and keep known engagement delivery available during creation rollback. Player activation remains gated.
 - Read owner-bound Play permissions through dedicated authenticated requests and retain same-key mutation retries. Recheck login ownership before every retry; compare shared credentials and login publication before applying refresh responses so stale refreshes cannot replace or clear a newer session.
