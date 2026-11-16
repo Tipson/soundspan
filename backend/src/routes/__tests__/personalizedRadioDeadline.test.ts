@@ -2,6 +2,9 @@ import { EventEmitter } from "node:events";
 import type { Request, Response, RequestHandler } from "express";
 const mockRecommend = jest.fn();
 jest.mock("../../middleware/auth", () => ({ requireAuthOrToken: jest.fn() }));
+jest.mock("../../services/recommendations/finiteQueueAdmission", () => ({
+    readmitRecommendationQueue: jest.fn(),
+}));
 jest.mock("../../services/recommendations/recommendationRuntime", () => ({
     unifiedRecommendationService: {
         recommendRadio: (...args: unknown[]) => mockRecommend(...args),

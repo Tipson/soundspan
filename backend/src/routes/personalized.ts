@@ -10,7 +10,12 @@ import { recommendationExposureStore } from "../services/recommendations/exposur
 import { logger } from "../utils/logger";
 import { sendRouteError } from "../utils/routeErrorResponse";
 import { LibrarySeedRadioError } from "../services/librarySeedRadioError";
-import { RadioRequestError } from "../services/recommendations/radioRequestExecution";
+import {
+    createRadioRequestExecution,
+    RadioRequestError,
+} from "../services/recommendations/radioRequestExecution";
+import { finiteQueueAdmissionRequestSchema } from "../services/recommendations/finiteQueueAdmissionContract";
+import { readmitRecommendationQueue } from "../services/recommendations/finiteQueueAdmission";
 import { createStreamProxyRequestAbort } from "./streamProxyRequestAbort";
 
 const router = Router();
@@ -165,6 +170,131 @@ function parseContinuationExclusions(value: string | undefined): string[] {
 }
 
 router.use(requireAuthOrToken);
+
+/**
+ * @openapi
+ * /api/personalized/queue-admission:
+ *   post:
+ *     summary: Recheck finite recommended queue references against current account feedback
+ *     description: Read-only exact and verified recording feedback plus existing provider artist suppression. Preserves request order and duplicates, returns no track metadata, and does not change playback or a manual queue. Unavailable evidence is a transient decision, not a persisted dislike.
+ *     tags: [Personalized]
+ *     security:
+ *       - apiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties: false
+ *             required: [references]
+ *             properties:
+ *               references:
+ *                 type: array
+ *                 minItems: 1
+ *                 maxItems: 100
+ *                 items:
+ *                   type: object
+ *                   additionalProperties: false
+ *                   required: [source, id]
+ *                   properties:
+ *                     source:
+ *                       type: string
+ *                       enum: [library, youtube, tidal, vk, yandex]
+ *                     id:
+ *                       type: string
+ *                       maxLength: 128
+ *                       description: Exact provider identity. Library uses URL-safe characters, YouTube uses an eleven-character video ID, VK uses owner_audio, and Tidal/Yandex use positive decimal IDs. Tidal must fit a safe integer.
+ *                     generationId:
+ *                       type: string
+ *                       minLength: 1
+ *                       maxLength: 128
+ *                       description: Optional served generation; artist evidence is read only from this account's matching served exposure.
+ *     responses:
+ *       200:
+ *         description: One decision per requested reference, in request order
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [version, appliesTo, decisions]
+ *               properties:
+ *                 version:
+ *                   type: integer
+ *                   enum: [1]
+ *                 appliesTo:
+ *                   type: string
+ *                   enum: [recommended_future]
+ *                 decisions:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     required: [source, id, state]
+ *                     properties:
+ *                       source:
+ *                         type: string
+ *                         enum: [library, youtube, tidal, vk, yandex]
+ *                       id:
+ *                         type: string
+ *                       state:
+ *                         type: string
+ *                         enum: [allowed, denied, unavailable]
+ *       400:
+ *         description: Invalid reference batch (INVALID_QUEUE_ADMISSION)
+ *       401:
+ *         description: Authentication required
+ *       504:
+ *         description: The thirteen-second server budget elapsed (QUEUE_ADMISSION_TIMEOUT); current playback is unchanged.
+ */
+router.post(
+    "/queue-admission",
+    asyncHandler(async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        const userId = req.user?.id;
+        if (!userId)
+            return sendRouteError(res, 401, "Authentication required", {
+                code: "AUTH_REQUIRED",
+            });
+        const parsed = finiteQueueAdmissionRequestSchema.safeParse(req.body);
+        if (!parsed.success)
+            return sendRouteError(
+                res,
+                400,
+                "Invalid recommendation queue references",
+                { code: "INVALID_QUEUE_ADMISSION" },
+            );
+        const requestAbort = createStreamProxyRequestAbort(req, res);
+        const execution = createRadioRequestExecution(requestAbort.signal);
+        try {
+            if (requestAbort.wasClientAborted()) return;
+            const result = await execution.run(() =>
+                readmitRecommendationQueue(
+                    userId,
+                    parsed.data.references,
+                    execution.check,
+                ),
+            );
+            if (requestAbort.wasClientAborted()) return;
+            return res.json(result);
+        } catch (error) {
+            if (requestAbort.wasClientAborted()) return;
+            if (
+                error instanceof RadioRequestError &&
+                error.code === "RADIO_REQUEST_TIMEOUT"
+            )
+                return sendRouteError(
+                    res,
+                    504,
+                    "Recommendation queue check timed out",
+                    { code: "QUEUE_ADMISSION_TIMEOUT" },
+                );
+            throw error;
+        } finally {
+            execution.dispose();
+            requestAbort.dispose();
+        }
+    }),
+);
 
 /**
  * @openapi

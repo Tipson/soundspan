@@ -1,5 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import request from "supertest";
+jest.mock("../../services/recommendations/finiteQueueAdmission", () => ({
+    readmitRecommendationQueue: jest.fn(),
+}));
 const mockFeed = jest.fn();
 jest.mock("../../middleware/auth", () => ({
     requireAuthOrToken: (req: Request, _res: Response, next: NextFunction) => {
