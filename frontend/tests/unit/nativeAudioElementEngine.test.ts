@@ -997,7 +997,7 @@ function withPixelUserAgent(work: () => void): void {
     }
 }
 
-test("Android hidden network retries carry the existing budget and retain foreground fallback after exhaustion", () =>
+test("Android hidden network retries exhaust into the normal terminal source recovery path", () =>
     withPixelUserAgent(() => {
         const h = createHarness({ isPageHidden: () => true });
         try {
@@ -1028,7 +1028,8 @@ test("Android hidden network retries carry the existing budget and retain foregr
             assert.equal(failures.length, 1);
             assert.equal(
                 (failures[0].payload as { recoverable: boolean }).recoverable,
-                true,
+                false,
+                "the orchestrator must not wait for browser-only foreground recovery after its bounded Android retries",
             );
             assert.equal(
                 h.scheduler.timers.filter((t) => !t.cleared).length,
@@ -1098,6 +1099,15 @@ test("Android hidden startup network retries stay bounded before metadata", () =
             assert.equal(
                 h.events.filter((e) => e.type === "loaderror").length,
                 1,
+            );
+            assert.equal(
+                (
+                    h.events.find((e) => e.type === "loaderror")!.payload as {
+                        recoverable: boolean;
+                    }
+                ).recoverable,
+                false,
+                "exhausted startup must not become indefinite browser-owned loading",
             );
         } finally {
             h.engine.destroy();

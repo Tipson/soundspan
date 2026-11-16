@@ -700,12 +700,13 @@ const handleElementError = (
     if (classification === "aborted") {
         return noChange(state);
     }
+    // After the shared budget, opted-in network failures must reach the normal
+    // terminal handler rather than wait indefinitely for browser-only recovery.
     const retryHiddenNetworkError =
         classification === "background_session_reclaim" &&
         event.retryHiddenNetworkError === true &&
         state.autoplay &&
-        (state.status === "playing" || state.status === "loading") &&
-        state.automaticRetriesUsed < NATIVE_ENGINE_MAX_AUTOMATIC_RETRIES;
+        (state.status === "playing" || state.status === "loading");
     if (
         classification === "background_session_reclaim" &&
         !retryHiddenNetworkError

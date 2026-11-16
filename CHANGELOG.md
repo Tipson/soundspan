@@ -9,7 +9,7 @@
 
 ## Unreleased
 
-- Retry interrupted Android Chromium network playback in the background with the existing bounded retry budget and retained position. Preserve Play intent during recovery, explicit pause/stop/replacement authority, and the legacy recoverable-error path after retries are exhausted.
+- Retry interrupted Android Chromium network playback in the background with the existing bounded retry budget and retained position. Preserve Play intent during recovery and explicit pause/stop/replacement authority. Hand exhausted Android network retries to normal terminal source recovery; retain browser-owned recovery on other platforms.
 
 - Provide a disabled-by-default, owner-scoped Play create/replay protocol with immutable request receipts, atomic exposure attribution, monotonic progress and history-clear epochs. Keep legacy keyless playback compatible; retain additive schema and receipt expiry floors while client delivery remains gated.
 - Keep ordinary YouTube extraction free of JavaScript solvers. Offer an opt-in, single-slot recovery that preserves extraction priority, cancellation and worker leases; retain a started transfer beyond its acquisition window and refuse recovery for terminal delivery failures.
