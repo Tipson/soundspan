@@ -156,6 +156,9 @@ export function toProviderPlaybackTrack(
 
     const youtubeVideoId =
         track.youtubeVideoId ?? track.provider.youtubeVideoId;
+    if (track.source === "tidal") {
+        throw new Error("Tidal playback is unavailable");
+    }
     if (youtubeVideoId) {
         return {
             ...baseTrack,
@@ -186,13 +189,14 @@ export function collectProviderRadioContinuation(
     const selected: Track[] = [];
     const boundedLimit = Math.max(0, Math.floor(limit));
     if (boundedLimit === 0) return [];
-    const candidates = selectWaveTracks(feed.shelves, mode);
+    const candidates = selectWaveTracks(feed.shelves, mode, feed.orderedWave);
 
     for (const candidate of candidates) {
         if (hasNativeMusicSourceIdentity(candidate)) {
             if (!readMusicSourcePlaybackTrack(candidate)) continue;
         } else if (
             candidate.source !== "library" &&
+            !(feed.orderedWave !== undefined && candidate.source === "tidal") &&
             providerVideoId(candidate) === null
         ) {
             continue;

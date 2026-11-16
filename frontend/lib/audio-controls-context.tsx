@@ -1,4 +1,6 @@
 "use client";
+import { orderedWaveQueueCheckpoints } from "./audio/orderedWaveSequence";
+import { getRecommendationSessionId } from "./recommendationSession";
 
 import {
     createContext,
@@ -773,6 +775,20 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             state.setCurrentAudiobook(null);
             state.setCurrentPodcast(null);
             state.setQueue(tracks);
+            if (
+                isVibeQueue &&
+                options?.orderedWave &&
+                options.orderedWave.owner.authGeneration ===
+                    api.getSessionGeneration() &&
+                options.orderedWave.owner.sessionId ===
+                    getRecommendationSessionId()
+            ) {
+                orderedWaveQueueCheckpoints.commit(
+                    tracks,
+                    options.orderedWave.page,
+                    options.orderedWave.owner,
+                );
+            }
             state.setCurrentIndex(normalizedStartIndex);
             state.setCurrentTrack(startTrack);
             playbackState.setIsPlaying(true);

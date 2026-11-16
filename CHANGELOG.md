@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Offer an explicitly enabled personal Wave sequence with exact owned continuation tails, stable server order and matching exposure positions. Preserve legacy shelves; reset invalidated continuation without replacing current playback or history, and discard late pages after queue edits.
 - Permit server-owned Wave ordering before the served exposure write, retaining admitted occurrences and legacy ordering outside the opted-in finalizer. Keep counterfactual rankings separate from the final served positions.
 - Recheck automatic browser queue transitions, radio continuations, repeat and speculative preloads against current server feedback. Wait for pending preference writes, retire stale decisions after owner or queue changes, and preserve current playback, history and manual entries when recommendation admission is unavailable.
 - Provide bounded, owner-scoped readmission of automatic queue references using current recording feedback and provider artist suppression. Return transient unavailable decisions without creating preferences; reject client metadata authority and stop waits on cancellation or deadline.

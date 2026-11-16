@@ -211,6 +211,28 @@ export class RecommendationExposureStore {
     }
 
     async record(input: RecordRecommendationGenerationInput): Promise<string> {
+        const sequence = input.context?.orderedWave;
+        let startPosition = 0;
+        if (sequence !== undefined) {
+            const context =
+                typeof sequence === "object" &&
+                sequence !== null &&
+                !Array.isArray(sequence)
+                    ? (sequence as Record<string, unknown>)
+                    : null;
+            const next = context?.nextPosition;
+            if (
+                input.surface !== "wave" ||
+                !input.served ||
+                context?.version !== 1 ||
+                typeof next !== "number" ||
+                !Number.isInteger(next) ||
+                next < input.recommendations.length ||
+                next > 2_147_483_647
+            )
+                throw new Error("Invalid Wave sequence positions");
+            startPosition = next - input.recommendations.length;
+        }
         input.execution?.check();
         const exposures = input.recommendations.flatMap(
             (recommendation, position) => {
@@ -233,7 +255,7 @@ export class RecommendationExposureStore {
                         source:
                             recommendation.track.candidateSources.join("+") ||
                             "unknown",
-                        position,
+                        position: startPosition + position,
                         score: recommendation.score,
                     },
                 ];

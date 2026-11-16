@@ -1,4 +1,8 @@
-import { type ApiClientConstructor, type ApiData } from "./core";
+import {
+    type ApiClientConstructor,
+    type ApiData,
+    type ApiRequestOptions,
+} from "./core";
 
 /** Provider and migration state returned by the system features endpoint. */
 export interface VibeSystemStatus {
@@ -23,6 +27,8 @@ export interface VibeSystemStatus {
 
 /** Feature flags and typed vibe status returned by the backend. */
 export interface SystemFeatures {
+    /** Explicitly enabled server order for personal Wave; omitted by legacy servers. */
+    orderedWave?: { version: 1 };
     musicCNN: boolean;
     vibeEmbeddings: boolean;
     audioAnalysis: boolean;
@@ -87,8 +93,10 @@ export function WithSettings<TBase extends ApiClientConstructor>(Base: TBase) {
         }
 
         // System Features
-        async getFeatures(): Promise<SystemFeatures> {
-            return this.request<SystemFeatures>("/system/features");
+        async getFeatures(
+            options?: ApiRequestOptions,
+        ): Promise<SystemFeatures> {
+            return this.request<SystemFeatures>("/system/features", options);
         }
 
         // System UI Settings (non-sensitive, available to all authenticated users)

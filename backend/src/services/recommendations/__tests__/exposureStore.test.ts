@@ -18,6 +18,75 @@ const track: RecommendationCandidate = {
 };
 
 describe("recommendation exposure store", () => {
+    it("uses the final sequence positions for a continued served Wave page", async () => {
+        const createGeneration = jest.fn().mockResolvedValue({ id: "g2" });
+        const store = new RecommendationExposureStore({
+            createGeneration,
+            loadRecentExposures: jest.fn(),
+            findAttributableExposure: jest.fn(),
+            updateExposure: jest.fn(),
+        });
+        await store.record({
+            userId: "alice",
+            sessionId: "tab",
+            surface: "wave",
+            direction: "for-you",
+            mood: null,
+            cursor: 7,
+            algorithm: "baseline-v1",
+            served: true,
+            degradedSources: [],
+            latencyMs: 1,
+            context: { orderedWave: { version: 1, nextPosition: 8 } },
+            recommendations: [
+                { track, score: 1 },
+                {
+                    track: {
+                        ...track,
+                        id: "yt:two",
+                        provider: { ...track.provider, youtubeVideoId: "two" },
+                    },
+                    score: 0.5,
+                },
+            ],
+        });
+        expect(
+            createGeneration.mock.calls[0][0].exposures.map(
+                (row: { position: number }) => row.position,
+            ),
+        ).toEqual([6, 7]);
+    });
+
+    it.each([-1, 0.5, 2_147_483_648, 0])(
+        "rejects invalid sequence position %s before persistence",
+        async (nextPosition) => {
+            const createGeneration = jest.fn();
+            const store = new RecommendationExposureStore({
+                createGeneration,
+                loadRecentExposures: jest.fn(),
+                findAttributableExposure: jest.fn(),
+                updateExposure: jest.fn(),
+            });
+            await expect(
+                store.record({
+                    userId: "alice",
+                    sessionId: "tab",
+                    surface: "wave",
+                    direction: "for-you",
+                    mood: null,
+                    cursor: 0,
+                    algorithm: "baseline-v1",
+                    served: true,
+                    degradedSources: [],
+                    latencyMs: 0,
+                    context: { orderedWave: { version: 1, nextPosition } },
+                    recommendations: [{ track, score: 1 }],
+                }),
+            ).rejects.toThrow("Invalid Wave sequence positions");
+            expect(createGeneration).not.toHaveBeenCalled();
+        },
+    );
+
     it("writes one generation with account-scoped exposure attribution", async () => {
         const createGeneration = jest.fn().mockResolvedValue({ id: "gen-1" });
         const store = new RecommendationExposureStore({

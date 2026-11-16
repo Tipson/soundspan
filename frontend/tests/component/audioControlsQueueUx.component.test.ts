@@ -9,6 +9,13 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Track } from "../../lib/audio-state-context";
 import type { QueueItem } from "../../lib/queue-item";
+import { readFileSync } from "node:fs";
+import {
+    readOrderedWavePage,
+    orderedWaveQueueCheckpoints,
+} from "../../lib/audio/orderedWaveSequence";
+import { toProviderPlaybackTrack } from "../../lib/audio/providerRadioContinuation";
+import { getRecommendationSessionId } from "../../lib/recommendationSession";
 import {
     RecommendationQueueFeedback,
     recommendationScopeForTrack,
@@ -145,6 +152,7 @@ mock.module("@/lib/audio-playback-context", {
 mock.module("@/lib/api", {
     namedExports: {
         api: {
+            getSessionGeneration: () => 0,
             updatePodcastProgress: (...args: unknown[]) => {
                 apiCalls.updatePodcastProgress.push(args);
                 return Promise.resolve({});
@@ -1673,6 +1681,52 @@ test("manual next at the Wave tail waits for one refill and advances once", asyn
     assert.equal(playback.currentTime, 0);
     assert.equal(playback.isPlaying, true);
 });
+
+for (const foreignSession of [false, true])
+    test(`ordered Wave seed is bound to the actual cloned playback queue, foreignSession=${foreignSession}`, async () => {
+        const raw = JSON.parse(
+            readFileSync(
+                new URL(
+                    "../../../fixtures/ordered-wave-v1.json",
+                    import.meta.url,
+                ),
+                "utf8",
+            ),
+        ).cases[0].orderedWave;
+        const page = readOrderedWavePage({ orderedWave: raw })!;
+        const tracks = page.items.map((row) =>
+            toProviderPlaybackTrack(row.track),
+        );
+        const state = createDeferredAudioState({});
+        const playback = createPlaybackStub();
+        const controls = await renderControls({ state, playback });
+        const owner = {
+            authGeneration: 0,
+            sessionId: foreignSession
+                ? "foreign-tab"
+                : getRecommendationSessionId(),
+            intent: JSON.stringify(["for-you", null, "any"]),
+        };
+        controls.playTracks(tracks, 0, true, {
+            replaceQueue: true,
+            orderedWave: { page, owner },
+        });
+        state.commit();
+        assert.notEqual(state.queue, tracks);
+        assert.equal(
+            orderedWaveQueueCheckpoints.capture(tracks, owner),
+            undefined,
+        );
+        assert.equal(
+            Boolean(
+                orderedWaveQueueCheckpoints.capture(
+                    state.queue as QueueItem[],
+                    owner,
+                ),
+            ),
+            !foreignSession,
+        );
+    });
 
 test("radio queue startup enables continuation even when no previous Wave was active", async () => {
     const tracks = [makeTrack("seed", "artist"), makeTrack("next", "other")];

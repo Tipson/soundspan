@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
     PersonalizedCatalogOptions,
     PersonalizedHomeFeed,
@@ -24,7 +25,19 @@ import {
     toRadioContinuationTrack,
     type RadioContinuationInput,
     type RadioContinuationResponse,
+    type RadioContinuationTrack,
 } from "./radioContinuation";
+import { orderWaveRecommendations } from "./orderedWave";
+import {
+    createWaveSequenceContext,
+    encodeWaveSequenceCursor,
+    parseWaveSequenceCursor,
+    validateWaveSequenceContinuation,
+    WaveSequenceError,
+    type WaveSequenceReference,
+    type WaveSequenceIntent,
+    type WaveSequenceContextV1,
+} from "./waveSequence";
 import {
     RecommendationEngine,
     type RecommendationCandidateBatch,
@@ -48,6 +61,17 @@ type CommonEngineDependencies = Omit<
 >;
 
 export interface UnifiedRecommendationDependencies extends CommonEngineDependencies {
+    /** Independent opt-in capability; disabled clients retain the legacy shelf path. */
+    waveSequenceEnabled?: boolean;
+    /** One exact owned generation lookup, before any continuation candidate work. */
+    loadWaveSequenceGeneration?: (
+        generationId: string,
+        userId: string,
+        sessionId: string,
+    ) => Promise<
+        | Parameters<typeof validateWaveSequenceContinuation>[0]["generation"]
+        | null
+    >;
     /** Original-station candidate selection with account exclusions before local quotas. */
     loadRadioCandidates?: (
         input: RadioContinuationInput,
@@ -86,9 +110,32 @@ export interface PersonalizedRecommendationInput {
     context?: RecommendationRequestContext;
     /** Authenticated playback probe: compute normally without user-signal writes. */
     diagnostic?: boolean;
+    /** Explicit capability, never inferred from the Wave surface. */
+    waveSequenceVersion?: 1;
+    waveSequenceCursor?: string;
+    waveSequenceTail?: unknown;
+}
+
+/** Public finite order, without server-only artist identity or ranking features. */
+export interface OrderedWaveFeedV1 {
+    version: 1;
+    sequenceId: string;
+    startPosition: number;
+    items: {
+        position: number;
+        track: Omit<RadioContinuationTrack, "streamSource" | "album"> & {
+            streamSource: RecommendationCandidate["source"];
+            album: RadioContinuationTrack["album"] & {
+                artist: RadioContinuationTrack["artist"];
+            };
+        };
+    }[];
+    nextCursor: string;
+    tail: WaveSequenceReference[];
 }
 
 export type PersonalizedRecommendationFeed = PersonalizedHomeFeed & {
+    orderedWave?: OrderedWaveFeedV1;
     languageStatus?: {
         selection: WaveLanguage;
         pending: boolean;
@@ -226,6 +273,17 @@ function toPersonalizedTrack(
     };
 }
 
+function toOrderedWaveTrack(
+    candidate: RecommendationCandidate,
+): OrderedWaveFeedV1["items"][number]["track"] {
+    const safe = toRadioContinuationTrack(candidate);
+    return {
+        ...safe,
+        streamSource: candidate.source,
+        album: { ...safe.album, artist: safe.artist },
+    };
+}
+
 /** Compatibility facade; every product surface crosses one engine boundary. */
 export class UnifiedRecommendationService {
     constructor(
@@ -236,10 +294,14 @@ export class UnifiedRecommendationService {
         loadCandidates: RecommendationEngineDependencies["loadCandidates"],
         diagnostic = false,
         execution?: RadioRequestExecution,
+        finalizeWaveRecommendations?: RecommendationEngineDependencies["finalizeWaveRecommendations"],
     ): RecommendationEngine {
         const sourceDependencies = {
             ...this.dependencies,
             loadCandidates,
+            ...(finalizeWaveRecommendations
+                ? { finalizeWaveRecommendations }
+                : {}),
         };
         const guard =
             <Args extends unknown[], Result>(
@@ -341,6 +403,60 @@ export class UnifiedRecommendationService {
     ): Promise<PersonalizedRecommendationFeed> {
         const execution = createRadioRequestExecution(options?.signal);
         try {
+            const sequenced = input.waveSequenceVersion === 1;
+            if (
+                (input.waveSequenceVersion !== undefined && !sequenced) ||
+                (!sequenced &&
+                    (input.waveSequenceCursor !== undefined ||
+                        input.waveSequenceTail !== undefined)) ||
+                (sequenced &&
+                    (!this.dependencies.waveSequenceEnabled ||
+                        input.surface !== "wave" ||
+                        input.diagnostic ||
+                        !input.sessionId ||
+                        !Number.isInteger(input.limit) ||
+                        input.limit < 1 ||
+                        input.limit > 25))
+            )
+                throw new WaveSequenceError("invalid_cursor");
+            const sequenceIntent: WaveSequenceIntent = {
+                direction: input.direction,
+                mood: input.mood,
+                language: input.language ?? "any",
+            };
+            let previous: WaveSequenceContextV1 | undefined;
+            if (sequenced && input.waveSequenceCursor !== undefined) {
+                const cursor = parseWaveSequenceCursor(
+                    input.waveSequenceCursor,
+                    execution.check,
+                );
+                const load = this.dependencies.loadWaveSequenceGeneration;
+                if (!load) throw new WaveSequenceError("invalid_cursor");
+                const generation = await execution.run(() =>
+                    load(cursor.generationId, input.userId, input.sessionId),
+                );
+                if (!generation) throw new WaveSequenceError("invalid_cursor");
+                previous = validateWaveSequenceContinuation({
+                    cursor,
+                    tail: input.waveSequenceTail,
+                    generation,
+                    userId: input.userId,
+                    sessionId: input.sessionId,
+                    intent: sequenceIntent,
+                    now: this.dependencies.now(),
+                    check: execution.check,
+                });
+            } else if (
+                sequenced &&
+                (input.waveSequenceTail !== undefined || input.cursor !== 0)
+            ) {
+                throw new WaveSequenceError("invalid_tail");
+            }
+            const sourceCursor = previous?.nextSourceCursor ?? input.cursor;
+            const startPosition = previous?.nextPosition ?? 0;
+            const sequenceId = sequenced
+                ? (previous?.sequenceId ?? randomUUID())
+                : undefined;
             const sourceState: { feed?: PersonalizedHomeFeed } = {};
             let languageStatus: PersonalizedRecommendationFeed["languageStatus"];
             const engine = this.engine(
@@ -354,7 +470,7 @@ export class UnifiedRecommendationService {
                                 ...(options?.signal
                                     ? { sourceSignal: options.signal }
                                     : {}),
-                                cursor: input.cursor,
+                                cursor: sourceCursor,
                                 mode: input.direction,
                                 surface: input.surface,
                                 ...(input.mood ? { mood: input.mood } : {}),
@@ -464,6 +580,28 @@ export class UnifiedRecommendationService {
                 },
                 input.diagnostic,
                 execution,
+                sequenced
+                    ? (admitted) => {
+                          const ordered = orderWaveRecommendations(
+                              admitted,
+                              previous?.tail.map((row) => row.artistKey),
+                              execution.check,
+                          );
+                          // Public serialization must succeed before the only served write.
+                          for (const { track } of ordered)
+                              toOrderedWaveTrack(track);
+                          const orderedWave = createWaveSequenceContext({
+                              ordered,
+                              sequenceId: sequenceId!,
+                              startPosition,
+                              nextSourceCursor: sourceState.feed!.nextCursor,
+                              verifiedPreviousTail: previous?.tail ?? [],
+                              intent: sequenceIntent,
+                              check: execution.check,
+                          });
+                          return { recommendations: ordered, orderedWave };
+                      }
+                    : undefined,
             );
             const result = await execution.run(() =>
                 engine.recommend({
@@ -476,9 +614,9 @@ export class UnifiedRecommendationService {
                         language: input.language,
                     },
                     sessionId: input.sessionId,
-                    cursor: input.cursor,
-                    limit: input.limit * 3,
-                    perLaneLimit: input.limit,
+                    cursor: sourceCursor,
+                    limit: sequenced ? input.limit : input.limit * 3,
+                    ...(sequenced ? {} : { perLaneLimit: input.limit }),
                     exclude: input.excludeVideoIds,
                     context: input.context,
                 }),
@@ -512,6 +650,31 @@ export class UnifiedRecommendationService {
                 nextCursor: result.nextCursor,
                 generationId: result.generationId,
                 degradedSources: result.degradedSources,
+                ...(result.orderedWave
+                    ? {
+                          orderedWave: {
+                              version: 1 as const,
+                              sequenceId: result.orderedWave.sequenceId,
+                              startPosition,
+                              items: result.tracks.map((track, index) => ({
+                                  position: startPosition + index,
+                                  track: toOrderedWaveTrack(track),
+                              })),
+                              nextCursor: encodeWaveSequenceCursor(
+                                  result.generationId,
+                                  result.orderedWave,
+                                  execution.check,
+                              ),
+                              tail: result.orderedWave.tail.map(
+                                  ({ source, id, position }) => ({
+                                      source,
+                                      id,
+                                      position,
+                                  }),
+                              ),
+                          },
+                      }
+                    : {}),
                 ...(languageStatus ? { languageStatus } : {}),
             };
         } finally {

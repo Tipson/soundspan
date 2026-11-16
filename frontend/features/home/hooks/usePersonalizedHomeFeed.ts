@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { fetchPersonalizedWaveFeed } from "@/lib/audio/fetchPersonalizedWaveFeed";
 import { queryKeys } from "@/lib/queryKeys";
 import type {
     PersonalizedHomeFeed,
@@ -84,7 +85,9 @@ export function personalizedHomeFeedQueryKey(
         surface,
         language,
     );
-    const periodKey = contextKey ? [...base, contextKey] : base;
+    const protocolKey =
+        surface === "wave" ? [...base, "ordered-wave-capable-v1"] : base;
+    const periodKey = contextKey ? [...protocolKey, contextKey] : protocolKey;
     return cacheDay ? [...periodKey, cacheDay] : periodKey;
 }
 
@@ -110,24 +113,38 @@ export function usePersonalizedHomeFeed(
             cacheDay,
         ),
         queryFn: ({ signal }) =>
-            api.request<PersonalizedHomeFeed>(
-                buildPersonalizedHomeFeedUrl(
-                    limit,
-                    mode,
-                    mood,
-                    surface,
-                    undefined,
-                    undefined,
-                    language,
-                    contextKey,
-                ),
-                {
-                    method: "GET",
-                    signal,
-                    timeoutMs: PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
-                    retryOnTimeout: PERSONALIZED_HOME_TIMEOUT_RETRY,
-                },
-            ),
+            surface === "wave"
+                ? fetchPersonalizedWaveFeed(
+                      buildPersonalizedHomeFeedUrl(
+                          limit,
+                          mode,
+                          mood,
+                          surface,
+                          undefined,
+                          undefined,
+                          language,
+                          contextKey,
+                      ),
+                      { signal },
+                  ).then(({ feed }) => feed)
+                : api.request<PersonalizedHomeFeed>(
+                      buildPersonalizedHomeFeedUrl(
+                          limit,
+                          mode,
+                          mood,
+                          surface,
+                          undefined,
+                          undefined,
+                          language,
+                          contextKey,
+                      ),
+                      {
+                          method: "GET",
+                          signal,
+                          timeoutMs: PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
+                          retryOnTimeout: PERSONALIZED_HOME_TIMEOUT_RETRY,
+                      },
+                  ),
         enabled,
         staleTime: 5 * 60 * 1000,
         retry: PERSONALIZED_HOME_QUERY_RETRY,

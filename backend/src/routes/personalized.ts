@@ -16,6 +16,7 @@ import {
 } from "../services/recommendations/radioRequestExecution";
 import { finiteQueueAdmissionRequestSchema } from "../services/recommendations/finiteQueueAdmissionContract";
 import { readmitRecommendationQueue } from "../services/recommendations/finiteQueueAdmission";
+import { WaveSequenceError } from "../services/recommendations/waveSequence";
 import { createStreamProxyRequestAbort } from "./streamProxyRequestAbort";
 
 const router = Router();
@@ -81,6 +82,9 @@ const personalizedHomeQuerySchema = z
             ])
             .optional(),
         surface: z.enum(["home", "wave", "made-for-you"]).optional(),
+        waveSequenceVersion: z.literal("1").optional(),
+        waveSequenceCursor: z.string().min(1).max(1024).optional(),
+        waveSequenceTail: z.string().max(4096).optional(),
         timeOfDay: z.literal("1").optional(),
         sessionId: z.string().trim().min(1).max(128).optional(),
         localHour: z.coerce.number().int().min(0).max(23).optional(),
@@ -93,6 +97,32 @@ const personalizedHomeQuerySchema = z
         deviceClass: z.enum(["mobile", "tablet", "desktop", "tv"]).optional(),
     })
     .strict()
+    .refine(
+        (value) => {
+            const requested =
+                value.waveSequenceVersion !== undefined ||
+                value.waveSequenceCursor !== undefined ||
+                value.waveSequenceTail !== undefined;
+            if (!requested) return true;
+            if (
+                value.waveSequenceVersion !== "1" ||
+                value.surface !== "wave" ||
+                !value.sessionId
+            )
+                return false;
+            const continuation = value.waveSequenceCursor !== undefined;
+            if (continuation !== (value.waveSequenceTail !== undefined))
+                return false;
+            return (
+                continuation || value.cursor === undefined || value.cursor === 0
+            );
+        },
+        {
+            message:
+                "Ordered Wave requires an explicit session and paired continuation",
+            path: ["waveSequenceVersion"],
+        },
+    )
     .refine((value) => !value.language || value.surface === "wave", {
         message: "Language selection requires Wave",
         path: ["language"],
@@ -495,6 +525,7 @@ router.get(
  *               type: string
  *             coverArt:
  *               type: string
+ *               nullable: true
  *             artist:
  *               type: object
  *               required: [id, name]
@@ -506,10 +537,10 @@ router.get(
  *                   type: string
  *         source:
  *           type: string
- *           enum: [youtube, vk, yandex]
+ *           enum: [library, youtube, tidal, vk, yandex]
  *         streamSource:
  *           type: string
- *           enum: [youtube, vk, yandex]
+ *           enum: [library, youtube, tidal, vk, yandex]
  *         youtubeVideoId:
  *           type: string
  *           description: Present only for YouTube; native tracks retain their exact provider recording.
@@ -535,6 +566,39 @@ router.get(
  *       type: object
  *       required: [shelves, degraded, reason, seedCount, nextCursor]
  *       properties:
+ *         orderedWave:
+ *           type: object
+ *           additionalProperties: false
+ *           required: [version, sequenceId, startPosition, items, nextCursor, tail]
+ *           description: Authoritative order for version1 opted-in Wave clients. Consume items in order; legacy shelf grouping is not its playback order.
+ *           properties:
+ *             version: { type: integer, enum: [1] }
+ *             sequenceId: { type: string, format: uuid }
+ *             startPosition: { type: integer, minimum: 0, maximum: 2147483647 }
+ *             items:
+ *               type: array
+ *               maxItems: 25
+ *               items:
+ *                 type: object
+ *                 additionalProperties: false
+ *                 required: [position, track]
+ *                 properties:
+ *                   position: { type: integer, minimum: 0, maximum: 2147483647 }
+ *                   track:
+ *                     $ref: '#/components/schemas/PersonalizedTrack'
+ *             nextCursor: { type: string, minLength: 1, maxLength: 1024 }
+ *             tail:
+ *               type: array
+ *               maxItems: 2
+ *               description: Exact ordered server suffix; echo the entire tail with its cursor. Artist identity is server-only.
+ *               items:
+ *                 type: object
+ *                 additionalProperties: false
+ *                 required: [source, id, position]
+ *                 properties:
+ *                   source: { type: string, enum: [library, youtube, tidal, vk, yandex] }
+ *                   id: { type: string, minLength: 1, maxLength: 128 }
+ *                   position: { type: integer, minimum: 0, maximum: 2147483647 }
  *         shelves:
  *           type: object
  *           required: [listenAgain, quickPicks, discovery]
@@ -657,6 +721,22 @@ router.get(
  *           minimum: 0
  *         description: Rotates the bounded set of recommendation seeds for queue continuation
  *       - in: query
+ *         name: sessionId
+ *         schema: { type: string, minLength: 1, maxLength: 128 }
+ *         description: Explicit playback session required by ordered Wave opt-in and retained for every continuation.
+ *       - in: query
+ *         name: waveSequenceVersion
+ *         schema: { type: string, enum: ['1'] }
+ *         description: Explicit ordered Wave opt-in; requires surface=wave and sessionId. Initial requests omit the sequence cursor/tail and use legacy cursor absent or zero.
+ *       - in: query
+ *         name: waveSequenceCursor
+ *         schema: { type: string, minLength: 1, maxLength: 1024 }
+ *         description: Opaque server generation locator; requires the complete paired waveSequenceTail. Never replace it with the numeric seed cursor.
+ *       - in: query
+ *         name: waveSequenceTail
+ *         schema: { type: string, maxLength: 4096 }
+ *         description: Bounded JSON encoding of the complete ordered server tail of up to two exact source/id/position references. Requires waveSequenceCursor.
+ *       - in: query
  *         name: exclude
  *         schema:
  *           type: string
@@ -696,6 +776,8 @@ router.get(
  *               $ref: '#/components/schemas/PersonalizedHomeFeed'
  *       400:
  *         description: Invalid query
+ *       409:
+ *         description: Ordered Wave is disabled or its sequence must be restarted (WAVE_SEQUENCE_RESET with a static reason).
  *       401:
  *         description: Not authenticated
  *       504:
@@ -720,8 +802,17 @@ async function handlePersonalizedHome(req: Request, res: Response) {
     }
 
     let excludeVideoIds: string[];
+    let waveSequenceTail: unknown;
     try {
         excludeVideoIds = parseContinuationExclusions(parsedQuery.data.exclude);
+        if (parsedQuery.data.waveSequenceTail !== undefined) {
+            if (
+                Buffer.byteLength(parsedQuery.data.waveSequenceTail, "utf8") >
+                4096
+            )
+                throw new TypeError("Ordered Wave tail exceeds its bound");
+            waveSequenceTail = JSON.parse(parsedQuery.data.waveSequenceTail);
+        }
     } catch {
         return sendRouteError(
             res,
@@ -744,6 +835,18 @@ async function handlePersonalizedHome(req: Request, res: Response) {
                 surface: parsedQuery.data.surface ?? "home",
                 limit,
                 cursor: parsedQuery.data.cursor ?? 0,
+                ...(parsedQuery.data.waveSequenceVersion
+                    ? {
+                          waveSequenceVersion: 1 as const,
+                          ...(parsedQuery.data.waveSequenceCursor !== undefined
+                              ? {
+                                    waveSequenceCursor:
+                                        parsedQuery.data.waveSequenceCursor,
+                                    waveSequenceTail,
+                                }
+                              : {}),
+                      }
+                    : {}),
                 direction: parsedQuery.data.mode ?? "for-you",
                 mood: parsedQuery.data.mood ?? null,
                 ...(parsedQuery.data.timeOfDay ? { timeOfDay: true } : {}),
@@ -778,6 +881,11 @@ async function handlePersonalizedHome(req: Request, res: Response) {
         return res.json(feed);
     } catch (error) {
         if (requestAbort.wasClientAborted()) return;
+        if (error instanceof WaveSequenceError)
+            return sendRouteError(res, 409, "Wave sequence must be restarted", {
+                code: "WAVE_SEQUENCE_RESET",
+                reason: error.code,
+            });
         if (
             error instanceof RadioRequestError &&
             error.code === "RADIO_REQUEST_TIMEOUT"

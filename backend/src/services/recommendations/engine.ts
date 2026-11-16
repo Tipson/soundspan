@@ -11,6 +11,7 @@ import { normalizeRecommendationArtistKey } from "./identityKeys";
 import type { RadioRequestExecution } from "./radioRequestExecution";
 import type { CurrentDislikeAdmission } from "./featureStore";
 import type { VerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
+import type { WaveSequenceContextV1 } from "./waveSequence";
 import {
     hasNativeRecommendationIdentity,
     readNativeRecommendationRecording,
@@ -92,7 +93,12 @@ export interface RecommendationEngineDependencies {
     /** Server-owned Wave ordering before its single served exposure write; absent retains legacy order. */
     finalizeWaveRecommendations?: (
         recommendations: readonly ScoredRecommendation[],
-    ) => readonly ScoredRecommendation[];
+    ) =>
+        | readonly ScoredRecommendation[]
+        | {
+              recommendations: readonly ScoredRecommendation[];
+              orderedWave: WaveSequenceContextV1;
+          };
     loadCandidates: (
         request: RecommendRequest,
         policyTime: Date,
@@ -536,12 +542,20 @@ export class RecommendationEngine {
                 algorithm: "baseline-v1",
                 served: true,
                 degradedSources,
-                recommendations: served,
+                recommendations: served.recommendations,
+                orderedWave: served.orderedWave,
                 startedAt,
             });
-            this.scheduleHotSet(request, served, analysisReserve);
+            this.scheduleHotSet(
+                request,
+                served.recommendations,
+                analysisReserve,
+            );
             return {
-                tracks: served.map(({ track }) => track),
+                tracks: served.recommendations.map(({ track }) => track),
+                ...(served.orderedWave
+                    ? { orderedWave: served.orderedWave }
+                    : {}),
                 nextCursor: loaded.nextCursor,
                 generationId,
                 degradedSources,
@@ -585,7 +599,8 @@ export class RecommendationEngine {
                 algorithm: "baseline-v1",
                 served: true,
                 degradedSources,
-                recommendations: served,
+                recommendations: served.recommendations,
+                orderedWave: served.orderedWave,
                 startedAt,
             });
             superviseBackground(
@@ -604,7 +619,10 @@ export class RecommendationEngine {
             );
             this.scheduleHotSet(request, hybrid, analysisReserve);
             return {
-                tracks: served.map(({ track }) => track),
+                tracks: served.recommendations.map(({ track }) => track),
+                ...(served.orderedWave
+                    ? { orderedWave: served.orderedWave }
+                    : {}),
                 nextCursor: loaded.nextCursor,
                 generationId,
                 degradedSources,
@@ -630,7 +648,8 @@ export class RecommendationEngine {
             served: true,
             experimentAssignment: "session-switchback-v1",
             degradedSources,
-            recommendations: servedRecommendations,
+            recommendations: servedRecommendations.recommendations,
+            orderedWave: servedRecommendations.orderedWave,
             startedAt,
         });
         if (normalizedRolloutPercent < 100) {
@@ -652,7 +671,12 @@ export class RecommendationEngine {
         }
         this.scheduleHotSet(request, hybrid, analysisReserve);
         return {
-            tracks: servedRecommendations.map(({ track }) => track),
+            tracks: servedRecommendations.recommendations.map(
+                ({ track }) => track,
+            ),
+            ...(servedRecommendations.orderedWave
+                ? { orderedWave: servedRecommendations.orderedWave }
+                : {}),
             nextCursor: loaded.nextCursor,
             generationId,
             degradedSources,
@@ -662,15 +686,22 @@ export class RecommendationEngine {
     private finalizeWave(
         request: RecommendRequest,
         recommendations: ScoredRecommendation[],
-    ): ScoredRecommendation[] {
+    ): {
+        recommendations: ScoredRecommendation[];
+        orderedWave?: WaveSequenceContextV1;
+    } {
         const finalize = this.dependencies.finalizeWaveRecommendations;
         if (request.intent.surface !== "wave" || !finalize)
-            return recommendations;
+            return { recommendations };
         const length = recommendations.length;
         const remaining = new Map<ScoredRecommendation, number>();
         for (const row of recommendations)
             remaining.set(row, (remaining.get(row) ?? 0) + 1);
-        const finalized = finalize(recommendations);
+        const result = finalize(recommendations);
+        const finalized =
+            "recommendations" in result ? result.recommendations : result;
+        const orderedWave =
+            "recommendations" in result ? result.orderedWave : undefined;
         if (!Array.isArray(finalized) || finalized.length !== length)
             throw new Error(
                 "Wave finalization must retain admitted occurrences",
@@ -683,7 +714,10 @@ export class RecommendationEngine {
                 );
             remaining.set(row, count - 1);
         }
-        return [...finalized];
+        return {
+            recommendations: [...finalized],
+            ...(orderedWave ? { orderedWave } : {}),
+        };
     }
 
     private async resolveCanonicalCandidates(
@@ -848,6 +882,7 @@ export class RecommendationEngine {
         experimentAssignment?: "session-switchback-v1";
         degradedSources: string[];
         recommendations: ScoredRecommendation[];
+        orderedWave?: WaveSequenceContextV1;
         startedAt: Date;
     }): Promise<string> {
         const latencyMs = Math.max(
@@ -869,6 +904,9 @@ export class RecommendationEngine {
                 ...requestContext(input.request),
                 ...(input.experimentAssignment
                     ? { experimentAssignment: input.experimentAssignment }
+                    : {}),
+                ...(input.served && input.orderedWave
+                    ? { orderedWave: input.orderedWave }
                     : {}),
             },
             recommendations: input.recommendations,

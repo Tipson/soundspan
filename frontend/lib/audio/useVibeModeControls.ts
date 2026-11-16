@@ -44,6 +44,15 @@ import {
     type OriginalRadioContinuationResponse,
 } from "../radio/originalRadioContinuation";
 import { getRecommendationSessionId } from "../recommendationSession";
+import {
+    fetchPersonalizedWaveFeed,
+    orderedWaveOwner,
+} from "./fetchPersonalizedWaveFeed";
+import {
+    orderedWaveQueueCheckpoints,
+    type OrderedWavePage,
+    type OrderedWaveCheckpoint,
+} from "./orderedWaveSequence";
 
 type AudioState = ReturnType<typeof useAudioState>;
 const MAX_PROVIDER_CONTINUATION_PAGES = 2;
@@ -75,6 +84,7 @@ export function useVibeModeControls({
     showQueueMutationToasts,
 }: UseVibeModeControlsOptions) {
     const requestGenerationRef = useRef(0);
+    const queueOrderRevisionRef = useRef(0);
     const providerRadioCursorRef = useRef(0);
     const originalRadioCursorRef = useRef<{
         origin: PlaybackRadioOrigin | null;
@@ -94,6 +104,27 @@ export function useVibeModeControls({
     });
 
     useLayoutEffect(() => {
+        const previous = playbackContextRef.current;
+        if (
+            previous.queue !== state.queue ||
+            previous.isShuffle !== state.isShuffle ||
+            previous.waveMode !== state.waveMode ||
+            previous.waveMood !== state.waveMood ||
+            previous.waveLanguage !== state.waveLanguage ||
+            previous.vibeMode !== state.vibeMode
+        ) {
+            queueOrderRevisionRef.current++;
+            orderedWaveQueueCheckpoints.invalidate(previous.queue);
+        }
+        orderedWaveQueueCheckpoints.capture(
+            state.queue,
+            orderedWaveOwner(
+                state.waveMode,
+                state.waveMood,
+                state.waveLanguage,
+            ),
+            Boolean(state.isShuffle),
+        );
         playbackContextRef.current = {
             track: state.currentTrack,
             trackId: state.currentTrack?.id ?? null,
@@ -125,6 +156,10 @@ export function useVibeModeControls({
                 return { success: false, trackCount: 0 };
             }
             const requestGeneration = ++requestGenerationRef.current;
+            const queueOrderRevision = queueOrderRevisionRef.current;
+            const queueIds = state.queue.map((row) => row.id).join("\u0000");
+            let orderedQueueRequest = false;
+            const orderedAuthGeneration = api.getSessionGeneration();
             const radioOrigin = normalizePlaybackRadioOrigin(
                 currentTrack.radioOrigin,
             );
@@ -153,6 +188,18 @@ export function useVibeModeControls({
             };
             const requestIsCurrent = () => {
                 const currentContext = playbackContextRef.current;
+                if (
+                    orderedQueueRequest &&
+                    (api.getSessionGeneration() !== orderedAuthGeneration ||
+                        queueOrderRevisionRef.current !== queueOrderRevision ||
+                        currentContext.queue !== requestContext.queue ||
+                        currentContext.queue
+                            .map((row) => row.id)
+                            .join("\u0000") !== queueIds ||
+                        Boolean(currentContext.isShuffle) !==
+                            Boolean(requestContext.isShuffle))
+                )
+                    return false;
                 if (
                     requestGenerationRef.current !== requestGeneration ||
                     getQueueReplacementGeneration() !==
@@ -397,33 +444,76 @@ export function useVibeModeControls({
                     );
                     return { success: true, trackCount: fresh.length };
                 }
-                if (isProviderRadioTrack(currentTrack)) {
+                if (
+                    isProviderRadioTrack(currentTrack) ||
+                    (state.vibeMode &&
+                        !radioOrigin &&
+                        currentTrack.recommendationGenerationId &&
+                        currentTrack.recommendationQueueMode !== "finite")
+                ) {
                     if (!state.vibeMode) {
                         providerRadioCursorRef.current = 0;
                     }
                     let cursor = providerRadioCursorRef.current;
                     let feed: PersonalizedHomeFeed | null = null;
                     let continuation: Track[] = [];
+                    let orderedPage: OrderedWavePage | undefined;
+                    const waveOwner = orderedWaveOwner(
+                        state.waveMode,
+                        state.vibeMode ? state.waveMood : null,
+                        state.vibeMode ? state.waveLanguage : "any",
+                    );
+                    const resetBudget = { remaining: 1 };
+                    let sequenceCheckpoint: OrderedWaveCheckpoint | undefined =
+                        replaceUpcoming
+                            ? undefined
+                            : orderedWaveQueueCheckpoints.capture(
+                                  state.queue,
+                                  waveOwner,
+                                  Boolean(state.isShuffle),
+                              );
+                    if (replaceUpcoming)
+                        orderedWaveQueueCheckpoints.invalidate(state.queue);
+                    orderedQueueRequest =
+                        Boolean(sequenceCheckpoint) ||
+                        typeof api.getFeatures === "function";
                     for (
                         let attempt = 0;
                         attempt < MAX_PROVIDER_CONTINUATION_PAGES;
                         attempt += 1
                     ) {
-                        feed = await api.request<PersonalizedHomeFeed>(
-                            buildProviderRadioContinuationPath(
-                                state.queue,
-                                cursor,
-                                25,
-                                state.waveMode,
-                                state.vibeMode ? state.waveMood : null,
-                                undefined,
-                                state.vibeMode ? state.waveLanguage : "any",
-                            ),
-                            {
-                                timeoutMs: PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
-                                retryOnTimeout: PERSONALIZED_HOME_TIMEOUT_RETRY,
-                            },
+                        const path = buildProviderRadioContinuationPath(
+                            state.queue,
+                            cursor,
+                            25,
+                            state.waveMode,
+                            state.vibeMode ? state.waveMood : null,
+                            undefined,
+                            state.vibeMode ? state.waveLanguage : "any",
                         );
+                        const receipt = orderedQueueRequest
+                            ? await fetchPersonalizedWaveFeed(path, {
+                                  checkpoint: sequenceCheckpoint,
+                                  resetBudget,
+                              })
+                            : {
+                                  feed: await api.request<PersonalizedHomeFeed>(
+                                      path,
+                                      {
+                                          timeoutMs:
+                                              PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
+                                          retryOnTimeout:
+                                              PERSONALIZED_HOME_TIMEOUT_RETRY,
+                                      },
+                                  ),
+                                  page: undefined,
+                                  reset: false,
+                              };
+                        feed = receipt.feed;
+                        orderedPage = receipt.page;
+                        if (orderedPage) orderedQueueRequest = true;
+                        if (receipt.reset)
+                            orderedWaveQueueCheckpoints.invalidate(state.queue);
                         if (!requestIsCurrent()) {
                             return { success: false, trackCount: 0 };
                         }
@@ -440,6 +530,33 @@ export function useVibeModeControls({
                         if (!prepared || !requestIsCurrent())
                             return { success: false, trackCount: 0 };
                         continuation = prepared;
+                        if (orderedPage) {
+                            sequenceCheckpoint = {
+                                sequenceId: orderedPage.sequenceId,
+                                nextPosition:
+                                    orderedPage.startPosition +
+                                    orderedPage.items.length,
+                                nextCursor: orderedPage.nextCursor,
+                                tail: orderedPage.tail,
+                            };
+                            if (
+                                orderedPage.items.length === 0 &&
+                                !state.isShuffle
+                            )
+                                orderedWaveQueueCheckpoints.commit(
+                                    state.queue,
+                                    orderedPage,
+                                    waveOwner,
+                                );
+                            else if (
+                                continuation.length !== orderedPage.items.length
+                            ) {
+                                sequenceCheckpoint = undefined;
+                                orderedWaveQueueCheckpoints.invalidate(
+                                    state.queue,
+                                );
+                            }
+                        }
                         cursor =
                             typeof feed.nextCursor === "number"
                                 ? feed.nextCursor
@@ -486,6 +603,57 @@ export function useVibeModeControls({
                             success: queueResult.acceptedCount > 0,
                             trackCount: queueResult.acceptedCount,
                         };
+                    }
+
+                    if (orderedPage) {
+                        if (!requestIsCurrent())
+                            return { success: false, trackCount: 0 };
+                        const latest = playbackContextRef.current;
+                        const fresh = collectProviderRadioContinuation(
+                            feed,
+                            latest.queue,
+                            25,
+                            latest.waveMode,
+                        ).filter(readyFor);
+                        if (!fresh.length)
+                            return { success: false, trackCount: 0 };
+                        const history = replaceUpcoming
+                            ? latest.queue.slice(
+                                  0,
+                                  Math.max(
+                                      0,
+                                      Math.min(
+                                          latest.currentIndex,
+                                          latest.queue.length - 1,
+                                      ),
+                                  ) + 1,
+                              )
+                            : latest.queue;
+                        const nextQueue = [...history, ...fresh];
+                        if (replaceUpcoming) {
+                            state.setIsShuffle(false);
+                            state.setShuffleIndices([]);
+                        } else if (state.isShuffle)
+                            state.setShuffleIndices((indices) => [
+                                ...indices,
+                                ...fresh.map(
+                                    (_, index) => history.length + index,
+                                ),
+                            ]);
+                        state.setVibeMode(true);
+                        state.setVibeSourceFeatures(null);
+                        state.setVibeQueueIds(nextQueue.map((row) => row.id));
+                        if (!state.isShuffle || replaceUpcoming)
+                            orderedWaveQueueCheckpoints.commit(
+                                nextQueue,
+                                orderedPage,
+                                waveOwner,
+                            );
+                        state.setQueue(nextQueue);
+                        reportLocalQueueCommit(
+                            replaceUpcoming ? "replace-upcoming" : "append",
+                        );
+                        return { success: true, trackCount: fresh.length };
                     }
 
                     if (replaceUpcoming) {

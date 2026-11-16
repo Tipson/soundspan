@@ -15,12 +15,14 @@ const mockRecordGeneration = jest.fn();
 const mockScheduleHotSet = jest.fn();
 const mockLoadRadioCandidates = jest.fn();
 const mockLoadVerifiedRepeats = jest.fn();
+const mockLoadWaveSequenceGeneration = jest.fn();
 const mockWarn = jest.fn();
 let capturedDependencies: Record<string, any>;
 
 jest.mock("../../../config", () => ({
     config: {
         recommendations: {
+            waveSequenceEnabled: false,
             mode: "shadow",
             hybridRolloutPercent: 0,
             explorationRate: 0.1,
@@ -79,6 +81,10 @@ jest.mock("../verifiedSourceRepeats", () => ({
     loadVerifiedSourceRepeatExclusions: (...args: unknown[]) =>
         mockLoadVerifiedRepeats(...args),
 }));
+jest.mock("../waveSequenceStore", () => ({
+    loadWaveSequenceGeneration: (...args: unknown[]) =>
+        mockLoadWaveSequenceGeneration(...args),
+}));
 jest.mock("../recommendationService", () => ({
     UnifiedRecommendationService: class {
         constructor(dependencies: Record<string, any>) {
@@ -103,6 +109,23 @@ function request(overrides: Partial<RecommendRequest> = {}): RecommendRequest {
 }
 
 describe("recommendation runtime adapters", () => {
+    it("binds the default-off sequence capability and its owned generation lookup", async () => {
+        const row = { id: "g1", userId: "alice", sessionId: "tab" };
+        mockLoadWaveSequenceGeneration.mockResolvedValueOnce(row);
+        expect(capturedDependencies.waveSequenceEnabled).toBe(false);
+        await expect(
+            capturedDependencies.loadWaveSequenceGeneration(
+                "g1",
+                "alice",
+                "tab",
+            ),
+        ).resolves.toBe(row);
+        expect(mockLoadWaveSequenceGeneration).toHaveBeenCalledWith(
+            "g1",
+            "alice",
+            "tab",
+        );
+    });
     beforeEach(() => {
         mockGetHomeFeed.mockResolvedValue({ shelves: {} });
         mockFindMatchForTrack.mockReset();

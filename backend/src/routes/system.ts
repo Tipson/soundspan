@@ -24,6 +24,13 @@ const router = Router();
  *             schema:
  *               type: object
  *               properties:
+ *                 orderedWave:
+ *                   type: object
+ *                   additionalProperties: false
+ *                   required: [version]
+ *                   description: Present only when the server permits explicitly opted-in ordered Wave requests.
+ *                   properties:
+ *                     version: { type: integer, enum: [1] }
  *                 vibe:
  *                   type: object
  *                   required: [provider, activeSpace, migration]
@@ -72,6 +79,9 @@ router.get("/features", requireAuth, async (req, res) => {
         res.json({
             ...features,
             playCreation,
+            ...(config.recommendations.waveSequenceEnabled
+                ? { orderedWave: { version: 1 } }
+                : {}),
             audioAnalysis: config.features.audioAnalysis,
             discovery: config.features.discovery,
             autoPlaylists: config.features.autoPlaylists,

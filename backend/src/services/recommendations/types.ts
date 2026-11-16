@@ -108,4 +108,6 @@ export interface RecommendResult {
     nextCursor: number;
     generationId: string;
     degradedSources: string[];
+    /** Server-owned context persisted with the served order; absent for legacy clients. */
+    orderedWave?: import("./waveSequence").WaveSequenceContextV1;
 }

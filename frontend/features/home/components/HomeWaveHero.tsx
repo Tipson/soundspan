@@ -12,6 +12,8 @@ import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import type { PersonalizedHomeFeed } from "../types";
 import { usePersonalizedHomeFeed } from "../hooks/usePersonalizedHomeFeed";
 import { selectWaveTracks } from "../selectWaveTracks";
+import { readOrderedWavePage } from "@/lib/audio/orderedWaveSequence";
+import { orderedWaveOwner } from "@/lib/audio/fetchPersonalizedWaveFeed";
 import { ru } from "@/lib/i18n/ru";
 import { getRecommendationSessionId } from "@/lib/recommendationSession";
 import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
@@ -53,8 +55,13 @@ export function HomeWaveHero({
         );
     const isLoading = isHomeLoading || isWaveLoading;
     const tracks = useMemo(
-        () => selectWaveTracks(waveFeed?.shelves, waveMode),
-        [waveFeed?.shelves, waveMode],
+        () =>
+            selectWaveTracks(
+                waveFeed?.shelves,
+                waveMode,
+                waveFeed?.orderedWave,
+            ),
+        [waveFeed, waveMode],
     );
     const generationId = waveFeed?.generationId;
     const queue = useMemo(
@@ -92,13 +99,25 @@ export function HomeWaveHero({
         if (queue.length === 0) return;
         setIsShuffle(false);
         setShuffleIndices([]);
-        playTracks(queue, 0, true);
+        const page = readOrderedWavePage(waveFeed ?? {});
+        if (page)
+            playTracks(queue, 0, true, {
+                orderedWave: {
+                    page,
+                    owner: orderedWaveOwner(waveMode, waveMood, waveLanguage),
+                },
+            });
+        else playTracks(queue, 0, true);
         setVibeMode(true);
         setVibeSourceFeatures(null);
         setVibeQueueIds(queue.map((track) => track.id));
     }, [
         playTracks,
         queue,
+        waveFeed,
+        waveMode,
+        waveMood,
+        waveLanguage,
         setVibeMode,
         setVibeQueueIds,
         setVibeSourceFeatures,

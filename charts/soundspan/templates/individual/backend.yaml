@@ -149,6 +149,7 @@ spec:
             "LOG_LEVEL" true
             "DOCS_PUBLIC" true
             "RECOMMENDATION_ENGINE_MODE" true
+            "RECOMMENDATION_WAVE_SEQUENCE_ENABLED" true
             "RECOMMENDATION_HYBRID_ROLLOUT_PERCENT" true
             "RECOMMENDATION_EXPLORATION_PERCENT" true
             "REMOTE_ANALYSIS_ENABLED" true
@@ -514,6 +515,13 @@ spec:
             {{- else }}
             - name: AUDIO_ANALYSIS_ENABLED
               value: {{ .Values.config.features.audioAnalysis | quote }}
+            {{- end }}
+            {{- if hasKey $backendEnv "RECOMMENDATION_WAVE_SEQUENCE_ENABLED" }}
+            - name: RECOMMENDATION_WAVE_SEQUENCE_ENABLED
+              value: {{ index $backendEnv "RECOMMENDATION_WAVE_SEQUENCE_ENABLED" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.recommendations.waveSequenceEnabled) }}
+            - name: RECOMMENDATION_WAVE_SEQUENCE_ENABLED
+              value: {{ .Values.config.recommendations.waveSequenceEnabled | quote }}
             {{- end }}
             {{- if hasKey $backendEnv "RECOMMENDATION_ENGINE_MODE" }}
             - name: RECOMMENDATION_ENGINE_MODE

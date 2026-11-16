@@ -119,6 +119,8 @@ export interface PersonalizedTrack {
 }
 
 export interface PersonalizedHomeFeed {
+    /** Untrusted additive protocol data; consumers validate it before use. */
+    orderedWave?: unknown;
     languageStatus?: {
         selection: PersonalizedHomeLanguage;
         pending: boolean;

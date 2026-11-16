@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { beforeEach, mock, test } from "node:test";
 import ReactDefault from "react";
+import { readFileSync } from "node:fs";
+import {
+    readOrderedWavePage,
+    orderedWaveQueueCheckpoints,
+} from "../../lib/audio/orderedWaveSequence";
+import { toProviderPlaybackTrack } from "../../lib/audio/providerRadioContinuation";
 import {
     recordExplicitPlaybackPause,
     recordExplicitPlaybackResume,
@@ -109,6 +115,7 @@ const feedRequestOptions: Array<
     { timeoutMs?: number; retryOnTimeout?: boolean } | undefined
 > = [];
 let sessionGeneration = 0;
+let orderedWaveCapabilities: (() => Promise<unknown>) | undefined;
 
 function captureRequest(
     path: string,
@@ -124,6 +131,9 @@ function captureRequest(
 mock.module("@/lib/api", {
     namedExports: {
         api: {
+            get getFeatures() {
+                return orderedWaveCapabilities;
+            },
             getSessionGeneration: () => sessionGeneration,
             getRadioContinuation: (input: {
                 origin: {
@@ -204,7 +214,225 @@ beforeEach(() => {
     feedRequestOptions.length = 0;
     activeHarness = null;
     sessionGeneration = 0;
+    orderedWaveCapabilities = undefined;
     recordExplicitPlaybackResume();
+});
+
+test("one refill shares one reset budget across an empty reset page", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const fixture = JSON.parse(
+        readFileSync(
+            new URL("../../../fixtures/ordered-wave-v1.json", import.meta.url),
+            "utf8",
+        ),
+    );
+    const first = readOrderedWavePage({
+        orderedWave: fixture.cases[0].orderedWave,
+    })!;
+    const queue = first.items.map((row) => toProviderPlaybackTrack(row.track));
+    const audio = makeAudioState(
+        queue.at(-1)! as never,
+        queue as never,
+        5,
+        true,
+    );
+    audio.state.waveLanguage = "any";
+    const owner = {
+        authGeneration: sessionGeneration,
+        sessionId: getRecommendationSessionId(),
+        intent: JSON.stringify(["for-you", null, "any"]),
+    };
+    assert.equal(orderedWaveQueueCheckpoints.commit(queue, first, owner), true);
+    orderedWaveCapabilities = async () => ({ orderedWave: { version: 1 } });
+    const published: Track[][] = [];
+    audio.state.setQueue = ((value: Track[] | ((q: Track[]) => Track[])) =>
+        published.push(
+            typeof value === "function" ? value(queue) : value,
+        )) as never;
+    const harness = new HookLifecycleHarness();
+    harness.beginRender();
+    activeHarness = harness;
+    const controls = useVibeModeControls({
+        state: audio.state as never,
+        getActiveListenTogetherSession: () => null,
+        showQueueMutationToasts: () => {},
+    });
+    harness.commitRender();
+    const tick = () => new Promise((resolve) => setImmediate(resolve));
+    const resetError = () =>
+        Object.assign(new Error("reset"), {
+            status: 409,
+            data: { code: "WAVE_SEQUENCE_RESET" },
+        });
+    const empty = {
+        shelves: { listenAgain: [], quickPicks: [], discovery: [] },
+        generationId: "empty-reset",
+        nextCursor: 0,
+        orderedWave: {
+            version: 1,
+            sequenceId: "22222222-2222-4222-8222-222222222222",
+            startPosition: 0,
+            items: [],
+            nextCursor: "ZW1wdHk",
+            tail: [],
+        },
+    };
+    const pending = controls.startVibeMode();
+    await tick();
+    feedRequests[0].reject(resetError());
+    await tick();
+    feedRequests[1].resolve(empty);
+    await tick();
+    feedRequests[2].reject(resetError());
+    await tick();
+    if (feedRequests[3]) feedRequests[3].resolve(empty);
+    await pending;
+    assert.equal(
+        feedRequestPaths.filter(
+            (path) =>
+                !new URL(path, "https://test").searchParams.has(
+                    "waveSequenceCursor",
+                ),
+        ).length,
+        1,
+    );
+    assert.equal(feedRequests.length, 3);
+    assert.deepEqual(published, []);
+    assert.equal(audio.state.currentIndex, 5);
+    assert.equal(audio.state.currentTrack, queue.at(-1));
+});
+
+test("ordered Wave appends the exact next server page and retains current/history", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const fixture = JSON.parse(
+        readFileSync(
+            new URL("../../../fixtures/ordered-wave-v1.json", import.meta.url),
+            "utf8",
+        ),
+    );
+    const first = readOrderedWavePage({
+        orderedWave: fixture.cases[0].orderedWave,
+    })!;
+    const queue = first.items.map((row) => toProviderPlaybackTrack(row.track));
+    const audio = makeAudioState(
+        queue.at(-1)! as never,
+        queue as never,
+        5,
+        true,
+    );
+    audio.state.waveLanguage = "any";
+    const owner = {
+        authGeneration: sessionGeneration,
+        sessionId: getRecommendationSessionId(),
+        intent: JSON.stringify(["for-you", null, "any"]),
+    };
+    assert.equal(orderedWaveQueueCheckpoints.commit(queue, first, owner), true);
+    const published: Track[][] = [];
+    audio.state.setQueue = ((value: Track[] | ((queue: Track[]) => Track[])) =>
+        published.push(
+            typeof value === "function" ? value(queue) : value,
+        )) as never;
+    const harness = new HookLifecycleHarness();
+    harness.beginRender();
+    activeHarness = harness;
+    const controls = useVibeModeControls({
+        state: audio.state as never,
+        getActiveListenTogetherSession: () => null,
+        showQueueMutationToasts: () => {},
+    });
+    harness.commitRender();
+    const pending = controls.startVibeMode();
+    assert.equal(
+        new URL(feedRequestPaths[0], "https://test").searchParams.get(
+            "waveSequenceVersion",
+        ),
+        "1",
+    );
+    const next = structuredClone(fixture.cases[1].orderedWave);
+    next.startPosition = 6;
+    next.items.forEach(
+        (row: { position: number }, index: number) =>
+            (row.position = 6 + index),
+    );
+    next.tail.forEach(
+        (row: { position: number }, index: number) =>
+            (row.position = 7 + index),
+    );
+    feedRequests[0].resolve({
+        shelves: { listenAgain: [], quickPicks: [], discovery: [] },
+        orderedWave: next,
+        generationId: "next-generation",
+        nextCursor: 8,
+    });
+    assert.deepEqual(await pending, { success: true, trackCount: 3 });
+    assert.equal(published.length, 1);
+    assert.deepEqual(published[0].slice(0, queue.length), queue);
+    assert.deepEqual(
+        published[0].slice(queue.length).map((row) => row.id),
+        next.items.map((row: { track: { id: string } }) => row.track.id),
+    );
+    assert.equal(
+        orderedWaveQueueCheckpoints.capture(published[0], owner)?.nextPosition,
+        9,
+    );
+    assert.equal(audio.mutations.includes("track"), false);
+    assert.equal(audio.mutations.includes("index"), false);
+});
+
+test("ordered replace-upcoming rejects a page after manual reorder even with unchanged tail", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const fixture = JSON.parse(
+        readFileSync(
+            new URL("../../../fixtures/ordered-wave-v1.json", import.meta.url),
+            "utf8",
+        ),
+    );
+    const first = readOrderedWavePage({
+        orderedWave: fixture.cases[0].orderedWave,
+    })!;
+    const queue = first.items.map((row) => toProviderPlaybackTrack(row.track));
+    const audio = makeAudioState(queue[0] as never, queue as never, 0, true);
+    audio.state.waveLanguage = "any";
+    orderedWaveCapabilities = async () => ({ orderedWave: { version: 1 } });
+    const harness = new HookLifecycleHarness();
+    const useRenderedControls = () => {
+        harness.beginRender();
+        activeHarness = harness;
+        const controls = useVibeModeControls({
+            state: audio.state as never,
+            getActiveListenTogetherSession: () => null,
+            showQueueMutationToasts: () => {},
+        });
+        harness.commitRender();
+        return controls;
+    };
+    const pending = useRenderedControls().startVibeMode({
+        queueStrategy: "replace-upcoming",
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(feedRequests.length, 1);
+    [queue[1], queue[2]] = [queue[2], queue[1]];
+    audio.state.queue = [...queue] as never;
+    useRenderedControls();
+    const next = structuredClone(fixture.cases[1].orderedWave);
+    next.startPosition = 0;
+    next.items.forEach(
+        (row: { position: number }, index: number) => (row.position = index),
+    );
+    next.tail.forEach(
+        (row: { position: number }, index: number) =>
+            (row.position = 1 + index),
+    );
+    feedRequests[0].resolve({
+        shelves: { listenAgain: [], quickPicks: [], discovery: [] },
+        orderedWave: next,
+        generationId: "late-generation",
+    });
+    assert.deepEqual(await pending, { success: false, trackCount: 0 });
+    assert.deepEqual(audio.mutations, []);
 });
 
 test("explicit station continuation uses the original seed rather than the current provider track", async () => {

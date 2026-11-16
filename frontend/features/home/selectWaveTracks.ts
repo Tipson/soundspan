@@ -3,6 +3,7 @@ import type {
     PersonalizedHomeMode,
     PersonalizedTrack,
 } from "./types";
+import { readOrderedWavePage } from "@/lib/audio/orderedWaveSequence";
 
 function unique(tracks: readonly PersonalizedTrack[]): PersonalizedTrack[] {
     const seen = new Set<string>();
@@ -18,7 +19,10 @@ function unique(tracks: readonly PersonalizedTrack[]): PersonalizedTrack[] {
 export function selectWaveTracks(
     shelves: PersonalizedHomeFeed["shelves"] | undefined,
     mode: PersonalizedHomeMode,
+    orderedWave?: unknown,
 ): PersonalizedTrack[] {
+    const page = readOrderedWavePage({ orderedWave });
+    if (page) return page.items.map(({ track }) => track);
     if (!shelves) return [];
     if (mode === "new") return unique(shelves.discovery);
     if (mode === "familiar")

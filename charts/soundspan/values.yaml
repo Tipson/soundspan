@@ -786,6 +786,8 @@ config:
   #    the variable absent so the application default applies and global.env or
   #    workload envFrom can supply it without being shadowed by the chart.
   recommendations:
+    # -- Enable the explicitly requested ordered Wave sequence protocol (app default false).
+    waveSequenceEnabled: null
     # -- Recommendation ranker: baseline, shadow, or active.
     engineMode: null
     # -- Stable percentage of accounts served by Hybrid v2 in active mode (0..100).

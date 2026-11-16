@@ -11,6 +11,11 @@ import type { PlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
 
 /** Explicit collection/station start options; omitted radio intent clears prior context. */
 export interface PlayTracksOptions {
+    /** Validated page handed to the actual cloned playback queue. */
+    orderedWave?: {
+        page: import("./audio/orderedWaveSequence").OrderedWavePage;
+        owner: import("./audio/orderedWaveSequence").OrderedWaveOwner;
+    };
     replaceQueue?: boolean;
     preserveOrder?: boolean;
     radioOrigin?: PlaybackRadioOrigin;

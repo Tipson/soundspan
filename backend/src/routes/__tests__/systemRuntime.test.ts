@@ -32,6 +32,7 @@ jest.mock("../../utils/db", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        recommendations: { waveSequenceEnabled: false },
         playCreation: { newCreationsEnabled: false, replaySupported: false },
         loudnessTargetLufs: -18,
         features: {

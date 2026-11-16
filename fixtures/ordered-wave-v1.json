@@ -1,0 +1,695 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "cross-shelf-six",
+      "previousArtistKeys": [],
+      "admitted": [
+        {
+          "id": "AAAAAAAAAA1",
+          "artist": "A"
+        },
+        {
+          "id": "AAAAAAAAAA2",
+          "artist": "A"
+        },
+        {
+          "id": "DDDDDDDDDD1",
+          "artist": "D"
+        },
+        {
+          "id": "BBBBBBBBBB1",
+          "artist": "B"
+        },
+        {
+          "id": "EEEEEEEEEE1",
+          "artist": "E"
+        },
+        {
+          "id": "CCCCCCCCCC1",
+          "artist": "C"
+        }
+      ],
+      "expectedIds": [
+        "AAAAAAAAAA1",
+        "DDDDDDDDDD1",
+        "BBBBBBBBBB1",
+        "AAAAAAAAAA2",
+        "EEEEEEEEEE1",
+        "CCCCCCCCCC1"
+      ],
+      "orderedWave": {
+        "version": 1,
+        "sequenceId": "5d73c623-d11d-4fda-943e-0e01ce5b3be7",
+        "startPosition": 0,
+        "items": [
+          {
+            "position": 0,
+            "track": {
+              "id": "yt:AAAAAAAAAA1",
+              "title": "AAAAAAAAAA1",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "A"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "AAAAAAAAAA1",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "AAAAAAAAAA1"
+            }
+          },
+          {
+            "position": 1,
+            "track": {
+              "id": "yt:DDDDDDDDDD1",
+              "title": "DDDDDDDDDD1",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "D"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "DDDDDDDDDD1",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "DDDDDDDDDD1"
+            }
+          },
+          {
+            "position": 2,
+            "track": {
+              "id": "yt:BBBBBBBBBB1",
+              "title": "BBBBBBBBBB1",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "B"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "BBBBBBBBBB1",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "BBBBBBBBBB1"
+            }
+          },
+          {
+            "position": 3,
+            "track": {
+              "id": "yt:AAAAAAAAAA2",
+              "title": "AAAAAAAAAA2",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "A"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "AAAAAAAAAA2",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "AAAAAAAAAA2"
+            }
+          },
+          {
+            "position": 4,
+            "track": {
+              "id": "yt:EEEEEEEEEE1",
+              "title": "EEEEEEEEEE1",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "E"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "EEEEEEEEEE1",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "EEEEEEEEEE1"
+            }
+          },
+          {
+            "position": 5,
+            "track": {
+              "id": "yt:CCCCCCCCCC1",
+              "title": "CCCCCCCCCC1",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "C"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "CCCCCCCCCC1",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "CCCCCCCCCC1"
+            }
+          }
+        ],
+        "nextCursor": "eyJ2ZXJzaW9uIjoxLCJnZW5lcmF0aW9uSWQiOiJmaXh0dXJlLWNyb3NzLXNoZWxmLXNpeCIsInNlcXVlbmNlSWQiOiI1ZDczYzYyMy1kMTFkLTRmZGEtOTQzZS0wZTAxY2U1YjNiZTciLCJuZXh0UG9zaXRpb24iOjYsIm5leHRTb3VyY2VDdXJzb3IiOjd9",
+        "tail": [
+          {
+            "source": "youtube",
+            "id": "EEEEEEEEEE1",
+            "position": 4
+          },
+          {
+            "source": "youtube",
+            "id": "CCCCCCCCCC1",
+            "position": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "cross-page",
+      "previousArtistKeys": [
+        "e",
+        "c"
+      ],
+      "admitted": [
+        {
+          "id": "CCCCCCCCCC2",
+          "artist": "C"
+        },
+        {
+          "id": "EEEEEEEEEE2",
+          "artist": "E"
+        },
+        {
+          "id": "DDDDDDDDDD2",
+          "artist": "D"
+        }
+      ],
+      "expectedIds": [
+        "DDDDDDDDDD2",
+        "EEEEEEEEEE2",
+        "CCCCCCCCCC2"
+      ],
+      "orderedWave": {
+        "version": 1,
+        "sequenceId": "5d73c623-d11d-4fda-943e-0e01ce5b3be7",
+        "startPosition": 2,
+        "items": [
+          {
+            "position": 2,
+            "track": {
+              "id": "yt:DDDDDDDDDD2",
+              "title": "DDDDDDDDDD2",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "D"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "DDDDDDDDDD2",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "DDDDDDDDDD2"
+            }
+          },
+          {
+            "position": 3,
+            "track": {
+              "id": "yt:EEEEEEEEEE2",
+              "title": "EEEEEEEEEE2",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "E"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "EEEEEEEEEE2",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "EEEEEEEEEE2"
+            }
+          },
+          {
+            "position": 4,
+            "track": {
+              "id": "yt:CCCCCCCCCC2",
+              "title": "CCCCCCCCCC2",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "C"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "CCCCCCCCCC2",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "CCCCCCCCCC2"
+            }
+          }
+        ],
+        "nextCursor": "eyJ2ZXJzaW9uIjoxLCJnZW5lcmF0aW9uSWQiOiJmaXh0dXJlLWNyb3NzLXBhZ2UiLCJzZXF1ZW5jZUlkIjoiNWQ3M2M2MjMtZDExZC00ZmRhLTk0M2UtMGUwMWNlNWIzYmU3IiwibmV4dFBvc2l0aW9uIjo1LCJuZXh0U291cmNlQ3Vyc29yIjo3fQ",
+        "tail": [
+          {
+            "source": "youtube",
+            "id": "EEEEEEEEEE2",
+            "position": 3
+          },
+          {
+            "source": "youtube",
+            "id": "CCCCCCCCCC2",
+            "position": 4
+          }
+        ]
+      }
+    },
+    {
+      "name": "unicode-credit",
+      "previousArtistKeys": [
+        "a"
+      ],
+      "admitted": [
+        {
+          "id": "AAAAAAAAAA3",
+          "artist": "Ａ"
+        },
+        {
+          "id": "BBBBBBBBBB3",
+          "artist": "B"
+        },
+        {
+          "id": "CCCCCCCCCC3",
+          "artist": "C"
+        }
+      ],
+      "expectedIds": [
+        "BBBBBBBBBB3",
+        "CCCCCCCCCC3",
+        "AAAAAAAAAA3"
+      ],
+      "orderedWave": {
+        "version": 1,
+        "sequenceId": "5d73c623-d11d-4fda-943e-0e01ce5b3be7",
+        "startPosition": 1,
+        "items": [
+          {
+            "position": 1,
+            "track": {
+              "id": "yt:BBBBBBBBBB3",
+              "title": "BBBBBBBBBB3",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "B"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "BBBBBBBBBB3",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "BBBBBBBBBB3"
+            }
+          },
+          {
+            "position": 2,
+            "track": {
+              "id": "yt:CCCCCCCCCC3",
+              "title": "CCCCCCCCCC3",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "C"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "CCCCCCCCCC3",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "CCCCCCCCCC3"
+            }
+          },
+          {
+            "position": 3,
+            "track": {
+              "id": "yt:AAAAAAAAAA3",
+              "title": "AAAAAAAAAA3",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "Ａ"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "AAAAAAAAAA3",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "AAAAAAAAAA3"
+            }
+          }
+        ],
+        "nextCursor": "eyJ2ZXJzaW9uIjoxLCJnZW5lcmF0aW9uSWQiOiJmaXh0dXJlLXVuaWNvZGUtY3JlZGl0Iiwic2VxdWVuY2VJZCI6IjVkNzNjNjIzLWQxMWQtNGZkYS05NDNlLTBlMDFjZTViM2JlNyIsIm5leHRQb3NpdGlvbiI6NCwibmV4dFNvdXJjZUN1cnNvciI6N30",
+        "tail": [
+          {
+            "source": "youtube",
+            "id": "CCCCCCCCCC3",
+            "position": 2
+          },
+          {
+            "source": "youtube",
+            "id": "AAAAAAAAAA3",
+            "position": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown-neutral",
+      "previousArtistKeys": [
+        null
+      ],
+      "admitted": [
+        {
+          "id": "UUUUUUUUUU1",
+          "artist": "Unknown"
+        },
+        {
+          "id": "UUUUUUUUUU2",
+          "artist": "Unknown Artist"
+        },
+        {
+          "id": "AAAAAAAAAA4",
+          "artist": "A"
+        }
+      ],
+      "expectedIds": [
+        "UUUUUUUUUU1",
+        "UUUUUUUUUU2",
+        "AAAAAAAAAA4"
+      ],
+      "orderedWave": {
+        "version": 1,
+        "sequenceId": "5d73c623-d11d-4fda-943e-0e01ce5b3be7",
+        "startPosition": 1,
+        "items": [
+          {
+            "position": 1,
+            "track": {
+              "id": "yt:UUUUUUUUUU1",
+              "title": "UUUUUUUUUU1",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "Unknown"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "UUUUUUUUUU1",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "UUUUUUUUUU1"
+            }
+          },
+          {
+            "position": 2,
+            "track": {
+              "id": "yt:UUUUUUUUUU2",
+              "title": "UUUUUUUUUU2",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "Unknown Artist"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "UUUUUUUUUU2",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "UUUUUUUUUU2"
+            }
+          },
+          {
+            "position": 3,
+            "track": {
+              "id": "yt:AAAAAAAAAA4",
+              "title": "AAAAAAAAAA4",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "A"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "AAAAAAAAAA4",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "AAAAAAAAAA4"
+            }
+          }
+        ],
+        "nextCursor": "eyJ2ZXJzaW9uIjoxLCJnZW5lcmF0aW9uSWQiOiJmaXh0dXJlLXVua25vd24tbmV1dHJhbCIsInNlcXVlbmNlSWQiOiI1ZDczYzYyMy1kMTFkLTRmZGEtOTQzZS0wZTAxY2U1YjNiZTciLCJuZXh0UG9zaXRpb24iOjQsIm5leHRTb3VyY2VDdXJzb3IiOjd9",
+        "tail": [
+          {
+            "source": "youtube",
+            "id": "UUUUUUUUUU2",
+            "position": 2
+          },
+          {
+            "source": "youtube",
+            "id": "AAAAAAAAAA4",
+            "position": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "single-artist",
+      "previousArtistKeys": [
+        "a",
+        "a"
+      ],
+      "admitted": [
+        {
+          "id": "AAAAAAAAAA5",
+          "artist": "A"
+        },
+        {
+          "id": "AAAAAAAAAA6",
+          "artist": "A"
+        },
+        {
+          "id": "AAAAAAAAAA7",
+          "artist": "A"
+        }
+      ],
+      "expectedIds": [
+        "AAAAAAAAAA5",
+        "AAAAAAAAAA6",
+        "AAAAAAAAAA7"
+      ],
+      "orderedWave": {
+        "version": 1,
+        "sequenceId": "5d73c623-d11d-4fda-943e-0e01ce5b3be7",
+        "startPosition": 2,
+        "items": [
+          {
+            "position": 2,
+            "track": {
+              "id": "yt:AAAAAAAAAA5",
+              "title": "AAAAAAAAAA5",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "A"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "AAAAAAAAAA5",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "AAAAAAAAAA5"
+            }
+          },
+          {
+            "position": 3,
+            "track": {
+              "id": "yt:AAAAAAAAAA6",
+              "title": "AAAAAAAAAA6",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "A"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "AAAAAAAAAA6",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "AAAAAAAAAA6"
+            }
+          },
+          {
+            "position": 4,
+            "track": {
+              "id": "yt:AAAAAAAAAA7",
+              "title": "AAAAAAAAAA7",
+              "duration": 180,
+              "trackNo": null,
+              "artist": {
+                "id": null,
+                "name": "A"
+              },
+              "album": {
+                "id": null,
+                "title": "Fixture album",
+                "coverArt": null
+              },
+              "source": "youtube",
+              "streamSource": "youtube",
+              "provider": {
+                "youtubeVideoId": "AAAAAAAAAA7",
+                "tidalTrackId": null
+              },
+              "youtubeVideoId": "AAAAAAAAAA7"
+            }
+          }
+        ],
+        "nextCursor": "eyJ2ZXJzaW9uIjoxLCJnZW5lcmF0aW9uSWQiOiJmaXh0dXJlLXNpbmdsZS1hcnRpc3QiLCJzZXF1ZW5jZUlkIjoiNWQ3M2M2MjMtZDExZC00ZmRhLTk0M2UtMGUwMWNlNWIzYmU3IiwibmV4dFBvc2l0aW9uIjo1LCJuZXh0U291cmNlQ3Vyc29yIjo3fQ",
+        "tail": [
+          {
+            "source": "youtube",
+            "id": "AAAAAAAAAA6",
+            "position": 3
+          },
+          {
+            "source": "youtube",
+            "id": "AAAAAAAAAA7",
+            "position": 4
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { RecommendationEngine } from "../engine";
 import type { RecommendationCandidate, ScoredRecommendation } from "../types";
 import { orderWaveRecommendations } from "../orderedWave";
+import type { WaveSequenceContextV1 } from "../waveSequence";
 
 function candidate(
     id: string,
@@ -130,6 +131,52 @@ describe("unified recommendation engine", () => {
                     "yt:e",
                     "yt:c",
                 ]);
+        },
+    );
+
+    it.each(["baseline", "shadow", "active"] as const)(
+        "persists sequence context with only the served order in %s mode",
+        async (mode) => {
+            const context: WaveSequenceContextV1 = {
+                version: 1,
+                sequenceId: "5d73c623-d11d-4fda-943e-0e01ce5b3be7",
+                nextPosition: 2,
+                nextSourceCursor: 1,
+                intent: { direction: "for-you", mood: null, language: "any" },
+                tail: [],
+            };
+            const deps = {
+                ...dependencies(mode),
+                finalizeWaveRecommendations: (
+                    rows: readonly ScoredRecommendation[],
+                ) => ({
+                    recommendations: [...rows].reverse(),
+                    orderedWave: context,
+                }),
+            };
+            deps.hybridRolloutPercent = 50;
+            const result = await new RecommendationEngine(deps).recommend(
+                request,
+            );
+            await new Promise((resolve) => setImmediate(resolve));
+            const served = deps.recordGeneration.mock.calls.filter(
+                ([row]) => row.served,
+            );
+            const shadow = deps.recordGeneration.mock.calls.filter(
+                ([row]) => !row.served,
+            );
+            expect(served).toHaveLength(1);
+            expect(served[0][0].context).toEqual(
+                expect.objectContaining({ orderedWave: context }),
+            );
+            expect(result.orderedWave).toEqual(context);
+            expect(
+                served[0][0].recommendations.map(
+                    (row: ScoredRecommendation) => row.track,
+                ),
+            ).toEqual(result.tracks);
+            for (const [row] of shadow)
+                expect(row.context).not.toHaveProperty("orderedWave");
         },
     );
 

@@ -50,6 +50,7 @@ jest.mock("../../utils/logger", () => {
 });
 
 import router from "../personalized";
+import { WaveSequenceError } from "../../services/recommendations/waveSequence";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
 
 const app = createRouteTestApp("/api/personalized", router);
@@ -101,6 +102,147 @@ describe("GET /api/personalized/home", () => {
         expect(response.status).toBe(401);
         expect(mockGetPersonalizedFeed).not.toHaveBeenCalled();
     });
+
+    it("forwards an explicit initial ordered Wave opt-in as numeric version1", async () => {
+        const response = await request(app)
+            .get("/api/personalized/home")
+            .query({
+                surface: "wave",
+                sessionId: "explicit-wave",
+                waveSequenceVersion: "1",
+                cursor: "0",
+            })
+            .set("x-test-auth", "ok");
+        expect(response.status).toBe(200);
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                userId: "user-1",
+                sessionId: "explicit-wave",
+                waveSequenceVersion: 1,
+                cursor: 0,
+            }),
+        );
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).not.toHaveProperty(
+            "waveSequenceTail",
+        );
+    });
+
+    it("decodes a bounded continuation tail without trusting its contents", async () => {
+        const tail = [{ source: "library", id: "last", position: 24 }];
+        const response = await request(app)
+            .get("/api/personalized/home")
+            .query({
+                surface: "wave",
+                sessionId: "explicit-wave",
+                waveSequenceVersion: "1",
+                waveSequenceCursor: "opaque-cursor",
+                waveSequenceTail: JSON.stringify(tail),
+            })
+            .set("x-test-auth", "ok");
+        expect(response.status).toBe(200);
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                waveSequenceVersion: 1,
+                waveSequenceCursor: "opaque-cursor",
+                waveSequenceTail: tail,
+            }),
+        );
+    });
+
+    it.each([
+        { waveSequenceVersion: "1" },
+        { surface: "home", sessionId: "explicit", waveSequenceVersion: "1" },
+        { surface: "wave", waveSequenceVersion: "1" },
+        { surface: "wave", sessionId: "explicit", waveSequenceVersion: "2" },
+        {
+            surface: "wave",
+            sessionId: "explicit",
+            waveSequenceCursor: "cursor",
+        },
+        {
+            surface: "wave",
+            sessionId: "explicit",
+            waveSequenceVersion: "1",
+            waveSequenceCursor: "cursor",
+        },
+        {
+            surface: "wave",
+            sessionId: "explicit",
+            waveSequenceVersion: "1",
+            waveSequenceTail: "[]",
+        },
+        {
+            surface: "wave",
+            sessionId: "explicit",
+            waveSequenceVersion: "1",
+            cursor: "1",
+        },
+        {
+            surface: "wave",
+            sessionId: "explicit",
+            waveSequenceVersion: "1",
+            waveSequenceCursor: "cursor",
+            waveSequenceTail: "{",
+        },
+        {
+            surface: "wave",
+            sessionId: "explicit",
+            waveSequenceVersion: "1",
+            waveSequenceCursor: "x".repeat(1025),
+            waveSequenceTail: "[]",
+        },
+        {
+            surface: "wave",
+            sessionId: "explicit",
+            waveSequenceVersion: "1",
+            waveSequenceCursor: "cursor",
+            waveSequenceTail: " ".repeat(4095) + "[]",
+        },
+        {
+            surface: "wave",
+            sessionId: "explicit",
+            waveSequenceVersion: ["1", "1"],
+        },
+    ])(
+        "rejects malformed ordered Wave query %j before service work",
+        async (query) => {
+            const response = await request(app)
+                .get("/api/personalized/home")
+                .query(query)
+                .set("x-test-auth", "ok");
+            expect(response.status).toBe(400);
+            expect(response.body.code).toBe("INVALID_QUERY");
+            expect(mockGetPersonalizedFeed).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([
+        "invalid_cursor",
+        "invalid_tail",
+        "expired",
+        "intent_changed",
+    ] as const)(
+        "returns a static reset boundary for service failure %s",
+        async (reason) => {
+            mockGetPersonalizedFeed.mockRejectedValueOnce(
+                new WaveSequenceError(reason),
+            );
+            const response = await request(app)
+                .get("/api/personalized/home")
+                .query({
+                    surface: "wave",
+                    sessionId: "explicit",
+                    waveSequenceVersion: "1",
+                })
+                .set("x-test-auth", "ok");
+            expect(response.status).toBe(409);
+            expect(response.body).toEqual({
+                error: "Wave sequence must be restarted",
+                code: "WAVE_SEQUENCE_RESET",
+                reason,
+            });
+        },
+    );
 
     it("passes explicit playback diagnostics to the recommendation engine", async () => {
         const response = await request(app)

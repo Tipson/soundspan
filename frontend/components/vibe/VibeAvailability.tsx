@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioWaveform, Loader2, Pause, Play, RotateCcw } from "lucide-react";
 import { usePersonalizedHomeFeed } from "@/features/home/hooks/usePersonalizedHomeFeed";
 import { selectWaveTracks } from "@/features/home/selectWaveTracks";
+import { readOrderedWavePage } from "@/lib/audio/orderedWaveSequence";
+import { orderedWaveOwner } from "@/lib/audio/fetchPersonalizedWaveFeed";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
 import type {
     PersonalizedHomeMood,
     PersonalizedHomeLanguage,
@@ -161,10 +164,19 @@ export function VibeProviderFallback() {
         return () => window.clearTimeout(timeout);
     }, [pendingRetune]);
     const tracks = useMemo(
-        () => selectWaveTracks(data?.shelves, requestedMode),
-        [data?.shelves, requestedMode],
+        () => selectWaveTracks(data?.shelves, requestedMode, data?.orderedWave),
+        [data, requestedMode],
     );
-    const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
+    const queue = useMemo(
+        () =>
+            tracks.map((track) =>
+                toProviderPlaybackTrack(track, {
+                    generationId: data?.generationId,
+                    sessionId: getRecommendationSessionId(),
+                }),
+            ),
+        [tracks, data?.generationId],
+    );
     const handoffStartWarmup = useWaveStartWarmup(
         tracks[0]?.youtubeVideoId ?? null,
         Boolean(ownerId) &&
@@ -222,7 +234,19 @@ export function VibeProviderFallback() {
         // immediately replaying the same song when it appears in both feeds.
         setIsShuffle(false);
         setShuffleIndices([]);
-        playTracks(retunedQueue, 0, true);
+        const page = readOrderedWavePage(data ?? {});
+        if (page)
+            playTracks(retunedQueue, 0, true, {
+                orderedWave: {
+                    page,
+                    owner: orderedWaveOwner(
+                        requestedMode,
+                        requestedMood,
+                        requestedLanguage,
+                    ),
+                },
+            });
+        else playTracks(retunedQueue, 0, true);
         setVibeMode(true);
         setVibeSourceFeatures(null);
         setVibeQueueIds(retunedQueue.map((track) => track.id));
@@ -232,6 +256,7 @@ export function VibeProviderFallback() {
         queueMicrotask(() => setRetuneNotice("updated"));
     }, [
         currentTrack?.id,
+        data,
         isError,
         isLoading,
         playTracks,
@@ -350,12 +375,25 @@ export function VibeProviderFallback() {
         setIsShuffle(false);
         setShuffleIndices([]);
         handoffStartWarmup();
-        playTracks(queue, 0, true);
+        const page = readOrderedWavePage(data ?? {});
+        if (page)
+            playTracks(queue, 0, true, {
+                orderedWave: {
+                    page,
+                    owner: orderedWaveOwner(
+                        activeMode,
+                        activeMood,
+                        activeLanguage,
+                    ),
+                },
+            });
+        else playTracks(queue, 0, true);
         setVibeMode(true);
         setVibeSourceFeatures(null);
         setVibeQueueIds(queue.map((track) => track.id));
     }, [
         handoffStartWarmup,
+        data,
         playTracks,
         queue,
         activeMode,

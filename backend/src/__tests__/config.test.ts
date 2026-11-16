@@ -120,6 +120,37 @@ describe("config module", () => {
         }
     }
 
+    it("disables ordered Wave by default and accepts only explicit valid opt-in", async () => {
+        expect(
+            (
+                await loadConfigModule({
+                    RECOMMENDATION_WAVE_SEQUENCE_ENABLED: undefined,
+                })
+            ).config.recommendations.waveSequenceEnabled,
+        ).toBe(false);
+        expect(
+            (
+                await loadConfigModule({
+                    RECOMMENDATION_WAVE_SEQUENCE_ENABLED: "false",
+                })
+            ).config.recommendations.waveSequenceEnabled,
+        ).toBe(false);
+        expect(
+            (
+                await loadConfigModule({
+                    RECOMMENDATION_WAVE_SEQUENCE_ENABLED: "true",
+                })
+            ).config.recommendations.waveSequenceEnabled,
+        ).toBe(true);
+    });
+
+    it("rejects malformed ordered Wave enablement at startup", async () => {
+        await expectStartupValidationFailure(
+            { RECOMMENDATION_WAVE_SEQUENCE_ENABLED: "enabled" },
+            "RECOMMENDATION_WAVE_SEQUENCE_ENABLED",
+        );
+    });
+
     it("builds config from validated env with explicit integrations", async () => {
         const { config } = await loadConfigModule({
             PORT: "4010",
@@ -248,6 +279,7 @@ describe("config module", () => {
     it("uses safe hybrid recommendation and remote-analysis defaults", async () => {
         const { config } = await loadConfigModule({
             RECOMMENDATION_ENGINE_MODE: undefined,
+            RECOMMENDATION_WAVE_SEQUENCE_ENABLED: undefined,
             RECOMMENDATION_HYBRID_ROLLOUT_PERCENT: undefined,
             RECOMMENDATION_EXPLORATION_PERCENT: undefined,
             REMOTE_ANALYSIS_ENABLED: undefined,
@@ -257,6 +289,7 @@ describe("config module", () => {
 
         expect(config.recommendations).toEqual({
             mode: "shadow",
+            waveSequenceEnabled: false,
             hybridRolloutPercent: 0,
             explorationRate: 0.1,
             remoteAnalysisEnabled: false,
@@ -268,6 +301,7 @@ describe("config module", () => {
     it("parses explicit hybrid recommendation controls", async () => {
         const { config } = await loadConfigModule({
             RECOMMENDATION_ENGINE_MODE: "active",
+            RECOMMENDATION_WAVE_SEQUENCE_ENABLED: "true",
             RECOMMENDATION_HYBRID_ROLLOUT_PERCENT: "25",
             RECOMMENDATION_EXPLORATION_PERCENT: "15",
             REMOTE_ANALYSIS_ENABLED: "true",
@@ -277,6 +311,7 @@ describe("config module", () => {
 
         expect(config.recommendations).toEqual({
             mode: "active",
+            waveSequenceEnabled: true,
             hybridRolloutPercent: 25,
             explorationRate: 0.15,
             remoteAnalysisEnabled: true,

@@ -51,6 +51,7 @@ jest.mock("../../utils/db", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        recommendations: { waveSequenceEnabled: false },
         playCreation: { newCreationsEnabled: false, replaySupported: false },
         loudnessTargetLufs: -18,
         features: {
@@ -65,6 +66,7 @@ jest.mock("../../config", () => ({
 
 import { featureDetection } from "../../services/featureDetection";
 import { prisma } from "../../utils/db";
+import { config } from "../../config";
 import router from "../system";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
 
@@ -77,6 +79,23 @@ describe("system routes integration", () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        config.recommendations.waveSequenceEnabled = false;
+    });
+
+    it("advertises ordered Wave version1 only when enabled and never caches capability", async () => {
+        mockGetFeatures.mockResolvedValue({ clapAvailable: true });
+        const read = () =>
+            request(app)
+                .get("/api/system/features")
+                .set(AUTH_HEADER, AUTH_VALUE);
+        const off = await read();
+        expect(off.status).toBe(200);
+        expect(off.body).not.toHaveProperty("orderedWave");
+        config.recommendations.waveSequenceEnabled = true;
+        const on = await read();
+        expect(on.status).toBe(200);
+        expect(on.body.orderedWave).toEqual({ version: 1 });
+        expect(on.headers["cache-control"]).toBe("private, no-store");
     });
 
     it.each(["/api/system/features", "/api/system/ui-settings"])(

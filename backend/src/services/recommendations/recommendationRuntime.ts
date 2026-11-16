@@ -23,6 +23,7 @@ import { loadSavedCanonicalKeys } from "./savedRecordings";
 import { UnifiedRecommendationService } from "./recommendationService";
 import { loadRadioContinuationCandidates } from "./radioContinuationRuntime";
 import { loadVerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
+import { loadWaveSequenceGeneration } from "./waveSequenceStore";
 import { hasNativeRecommendationIdentity } from "./nativeCandidates";
 import type { RecommendRequest, RecommendationCandidate } from "./types";
 
@@ -122,6 +123,8 @@ async function loadSimilarCandidates(request: RecommendRequest) {
 }
 
 export const unifiedRecommendationService = new UnifiedRecommendationService({
+    waveSequenceEnabled: config.recommendations.waveSequenceEnabled,
+    loadWaveSequenceGeneration,
     loadRadioCandidates: loadRadioContinuationCandidates,
     loadSavedCanonicalKeys,
     loadSavedMoodCandidates,
