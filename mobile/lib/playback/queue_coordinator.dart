@@ -9,7 +9,15 @@ import '../core/session/session_authority.dart';
 import 'playback_controller.dart';
 import 'playback_engine.dart';
 import 'native_loudness_controller.dart';
+import 'finite_queue_admission_coordinator.dart';
+import 'finite_queue_admission_api.dart';
 import 'recommendation_queue_policy.dart';
+
+typedef _AdmissionChoice = ({
+  String? next,
+  bool unavailable,
+  bool Function()? permitted,
+});
 
 /// One service-owned occurrence queue; widgets only send commands.
 final class QueueCoordinator implements PlaybackController {
@@ -30,6 +38,12 @@ final class QueueCoordinator implements PlaybackController {
   final SessionAuthority authority;
   final PlaybackEngine engine;
   final PrepareAudio prepare;
+  FiniteQueueAdmissionCoordinator? finiteAdmission;
+  static const _admissionUnavailable = AppFailure(
+    code: 'recommendation_admission_unavailable',
+    message: 'Не удалось проверить следующую рекомендацию. Повторите попытку.',
+    retryable: true,
+  );
   final Duration prepareTimeout;
   final Duration Function() _elapsed;
   final Random _random;
@@ -58,6 +72,7 @@ final class QueueCoordinator implements PlaybackController {
   int _queueEpoch = 0;
   int _queueBoundary = 0;
   int _intentRevision = 0;
+  int _advanceRevision = 0;
   final _recommendationExclusions = <String, Set<String>>{};
   final _closedRecommendationScopes = <String>{};
   static const _maxRecommendationExclusions =
@@ -316,6 +331,7 @@ final class QueueCoordinator implements PlaybackController {
       replacementIntent = ++_replacementIntent;
       _naturalContinuation = null;
       if (!command.automaticRecommendation) {
+        finiteAdmission?.invalidateQueue();
         _pendingManualReplacementIntent = replacementIntent;
       }
       replacementClock = Stopwatch()..start();
@@ -323,7 +339,21 @@ final class QueueCoordinator implements PlaybackController {
     if (command is Enqueue &&
         !command.automaticRecommendation &&
         authority.isCurrent(command.fence)) {
+      finiteAdmission?.invalidateQueue();
       _naturalContinuation = null;
+    }
+    if (command is PlayEntry ||
+        command is Previous ||
+        command is Seek ||
+        command is Remove ||
+        command is Reorder ||
+        command is SetShuffle ||
+        command is SetRepeat ||
+        command is Pause ||
+        command is Resume ||
+        command is RestoreQueue) {
+      finiteAdmission?.invalidateQueue();
+      ++_advanceRevision;
     }
     if (command is Clear) {
       await _clear();
@@ -415,7 +445,9 @@ final class QueueCoordinator implements PlaybackController {
           final budget = prepareTimeout < const Duration(seconds: 10)
               ? prepareTimeout
               : const Duration(seconds: 10);
-          await authority.assertCurrent(fence).timeout(budget);
+          if (!command.automaticRecommendation || finiteAdmission == null) {
+            await authority.assertCurrent(fence).timeout(budget);
+          }
         } catch (error) {
           if (error is TimeoutException) {
             // This intent has finished admission. Its own manual marker must
@@ -459,7 +491,7 @@ final class QueueCoordinator implements PlaybackController {
           return;
         }
         if (command.entries.isEmpty) {
-          await _clear();
+          if (!command.automaticRecommendation) await _clear();
           return;
         }
         final admission = snapshot;
@@ -474,6 +506,30 @@ final class QueueCoordinator implements PlaybackController {
                   )
                   .toList();
         if (incoming.isEmpty) return;
+        String? automaticInitial;
+        bool Function()? replacementPermit;
+        if (command.automaticRecommendation && finiteAdmission != null) {
+          final candidates = List<QueueEntry>.of(incoming);
+          if (_shuffle) candidates.shuffle(_random);
+          final choice = await _admitAutomatic(
+            admission,
+            candidates,
+            emptyQueueFence: fence,
+          );
+          if (_disposed ||
+              _replacementIntent != replacementIntent ||
+              !authority.isCurrent(fence) ||
+              !_matchesLineage(fence, command.expectedLineage!)) {
+            return;
+          }
+          if (choice.unavailable || choice.next == null) {
+            _failure = _admissionUnavailable;
+            _publish();
+            return;
+          }
+          automaticInitial = choice.next;
+          replacementPermit = choice.permitted;
+        }
         if (!command.automaticRecommendation) {
           _recommendationExclusions.clear();
           _closedRecommendationScopes.clear();
@@ -497,20 +553,56 @@ final class QueueCoordinator implements PlaybackController {
         _intentRevision++;
         final initial = command.initialEntryId;
         await _select(
-          initial != null && _entries.any((entry) => entry.entryId == initial)
-              ? initial
-              : _entries.first.entryId,
+          automaticInitial ??
+              (initial != null &&
+                      _entries.any((entry) => entry.entryId == initial)
+                  ? initial
+                  : _entries.first.entryId),
           preparationClock: replacementClock,
+          admissionCurrent: replacementPermit == null
+              ? null
+              : () =>
+                    replacementPermit!() &&
+                    _replacementIntent == replacementIntent,
         );
       case Enqueue():
         final boundary = _queueBoundary;
+        final captured = snapshot;
+        final selection =
+            command.automaticRecommendation &&
+                (_entries.isEmpty || _acceptsContinuation(command.fence))
+            ? ++_advanceRevision
+            : null;
+        final replacement = _replacementIntent;
+        _AdmissionChoice? choice;
         try {
-          await authority.assertCurrent(command.fence);
+          if (selection != null && finiteAdmission != null) {
+            choice = await _admitAutomatic(
+              captured,
+              command.entries
+                  .where(
+                    (entry) => captured.allowsRecommendation(
+                      entry.track.ref,
+                      entry.context,
+                    ),
+                  )
+                  .toList(),
+              emptyQueueFence: command.fence,
+            );
+          } else {
+            final check = authority.assertCurrent(command.fence);
+            await (command.automaticRecommendation
+                ? check.timeout(const Duration(seconds: 17))
+                : check);
+          }
         } catch (_) {
           if (command.automaticRecommendation) return;
           rethrow;
         }
         if (_disposed ||
+            (selection != null &&
+                (selection != _advanceRevision ||
+                    replacement != _replacementIntent)) ||
             _queueBoundary != boundary ||
             !authority.isCurrent(command.fence) ||
             (command.expectedLineage != null &&
@@ -519,6 +611,11 @@ final class QueueCoordinator implements PlaybackController {
                   command.expectedLineage!,
                   allowPendingManual: !command.automaticRecommendation,
                 ))) {
+          return;
+        }
+        if (choice != null && (choice.unavailable || choice.next == null)) {
+          _failure = _admissionUnavailable;
+          _publish();
           return;
         }
         if (_fence != null && _fence != command.fence) {
@@ -540,6 +637,10 @@ final class QueueCoordinator implements PlaybackController {
                   )
                   .toList();
         if (incoming.isEmpty) return;
+        if (choice?.next != null &&
+            !incoming.any((entry) => entry.entryId == choice!.next)) {
+          return;
+        }
         if (!command.automaticRecommendation) {
           _recommendationExclusions.clear();
           _closedRecommendationScopes.clear();
@@ -552,7 +653,15 @@ final class QueueCoordinator implements PlaybackController {
           if (_shuffle) _order.shuffle(_random);
           _intent = false;
           _intentRevision++;
-          await _select(_entries.first.entryId);
+          await _select(
+            choice?.next ?? _entries.first.entryId,
+            admissionCurrent: choice?.permitted == null
+                ? null
+                : () =>
+                      choice!.permitted!() &&
+                      selection == _advanceRevision &&
+                      replacement == _replacementIntent,
+          );
           return;
         }
         if (!command.automaticRecommendation) ++_queueEpoch;
@@ -573,7 +682,15 @@ final class QueueCoordinator implements PlaybackController {
           _naturalContinuation = null;
           _intent = true;
           _intentRevision++;
-          await _select(ids.first);
+          await _select(
+            choice?.next ?? ids.first,
+            admissionCurrent: choice?.permitted == null
+                ? null
+                : () =>
+                      choice!.permitted!() &&
+                      selection == _advanceRevision &&
+                      replacement == _replacementIntent,
+          );
         } else {
           _publish();
         }
@@ -683,27 +800,15 @@ final class QueueCoordinator implements PlaybackController {
           );
         }
         if (command.fence != null) {
-          final beforeAdmission = _generation;
           if (_current != command.expectedEntryId || _fence != command.fence) {
             return;
           }
-          final selectionIntent = ++_replacementIntent;
-          _naturalContinuation = null;
-          try {
-            await authority.assertCurrent(command.fence!);
-          } catch (_) {
-            return;
-          }
-          if (!_valid(beforeAdmission, command.fence!) ||
-              _current != command.expectedEntryId ||
-              _replacementIntent != selectionIntent) {
-            return;
-          }
-        } else {
-          ++_replacementIntent;
-          _naturalContinuation = null;
         }
-        await _advance(completion: false);
+        _naturalContinuation = null;
+        await _advance(
+          completion: false,
+          requireOwnerAdmission: command.fence != null,
+        );
       case Previous():
         ++_replacementIntent;
         _naturalContinuation = null;
@@ -815,6 +920,18 @@ final class QueueCoordinator implements PlaybackController {
       ?.context
       .recommendationScopeKey;
 
+  bool _acceptsContinuation(SessionFence fence) {
+    final continuation = _naturalContinuation;
+    return continuation != null &&
+        _valid(continuation.generation, continuation.fence) &&
+        continuation.fence == fence &&
+        continuation.lineage == _queueEpoch &&
+        continuation.revision == _intentRevision &&
+        continuation.entryId == _current &&
+        _processing == PlaybackProcessing.completed &&
+        !_intent;
+  }
+
   void _pruneExcludedFuture() {
     final index = _order.indexOf(_current ?? '');
     if (index < 0) return;
@@ -836,7 +953,9 @@ final class QueueCoordinator implements PlaybackController {
     String id, {
     Duration initialPosition = Duration.zero,
     Stopwatch? preparationClock,
+    bool Function()? admissionCurrent,
   }) async {
+    if (admissionCurrent?.call() == false) return;
     _cancelPlayStartWatchdog();
     final old = _current;
     _current = id;
@@ -872,6 +991,7 @@ final class QueueCoordinator implements PlaybackController {
       await withinDeadline(() async => previousResource?.revoke());
       await withinDeadline(() => stop);
       if (!_valid(generation, fence)) return;
+      if (admissionCurrent?.call() == false) throw _admissionUnavailable;
       final entry = _entries.firstWhere((e) => e.entryId == id);
       if (!entry.track.playable) {
         throw const AppFailure(
@@ -890,6 +1010,7 @@ final class QueueCoordinator implements PlaybackController {
         await resource.revoke();
         return;
       }
+      if (admissionCurrent?.call() == false) throw _admissionUnavailable;
       _resource = resource;
       handedToQueue = true;
       await withinDeadline(() => authority.assertCurrent(fence));
@@ -897,8 +1018,10 @@ final class QueueCoordinator implements PlaybackController {
         // A replacement/Clear already released the source owned by the queue.
         return;
       }
+      if (admissionCurrent?.call() == false) throw _admissionUnavailable;
       await withinDeadline(() => engine.load(prepared.uri, generation));
       if (!_valid(generation, fence)) return;
+      if (admissionCurrent?.call() == false) throw _admissionUnavailable;
       await withinDeadline(() => engine.setVolume(_volume));
       if (!_valid(generation, fence)) return;
       int? appliedRevision;
@@ -916,11 +1039,13 @@ final class QueueCoordinator implements PlaybackController {
       _processing = PlaybackProcessing.ready;
       _publish();
       if (_intent) {
+        if (admissionCurrent?.call() == false) throw _admissionUnavailable;
         await withinDeadline(
           () => _play(
             generation,
             fence,
             budget: prepareTimeout - preparationClock!.elapsed,
+            admissionCurrent: admissionCurrent,
           ),
         );
       }
@@ -955,6 +1080,7 @@ final class QueueCoordinator implements PlaybackController {
     int generation,
     SessionFence fence, {
     Duration? budget,
+    bool Function()? admissionCurrent,
   }) async {
     if (_focusSuspended) return;
     _cancelPlayStartWatchdog();
@@ -999,6 +1125,10 @@ final class QueueCoordinator implements PlaybackController {
               : null,
         );
       }
+      return;
+    }
+    if (admissionCurrent?.call() == false) {
+      _fail(failure: _admissionUnavailable);
       return;
     }
     _playStartPosition = _position;
@@ -1129,10 +1259,128 @@ final class QueueCoordinator implements PlaybackController {
     _publish(PlaybackEventKind.failure);
   }
 
-  Future<void> _advance({required bool completion}) async {
+  Future<_AdmissionChoice> _admitAutomatic(
+    QueueSnapshot captured,
+    List<QueueEntry> candidates, {
+    SessionFence? emptyQueueFence,
+    bool requireOwnerAdmission = false,
+  }) async {
+    final policy = finiteAdmission;
+    if (policy == null) {
+      return (
+        next: candidates.firstOrNull?.entryId,
+        unavailable: false,
+        permitted: null,
+      );
+    }
+    final automatic = candidates
+        .takeWhile((entry) => entry.context.recommendationScopeKey != null)
+        .toList();
+    final manual = candidates.skip(automatic.length).firstOrNull?.entryId;
+    if (automatic.isEmpty && !requireOwnerAdmission) {
+      return (next: manual, unavailable: false, permitted: null);
+    }
+    final refs = <FiniteQueueAdmissionReference>[];
+    final referenced = <String>[];
+    for (final entry in automatic) {
+      final ref = FiniteQueueAdmissionReference.fromTrack(
+        entry.track.ref,
+        generationId: entry.context.recommendationGenerationId,
+      );
+      if (ref != null) {
+        refs.add(ref);
+        referenced.add(entry.entryId);
+      }
+    }
+    final result = await policy.admit(
+      captured: captured,
+      references: refs,
+      emptyQueueFence: emptyQueueFence,
+    );
+    if (!result.isCurrent) {
+      return (next: null, unavailable: true, permitted: null);
+    }
+    final epoch = policy.mutationEpoch, queue = policy.queueEpoch;
+    bool permitted() =>
+        identical(finiteAdmission, policy) &&
+        policy.isMutationCurrent(epoch) &&
+        policy.queueEpoch == queue;
+    if (automatic.isEmpty) {
+      return (
+        next: manual,
+        unavailable: result.mode == FiniteQueueAdmissionMode.unavailable,
+        permitted: permitted,
+      );
+    }
+    if (result.mode == FiniteQueueAdmissionMode.unavailable) {
+      return (
+        next: manual,
+        unavailable: manual == null,
+        permitted: requireOwnerAdmission ? permitted : null,
+      );
+    }
+    String? next;
+    if (result.mode == FiniteQueueAdmissionMode.legacyExact) {
+      next = automatic.firstOrNull?.entryId;
+    } else {
+      for (var i = 0; i < referenced.length; i++) {
+        if (result.stateAt(i) == FiniteQueueAdmissionState.allowed) {
+          next = referenced[i];
+          break;
+        }
+      }
+    }
+    if (next == null) {
+      final unavailable =
+          refs.isEmpty ||
+          List.generate(
+            refs.length,
+            result.stateAt,
+          ).contains(FiniteQueueAdmissionState.unavailable);
+      return (
+        next: manual,
+        unavailable: manual == null && unavailable,
+        permitted: requireOwnerAdmission ? permitted : null,
+      );
+    }
+    return (next: next, unavailable: false, permitted: permitted);
+  }
+
+  Future<void> _advance({
+    required bool completion,
+    bool requireOwnerAdmission = false,
+  }) async {
     if (_current == null) return;
+    // Both native completion and Next reserve before their first await.
+    final operation = ++_advanceRevision;
+    final replacement = ++_replacementIntent;
     final index = _order.indexOf(_current!);
     final admission = snapshot;
+    final intentRevision = _intentRevision;
+    bool current() =>
+        operation == _advanceRevision &&
+        replacement == _replacementIntent &&
+        admission.fence != null &&
+        _valid(admission.generation, admission.fence!) &&
+        _queueEpoch == admission.lineage &&
+        _intentRevision == intentRevision &&
+        _current == admission.currentEntryId;
+    // With a finite coordinator this check is inside its sole deadline below,
+    // including owner-only manual successors (an empty recording batch).
+    if (requireOwnerAdmission && finiteAdmission == null) {
+      try {
+        await authority
+            .assertCurrent(admission.fence!)
+            .timeout(const Duration(seconds: 17));
+      } catch (_) {
+        if (current()) {
+          _failure = _admissionUnavailable;
+          _publish();
+        }
+        return;
+      }
+      if (!current()) return;
+    }
     final byId = {for (final entry in _entries) entry.entryId: entry};
     bool allowed(String id) {
       final entry = byId[id];
@@ -1140,21 +1388,48 @@ final class QueueCoordinator implements PlaybackController {
           admission.allowsRecommendation(entry.track.ref, entry.context);
     }
 
-    if (completion && _repeat == QueueRepeat.one && allowed(_current!)) {
-      await _select(_current!);
+    final candidates =
+        completion && _repeat == QueueRepeat.one && allowed(_current!)
+        ? [_current!]
+        : [
+            ..._order.skip(index + 1).where(allowed),
+            if (_repeat == QueueRepeat.all)
+              ..._order.take(index + 1).where(allowed),
+          ];
+    final _AdmissionChoice choice = finiteAdmission == null
+        ? (next: candidates.firstOrNull, unavailable: false, permitted: null)
+        : await _admitAutomatic(
+            admission,
+            candidates.map((id) => byId[id]!).toList(),
+            requireOwnerAdmission: requireOwnerAdmission,
+          );
+    if (!current()) return;
+    if (choice.unavailable) {
+      _failure = _admissionUnavailable;
+      _publish();
       return;
     }
-    final next = _order.skip(index + 1).where(allowed).firstOrNull;
+    final next = choice.next;
     if (next != null) {
-      await _select(next);
+      await _select(
+        next,
+        admissionCurrent: choice.permitted == null
+            ? null
+            : () =>
+                  choice.permitted!() &&
+                  operation == _advanceRevision &&
+                  replacement == _replacementIntent,
+      );
       return;
     }
-    if (_repeat == QueueRepeat.all) {
-      final first = _order.where(allowed).firstOrNull;
-      if (first != null) {
-        await _select(first);
-        return;
-      }
+    if (finiteAdmission != null && !completion && candidates.isNotEmpty) {
+      _failure = const AppFailure(
+        code: 'recommendation_tail_blocked',
+        message: 'В очереди нет доступной следующей рекомендации.',
+        retryable: true,
+      );
+      _publish();
+      return;
     }
     final allowContinuation =
         completion &&
@@ -1265,6 +1540,8 @@ final class QueueCoordinator implements PlaybackController {
   }
 
   Future<void> _clear() async {
+    finiteAdmission?.invalidateQueue();
+    ++_advanceRevision;
     _cancelPlayStartWatchdog();
     _focusSuspended = false;
     _naturalContinuation = null;

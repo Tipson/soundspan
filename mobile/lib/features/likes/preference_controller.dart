@@ -9,6 +9,7 @@ import '../../core/network/api_transport.dart';
 import '../../core/network/network_policy.dart';
 import '../../core/session/session_authority.dart';
 import '../../playback/playback_controller.dart';
+import '../../playback/finite_queue_admission_coordinator.dart';
 import '../../playback/recommendation_queue_policy.dart';
 import '../library/library_models.dart';
 import 'likes_models.dart';
@@ -23,6 +24,7 @@ final class PreferenceController extends ChangeNotifier {
     required this.fence,
     this.networkPolicy = const NetworkPolicy.online(),
     this.playback,
+    this.finiteAdmission,
   }) {
     _session = authority.changes.listen((_) {
       if (!isCurrent) {
@@ -37,10 +39,12 @@ final class PreferenceController extends ChangeNotifier {
   final SessionFence fence;
   final NetworkPolicy networkPolicy;
   final PlaybackController? playback;
+  final FiniteQueueAdmissionCoordinator? finiteAdmission;
   late final StreamSubscription<SessionState> _session;
   final _slots = <String, _PreferenceSlot>{};
   final _watchers = <String, ValueNotifier<PreferenceState>>{};
   final _skippedSelections = <(String, int)>{};
+  final _intents = <_PreferenceIntent>{};
   final _applied = StreamController<PreferenceChange>.broadcast(sync: true);
   Stream<PreferenceChange> get applied => _applied.stream;
   bool _disposed = false;
@@ -123,7 +127,12 @@ final class PreferenceController extends ChangeNotifier {
     // Captured synchronously, before either network or another selected entry.
     final captured = playback?.snapshot;
     final slot = _slots.putIfAbsent(ref.identityKey, _PreferenceSlot.new);
-    final pending = _PreferenceIntent(signal, captured);
+    final pending = _PreferenceIntent(
+      signal,
+      captured,
+      finiteAdmission?.beginMutation(),
+    );
+    _intents.add(pending);
     slot.revision++;
     slot.pending.add(pending);
     slot.state = PreferenceState(signal: signal, pending: true);
@@ -229,6 +238,10 @@ final class PreferenceController extends ChangeNotifier {
           );
         }
         if (!intent.done.isCompleted) intent.done.completeError(error);
+      } finally {
+        _intents.remove(intent);
+        final mutation = intent.mutation;
+        if (mutation != null) finiteAdmission?.finishMutation(mutation);
       }
     }
     slot.running = false;
@@ -334,8 +347,18 @@ final class PreferenceController extends ChangeNotifier {
   }
 
   void _clear() {
+    for (final intent in _intents) {
+      final mutation = intent.mutation;
+      if (mutation != null) finiteAdmission?.finishMutation(mutation);
+      if (!intent.done.isCompleted) {
+        intent.done.completeError(collectionStaleSession);
+      }
+    }
+    _intents.clear();
     for (final slot in _slots.values) {
       for (final intent in slot.pending) {
+        final mutation = intent.mutation;
+        if (mutation != null) finiteAdmission?.finishMutation(mutation);
         if (!intent.done.isCompleted) {
           intent.done.completeError(collectionStaleSession);
         }
@@ -375,8 +398,9 @@ final class _PreferenceSlot {
 }
 
 final class _PreferenceIntent {
-  _PreferenceIntent(this.signal, this.captured);
+  _PreferenceIntent(this.signal, this.captured, this.mutation);
   final PreferenceSignal signal;
   final QueueSnapshot? captured;
+  final FiniteQueueMutation? mutation;
   final done = Completer<void>();
 }

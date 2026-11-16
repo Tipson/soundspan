@@ -76,6 +76,7 @@ final class OwnerUiSession {
         fence: fence,
         networkPolicy: owner.policy,
         playback: owner.playback,
+        finiteAdmission: owner.finiteAdmission,
       ),
     );
     final likesRepository = LikesRepository(

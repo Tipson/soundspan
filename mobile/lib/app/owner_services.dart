@@ -22,6 +22,8 @@ import '../downloads/private_media_paths.dart';
 import '../downloads/protected_media_fetcher.dart';
 import '../features/recommendations/recommendation_repository.dart';
 import '../playback/feedback_outbox.dart';
+import '../playback/finite_queue_admission_api.dart';
+import '../playback/finite_queue_admission_coordinator.dart';
 import '../playback/local_first_preparation.dart';
 import '../playback/loudness_gain_policy.dart';
 import '../playback/native_loudness_controller.dart';
@@ -65,6 +67,7 @@ final class NativeOwnerServices implements AppOwnerScope {
   final Future<void> Function(SessionFence) cancelDownloads;
   late final StoredNetworkPolicy policy;
   late final DartApiTransport transport;
+  late final FiniteQueueAdmissionCoordinator finiteAdmission;
   late final DartJsonHttpClient _json;
   late final DownloadRepository downloads;
   late final ArtworkRepository artwork;
@@ -145,6 +148,24 @@ final class NativeOwnerServices implements AppOwnerScope {
     _json = DartJsonHttpClient(networkPolicy: policy, securityContext: tls);
     _retire.add(_json.close);
     transport = DartApiTransport(client: _json, authority: authority);
+    finiteAdmission = FiniteQueueAdmissionCoordinator(
+      api: FiniteQueueAdmissionApi(transport: transport),
+      authority: authority,
+      snapshot: () => playback.snapshot,
+      snapshots: playback.snapshots,
+    );
+    final queue = switch (playback) {
+      ServicePlaybackController service => service.handler.coordinator,
+      QueueCoordinator coordinator => coordinator,
+      _ => null,
+    };
+    queue?.finiteAdmission = finiteAdmission;
+    _retire.add(() {
+      if (identical(queue?.finiteAdmission, finiteAdmission)) {
+        queue?.finiteAdmission = null;
+      }
+      return finiteAdmission.close();
+    });
     gateway = MediaGateway(
       authority: authority,
       fetcher: ProtectedMediaFetcher(
@@ -264,6 +285,7 @@ final class NativeOwnerServices implements AppOwnerScope {
       authority: authority,
       networkAllowed: () => _current && policy.networkAllowed,
       warm: _warmNext,
+      finiteAdmission: finiteAdmission,
     );
     _retire.add(_warmup!.close);
     reporter = PlaybackReporter(
