@@ -127,6 +127,16 @@ final class ApiResponse {
   bool get isSuccess => statusCode >= 200 && statusCode < 300;
   void requireSuccess() {
     if (!isSuccess) {
+      if (statusCode == 409 &&
+          data is Map &&
+          (data as Map)['code'] == 'WAVE_SEQUENCE_RESET') {
+        throw const AppFailure(
+          code: 'wave_sequence_reset',
+          message: 'Последовательность Волны нужно начать заново',
+          retryable: true,
+          statusCode: 409,
+        );
+      }
       throw failureForStatus(statusCode, retryAfter: retryAfter);
     }
   }

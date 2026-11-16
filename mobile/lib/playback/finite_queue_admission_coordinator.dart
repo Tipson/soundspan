@@ -59,10 +59,13 @@ final class FiniteQueueAdmissionCoordinator {
   final _changes = StreamController<void>.broadcast(sync: true);
   Stream<void> get changes => _changes.stream;
   Completer<void> _pendingChanged = Completer<void>();
-  int _mutation = 0, _queue = 0;
+  int _mutation = 0, _queue = 0, _order = 0;
   bool _closed = false;
   int get mutationEpoch => _mutation;
   int get queueEpoch => _queue;
+
+  /// Manual queue edits invalidate order without treating pause/seek as edits.
+  int get orderEpoch => _order;
   int get pendingMutations => _pending.length;
   bool isMutationCurrent(int epoch) =>
       !_closed && _mutation == epoch && _pending.isEmpty;
@@ -95,8 +98,9 @@ final class FiniteQueueAdmissionCoordinator {
   }
 
   /// Reserve synchronously before a manual queue/selection admission awaits.
-  void invalidateQueue() {
+  void invalidateQueue({bool orderChanged = false}) {
     ++_queue;
+    if (orderChanged) ++_order;
     _cancelAll();
     if (!_closed) _changes.add(null);
   }

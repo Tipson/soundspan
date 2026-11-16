@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Preserve explicitly enabled server Wave sequences across pages without reshuffling or dropping admitted sources. Reset edited order without interrupting current playback, keep natural refill after feedback, pause and seek, and retain strict source-selection and owner fences.
 - Remove server-denied recording aliases from the latest future Android recommendation tail after preference writes settle. Validate every active automatic append before attachment, preserving current playback, history, manual entries and strict source-selection admission across natural handoffs.
 - Recheck automatic Android queue selection, repeat, continuation and warmup against current server feedback after pending preference writes. Share one bounded admission deadline, retire delayed selections after newer playback commands, and preserve current playback, history and manual entries when recommendation admission is unavailable.
 - Admit Android queue feedback only when a present server policy matches the recording, supported version, future recommendation scope and persisted signal. Preserve local exclusions for unsupported replies while retaining saved preference state and legacy responses.

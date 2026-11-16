@@ -237,6 +237,14 @@ final class NativeOwnerServices implements AppOwnerScope {
     final recommendations = RecommendationRepository(
       transport: transport,
       networkPolicy: policy,
+      orderedWaveCapability: (original, force) async {
+        if (original != fence || !_current) throw _stale;
+        if (force || capabilities.orderedWaveEnabled == null) {
+          await capabilities.refresh();
+        }
+        await _guard();
+        return capabilities.orderedWaveEnabled;
+      },
     );
     outbox = FeedbackOutbox(
       store: store,
@@ -278,6 +286,7 @@ final class NativeOwnerServices implements AppOwnerScope {
       controller: playback,
       repository: recommendations,
       authority: authority,
+      finiteAdmission: finiteAdmission,
     );
     _retire.add(wave.dispose);
     _warmup = NextTrackWarmup(

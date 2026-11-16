@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import '../core/model/app_failure.dart';
 import '../core/model/owner_key.dart';
 import '../core/session/session_authority.dart';
 import '../features/recommendations/recommendation_repository.dart';
 import 'playback_controller.dart';
 import 'wave_selection.dart';
+import 'finite_queue_admission_coordinator.dart';
 export 'wave_selection.dart';
 
 enum WaveStatus { detached, loading, active, exhausted, error }
@@ -32,6 +35,7 @@ final class WaveContinuation {
     required this.controller,
     required this.repository,
     required this.authority,
+    this.finiteAdmission,
     String Function()? sessionId,
   }) : _newSession = sessionId ?? _randomSession {
     _snapshots = controller.snapshots.listen(_observe);
@@ -43,6 +47,7 @@ final class WaveContinuation {
   final PlaybackController controller;
   final RecommendationRepository repository;
   final SessionAuthority authority;
+  final FiniteQueueAdmissionCoordinator? finiteAdmission;
   final String Function() _newSession;
   late final StreamSubscription<QueueSnapshot> _snapshots;
   late final StreamSubscription<SessionState> _sessions;
@@ -61,6 +66,10 @@ final class WaveContinuation {
   int _emptyPages = 0;
   bool _disposed = false;
   bool _needsReplacement = false;
+  OrderedWavePage? _ordered;
+  _OrderedQueueCheckpoint? _orderedCheckpoint;
+  int _sequenceResets = 0;
+  bool _forceCapabilities = false;
   void _publish(WaveState value) {
     _state = value;
     if (!_disposed) _states.add(value);
@@ -95,6 +104,10 @@ final class WaveContinuation {
     _lineage = controller.snapshot.lineage;
     _emptyPages = 0;
     _needsReplacement = true;
+    _ordered = null;
+    _orderedCheckpoint = null;
+    _sequenceResets = 0;
+    _forceCapabilities = false;
     _publish(WaveState(status: WaveStatus.loading, selection: selection));
     await _request(_revision);
   }
@@ -122,6 +135,10 @@ final class WaveContinuation {
     ++_revision;
     _emptyPages = 0;
     _needsReplacement = true;
+    _ordered = null;
+    _orderedCheckpoint = null;
+    _sequenceResets = 0;
+    _forceCapabilities = false;
     _publish(WaveState(status: WaveStatus.loading, selection: selection));
     await _request(_revision);
   }
@@ -131,6 +148,9 @@ final class WaveContinuation {
     _fence = null;
     _lineage = null;
     _session = null;
+    _ordered = null;
+    _orderedCheckpoint = null;
+    _forceCapabilities = false;
     _publish(WaveState(selection: _state.selection));
   }
 
@@ -152,6 +172,20 @@ final class WaveContinuation {
     final current = controller.snapshot;
     if (snapshot.lineage != current.lineage ||
         snapshot.fence != current.fence) {
+      return;
+    }
+    if (_orderedCheckpoint != null &&
+        (current.fence != _fence ||
+            (current.lineage != _lineage &&
+                !current.entries.any(
+                  (entry) => entry.context.surface == PlaySurface.wave,
+                )))) {
+      detach();
+      return;
+    }
+    if (_orderedCheckpoint != null &&
+        !_orderedCheckpoint!.matches(current, finiteAdmission)) {
+      _invalidateOrdered();
       return;
     }
     if (snapshot.lineage != _lineage || snapshot.fence != _fence) {
@@ -185,6 +219,13 @@ final class WaveContinuation {
     final selection = _state.selection;
     final cursor = _state.cursor;
     final replace = _needsReplacement;
+    final requestedQueue = _OrderedQueueCheckpoint(
+      controller.snapshot,
+      finiteAdmission,
+    );
+    final forceCapabilities = _forceCapabilities;
+    _forceCapabilities = false;
+    var resetSequence = false;
     try {
       final before = controller.snapshot;
       final excluded = replace
@@ -196,9 +237,17 @@ final class WaveContinuation {
         cursor: cursor,
         exclusions: excluded,
         sessionId: session,
+        continuation: _ordered,
+        forceCapabilityRefresh: forceCapabilities,
       );
       if (!_valid(revision, lineage, fence)) return;
       final current = controller.snapshot;
+      if (page.orderedWave != null &&
+          (!requestedQueue.matches(current, finiteAdmission) ||
+              !requestedQueue.mutationsCurrent(finiteAdmission))) {
+        _invalidateOrdered();
+        return;
+      }
       final context = PlayContext(
         surface: PlaySurface.wave,
         waveMode: selection.mode,
@@ -211,15 +260,25 @@ final class WaveContinuation {
                 current.currentEntry!.track.ref.identityKey,
             }
           : current.entries.map((e) => e.track.ref.identityKey).toSet();
-      final tracks = page.tracks
-          .where(
-            (t) =>
-                t.playable &&
-                current.allowsRecommendation(t.ref, context) &&
-                existing.add(t.ref.identityKey),
-          )
-          .take(25)
-          .toList();
+      if (page.orderedWave != null &&
+          page.tracks.any(
+            (track) =>
+                !track.playable ||
+                !current.allowsRecommendation(track.ref, context),
+          )) {
+        throw invalidOrderedWave;
+      }
+      final tracks = page.orderedWave != null
+          ? List.of(page.tracks)
+          : page.tracks
+                .where(
+                  (t) =>
+                      t.playable &&
+                      current.allowsRecommendation(t.ref, context) &&
+                      existing.add(t.ref.identityKey),
+                )
+                .take(25)
+                .toList();
       if (tracks.isEmpty) {
         if (page.temporaryFailure) {
           _status(
@@ -246,6 +305,7 @@ final class WaveContinuation {
             fence: fence,
             expectedLineage: lineage,
             automaticRecommendation: true,
+            orderedRecommendation: page.orderedWave != null,
           ),
         );
       } else {
@@ -255,6 +315,7 @@ final class WaveContinuation {
             fence: fence,
             expectedLineage: lineage,
             automaticRecommendation: true,
+            orderedRecommendation: page.orderedWave != null,
           ),
         );
       }
@@ -262,6 +323,19 @@ final class WaveContinuation {
         return;
       }
       final applied = controller.snapshot;
+      if (page.orderedWave != null) {
+        final ids = entries.map((e) => e.entryId).toList();
+        final expected = replace
+            ? ids
+            : [...requestedQueue.snapshot.effectiveOrder, ...ids];
+        if (!requestedQueue.mutationsCurrent(finiteAdmission)) {
+          _invalidateOrdered();
+          return;
+        }
+        if (!listEquals(applied.effectiveOrder, expected)) {
+          throw invalidOrderedWave;
+        }
+      }
       final submittedIds = entries.map((e) => e.entryId).toSet();
       final admitted = applied.entries.any(
         (entry) => submittedIds.contains(entry.entryId),
@@ -296,9 +370,15 @@ final class WaveContinuation {
       _emptyPages = 0;
       _lineage = applied.lineage;
       _needsReplacement = false;
+      _ordered = page.orderedWave;
+      _orderedCheckpoint = page.orderedWave == null
+          ? null
+          : _OrderedQueueCheckpoint(applied, finiteAdmission);
       _publish(
         WaveState(
-          status: page.nextCursor == null
+          status: page.orderedWave != null
+              ? WaveStatus.active
+              : page.nextCursor == null
               ? WaveStatus.exhausted
               : WaveStatus.active,
           selection: selection,
@@ -308,28 +388,48 @@ final class WaveContinuation {
       );
     } catch (error) {
       if (_valid(revision, lineage, fence)) {
-        _status(
-          WaveStatus.error,
-          failure: switch (error) {
-            AppFailure(statusCode: 504) => const AppFailure(
-              code: 'wave_request_timeout',
-              message: 'Волна не успела подготовиться. Попробуйте ещё раз',
-              retryable: true,
-              statusCode: 504,
-            ),
-            AppFailure() => error,
-            _ => const AppFailure(
-              code: 'wave_request_failed',
-              message: 'Не удалось продолжить Волну',
-              retryable: true,
-            ),
-          },
-        );
+        if (error is AppFailure &&
+            error.code == 'wave_sequence_reset' &&
+            (!requestedQueue.matches(controller.snapshot, finiteAdmission) ||
+                !requestedQueue.mutationsCurrent(finiteAdmission))) {
+          _invalidateOrdered();
+        } else if (error is AppFailure &&
+            error.code == 'wave_sequence_reset' &&
+            _sequenceResets == 0) {
+          _sequenceResets++;
+          _ordered = null;
+          _orderedCheckpoint = null;
+          _session = _newSession();
+          _needsReplacement = controller.snapshot.entries.isEmpty;
+          _forceCapabilities = true;
+          resetSequence = true;
+          _publish(WaveState(status: WaveStatus.loading, selection: selection));
+        } else {
+          _status(
+            WaveStatus.error,
+            failure: switch (error) {
+              AppFailure(statusCode: 504) => const AppFailure(
+                code: 'wave_request_timeout',
+                message: 'Волна не успела подготовиться. Попробуйте ещё раз',
+                retryable: true,
+                statusCode: 504,
+              ),
+              AppFailure() => error,
+              _ => const AppFailure(
+                code: 'wave_request_failed',
+                message: 'Не удалось продолжить Волну',
+                retryable: true,
+              ),
+            },
+          );
+        }
       }
     } finally {
       if (_inFlight == revision) _inFlight = null;
       if (_applying == revision) _applying = null;
-      if (revision == _revision && _state.status == WaveStatus.active) {
+      if (resetSequence && revision == _revision) {
+        unawaited(_request(revision));
+      } else if (revision == _revision && _state.status == WaveStatus.active) {
         if (_emptyPages > 0) {
           unawaited(_request(revision));
         } else {
@@ -340,6 +440,11 @@ final class WaveContinuation {
   }
 
   void _consumeEmptyPage(RecommendationPage page) {
+    if (page.orderedWave != null) {
+      _ordered = page.orderedWave;
+      _status(WaveStatus.exhausted, generation: page.generationId);
+      return;
+    }
     _emptyPages++;
     _status(
       _emptyPages >= 2 || page.nextCursor == null
@@ -347,6 +452,25 @@ final class WaveContinuation {
           : WaveStatus.active,
       cursor: page.nextCursor,
       generation: page.generationId,
+    );
+  }
+
+  void _invalidateOrdered() {
+    ++_revision;
+    _ordered = null;
+    _orderedCheckpoint = null;
+    _session = _newSession();
+    _lineage = controller.snapshot.lineage;
+    _needsReplacement = controller.snapshot.entries.isEmpty;
+    _emptyPages = 0;
+    _sequenceResets = 0;
+    _forceCapabilities = true;
+    _publish(
+      WaveState(
+        status: WaveStatus.active,
+        selection: _state.selection,
+        generationId: _state.generationId,
+      ),
     );
   }
 
@@ -366,4 +490,38 @@ final class WaveContinuation {
       (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
     ).join();
   }
+}
+
+/// Existing finite-policy epochs catch manual changes even if the array returns
+/// to its old value. Position/current handoffs retain the immutable future order.
+final class _OrderedQueueCheckpoint {
+  _OrderedQueueCheckpoint(
+    this.snapshot,
+    FiniteQueueAdmissionCoordinator? policy,
+  ) : queueEpoch = policy?.queueEpoch,
+      orderEpoch = policy?.orderEpoch,
+      mutationEpoch = policy?.mutationEpoch;
+  final QueueSnapshot snapshot;
+  final int? queueEpoch, orderEpoch, mutationEpoch;
+  bool mutationsCurrent(FiniteQueueAdmissionCoordinator? policy) =>
+      policy == null ||
+      (policy.queueEpoch == queueEpoch &&
+          mutationEpoch != null &&
+          policy.isMutationCurrent(mutationEpoch!));
+  bool matches(QueueSnapshot latest, FiniteQueueAdmissionCoordinator? policy) =>
+      (policy == null || policy.orderEpoch == orderEpoch) &&
+      latest.fence == snapshot.fence &&
+      latest.lineage == snapshot.lineage &&
+      latest.shuffle == snapshot.shuffle &&
+      listEquals(latest.effectiveOrder, snapshot.effectiveOrder) &&
+      setEquals(
+        latest.closedRecommendationScopes,
+        snapshot.closedRecommendationScopes,
+      ) &&
+      latest.recommendationExclusions.length ==
+          snapshot.recommendationExclusions.length &&
+      snapshot.recommendationExclusions.entries.every(
+        (item) =>
+            setEquals(item.value, latest.recommendationExclusions[item.key]),
+      );
 }

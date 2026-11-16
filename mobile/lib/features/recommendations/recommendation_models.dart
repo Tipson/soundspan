@@ -1,5 +1,7 @@
 import '../../core/model/track.dart';
 import '../../core/model/track_ref.dart';
+import 'ordered_wave.dart';
+export 'ordered_wave.dart';
 
 /// A server-owned feed page. Cursor and lineage are never manufactured locally.
 final class RecommendationPage {
@@ -9,12 +11,14 @@ final class RecommendationPage {
     this.generationId,
     this.reason,
     this.languagePending = false,
+    this.orderedWave,
   }) : tracks = List.unmodifiable(tracks);
   final List<Track> tracks;
   final int? nextCursor;
   final String? generationId;
   final String? reason;
   final bool languagePending;
+  final OrderedWavePage? orderedWave;
   bool get temporaryFailure =>
       reason == 'provider_partial_failure' ||
       reason == 'provider_unavailable' ||

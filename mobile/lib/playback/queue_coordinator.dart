@@ -357,7 +357,7 @@ final class QueueCoordinator implements PlaybackController {
       replacementIntent = ++_replacementIntent;
       _naturalContinuation = null;
       if (!command.automaticRecommendation) {
-        finiteAdmission?.invalidateQueue();
+        finiteAdmission?.invalidateQueue(orderChanged: true);
         _pendingManualReplacementIntent = replacementIntent;
       }
       replacementClock = Stopwatch()..start();
@@ -365,7 +365,7 @@ final class QueueCoordinator implements PlaybackController {
     if (command is Enqueue &&
         !command.automaticRecommendation &&
         authority.isCurrent(command.fence)) {
-      finiteAdmission?.invalidateQueue();
+      finiteAdmission?.invalidateQueue(orderChanged: true);
       _naturalContinuation = null;
     }
     if (command is PlayEntry ||
@@ -378,7 +378,13 @@ final class QueueCoordinator implements PlaybackController {
         command is Pause ||
         command is Resume ||
         command is RestoreQueue) {
-      finiteAdmission?.invalidateQueue();
+      finiteAdmission?.invalidateQueue(
+        orderChanged:
+            command is Remove ||
+            command is Reorder ||
+            command is SetShuffle ||
+            command is RestoreQueue,
+      );
       ++_advanceRevision;
     }
     if (command is Clear) {
@@ -536,7 +542,9 @@ final class QueueCoordinator implements PlaybackController {
         bool Function()? replacementPermit;
         if (command.automaticRecommendation && finiteAdmission != null) {
           final candidates = List<QueueEntry>.of(incoming);
-          if (_shuffle) candidates.shuffle(_random);
+          if (_shuffle && !command.orderedRecommendation) {
+            candidates.shuffle(_random);
+          }
           final choice = await _admitAutomatic(
             admission,
             candidates,
@@ -571,6 +579,7 @@ final class QueueCoordinator implements PlaybackController {
         }
         ++_queueEpoch;
         ++_queueBoundary;
+        if (command.orderedRecommendation) _shuffle = false;
         _entries = List.of(incoming);
         _fence = fence;
         _order = _entries.map((e) => e.entryId).toList();
@@ -710,7 +719,7 @@ final class QueueCoordinator implements PlaybackController {
         if (!command.automaticRecommendation) ++_queueEpoch;
         _entries.addAll(incoming);
         final ids = incoming.map((e) => e.entryId).toList();
-        if (_shuffle) ids.shuffle(_random);
+        if (_shuffle && !command.orderedRecommendation) ids.shuffle(_random);
         _order.addAll(ids);
         final continuation = _naturalContinuation;
         if (command.automaticRecommendation &&
@@ -1691,7 +1700,7 @@ final class QueueCoordinator implements PlaybackController {
   }
 
   Future<void> _clear() async {
-    finiteAdmission?.invalidateQueue();
+    finiteAdmission?.invalidateQueue(orderChanged: true);
     ++_advanceRevision;
     _cancelPlayStartWatchdog();
     _focusSuspended = false;

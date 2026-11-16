@@ -83,9 +83,11 @@ final class ServerCapabilities {
     required this.federation,
     this.audius = false,
     this.loudnessTargetLufs,
+    this.orderedWave = false,
   });
   final bool discovery, autoPlaylists, federation, audius;
   final double? loudnessTargetLufs;
+  final bool orderedWave;
   factory ServerCapabilities.decode(Object? value) {
     if (value is! Map ||
         value['discovery'] is! bool ||
@@ -95,6 +97,14 @@ final class ServerCapabilities {
       throw const FormatException('Invalid capabilities');
     }
     final loudness = value['loudnessTargetLufs'];
+    final ordered = value['orderedWave'];
+    if (value.containsKey('orderedWave') &&
+        (ordered is! Map ||
+            ordered.length != 1 ||
+            ordered['version'] is! int ||
+            ordered['version'] != 1)) {
+      throw const FormatException('Invalid ordered Wave capability');
+    }
     if (loudness != null &&
         (loudness is! num ||
             !loudness.isFinite ||
@@ -108,6 +118,7 @@ final class ServerCapabilities {
       federation: value['federation'] as bool,
       audius: value['audius'] as bool? ?? false,
       loudnessTargetLufs: (loudness as num?)?.toDouble(),
+      orderedWave: value.containsKey('orderedWave'),
     );
   }
   Map<String, Object?> toJson() => {
@@ -115,6 +126,7 @@ final class ServerCapabilities {
     'autoPlaylists': autoPlaylists,
     'federation': federation,
     'audius': audius,
+    if (orderedWave) 'orderedWave': {'version': 1},
     if (loudnessTargetLufs != null) 'loudnessTargetLufs': loudnessTargetLufs,
   };
 }
@@ -151,6 +163,14 @@ final class ServerCapabilitiesRepository {
       _playGrant == null;
   PlayCreationGrant? get playCreationGrant =>
       _playGrant?.isFresh == true ? _playGrant : null;
+  bool? get orderedWaveEnabled =>
+      _current &&
+          policy.networkAllowed &&
+          _onlineAt != null &&
+          _elapsed() - _onlineAt! >= Duration.zero &&
+          _elapsed() - _onlineAt! < const Duration(seconds: 300)
+      ? state.value?.orderedWave
+      : null;
   VoidCallback? onPlayCreationRefresh;
   void _policyChanged() {
     if (!policy.networkAllowed) {

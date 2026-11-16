@@ -12,6 +12,7 @@ final class ReplaceQueue extends PlaybackCommand {
     required this.fence,
     this.expectedLineage,
     this.automaticRecommendation = false,
+    this.orderedRecommendation = false,
     this.initialEntryId,
     this.play = true,
   }) : entries = List.unmodifiable(entries);
@@ -21,6 +22,7 @@ final class ReplaceQueue extends PlaybackCommand {
 
   /// Lineage guards also protect manual Play; only the Wave producer opts in.
   final bool automaticRecommendation;
+  final bool orderedRecommendation;
   final String? initialEntryId;
   final bool play;
 }
@@ -31,11 +33,13 @@ final class Enqueue extends PlaybackCommand {
     required this.fence,
     this.expectedLineage,
     this.automaticRecommendation = false,
+    this.orderedRecommendation = false,
   }) : entries = List.unmodifiable(entries);
   final List<QueueEntry> entries;
   final SessionFence fence;
   final int? expectedLineage;
   final bool automaticRecommendation;
+  final bool orderedRecommendation;
 }
 
 /// Guards an exact recording in the current recommendation scope and prunes

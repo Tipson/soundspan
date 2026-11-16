@@ -242,9 +242,24 @@ final class DartJsonHttpClient implements JsonHttpClient {
     }
     // Non-JSON error responses still retain status for 401/429/503 policy.
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      Object? classified;
+      if (response.statusCode == 409 &&
+          input.method == ApiMethod.get &&
+          input.path == '/api/personalized/home' &&
+          input.query['waveSequenceVersion'] == '1' &&
+          response.headers.contentType?.mimeType == 'application/json') {
+        try {
+          final value = jsonDecode(utf8.decode(bytes));
+          if (value is Map && value['code'] == 'WAVE_SEQUENCE_RESET') {
+            classified = const {'code': 'WAVE_SEQUENCE_RESET'};
+          }
+        } on FormatException {
+          // Unknown/non-JSON errors retain only status and existing retry policy.
+        }
+      }
       return ApiResponse(
         response.statusCode,
-        null,
+        classified,
         retryAfter: RetryAfterPolicy.parse(
           statusCode: response.statusCode,
           values: response.headers[HttpHeaders.retryAfterHeader],
