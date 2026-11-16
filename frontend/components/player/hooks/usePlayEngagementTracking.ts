@@ -11,15 +11,20 @@ import {
     resolvePlaybackRecommendationSessionId,
 } from "./playEngagementSession";
 import { getRecommendationSessionId } from "@/lib/recommendationSession";
+import { getAuthRuntimeLease } from "@/lib/auth-runtime-generation";
+import { createPlayJournalDeliveryScope } from "@/lib/playCreateJournalBridge";
+import { resolvePlaybackOccurrenceMediaIdentity } from "@/lib/audio-engine/playbackOccurrence";
+import { isListenTogetherActiveOrPending } from "@/lib/listen-together-session";
+import { createPlayEngagementOccurrenceResolver } from "./playEngagementOccurrence";
 
 const logger = frontendLogger.child("PlayEngagement");
 
 interface UsePlayEngagementTrackingOptions {
     currentTrack: Track | null;
     currentIndex: number;
+    localTrackPlaybackOccurrence: number;
     playbackType: "track" | "audiobook" | "podcast" | null;
-    isPlaying: boolean;
-    isBuffering: boolean;
+    isCurrentEngineOccurrence(): boolean;
     vibeMode: boolean;
     waveMode: WaveMode;
 }
@@ -48,10 +53,24 @@ function splitPlayInput(input: PlayLogInput): {
     };
 }
 
-function remotePlayKey(track: Track | null): string | null {
+function remotePlayIdentity(
+    track: Track | null,
+): { recordingKey: string; rowKey: string } | null {
     if (!track || !isRemoteTrack(track)) return null;
     try {
-        return JSON.stringify(toPlayTrackRef(track));
+        const ref = toPlayTrackRef(track);
+        const mediaKey =
+            "youtubeVideoId" in ref
+                ? `youtube:${ref.youtubeVideoId}`
+                : "tidalTrackId" in ref
+                  ? `tidal:${ref.tidalTrackId}`
+                  : "musicSourceRecording" in ref
+                    ? `${ref.musicSourceRecording.provider}:${ref.musicSourceRecording.id}`
+                    : `track:${ref.trackId}`;
+        return {
+            recordingKey: mediaKey,
+            rowKey: resolvePlaybackOccurrenceMediaIdentity(track, mediaKey),
+        };
     } catch {
         return null;
     }
@@ -61,18 +80,33 @@ function remotePlayKey(track: Track | null): string | null {
 export function usePlayEngagementTracking({
     currentTrack,
     currentIndex,
+    localTrackPlaybackOccurrence,
     playbackType,
-    isPlaying,
-    isBuffering,
+    isCurrentEngineOccurrence,
     vibeMode,
     waveMode,
 }: UsePlayEngagementTrackingOptions) {
     const trackerRef = useRef<
         ReturnType<typeof createPlayEngagementTracker> | undefined
     >(undefined);
+    const authLeaseRef = useRef(getAuthRuntimeLease());
+    const scopeRef = useRef<
+        ReturnType<typeof createPlayJournalDeliveryScope> | undefined
+    >(undefined);
+    const occurrenceRef = useRef<
+        ReturnType<typeof createPlayEngagementOccurrenceResolver> | undefined
+    >(undefined);
     const getTracker = useCallback(() => {
         if (trackerRef.current) return trackerRef.current;
+        const scope = createPlayJournalDeliveryScope(authLeaseRef.current);
+        const occurrence = createPlayEngagementOccurrenceResolver();
+        occurrenceRef.current = occurrence;
+        scopeRef.current = scope;
         const tracker = createPlayEngagementTracker({
+            beginPlay: (input) => {
+                scope.assertCurrent();
+                return occurrence.current().journal ? scope.begin(input) : null;
+            },
             logPlay: (input) => {
                 const { trackRef, context } = splitPlayInput(input);
                 return api.logPlay(trackRef, context);
@@ -86,26 +120,47 @@ export function usePlayEngagementTracking({
         trackerRef.current = tracker;
         return tracker;
     }, []);
-    const trackKey = remotePlayKey(currentTrack);
-    const playKey = trackKey ? `${trackKey}\u0000${currentIndex}` : null;
+    const identity =
+        playbackType === "track" ? remotePlayIdentity(currentTrack) : null;
+    const recordingKey = identity?.recordingKey ?? null;
+    const rowKey = identity?.rowKey ?? null;
+    const observeCurrentOccurrence = useCallback(() => {
+        getTracker();
+        return occurrenceRef.current!.observe({
+            recordingKey,
+            rowKey,
+            localOccurrence: localTrackPlaybackOccurrence,
+            currentIndex,
+            collaborative: isListenTogetherActiveOrPending(),
+        });
+    }, [
+        getTracker,
+        recordingKey,
+        rowKey,
+        localTrackPlaybackOccurrence,
+        currentIndex,
+    ]);
 
     const startCurrentPlay = useCallback(() => {
         if (
             playbackType !== "track" ||
             !currentTrack ||
-            !playKey ||
-            !isRemoteTrack(currentTrack)
+            !recordingKey ||
+            !isRemoteTrack(currentTrack) ||
+            !isCurrentEngineOccurrence()
         ) {
             return;
         }
         try {
+            const occurrence = observeCurrentOccurrence();
+            if (!occurrence.key) return;
             const context = resolvePlaybackRecommendationContext(
                 typeof window === "undefined" ? null : window.location.pathname,
                 vibeMode,
                 waveMode,
             );
             getTracker().start({
-                key: playKey,
+                key: occurrence.key,
                 play: {
                     ...toPlayTrackRef(currentTrack),
                     ...context,
@@ -129,31 +184,50 @@ export function usePlayEngagementTracking({
                 error,
             });
         }
-    }, [currentTrack, getTracker, playKey, playbackType, vibeMode, waveMode]);
+    }, [
+        currentTrack,
+        getTracker,
+        isCurrentEngineOccurrence,
+        recordingKey,
+        observeCurrentOccurrence,
+        playbackType,
+        vibeMode,
+        waveMode,
+    ]);
 
     useEffect(() => {
         const tracker = getTracker();
-        tracker.transitionTo(playKey);
-        if (isPlaying && !isBuffering) {
+        tracker.transitionTo(observeCurrentOccurrence().key);
+    }, [getTracker, observeCurrentOccurrence]);
+
+    useEffect(() => {
+        getTracker();
+        const finalize = () => trackerRef.current?.transitionTo(null);
+        const unregister = scopeRef.current?.registerFinalizer(finalize);
+        return () => {
+            finalize();
+            unregister?.();
+            trackerRef.current = undefined;
+            scopeRef.current = undefined;
+            occurrenceRef.current = undefined;
+        };
+    }, [getTracker]);
+
+    const noteProgress = useCallback(
+        (positionSeconds: number) => {
+            if (!isCurrentEngineOccurrence()) return;
             startCurrentPlay();
-        }
-    }, [getTracker, isBuffering, isPlaying, playKey, startCurrentPlay]);
-
-    useEffect(
-        () => () => {
-            trackerRef.current?.transitionTo(null);
+            trackerRef.current?.noteProgress(positionSeconds);
         },
-        [],
+        [isCurrentEngineOccurrence, startCurrentPlay],
     );
-
-    const noteProgress = useCallback((positionSeconds: number) => {
-        trackerRef.current?.noteProgress(positionSeconds);
-    }, []);
     const finishCompleted = useCallback(() => {
         trackerRef.current?.finish("completed");
+        occurrenceRef.current?.finish();
     }, []);
     const finishFailed = useCallback(() => {
         trackerRef.current?.finish("failed");
+        occurrenceRef.current?.finish();
     }, []);
 
     return {

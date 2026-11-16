@@ -53,9 +53,9 @@ for (const provider of ["youtube", "vk", "yandex"] as const) {
             tracker = usePlayEngagementTracking({
                 currentTrack: track,
                 currentIndex: 0,
+                localTrackPlaybackOccurrence: 1,
                 playbackType: "track",
-                isPlaying: true,
-                isBuffering: false,
+                isCurrentEngineOccurrence: () => true,
                 vibeMode: false,
                 waveMode: "for-you",
             });
@@ -70,6 +70,11 @@ for (const provider of ["youtube", "vk", "yandex"] as const) {
             await React.act(
                 async () => new Promise<void>((done) => setImmediate(done)),
             );
+            assert.equal(log.mock.callCount(), 0);
+            await React.act(async () => {
+                tracker!.startCurrentPlay();
+                await new Promise<void>((done) => setImmediate(done));
+            });
             assert.equal(log.mock.callCount(), 1);
             if (provider !== "youtube") {
                 assert.deepEqual(log.mock.calls[0].arguments[0], {

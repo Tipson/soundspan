@@ -550,6 +550,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             const targetTrack = state.queue[targetIndex];
             // Listen Together queues are music-only; ignore episode entries.
             if (!targetTrack || isEpisodeQueueItem(targetTrack)) return;
+            state.commitLocalTrackPlaybackOccurrence();
             const optimisticSelectionPolicy =
                 getListenTogetherOptimisticTrackSelectionPolicy();
             if (
@@ -625,6 +626,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 state.setVibeSourceFeatures(null);
                 state.setVibeQueueIds([]);
             }
+
+            state.commitLocalTrackPlaybackOccurrence();
 
             resetPersistedTrackStartPosition(track.id);
             state.setPlaybackType("track");
@@ -752,6 +755,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 state.setVibeSourceFeatures(null);
                 state.setVibeQueueIds([]);
             }
+
+            state.commitLocalTrackPlaybackOccurrence();
 
             resetPersistedTrackStartPosition(startTrack.id);
             state.setPlaybackType("track");
@@ -1033,6 +1038,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                     });
                 return;
             }
+
+            state.commitLocalTrackPlaybackOccurrence();
 
             resetPersistedTrackStartPosition(item.id);
             state.setCurrentIndex(index);
@@ -1557,6 +1564,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             // is playing. Episodes and tracks share one queue, so queueing
             // music must never interrupt the playing episode (and vice versa).
             if (state.queue.length === 0 && state.playbackType !== "podcast") {
+                state.commitLocalTrackPlaybackOccurrence();
                 resetPersistedTrackStartPosition(validTracks[0].id);
                 state.setPlaybackType("track");
                 state.setQueue(validTracks);
@@ -1736,6 +1744,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
             // If nothing is playing (empty queue, no episode), just start the track
             if (state.queue.length === 0 && state.playbackType !== "podcast") {
+                state.commitLocalTrackPlaybackOccurrence();
                 resetPersistedTrackStartPosition(track.id);
                 state.setPlaybackType("track");
                 state.setQueue([track]);
@@ -1880,6 +1889,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 state.playbackType === "audiobook"
             ) {
                 recordPlaybackReplacement();
+                state.commitLocalTrackPlaybackOccurrence();
                 resetPersistedTrackStartPosition(track.id);
                 state.setPlaybackType("track");
                 state.setCurrentTrack(track);
@@ -1916,6 +1926,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 Math.max(upNextInsertRef.current, insertAt) + 1;
 
             // Atomically commit all state together so React batches the update
+            state.commitLocalTrackPlaybackOccurrence();
             resetPersistedTrackStartPosition(track.id);
             state.setQueue(newQueue);
             state.setShuffleIndices(newShuffleIndices);
@@ -2277,6 +2288,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                         return;
                     }
                     recordPlaybackReplacement();
+                    state.commitLocalTrackPlaybackOccurrence();
                     resetPersistedTrackStartPosition(tracks[0].id);
                     state.setQueue(tracks);
                     state.setCurrentIndex(0);

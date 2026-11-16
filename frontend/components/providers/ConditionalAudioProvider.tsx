@@ -13,6 +13,8 @@ import {
     useDeviceOffline,
 } from "@/features/device-offline/DeviceOfflineProvider";
 import { WaveSelectionSynchronizer } from "@/components/providers/WaveSelectionSynchronizer";
+import { PlayCreateJournalProvider } from "@/components/providers/PlayCreateJournalProvider";
+import { getAuthRuntimeGeneration } from "@/lib/auth-runtime-generation";
 
 function HydratedAudioRuntime() {
     const { isHydrated } = useDeviceOffline();
@@ -28,7 +30,7 @@ export function ConditionalAudioProvider({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
 
     // Don't load audio provider on public pages or when not authenticated
     const publicPages = ["/login", "/register", "/onboarding", "/setup"];
@@ -45,18 +47,26 @@ export function ConditionalAudioProvider({
     return (
         <DeviceOfflineProvider>
             <AudioErrorBoundary>
-                <AudioStateProvider>
-                    <WaveSelectionSynchronizer />
-                    <AudioPlaybackProvider>
-                        <AudioControlsProvider>
-                            {/* Wait for the verified per-user device index before resolving media URLs. */}
-                            <HydratedAudioRuntime />
-                            <ListenTogetherProvider>
-                                {children}
-                            </ListenTogetherProvider>
-                        </AudioControlsProvider>
-                    </AudioPlaybackProvider>
-                </AudioStateProvider>
+                <PlayCreateJournalProvider
+                    key={JSON.stringify([
+                        user?.id ?? null,
+                        getAuthRuntimeGeneration(),
+                    ])}
+                    ownerId={user?.id ?? null}
+                >
+                    <AudioStateProvider>
+                        <WaveSelectionSynchronizer />
+                        <AudioPlaybackProvider>
+                            <AudioControlsProvider>
+                                {/* Wait for the verified per-user device index before resolving media URLs. */}
+                                <HydratedAudioRuntime />
+                                <ListenTogetherProvider>
+                                    {children}
+                                </ListenTogetherProvider>
+                            </AudioControlsProvider>
+                        </AudioPlaybackProvider>
+                    </AudioStateProvider>
+                </PlayCreateJournalProvider>
             </AudioErrorBoundary>
         </DeviceOfflineProvider>
     );

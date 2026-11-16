@@ -248,6 +248,10 @@ interface AudioStateContextType {
     currentAudiobook: Audiobook | null;
     currentPodcast: Podcast | null;
     playbackType: "track" | "audiobook" | "podcast" | null;
+    /** Committed solo track starts; queue remaps and recovery preserve this value. */
+    localTrackPlaybackOccurrence: number;
+    /** Marks an actual solo track selection in the same batch as its media state. */
+    commitLocalTrackPlaybackOccurrence: () => void;
 
     // Queue state (unified mixed-media queue: tracks + podcast episodes)
     queue: QueueItem[];
@@ -404,6 +408,12 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     const [currentTrack, setCurrentTrackState] = useState<Track | null>(
         readPersistedTrack,
     );
+    const [localTrackPlaybackOccurrence, setLocalTrackPlaybackOccurrence] =
+        useState(0);
+    const commitLocalTrackPlaybackOccurrence = useCallback(() => {
+        if (isListenTogetherActiveOrPending()) return;
+        setLocalTrackPlaybackOccurrence((previous) => previous + 1);
+    }, []);
     const [currentAudiobook, setCurrentAudiobook] = useState<Audiobook | null>(
         () => parseStorageJson(STORAGE_KEYS.CURRENT_AUDIOBOOK, null),
     );
@@ -1563,6 +1573,8 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             currentAudiobook,
             currentPodcast,
             playbackType,
+            localTrackPlaybackOccurrence,
+            commitLocalTrackPlaybackOccurrence,
             queue,
             currentIndex,
             isShuffle,
@@ -1602,6 +1614,8 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             currentAudiobook,
             currentPodcast,
             playbackType,
+            localTrackPlaybackOccurrence,
+            commitLocalTrackPlaybackOccurrence,
             queue,
             currentIndex,
             isShuffle,

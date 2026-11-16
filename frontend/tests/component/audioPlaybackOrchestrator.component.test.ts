@@ -498,6 +498,7 @@ const audioState = {
     repeatMode: "off" as "off" | "one" | "all",
     queue: [] as Track[],
     currentIndex: 0,
+    localTrackPlaybackOccurrence: 0,
     isShuffle: false,
     shuffleIndices: [] as number[],
     vibeMode: false,
@@ -736,6 +737,7 @@ const resetHarnessState = (): void => {
     audioState.repeatMode = "off";
     audioState.queue = [audioState.currentTrack, makeTrack("track-2")];
     audioState.currentIndex = 0;
+    audioState.localTrackPlaybackOccurrence = 0;
     audioState.isShuffle = false;
     audioState.shuffleIndices = [0, 1];
     audioState.vibeMode = false;
@@ -949,6 +951,8 @@ mock.module("@/lib/audio-state-context", {
             },
             queue: audioState.queue,
             currentIndex: audioState.currentIndex,
+            localTrackPlaybackOccurrence:
+                audioState.localTrackPlaybackOccurrence,
             isShuffle: audioState.isShuffle,
             shuffleIndices: audioState.shuffleIndices,
             vibeMode: audioState.vibeMode,
@@ -5816,6 +5820,9 @@ test("remote track change finalizes an early listen as skipped once", async () =
 
     renderOrchestrator();
     await flushAsync(8);
+    engine.emit("load", { durationSec: 200 });
+    engine.playing = true;
+    engine.emit("play");
     engine.emit("timeupdate", { timeSec: 0 });
     engine.emit("timeupdate", { timeSec: 8 });
 
@@ -5857,16 +5864,25 @@ test("adjacent duplicate remote occurrences create separate play sessions", asyn
     audioState.currentTrack = duplicate;
     audioState.queue = [duplicate, { ...duplicate }];
     audioState.currentIndex = 0;
+    audioState.localTrackPlaybackOccurrence = 1;
 
     renderOrchestrator();
     await flushAsync(8);
+    engine.emit("load", { durationSec: 200 });
+    engine.playing = true;
+    engine.emit("play");
     engine.emit("timeupdate", { timeSec: 0 });
     engine.emit("timeupdate", { timeSec: 5 });
 
     audioState.currentTrack = { ...duplicate };
     audioState.currentIndex = 1;
+    audioState.localTrackPlaybackOccurrence = 2;
     rerenderOrchestrator();
     await flushAsync(12);
+    engine.emit("load", { durationSec: 200 });
+    engine.playing = true;
+    engine.emit("play");
+    await flushAsync();
 
     assert.equal(apiCalls.logPlay.length, 2);
     assert.deepEqual(
@@ -7413,4 +7429,334 @@ test("a new end after replay requests its own continuation while the old request
     requests[1]({ success: false, trackCount: 0 });
     await flushAsync();
     assert.equal(controlCalls.next, 1);
+});
+
+test("remote history requires a current engine play instead of UI intent or a stale play event", async () => {
+    playbackState.isPlaying = true;
+    const track = makeTrack("yt:confirmed-history", {
+        filePath: undefined,
+        streamSource: "youtube",
+        youtubeVideoId: "confirmed-history",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 100,
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [track];
+    renderOrchestrator();
+    await flushAsync(8);
+    assert.equal(
+        apiCalls.logPlay.length,
+        0,
+        "UI intent is not a confirmed run",
+    );
+    engine.emit("play");
+    await flushAsync();
+    assert.equal(
+        apiCalls.logPlay.length,
+        0,
+        "an unready source cannot confirm a run",
+    );
+    engine.emit("load", { durationSec: 100 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 4 });
+    await flushAsync();
+    assert.equal(apiCalls.logPlay.length, 1);
+    assert.equal(
+        apiCalls.logPlay[0].trackRef.youtubeVideoId,
+        "confirmed-history",
+    );
+});
+
+test("a prior source play during the next load cannot create the next occurrence history", async () => {
+    playbackState.isPlaying = true;
+    const first = makeTrack("yt:history-old-source", {
+        filePath: undefined,
+        streamSource: "youtube",
+        youtubeVideoId: "history-old-source",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 100,
+    });
+    const second = {
+        ...first,
+        id: "yt:history-new-source",
+        youtubeVideoId: "history-new-source",
+    };
+    audioState.currentTrack = first;
+    audioState.queue = [first, second];
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.emit("load", { durationSec: 100 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 4 });
+    await flushAsync();
+    assert.equal(apiCalls.logPlay.length, 1);
+    audioState.currentTrack = second;
+    audioState.currentIndex = 1;
+    rerenderOrchestrator();
+    await flushAsync(8);
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 0.1 });
+    await flushAsync();
+    assert.equal(
+        apiCalls.logPlay.length,
+        1,
+        "the loading occurrence has no confirmed engine yet",
+    );
+    engine.emit("load", { durationSec: 100 });
+    engine.emit("play");
+    await flushAsync();
+    assert.deepEqual(
+        apiCalls.logPlay.map((row) => row.trackRef.youtubeVideoId),
+        ["history-old-source", "history-new-source"],
+    );
+});
+
+test("real progress can confirm remote history when the play event precedes load readiness", async () => {
+    playbackState.isPlaying = true;
+    const track = makeTrack("yt:history-progress-first", {
+        filePath: undefined,
+        streamSource: "youtube",
+        youtubeVideoId: "history-progress-first",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 100,
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [track];
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.playing = true;
+    engine.emit("play");
+    await flushAsync();
+    assert.equal(apiCalls.logPlay.length, 0);
+    engine.currentTime = engine.actualCurrentTime = 2.4;
+    engine.emit("timeupdate", { timeSec: 2.4 });
+    await flushAsync();
+    assert.equal(apiCalls.logPlay.length, 1);
+    engine.emit("playerror", {
+        error: new Error("decoder failed"),
+        code: "3",
+        recoverable: false,
+    });
+    await flushAsync(12);
+    assert.equal(apiCalls.updatePlayEngagement[0]?.input.outcome, "failed");
+    assert.equal(apiCalls.updatePlayEngagement[0]?.input.listenedSeconds, 2.4);
+});
+
+test("pause and seek keep the existing remote history run and exclude seek distance", async () => {
+    playbackState.isPlaying = true;
+    const track = makeTrack("yt:history-seek", {
+        filePath: undefined,
+        streamSource: "youtube",
+        youtubeVideoId: "history-seek",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 100,
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [track];
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.emit("load", { durationSec: 100 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 8 });
+    recordExplicitPlaybackPause();
+    playbackState.isPlaying = false;
+    engine.playing = false;
+    engine.emit("pause");
+    rerenderOrchestrator();
+    await flushAsync();
+    recordExplicitPlaybackSeek();
+    engine.currentTime = engine.actualCurrentTime = 60;
+    engine.emit("seek", { timeSec: 60 });
+    recordExplicitPlaybackResume();
+    playbackState.isPlaying = true;
+    engine.playing = true;
+    rerenderOrchestrator();
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 60 });
+    engine.emit("timeupdate", { timeSec: 64 });
+    engine.emit("end");
+    await flushAsync(12);
+    assert.equal(apiCalls.logPlay.length, 1);
+    assert.deepEqual(
+        apiCalls.updatePlayEngagement.map((row) => row.input),
+        [{ listenedSeconds: 12, completionRatio: 1, outcome: "completed" }],
+    );
+});
+
+test("metadata refresh on the loaded remote occurrence does not create another listening run", async () => {
+    playbackState.isPlaying = true;
+    const track = makeTrack("yt:history-metadata", {
+        filePath: undefined,
+        streamSource: "youtube",
+        youtubeVideoId: "history-metadata",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 100,
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [track];
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.emit("load", { durationSec: 100 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 4 });
+    await flushAsync();
+    const loads = engine.loadCalls.length;
+    audioState.currentTrack = {
+        ...track,
+        title: "Updated display title",
+        artist: { name: "Corrected artist" },
+    };
+    audioState.queue = [audioState.currentTrack];
+    rerenderOrchestrator();
+    await flushAsync();
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 8 });
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, loads);
+    assert.equal(apiCalls.logPlay.length, 1);
+    assert.equal(apiCalls.updatePlayEngagement.length, 0);
+});
+
+test("a completed repeat-one playback creates a new confirmed history run", async () => {
+    playbackState.isPlaying = true;
+    audioState.repeatMode = "one";
+    const track = makeTrack("yt:history-repeat", {
+        filePath: undefined,
+        streamSource: "youtube",
+        youtubeVideoId: "history-repeat",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 10,
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [track];
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.duration = 10;
+    engine.emit("load", { durationSec: 10 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 10 });
+    engine.trackEnded = true;
+    engine.playing = false;
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(apiCalls.logPlay.length, 1);
+    engine.trackEnded = false;
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 5 });
+    engine.emit("timeupdate", { timeSec: 10 });
+    engine.trackEnded = true;
+    engine.playing = false;
+    engine.emit("end");
+    await flushAsync(12);
+    assert.equal(apiCalls.logPlay.length, 2);
+    assert.deepEqual(
+        apiCalls.updatePlayEngagement.map((row) => row.input),
+        [
+            { listenedSeconds: 10, completionRatio: 1, outcome: "completed" },
+            { listenedSeconds: 10, completionRatio: 1, outcome: "completed" },
+        ],
+    );
+});
+
+test("removing a past queue row preserves the playing run, progress and engine source", async () => {
+    playbackState.isPlaying = true;
+    const track = makeTrack("yt:history-remap", {
+        filePath: undefined,
+        streamSource: "youtube",
+        youtubeVideoId: "history-remap",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 100,
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [makeTrack("past-row"), track, makeTrack("future-row")];
+    audioState.currentIndex = 1;
+    audioState.localTrackPlaybackOccurrence = 1;
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.emit("load", { durationSec: 100 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 5 });
+    await flushAsync();
+    const loads = engine.loadCalls.length;
+    audioState.queue = audioState.queue.slice(1);
+    audioState.currentIndex = 0;
+    rerenderOrchestrator();
+    await flushAsync(8);
+    engine.emit("timeupdate", { timeSec: 9 });
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, loads);
+    assert.equal(apiCalls.logPlay.length, 1);
+    assert.equal(apiCalls.updatePlayEngagement.length, 0);
+    engine.emit("end");
+    await flushAsync(12);
+    assert.deepEqual(
+        apiCalls.updatePlayEngagement.map((row) => row.input),
+        [{ listenedSeconds: 9, completionRatio: 1, outcome: "completed" }],
+    );
+});
+
+test("an explicit new occurrence of the same object and index reloads before confirming another run", async () => {
+    playbackState.isPlaying = true;
+    const track = makeTrack("yt:history-same-object", {
+        filePath: undefined,
+        streamSource: "youtube",
+        youtubeVideoId: "history-same-object",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        duration: 100,
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [track];
+    audioState.localTrackPlaybackOccurrence = 1;
+    renderOrchestrator();
+    await flushAsync(8);
+    engine.emit("load", { durationSec: 100 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 8 });
+    await flushAsync();
+    assert.equal(apiCalls.logPlay.length, 1);
+    const loads = engine.loadCalls.length;
+    audioState.localTrackPlaybackOccurrence++;
+    rerenderOrchestrator();
+    await flushAsync(8);
+    assert.equal(engine.loadCalls.length, loads + 1);
+    assert.equal(
+        apiCalls.logPlay.length,
+        1,
+        "new selection must wait for its own engine readiness",
+    );
+    engine.playing = true;
+    engine.emit("play");
+    await flushAsync();
+    assert.equal(
+        apiCalls.logPlay.length,
+        1,
+        "the old loading source cannot confirm the new selection",
+    );
+    engine.emit("load", { durationSec: 100 });
+    engine.playing = true;
+    engine.emit("play");
+    await flushAsync();
+    assert.equal(apiCalls.logPlay.length, 2);
+    assert.deepEqual(
+        apiCalls.updatePlayEngagement.map((row) => row.input),
+        [{ listenedSeconds: 8, completionRatio: 0.08, outcome: "skipped" }],
+    );
 });

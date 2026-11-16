@@ -454,6 +454,13 @@ async function mountManualControls(currentTrack: Track) {
     const pending: Array<() => void> = [];
     const feedback = new RecommendationQueueFeedback();
     const state: Record<string, unknown> = {
+        localTrackPlaybackOccurrence: 0,
+        commitLocalTrackPlaybackOccurrence: () => {
+            pending.push(() => {
+                state.localTrackPlaybackOccurrence =
+                    (state.localTrackPlaybackOccurrence as number) + 1;
+            });
+        },
         recommendationFeedback: {
             allows: feedback.allows.bind(feedback),
             reset: feedback.reset.bind(feedback),

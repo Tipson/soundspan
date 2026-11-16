@@ -1,6 +1,6 @@
 "use client";
 
-import { useAudioState } from "@/lib/audio-state-context";
+import { useAudioState, type Track } from "@/lib/audio-state-context";
 import { useAudioVolumeMode } from "@/lib/audio-volume-mode-context";
 import { usePlaybackStatus } from "@/lib/audio-playback-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
@@ -95,6 +95,20 @@ function hasPendingSourceRecoveryPosition(
         ])
     );
 }
+
+/** A committed local start reloads even the same source; cursor remaps retain the loaded identity. */
+function resolveTrackRunMediaIdentity(
+    track: Track,
+    occurrence: number,
+): string {
+    const mediaId = resolvePlaybackOccurrenceMediaIdentity(
+        track,
+        resolveDeviceOfflineMediaIdentity(track),
+    );
+    return occurrence > 0
+        ? `${mediaId}\u0000local-start:${occurrence}`
+        : mediaId;
+}
 /**
  * AudioPlaybackOrchestrator - Unified audio playback using runtime audio engines
  * Handles: web playback, progress saving for audiobooks/podcasts
@@ -115,6 +129,7 @@ export const AudioPlaybackOrchestrator = memo(
             queue,
             setQueue,
             currentIndex,
+            localTrackPlaybackOccurrence,
             isShuffle,
             shuffleIndices,
             vibeMode,
@@ -271,12 +286,44 @@ export const AudioPlaybackOrchestrator = memo(
             startVibeMode,
             radioOrigin: currentTrack?.radioOrigin,
         });
+        const isCurrentEngineOccurrence = useCallback(
+            () =>
+                Boolean(
+                    currentTrack &&
+                    currentTrackRef.current === currentTrack &&
+                    lastTrackIdRef.current ===
+                        resolveTrackRunMediaIdentity(
+                            currentTrack,
+                            localTrackPlaybackOccurrence,
+                        ) &&
+                    playbackTypeRef.current === "track" &&
+                    !isLoadingRef.current &&
+                    activeEngineTrackIdRef.current === currentTrack.id &&
+                    activeEngineLoadIdRef.current === loadIdRef.current &&
+                    !hasPendingSourceRecoveryPosition(orchestratorRefs) &&
+                    orchestratorRefs.serverSourceRecoveryLoadIdRef.current !==
+                        loadIdRef.current &&
+                    audioEngine.isPlaying(),
+                ),
+            [
+                currentTrack,
+                currentTrackRef,
+                lastTrackIdRef,
+                localTrackPlaybackOccurrence,
+                playbackTypeRef,
+                isLoadingRef,
+                activeEngineTrackIdRef,
+                activeEngineLoadIdRef,
+                loadIdRef,
+                orchestratorRefs,
+            ],
+        );
         const playEngagement = H.usePlayEngagementTracking({
             currentTrack,
             currentIndex,
+            localTrackPlaybackOccurrence,
             playbackType,
-            isPlaying,
-            isBuffering,
+            isCurrentEngineOccurrence,
             vibeMode,
             waveMode,
         });
@@ -1019,9 +1066,9 @@ export const AudioPlaybackOrchestrator = memo(
             outputStateRef.current = { volume, isMuted };
 
             const currentMediaId = currentTrack
-                ? resolvePlaybackOccurrenceMediaIdentity(
+                ? resolveTrackRunMediaIdentity(
                       currentTrack,
-                      resolveDeviceOfflineMediaIdentity(currentTrack),
+                      localTrackPlaybackOccurrence,
                   )
                 : currentAudiobook?.id || currentPodcast?.id || null;
 
@@ -1776,6 +1823,7 @@ export const AudioPlaybackOrchestrator = memo(
             // eslint-disable-next-line react-hooks/exhaustive-deps -- canSeek/isPlaying/setIsPlaying intentionally excluded: adding them would re-trigger audio loading on play/pause or seek state changes, breaking playback
         }, [
             currentTrack,
+            localTrackPlaybackOccurrence,
             currentAudiobook,
             currentPodcast,
             playbackType,

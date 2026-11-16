@@ -211,6 +211,14 @@ function createDeferredAudioState(
             revision: 0,
         },
         currentTrack: null,
+        localTrackPlaybackOccurrence: 0,
+        commitLocalTrackPlaybackOccurrence: () => {
+            if (listenTogetherSession.current) return;
+            pending.push(() => {
+                stub.localTrackPlaybackOccurrence =
+                    (stub.localTrackPlaybackOccurrence as number) + 1;
+            });
+        },
         currentPodcast: null,
         currentAudiobook: null,
         playbackType: null,

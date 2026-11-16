@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { SystemSettings } from "../../features/settings/types";
+import type { FrontendLogger } from "../../lib/logger";
 
 const activeMigration = {
     spaceId: "space-migrating",
@@ -38,14 +39,17 @@ mock.module("@/lib/features-context", {
     },
 });
 
+const testLogger: FrontendLogger = {
+    error: () => undefined,
+    warn: () => undefined,
+    info: () => undefined,
+    debug: () => undefined,
+    child: () => testLogger,
+};
 mock.module("@/lib/logger", {
     namedExports: {
-        createFrontendLogger: () => ({
-            error: () => undefined,
-            warn: () => undefined,
-            info: () => undefined,
-            debug: () => undefined,
-        }),
+        createFrontendLogger: () => testLogger,
+        frontendLogger: testLogger,
     },
 });
 

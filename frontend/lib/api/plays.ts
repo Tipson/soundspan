@@ -9,6 +9,7 @@ import {
     type PlayCreatePayload,
 } from "../playCreateJournal";
 import { preparePlayCreateOwner } from "../playCreateOwner";
+import { suspendPlayCreateJournalHistory } from "../playCreateJournalBridge";
 import {
     readPlayCreateAck,
     readPlayEngagementAck,
@@ -295,13 +296,19 @@ export function WithPlays<TBase extends ApiClientConstructor>(Base: TBase) {
         }
 
         async clearPlayHistory(range: "7d" | "30d" | "365d" | "all") {
-            return this.request<{
-                success: boolean;
-                range: "7d" | "30d" | "365d" | "all";
-                deletedCount: number;
-            }>(`/plays/history?range=${range}`, {
-                method: "DELETE",
-            });
+            const finish = suspendPlayCreateJournalHistory(this);
+            let succeeded = false;
+            try {
+                const result = await this.request<{
+                    success: boolean;
+                    range: "7d" | "30d" | "365d" | "all";
+                    deletedCount: number;
+                }>(`/plays/history?range=${range}`, { method: "DELETE" });
+                succeeded = result?.success === true;
+                return result;
+            } finally {
+                finish(succeeded);
+            }
         }
 
         // Playback State (cross-device sync)
