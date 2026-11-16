@@ -110,6 +110,16 @@ type AnyAudioEventHandler = (payload: unknown) => void;
 
 const TICKER_INTERVAL_MS = 1_000;
 
+// Preserve the foreground-reclaim policy elsewhere. Use the existing bounded
+// source retry on Android Chromium without clearing the listener's Play intent.
+function retryHiddenNetworkError(): boolean {
+    const userAgent =
+        typeof navigator === "undefined" ? "" : navigator.userAgent;
+    return (
+        /Android/i.test(userAgent) && /(?:Chrome|Chromium)\//i.test(userAgent)
+    );
+}
+
 const ELEMENT_EVENT_TYPES = [
     "loadedmetadata",
     "playing",
@@ -1023,6 +1033,7 @@ export class NativeAudioElementEngine implements AudioEngine {
                     mediaErrorCode: element.error?.code ?? null,
                     mediaErrorMessage: element.error?.message ?? null,
                     isPageHidden: this.isPageHidden(),
+                    retryHiddenNetworkError: retryHiddenNetworkError(),
                     currentTimeSec: element.currentTime || 0,
                     nowMs,
                 });

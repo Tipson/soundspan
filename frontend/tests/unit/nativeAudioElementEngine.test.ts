@@ -934,6 +934,211 @@ test("background network error surfaces a recoverable playerror and preserves th
     );
 });
 
+test("Android Chromium retries a hidden mid-track network error without dropping Play intent", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            userAgent:
+                "Mozilla/5.0 (Linux; Android 16; Pixel 9) AppleWebKit/537.36 Chrome/142.0.0.0 Mobile Safari/537.36",
+        },
+    });
+    const h = createHarness({ isPageHidden: () => true });
+    try {
+        h.engine.load("https://stream.example/pixel-transition.mp3", {
+            autoplay: true,
+        });
+        h.mainElement().fireLoadedMetadata(124.821);
+        const position = 4.38821;
+        h.mainElement().currentTime = position;
+        const before = h.mainElement().srcAssignments;
+        h.mainElement().fireError(
+            2,
+            "network interrupted after automatic transition",
+        );
+        assert.equal(
+            h.mainElement().srcAssignments,
+            before + 1,
+            "a playing Android source must get a bounded retry while still hidden",
+        );
+        assert.equal(
+            h.events.filter((e) => e.type === "playerror").length,
+            0,
+            "a retry must not tell the orchestrator to clear Play intent",
+        );
+        const plays = h.mainElement().playCalls;
+        h.mainElement().fireLoadedMetadata(124.821);
+        assert.equal(h.mainElement().currentTime, position);
+        assert.equal(h.mainElement().playCalls, plays + 1);
+        assert.equal(h.engine.isPlaying(), true);
+    } finally {
+        h.engine.destroy();
+        if (descriptor)
+            Object.defineProperty(globalThis, "navigator", descriptor);
+        else Reflect.deleteProperty(globalThis, "navigator");
+    }
+});
+
+function withPixelUserAgent(work: () => void): void {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            userAgent:
+                "Mozilla/5.0 (Linux; Android 16; Pixel 9) Chrome/142.0 Mobile Safari/537.36",
+        },
+    });
+    try {
+        work();
+    } finally {
+        if (descriptor)
+            Object.defineProperty(globalThis, "navigator", descriptor);
+        else Reflect.deleteProperty(globalThis, "navigator");
+    }
+}
+
+test("Android hidden network retries carry the existing budget and retain foreground fallback after exhaustion", () =>
+    withPixelUserAgent(() => {
+        const h = createHarness({ isPageHidden: () => true });
+        try {
+            h.engine.load("https://stream.example/bounded.mp3", {
+                autoplay: true,
+            });
+            h.mainElement().fireLoadedMetadata(125);
+            for (
+                let attempt = 0;
+                attempt < NATIVE_ENGINE_MAX_AUTOMATIC_RETRIES;
+                attempt++
+            ) {
+                h.mainElement().currentTime = 4.38821 + attempt;
+                const assignments = h.mainElement().srcAssignments;
+                h.mainElement().fireError(2, "hidden network error");
+                assert.equal(h.mainElement().srcAssignments, assignments + 1);
+                assert.equal(
+                    h.events.filter((e) => e.type === "playerror").length,
+                    0,
+                );
+                h.mainElement().fireLoadedMetadata(125);
+                assert.equal(h.mainElement().currentTime, 4.38821 + attempt);
+            }
+            const assignments = h.mainElement().srcAssignments;
+            h.mainElement().fireError(2, "budget exhausted");
+            assert.equal(h.mainElement().srcAssignments, assignments);
+            const failures = h.events.filter((e) => e.type === "playerror");
+            assert.equal(failures.length, 1);
+            assert.equal(
+                (failures[0].payload as { recoverable: boolean }).recoverable,
+                true,
+            );
+            assert.equal(
+                h.scheduler.timers.filter((t) => !t.cleared).length,
+                0,
+            );
+        } finally {
+            h.engine.destroy();
+        }
+    }));
+
+for (const boundary of ["pause", "stop", "replace"] as const) {
+    test(`Android pending hidden recovery respects explicit ${boundary}`, () =>
+        withPixelUserAgent(() => {
+            const h = createHarness({ isPageHidden: () => true });
+            try {
+                h.engine.load("https://stream.example/original.mp3", {
+                    autoplay: true,
+                });
+                h.mainElement().fireLoadedMetadata(125);
+                h.mainElement().currentTime = 4.38821;
+                h.mainElement().fireError(2, "interrupted");
+                if (boundary === "pause") h.engine.pause();
+                else if (boundary === "stop") h.engine.stop();
+                else
+                    h.engine.load(
+                        "https://stream.example/manual-selection.mp3",
+                        { autoplay: false },
+                    );
+                const plays = h.mainElement().playCalls;
+                h.mainElement().fireLoadedMetadata(150);
+                assert.equal(h.mainElement().playCalls, plays);
+                assert.equal(h.engine.isPlaying(), false);
+                if (boundary === "replace")
+                    assert.equal(
+                        h.mainElement().src,
+                        "https://stream.example/manual-selection.mp3",
+                    );
+            } finally {
+                h.engine.destroy();
+            }
+        }));
+}
+
+test("Android hidden startup network retries stay bounded before metadata", () =>
+    withPixelUserAgent(() => {
+        const h = createHarness({ isPageHidden: () => true });
+        try {
+            h.engine.load("https://stream.example/not-ready.mp3", {
+                autoplay: true,
+            });
+            for (
+                let attempt = 0;
+                attempt < NATIVE_ENGINE_MAX_AUTOMATIC_RETRIES;
+                attempt++
+            ) {
+                h.mainElement().fireError(2, "not ready");
+                h.scheduler.firePendingTimer();
+            }
+            const assignments = h.mainElement().srcAssignments;
+            h.mainElement().fireError(2, "exhausted startup");
+            assert.equal(h.mainElement().srcAssignments, assignments);
+            assert.equal(h.mainElement().playCalls, 0);
+            assert.equal(
+                h.scheduler.timers.filter((t) => !t.cleared).length,
+                0,
+            );
+            assert.equal(
+                h.events.filter((e) => e.type === "loaderror").length,
+                1,
+            );
+        } finally {
+            h.engine.destroy();
+        }
+    }));
+
+for (const userAgent of [
+    "Mozilla/5.0 (iPhone) Version/18.0 Mobile Safari/605.1",
+    "Mozilla/5.0 (Android) Firefox/140.0",
+]) {
+    test(`hidden network foreground policy stays compatible for ${userAgent}`, () => {
+        const descriptor = Object.getOwnPropertyDescriptor(
+            globalThis,
+            "navigator",
+        );
+        Object.defineProperty(globalThis, "navigator", {
+            configurable: true,
+            value: { userAgent },
+        });
+        const h = createHarness({ isPageHidden: () => true });
+        try {
+            h.engine.load("https://stream.example/compat.mp3", {
+                autoplay: true,
+            });
+            h.mainElement().fireLoadedMetadata(125);
+            const assignments = h.mainElement().srcAssignments;
+            h.mainElement().fireError(2, "reclaimed");
+            assert.equal(h.mainElement().srcAssignments, assignments);
+            assert.equal(
+                h.events.filter((e) => e.type === "playerror").length,
+                1,
+            );
+        } finally {
+            h.engine.destroy();
+            if (descriptor)
+                Object.defineProperty(globalThis, "navigator", descriptor);
+            else Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+}
+
 test("mid-playback transient error recovers by reloading at position and resuming playback", () => {
     const harness = createHarness();
     harness.engine.load("https://stream.example/track.flac", {

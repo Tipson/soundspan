@@ -128,6 +128,8 @@ export type NativeEnginePolicyEvent =
           mediaErrorCode: number | null;
           mediaErrorMessage: string | null;
           isPageHidden: boolean;
+          /** Host opt-in for bounded retries of requested background media. */
+          retryHiddenNetworkError?: boolean;
           currentTimeSec: number;
           nowMs: number;
       }
@@ -698,7 +700,16 @@ const handleElementError = (
     if (classification === "aborted") {
         return noChange(state);
     }
-    if (classification === "background_session_reclaim") {
+    const retryHiddenNetworkError =
+        classification === "background_session_reclaim" &&
+        event.retryHiddenNetworkError === true &&
+        state.autoplay &&
+        (state.status === "playing" || state.status === "loading") &&
+        state.automaticRetriesUsed < NATIVE_ENGINE_MAX_AUTOMATIC_RETRIES;
+    if (
+        classification === "background_session_reclaim" &&
+        !retryHiddenNetworkError
+    ) {
         return {
             state: { ...state, status: "error" },
             effects: [
@@ -730,7 +741,7 @@ const handleElementError = (
         };
     }
     if (
-        classification === "transient" &&
+        (classification === "transient" || retryHiddenNetworkError) &&
         state.automaticRetriesUsed < NATIVE_ENGINE_MAX_AUTOMATIC_RETRIES
     ) {
         const attempt = state.automaticRetriesUsed + 1;
