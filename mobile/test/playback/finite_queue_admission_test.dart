@@ -386,6 +386,97 @@ void main() {
       },
     );
 
+    test('future-tail purpose coalesces separately and survives only automatic current changes', () async {
+      final gate = Completer<ApiResponse>();
+      transport = CollectionTransport((_, _) => gate.future);
+      await coordinator.close();
+      coordinator = FiniteQueueAdmissionCoordinator(
+        api: FiniteQueueAdmissionApi(transport: transport),
+        authority: authority,
+        snapshot: () => state,
+      );
+      final selection = coordinator.admit(
+        captured: state,
+        references: [refA, refB],
+      );
+      final future = coordinator.admit(
+        captured: state,
+        references: [refA, refB],
+        futureTail: true,
+      );
+      final sameFuture = coordinator.admit(
+        captured: state,
+        references: [refA, refB],
+        futureTail: true,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(transport.requests.length, 2);
+      state = QueueSnapshot(
+        fence: collectionFence,
+        lineage: 3,
+        generation: 8,
+        currentEntryId: 'automatic-next',
+      );
+      gate.complete(
+        admissionResponse([refA, refB], states: ['allowed', 'denied']),
+      );
+      expect((await selection).isCurrent, isFalse);
+      final tail = await future;
+      expect(identical(tail, await sameFuture), isTrue);
+      expect(tail.stateAt(1), FiniteQueueAdmissionState.denied);
+      coordinator.invalidateQueue();
+      expect(tail.isCurrent, isFalse);
+    });
+
+    test('future-tail windows share the original deadline and never resume a late batch', () async {
+      final gate = Completer<ApiResponse>(), secondStarted = Completer<void>();
+      ApiRequest? second;
+      transport = CollectionTransport((request, _) {
+        final refs = (request.body!['references'] as List).cast<Map>();
+        if (transport.requests.length == 2) {
+          second = request;
+          secondStarted.complete();
+          return gate.future;
+        }
+        return ApiResponse(200, {
+          'version': 1,
+          'appliesTo': 'recommended_future',
+          'decisions': [
+            for (final ref in refs) {...ref, 'state': 'allowed'},
+          ],
+        });
+      });
+      await coordinator.close();
+      coordinator = FiniteQueueAdmissionCoordinator(
+        api: FiniteQueueAdmissionApi(transport: transport),
+        authority: authority,
+        snapshot: () => state,
+        timeout: const Duration(seconds: 1),
+      );
+      final future = coordinator.admit(
+        captured: state,
+        futureTail: true,
+        references: List.generate(
+          202,
+          (i) => FiniteQueueAdmissionReference(source: 'library', id: 'ref-$i'),
+        ),
+      );
+      await secondStarted.future;
+      expect((await future).mode, FiniteQueueAdmissionMode.unavailable);
+      final refs = (second!.body!['references'] as List).cast<Map>();
+      gate.complete(
+        ApiResponse(200, {
+          'version': 1,
+          'appliesTo': 'recommended_future',
+          'decisions': [
+            for (final ref in refs) {...ref, 'state': 'allowed'},
+          ],
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(transport.requests.length, 2);
+    });
+
     test('timeout during401 refresh never replays a late grant', () async {
       final refresh = Completer<TokenPair>();
       final refreshing = Completer<void>();

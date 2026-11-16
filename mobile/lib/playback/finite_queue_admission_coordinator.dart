@@ -127,18 +127,36 @@ final class FiniteQueueAdmissionCoordinator {
 
   void _cancelStale() {
     for (final flight in _flights.toList()) {
-      if (!_current(flight.capture)) flight.cancellation.cancel();
+      if (!_flightCurrent(flight)) flight.cancellation.cancel();
     }
   }
 
+  bool _flightCurrent(_Flight flight) {
+    if (!flight.futureTail) return _current(flight.capture);
+    final capture = flight.capture;
+    final latest = _capture(snapshot(), capture.fence);
+    return !_closed &&
+        authority.isCurrent(capture.fence) &&
+        latest != null &&
+        latest.fence == capture.fence &&
+        latest.lineage == capture.lineage &&
+        latest.mutation == capture.mutation &&
+        latest.queue == capture.queue;
+  }
+
+  /// Future-tail metadata checks cover every window and retain only the existing
+  /// owner/lineage/mutation/manual-queue fence across automatic current changes.
+  /// They never authorize selecting or preparing a current source.
   Future<FiniteQueueAdmissionEvaluation> admit({
     required QueueSnapshot captured,
     required List<FiniteQueueAdmissionReference> references,
     SessionFence? emptyQueueFence,
+    bool futureTail = false,
   }) {
     final refs = List<FiniteQueueAdmissionReference>.unmodifiable(references);
     final capture = _capture(captured, emptyQueueFence);
-    if (capture == null || !_current(capture)) {
+    final flight = capture == null ? null : _Flight(capture, refs, futureTail);
+    if (flight == null || !_flightCurrent(flight)) {
       return Future.value(
         FiniteQueueAdmissionEvaluation._(
           FiniteQueueAdmissionResult.unavailable(refs.length),
@@ -147,11 +165,12 @@ final class FiniteQueueAdmissionCoordinator {
       );
     }
     for (final flight in _flights) {
-      if (flight.capture == capture && _sameRefs(flight.references, refs)) {
+      if (flight.capture == capture &&
+          flight.futureTail == futureTail &&
+          _sameRefs(flight.references, refs)) {
         return flight.future;
       }
     }
-    final flight = _Flight(capture, refs);
     _flights.add(flight);
     flight.future = _evaluate(flight);
     return flight.future;
@@ -169,20 +188,20 @@ final class FiniteQueueAdmissionCoordinator {
           await _pendingChanged.future;
           cancellation.check();
         }
-        if (!_current(flight.capture)) {
+        if (!_flightCurrent(flight)) {
           cancellation.cancel();
           cancellation.check();
         }
         await authority.assertCurrent(flight.capture.fence);
         cancellation.check();
-        if (!_current(flight.capture)) {
+        if (!_flightCurrent(flight)) {
           cancellation.cancel();
           cancellation.check();
         }
         final states = <FiniteQueueAdmissionState>[];
         for (var start = 0; start < flight.references.length; start += 100) {
           cancellation.check();
-          if (!_current(flight.capture)) {
+          if (!_flightCurrent(flight)) {
             cancellation.cancel();
             cancellation.check();
           }
@@ -207,7 +226,10 @@ final class FiniteQueueAdmissionCoordinator {
           states.addAll(batch.states);
           // Automatic selection needs the first usable occurrence. Remaining
           // queue rows are checked only when they become actual candidates.
-          if (batch.states.contains(FiniteQueueAdmissionState.allowed)) break;
+          if (!flight.futureTail &&
+              batch.states.contains(FiniteQueueAdmissionState.allowed)) {
+            break;
+          }
         }
         states.addAll(
           List.filled(
@@ -228,7 +250,7 @@ final class FiniteQueueAdmissionCoordinator {
     }
     return FiniteQueueAdmissionEvaluation._(
       result,
-      () => !cancellation.isCancelled && _current(flight.capture),
+      () => !cancellation.isCancelled && _flightCurrent(flight),
     );
   }
 
@@ -250,9 +272,10 @@ final class FiniteQueueAdmissionCoordinator {
 }
 
 final class _Flight {
-  _Flight(this.capture, this.references);
+  _Flight(this.capture, this.references, this.futureTail);
   final _Capture capture;
   final List<FiniteQueueAdmissionReference> references;
+  final bool futureTail;
   final cancellation = MediaCancellation();
   late final Future<FiniteQueueAdmissionEvaluation> future;
 }

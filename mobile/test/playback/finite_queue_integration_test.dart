@@ -613,6 +613,416 @@ void main() {
     },
   );
 
+  test('active automatic refill awaits finite admission and attaches only allowed rows', () async {
+    final old = queue.snapshot;
+    final loads = engine.loaded.length, stops = engine.stops;
+    final refill = queue.createEntries([
+      collectionTrack(5),
+      collectionTrack(6),
+    ], recommended);
+    final response = Completer<ApiResponse>();
+    ApiRequest? requested;
+    respond = (request) {
+      requested = request;
+      return response.future;
+    };
+    final pending = queue.dispatch(
+      Enqueue(
+        refill,
+        fence: collectionFence,
+        expectedLineage: old.lineage,
+        automaticRecommendation: true,
+      ),
+    );
+    await settle();
+    expect(queue.snapshot.entries, old.entries);
+    expect(requested, isNotNull);
+    response.complete(decisions(requested!, ['denied', 'allowed']));
+    await pending;
+    expect(queue.snapshot.entries.map((entry) => entry.entryId), [
+      ...entries.map((entry) => entry.entryId),
+      refill.last.entryId,
+    ]);
+    expect(queue.snapshot.currentEntryId, old.currentEntryId);
+    expect(queue.snapshot.position, old.position);
+    expect(queue.snapshot.generation, old.generation);
+    expect(engine.loaded.length, loads);
+    expect(engine.stops, stops);
+  });
+
+  test(
+    'active refill checks every finite window after an allowed first batch',
+    () async {
+      final old = queue.snapshot;
+      final refill = queue.createEntries(
+        List.generate(202, (i) => collectionTrack(i + 10)),
+        recommended,
+      );
+      final batchSizes = <int>[];
+      respond = (request) async {
+        final refs = request.body!['references'] as List;
+        batchSizes.add(refs.length);
+        return decisions(
+          request,
+          refs
+              .map(
+                (ref) =>
+                    (ref as Map)['id'] == 'local-211' ? 'denied' : 'allowed',
+              )
+              .toList(),
+        );
+      };
+      await queue.dispatch(
+        Enqueue(
+          refill,
+          fence: collectionFence,
+          expectedLineage: old.lineage,
+          automaticRecommendation: true,
+        ),
+      );
+      expect(batchSizes, [100, 100, 2]);
+      expect(queue.snapshot.entries.map((entry) => entry.entryId), [
+        ...entries.map((entry) => entry.entryId),
+        ...refill.take(201).map((entry) => entry.entryId),
+      ]);
+      expect(queue.snapshot.currentEntryId, old.currentEntryId);
+      expect(queue.snapshot.position, old.position);
+    },
+  );
+
+  test('saved future negative prunes only denied aliases in the current scope without moving37s', () async {
+    const alias = YoutubeTrackRef('BBBBBBBBBBB');
+    final history = QueueEntry(
+      entryId: 'history',
+      track: Track(ref: alias, title: 'History', artist: 'Artist'),
+      context: recommended,
+    );
+    final blocked = QueueEntry(
+      entryId: 'blocked',
+      track: history.track,
+      context: recommended,
+    );
+    final manual = QueueEntry(
+      entryId: 'manual-alias',
+      track: history.track,
+      context: const PlayContext(surface: PlaySurface.playlist),
+    );
+    final rows = [history, entries[0], blocked, entries[2], manual];
+    await queue.dispatch(
+      ReplaceQueue(
+        rows,
+        fence: collectionFence,
+        initialEntryId: entries[0].entryId,
+      ),
+    );
+    engine.emit(position: const Duration(seconds: 37));
+    final old = queue.snapshot;
+    final loads = engine.loaded.length, stops = engine.stops;
+    var reads = 0;
+    respond = (request) async {
+      reads++;
+      final refs = request.body!['references'] as List;
+      return decisions(
+        request,
+        refs
+            .map(
+              (ref) =>
+                  (ref as Map)['id'] == 'BBBBBBBBBBB' ? 'denied' : 'allowed',
+            )
+            .toList(),
+      );
+    };
+    await preferences.set(
+      const LibraryTrackRef('original-negative'),
+      PreferenceSignal.dislike,
+    );
+    await settle();
+    expect(queue.snapshot.entries.map((entry) => entry.entryId), [
+      'history',
+      entries[0].entryId,
+      entries[2].entryId,
+      'manual-alias',
+    ]);
+    expect(queue.snapshot.currentEntryId, old.currentEntryId);
+    expect(queue.snapshot.position, old.position);
+    expect(queue.snapshot.generation, old.generation);
+    expect(queue.snapshot.lineage, old.lineage);
+    expect(engine.loaded.length, loads);
+    expect(engine.stops, stops);
+    engine.emit(position: const Duration(seconds: 38));
+    engine.emit(position: const Duration(seconds: 39));
+    await settle();
+    expect(reads, 1);
+  });
+
+  test(
+    'current negative keeps alias cleanup after its automatic current handoff',
+    () async {
+      final old = queue.snapshot;
+      respond = (request) async {
+        final refs = request.body!['references'] as List;
+        return decisions(
+          request,
+          refs
+              .map(
+                (ref) => (ref as Map)['id'] == 'local-3' ? 'denied' : 'allowed',
+              )
+              .toList(),
+        );
+      };
+      await preferences.set(entries[0].track.ref, PreferenceSignal.dislike);
+      await settle();
+      expect(queue.snapshot.currentEntryId, entries[1].entryId);
+      expect(queue.snapshot.entries.map((entry) => entry.entryId), [
+        entries[0].entryId,
+        entries[1].entryId,
+      ]);
+      expect(queue.snapshot.lineage, old.lineage);
+      expect(prepared, [entries[0].entryId, entries[1].entryId]);
+    },
+  );
+
+  test('late future denial follows automatic handoff but preserves latest current37s and history', () async {
+    final response = Completer<ApiResponse>();
+    ApiRequest? requested;
+    var reads = 0;
+    respond = (request) async {
+      reads++;
+      if (reads == 1) {
+        requested = request;
+        return response.future;
+      }
+      return decisions(request, ['allowed', 'denied']);
+    };
+    await preferences.set(
+      const LibraryTrackRef('original-negative'),
+      PreferenceSignal.dislike,
+    );
+    await settle();
+    expect(requested, isNotNull);
+    await queue.dispatch(const Next());
+    engine.emit(position: const Duration(seconds: 37));
+    final selected = queue.snapshot;
+    final loads = engine.loaded.length, stops = engine.stops;
+    response.complete(decisions(requested!, ['allowed', 'denied']));
+    await settle();
+    expect(queue.snapshot.entries.map((entry) => entry.entryId), [
+      entries[0].entryId,
+      entries[1].entryId,
+    ]);
+    expect(queue.snapshot.currentEntryId, selected.currentEntryId);
+    expect(queue.snapshot.position, selected.position);
+    expect(queue.snapshot.generation, selected.generation);
+    expect(engine.loaded.length, loads);
+    expect(engine.stops, stops);
+    expect(reads, 2);
+  });
+
+  test('future cleanup and active append leave unavailable rows and current untouched', () async {
+    final old = queue.snapshot;
+    respond = (_) async => const ApiResponse(503, null);
+    await preferences.set(
+      const LibraryTrackRef('original-negative'),
+      PreferenceSignal.dislike,
+    );
+    await settle();
+    final refill = queue.createEntries([collectionTrack(5)], recommended);
+    await queue.dispatch(
+      Enqueue(
+        refill,
+        fence: collectionFence,
+        expectedLineage: old.lineage,
+        automaticRecommendation: true,
+      ),
+    );
+    expect(queue.snapshot.entries, old.entries);
+    expect(queue.snapshot.currentEntryId, old.currentEntryId);
+    expect(queue.snapshot.position, old.position);
+    expect(queue.snapshot.generation, old.generation);
+    expect(queue.snapshot.closedRecommendationScopes, isEmpty);
+  });
+
+  test(
+    'manual replacement retires a late active refill and future denial',
+    () async {
+      final gates = <ApiRequest, Completer<ApiResponse>>{};
+      respond = (request) {
+        final gate = Completer<ApiResponse>();
+        gates[request] = gate;
+        return gate.future;
+      };
+      await preferences.set(
+        const LibraryTrackRef('original-negative'),
+        PreferenceSignal.dislike,
+      );
+      await settle();
+      final refill = queue.createEntries([collectionTrack(5)], recommended);
+      final appending = queue.dispatch(
+        Enqueue(
+          refill,
+          fence: collectionFence,
+          expectedLineage: queue.snapshot.lineage,
+          automaticRecommendation: true,
+        ),
+      );
+      await settle();
+      expect(gates.length, 2);
+      final manual = queue.createEntries([
+        collectionTrack(7),
+      ], const PlayContext(surface: PlaySurface.playlist));
+      await queue.dispatch(ReplaceQueue(manual, fence: collectionFence));
+      for (final pending in gates.entries) {
+        final refs = pending.key.body!['references'] as List;
+        pending.value.complete(
+          decisions(pending.key, List.filled(refs.length, 'denied')),
+        );
+      }
+      await appending;
+      await settle();
+      expect(queue.snapshot.entries, manual);
+      expect(queue.snapshot.currentEntryId, manual.single.entryId);
+    },
+  );
+
+  test(
+    'two pending preferences and Undo refresh only after the last like settles',
+    () async {
+      final negative = Completer<ApiResponse>(),
+          like = Completer<ApiResponse>();
+      preferenceRespond = (request) => request.body!['signal'] == 'thumbs_down'
+          ? negative.future
+          : request.body!['signal'] == 'thumbs_up'
+          ? like.future
+          : Future.value(preferenceResponse('local-1', 'clear'));
+      final disliking = preferences.set(
+        entries[0].track.ref,
+        PreferenceSignal.dislike,
+      );
+      final liking = preferences.set(
+        entries[1].track.ref,
+        PreferenceSignal.like,
+      );
+      final undoing = preferences.set(
+        entries[0].track.ref,
+        PreferenceSignal.clear,
+      );
+      await settle();
+      expect(admission.pendingMutations, 3);
+      expect(
+        transport.requests.where((r) => r.path.endsWith('queue-admission')),
+        isEmpty,
+      );
+      negative.complete(preferenceResponse('local-1', 'thumbs_down'));
+      await disliking;
+      await undoing;
+      await settle();
+      expect(admission.pendingMutations, 1);
+      expect(
+        transport.requests.where((r) => r.path.endsWith('queue-admission')),
+        isEmpty,
+      );
+      like.complete(preferenceResponse('local-2', 'thumbs_up'));
+      await liking;
+      await settle();
+      expect(admission.pendingMutations, 0);
+      expect(
+        transport.requests
+            .where((r) => r.path.endsWith('queue-admission'))
+            .length,
+        1,
+      );
+      expect(queue.snapshot.entries, entries);
+      expect(queue.snapshot.currentEntryId, entries[0].entryId);
+      expect(prepared, [entries[0].entryId]);
+    },
+  );
+
+  test(
+    'saved negative checks the complete future after an allowed first window',
+    () async {
+      final rows = queue.createEntries(
+        List.generate(203, (i) => collectionTrack(i + 10)),
+        recommended,
+      );
+      await queue.dispatch(ReplaceQueue(rows, fence: collectionFence));
+      engine.emit(position: const Duration(seconds: 37));
+      final old = queue.snapshot;
+      final batchSizes = <int>[];
+      respond = (request) async {
+        final refs = request.body!['references'] as List;
+        batchSizes.add(refs.length);
+        return decisions(
+          request,
+          refs
+              .map(
+                (ref) =>
+                    (ref as Map)['id'] == 'local-212' ? 'denied' : 'allowed',
+              )
+              .toList(),
+        );
+      };
+      await preferences.set(
+        const LibraryTrackRef('original-negative'),
+        PreferenceSignal.dislike,
+      );
+      await settle();
+      expect(batchSizes, [100, 100, 2]);
+      expect(
+        queue.snapshot.entries.map((entry) => entry.entryId),
+        rows.take(202).map((entry) => entry.entryId),
+      );
+      expect(queue.snapshot.currentEntryId, old.currentEntryId);
+      expect(queue.snapshot.position, old.position);
+      expect(queue.snapshot.generation, old.generation);
+    },
+  );
+
+  test(
+    'active future-tail grant cannot select a source after a natural end',
+    () async {
+      await queue.dispatch(ReplaceQueue([entries[0]], fence: collectionFence));
+      engine.emit(position: const Duration(seconds: 37));
+      final response = Completer<ApiResponse>();
+      ApiRequest? requested;
+      respond = (request) {
+        requested = request;
+        return response.future;
+      };
+      final refill = queue.createEntries([collectionTrack(5)], recommended);
+      final pending = queue.dispatch(
+        Enqueue(
+          refill,
+          fence: collectionFence,
+          expectedLineage: queue.snapshot.lineage,
+          automaticRecommendation: true,
+        ),
+      );
+      await settle();
+      expect(requested, isNotNull);
+      engine.emit(processing: PlaybackProcessing.completed);
+      await settle();
+      final ended = queue.snapshot;
+      final loads = engine.loaded.length;
+      expect(ended.processing, PlaybackProcessing.completed);
+      response.complete(decisions(requested!, ['allowed']));
+      await pending;
+      expect(queue.snapshot.entries, ended.entries);
+      expect(queue.snapshot.currentEntryId, ended.currentEntryId);
+      expect(queue.snapshot.generation, ended.generation);
+      expect(engine.loaded.length, loads);
+      respond = (request) async => decisions(request, ['allowed']);
+      await queue.dispatch(
+        Enqueue(
+          refill,
+          fence: collectionFence,
+          expectedLineage: queue.snapshot.lineage,
+          automaticRecommendation: true,
+        ),
+      );
+      expect(queue.snapshot.currentEntryId, refill.single.entryId);
+    },
+  );
+
   test('controller disposal settles an acknowledged intent still reconciling its tail', () async {
     final controller = PreferenceController(
       transport: transport,

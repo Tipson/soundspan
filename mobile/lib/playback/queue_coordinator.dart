@@ -38,7 +38,33 @@ final class QueueCoordinator implements PlaybackController {
   final SessionAuthority authority;
   final PlaybackEngine engine;
   final PrepareAudio prepare;
-  FiniteQueueAdmissionCoordinator? finiteAdmission;
+  FiniteQueueAdmissionCoordinator? _finiteAdmission;
+  StreamSubscription<void>? _finiteChanges;
+  int _finiteObservedMutation = 0;
+  bool _finiteMutationPending = false;
+
+  /// Mounted owner policy; each settled mutation gets one future-tail check.
+  FiniteQueueAdmissionCoordinator? get finiteAdmission => _finiteAdmission;
+  set finiteAdmission(FiniteQueueAdmissionCoordinator? policy) {
+    if (identical(policy, _finiteAdmission)) return;
+    unawaited(_finiteChanges?.cancel());
+    _finiteChanges = null;
+    _finiteAdmission = policy;
+    _finiteObservedMutation = policy?.mutationEpoch ?? 0;
+    _finiteMutationPending = (policy?.pendingMutations ?? 0) > 0;
+    if (policy == null) return;
+    _finiteChanges = policy.changes.listen((_) {
+      if (!identical(finiteAdmission, policy) || _disposed) return;
+      if (_finiteObservedMutation != policy.mutationEpoch) {
+        _finiteObservedMutation = policy.mutationEpoch;
+        _finiteMutationPending = true;
+      }
+      if (!_finiteMutationPending || policy.pendingMutations != 0) return;
+      _finiteMutationPending = false;
+      unawaited(_readmitFuture(policy));
+    });
+  }
+
   static const _admissionUnavailable = AppFailure(
     code: 'recommendation_admission_unavailable',
     message: 'Не удалось проверить следующую рекомендацию. Повторите попытку.',
@@ -575,8 +601,17 @@ final class QueueCoordinator implements PlaybackController {
             : null;
         final replacement = _replacementIntent;
         _AdmissionChoice? choice;
+        Set<String>? admittedFuture;
         try {
-          if (selection != null && finiteAdmission != null) {
+          if (command.automaticRecommendation &&
+              selection == null &&
+              finiteAdmission != null) {
+            admittedFuture = await _admitIncomingFuture(
+              captured,
+              command.entries,
+            );
+            if (admittedFuture == null) return;
+          } else if (selection != null && finiteAdmission != null) {
             choice = await _admitAutomatic(
               captured,
               command.entries
@@ -618,6 +653,11 @@ final class QueueCoordinator implements PlaybackController {
           _publish();
           return;
         }
+        // An active append's metadata grant cannot become a source-selection
+        // grant if natural completion acquired the queue while it was pending.
+        if (admittedFuture != null && _acceptsContinuation(command.fence)) {
+          return;
+        }
         if (_fence != null && _fence != command.fence) {
           throw const AppFailure(
             code: 'session_revoked',
@@ -630,10 +670,13 @@ final class QueueCoordinator implements PlaybackController {
             ? command.entries
             : command.entries
                   .where(
-                    (entry) => admission.allowsRecommendation(
-                      entry.track.ref,
-                      entry.context,
-                    ),
+                    (entry) =>
+                        admission.allowsRecommendation(
+                          entry.track.ref,
+                          entry.context,
+                        ) &&
+                        (admittedFuture == null ||
+                            admittedFuture.contains(entry.entryId)),
                   )
                   .toList();
         if (incoming.isEmpty) return;
@@ -932,21 +975,129 @@ final class QueueCoordinator implements PlaybackController {
         !_intent;
   }
 
-  void _pruneExcludedFuture() {
+  Future<void> _readmitFuture(FiniteQueueAdmissionCoordinator policy) async {
+    final captured = snapshot;
+    final scope = captured.currentEntry?.context.recommendationScopeKey;
+    final fence = captured.fence;
+    if (scope == null ||
+        fence == null ||
+        !_matchesLineage(fence, captured.lineage)) {
+      return;
+    }
+    final current = captured.effectiveOrder.indexOf(
+      captured.currentEntryId ?? '',
+    );
+    if (current < 0) return;
+    final future = captured.effectiveOrder.skip(current + 1).toSet();
+    final refs = <FiniteQueueAdmissionReference>[];
+    final referenced = <String>[];
+    for (final entry in captured.entries) {
+      if (!future.contains(entry.entryId) ||
+          entry.context.recommendationScopeKey != scope) {
+        continue;
+      }
+      final ref = FiniteQueueAdmissionReference.fromTrack(
+        entry.track.ref,
+        generationId: entry.context.recommendationGenerationId,
+      );
+      if (ref != null) {
+        refs.add(ref);
+        referenced.add(entry.entryId);
+      }
+    }
+    if (refs.isEmpty) return;
+    final result = await policy.admit(
+      captured: captured,
+      references: refs,
+      futureTail: true,
+    );
+    if (!identical(finiteAdmission, policy) ||
+        !result.isCurrent ||
+        result.mode != FiniteQueueAdmissionMode.authoritative ||
+        !_matchesLineage(fence, captured.lineage) ||
+        _currentRecommendationScope != scope) {
+      return;
+    }
+    final denied = <String>{
+      for (var i = 0; i < referenced.length; i++)
+        if (result.stateAt(i) == FiniteQueueAdmissionState.denied)
+          referenced[i],
+    };
+    if (_pruneExcludedFuture(denied: denied)) _publish();
+  }
+
+  Future<Set<String>?> _admitIncomingFuture(
+    QueueSnapshot captured,
+    List<QueueEntry> entries,
+  ) async {
+    final policy = finiteAdmission!;
+    final refs = <FiniteQueueAdmissionReference>[];
+    final referenced = <String>[];
+    final allowed = <String>{};
+    for (final entry in entries) {
+      if (!captured.allowsRecommendation(entry.track.ref, entry.context)) {
+        continue;
+      }
+      if (entry.context.recommendationScopeKey == null) {
+        allowed.add(entry.entryId);
+        continue;
+      }
+      final ref = FiniteQueueAdmissionReference.fromTrack(
+        entry.track.ref,
+        generationId: entry.context.recommendationGenerationId,
+      );
+      if (ref != null) {
+        refs.add(ref);
+        referenced.add(entry.entryId);
+      }
+    }
+    if (refs.isEmpty) {
+      await authority
+          .assertCurrent(captured.fence!)
+          .timeout(const Duration(seconds: 17));
+      return allowed;
+    }
+    final result = await policy.admit(
+      captured: captured,
+      references: refs,
+      futureTail: true,
+    );
+    if (!identical(finiteAdmission, policy) ||
+        !result.isCurrent ||
+        _currentRecommendationScope !=
+            captured.currentEntry?.context.recommendationScopeKey ||
+        result.mode == FiniteQueueAdmissionMode.unavailable) {
+      return null;
+    }
+    for (var i = 0; i < referenced.length; i++) {
+      if (result.mode == FiniteQueueAdmissionMode.legacyExact ||
+          result.stateAt(i) == FiniteQueueAdmissionState.allowed) {
+        allowed.add(referenced[i]);
+      }
+    }
+    return allowed;
+  }
+
+  bool _pruneExcludedFuture({Set<String> denied = const {}}) {
     final index = _order.indexOf(_current ?? '');
-    if (index < 0) return;
+    if (index < 0) return false;
     final admission = snapshot;
     final future = _order.skip(index + 1).toSet();
     final removed = _entries
         .where(
           (entry) =>
               future.contains(entry.entryId) &&
-              !admission.allowsRecommendation(entry.track.ref, entry.context),
+              (denied.contains(entry.entryId) ||
+                  !admission.allowsRecommendation(
+                    entry.track.ref,
+                    entry.context,
+                  )),
         )
         .map((entry) => entry.entryId)
         .toSet();
     _entries.removeWhere((entry) => removed.contains(entry.entryId));
     _order.removeWhere(removed.contains);
+    return removed.isNotEmpty;
   }
 
   Future<void> _select(
@@ -1578,6 +1729,7 @@ final class QueueCoordinator implements PlaybackController {
     if (_disposed) return;
     await _clear();
     _disposed = true;
+    await _finiteChanges?.cancel();
     await _engineSubscription.cancel();
     await _sessionSubscription.cancel();
     await engine.dispose();
