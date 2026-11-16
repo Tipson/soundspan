@@ -461,7 +461,26 @@ test("restore reads fresh owner history scope during producer rollback without e
     assert.equal(newAdmission(value), null);
 });
 
-test("restore scope cannot revive a cached, disabled, expired or mismatched receipt", () => {
+test("restore reads a disabled policy scope for known engagement without authorizing new or replayed creation", () => {
+    const value = grant({
+        newCreationsEnabled: false,
+        replaySupported: false,
+        allowedSources: [],
+    });
+    assert.deepEqual(
+        admit(value, {
+            binding,
+            nowMonotonicMs: receipt,
+            online: true,
+            intent: { kind: "restore" },
+        }),
+        { historyEpoch: 4, serverNowMs: now },
+    );
+    assert.equal(newAdmission(value), null);
+    assert.equal(replay(value, key().value), null);
+});
+
+test("restore scope cannot revive a cached, expired or mismatched receipt", () => {
     const restore = (
         value: PlayCreateGrant,
         patch: Partial<{
@@ -477,7 +496,6 @@ test("restore scope cannot revive a cached, disabled, expired or mismatched rece
             intent: { kind: "restore" },
             ...patch,
         });
-    assert.equal(restore(grant({ replaySupported: false })), null);
     assert.equal(restore({ ...grant() }), null);
     assert.equal(
         restore(grant(), { binding: { ...binding, loginNonce: "other" } }),

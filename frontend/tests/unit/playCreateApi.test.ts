@@ -236,7 +236,7 @@ test("fresh grants use independent private identity and feature HTTP reads witho
     );
 });
 
-test("unknown, disabled, malformed and nonprivate capabilities close compatibly while producer rollback permits restoration", async () => {
+test("unknown, malformed and nonprivate capabilities close compatibly while producer rollback permits restoration", async () => {
     let selected: { data: unknown; status?: number; cache?: string } = {
         data: {},
     };
@@ -245,7 +245,6 @@ test("unknown, disabled, malformed and nonprivate capabilities close compatibly 
             for (const value of [
                 { data: {}, status: 404 },
                 { data: {} },
-                { data: { playCreation: policy({ replaySupported: false }) } },
                 { data: { playCreation: policy({ version: 2 }) } },
                 {
                     data: { playCreation: policy() },
@@ -295,6 +294,60 @@ test("unknown, disabled, malformed and nonprivate capabilities close compatibly 
                 : json(response, selected.data, selected.status ?? 200, {
                       "Cache-Control": selected.cache ?? "private,no-store",
                   }),
+    );
+});
+
+test("a fresh fully disabled policy restores known engagement scope but grants no create permission", async () => {
+    await fixture(
+        async (client, requests) => {
+            const grant = await client.getPlayCreationGrant({ network });
+            assert.ok(grant);
+            const admit = (
+                intent: Parameters<typeof admitPlayCreateGrant>[1]["intent"],
+            ) =>
+                admitPlayCreateGrant(grant, {
+                    binding: binding(client),
+                    online: true,
+                    nowMonotonicMs: performance.now(),
+                    intent,
+                });
+            assert.equal(admit({ kind: "restore" })?.historyEpoch, 7);
+            assert.equal(admit({ kind: "new", source: "youtube" }), null);
+            assert.equal(admit({ kind: "replay", key }), null);
+            assert.deepEqual(
+                await client.updatePlayEngagementIdempotent(
+                    "known-id",
+                    engagement,
+                    {
+                        binding: grant.binding,
+                    },
+                ),
+                { success: true },
+            );
+            assert.deepEqual(
+                requests.map((row) => [row.method, row.url]),
+                [
+                    ["GET", "/api/auth/me"],
+                    ["GET", "/api/system/features"],
+                    ["PATCH", "/api/plays/known-id/engagement"],
+                ],
+            );
+        },
+        (request, response) =>
+            json(
+                response,
+                request.url === "/api/auth/me"
+                    ? { id: "owner-a" }
+                    : request.url === "/api/system/features"
+                      ? {
+                            playCreation: policy({
+                                newCreationsEnabled: false,
+                                replaySupported: false,
+                                allowedSources: [],
+                            }),
+                        }
+                      : { success: true },
+            ),
     );
 });
 

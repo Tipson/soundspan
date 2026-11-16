@@ -220,7 +220,7 @@ export function admitPlayCreateGrant(
         intent:
             | { kind: "new"; source: PlayCreateSource }
             | { kind: "replay"; key: string }
-            /** Read current lease scope; each wire send still needs new/replay admission. */
+            /** Read current lease scope for recovery/known engagement; never authorize creation. */
             | { kind: "restore" };
     },
 ): PlayCreateAdmission | null {
@@ -240,7 +240,7 @@ export function admitPlayCreateGrant(
     if (
         elapsed < 0 ||
         elapsed >= policy.capabilityTtlSeconds * 1000 ||
-        !policy.replaySupported
+        (options.intent.kind !== "restore" && !policy.replaySupported)
     )
         return null;
     const expected = dataRecord(options.binding);

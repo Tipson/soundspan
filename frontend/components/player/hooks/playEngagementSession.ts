@@ -11,8 +11,20 @@ const MAX_LISTENED_SECONDS = 86_400;
 const MAX_CONTIGUOUS_PROGRESS_DELTA_SECONDS = 10;
 const EARLY_SKIP_SECONDS = 30;
 const EARLY_SKIP_RATIO = 0.2;
+const DURABLE_CHECKPOINT_SECONDS = 30;
+
+/** A selected durable run owns all retries; the tracker must never fall back after selection. */
+export interface PlayEngagementDelivery {
+    created: Promise<PlayLogResponse>;
+    noteEngagement(
+        input: PlayEngagementInput,
+        final: boolean,
+    ): Promise<boolean>;
+}
 
 interface PlayEngagementDependencies {
+    /** Null means legacy was selected before a durable run was created. */
+    beginPlay?(input: PlayLogInput): PlayEngagementDelivery | null;
     logPlay(input: PlayLogInput): Promise<PlayLogResponse>;
     updatePlayEngagement(
         playId: string,
@@ -38,6 +50,8 @@ interface ActivePlayEngagement {
     finalInput: PlayEngagementInput | null;
     playId: string | null;
     finalSent: boolean;
+    delivery: PlayEngagementDelivery | null;
+    checkpointSeconds: number;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -121,17 +135,46 @@ export function resolvePlaybackRecommendationSessionId(
 
 /**
  * Tracks one remote play at a time and emits exactly one final engagement.
- * Finalization remains pending until the create-play response supplies its id.
+ * Durable finalization is captured before the response; legacy delivery waits for its id.
  */
 export function createPlayEngagementTracker(
     dependencies: PlayEngagementDependencies,
 ) {
     let active: ActivePlayEngagement | null = null;
 
+    const checkpoint = (
+        session: ActivePlayEngagement,
+        input: PlayEngagementInput,
+        final: boolean,
+    ): void => {
+        if (!session.delivery) return;
+        // Capture synchronously, including final-before-create-ACK; the journal owns persistence ordering.
+        try {
+            void session.delivery.noteEngagement(input, final).then(
+                (accepted) => {
+                    if (!accepted)
+                        dependencies.onError?.(
+                            "finalize",
+                            new Error("Play checkpoint was not accepted"),
+                        );
+                },
+                (error) => dependencies.onError?.("finalize", error),
+            );
+        } catch (error) {
+            dependencies.onError?.("finalize", error);
+        }
+    };
+
     const sendFinalIfReady = (session: ActivePlayEngagement): void => {
-        if (session.finalSent || !session.playId || !session.finalInput) {
+        if (session.finalSent || !session.finalInput) {
             return;
         }
+        if (session.delivery) {
+            session.finalSent = true;
+            checkpoint(session, session.finalInput, true);
+            return;
+        }
+        if (!session.playId) return;
         session.finalSent = true;
         void dependencies
             .updatePlayEngagement(session.playId, session.finalInput)
@@ -151,6 +194,15 @@ export function createPlayEngagementTracker(
             if (active?.key === input.key) return;
             if (active) finish("transition");
 
+            let delivery: PlayEngagementDelivery | null;
+            try {
+                delivery = dependencies.beginPlay?.(input.play) ?? null;
+            } catch (error) {
+                // Selection may already have issued a key. A second keyless POST could duplicate it.
+                dependencies.onError?.("create", error);
+                return;
+            }
+
             const session: ActivePlayEngagement = {
                 key: input.key,
                 durationSeconds: finiteNonNegative(input.durationSeconds),
@@ -160,10 +212,11 @@ export function createPlayEngagementTracker(
                 finalInput: null,
                 playId: null,
                 finalSent: false,
+                delivery,
+                checkpointSeconds: 0,
             };
             active = session;
-            void dependencies
-                .logPlay(input.play)
+            void (delivery?.created ?? dependencies.logPlay(input.play))
                 .then((response) => {
                     const playId =
                         typeof response?.id === "string"
@@ -195,6 +248,27 @@ export function createPlayEngagementTracker(
                 session.maxPositionSeconds,
                 position,
             );
+            if (
+                session.delivery &&
+                session.listenedSeconds - session.checkpointSeconds >=
+                    DURABLE_CHECKPOINT_SECONDS &&
+                completionRatio(session) > EARLY_SKIP_RATIO
+            ) {
+                session.checkpointSeconds = session.listenedSeconds;
+                checkpoint(
+                    session,
+                    {
+                        listenedSeconds: clamp(
+                            session.listenedSeconds,
+                            0,
+                            MAX_LISTENED_SECONDS,
+                        ),
+                        completionRatio: completionRatio(session),
+                        outcome: "meaningful",
+                    },
+                    false,
+                );
+            }
         },
 
         transitionTo(nextKey: string | null): void {

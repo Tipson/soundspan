@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Deliver browser Play attempts through a bounded, owner-fenced coordinator and preserve absolute final engagement before creation acknowledgements. Recover admission after idle or network changes, retain live checkpoints through failed history clears, and keep known engagement delivery available during creation rollback. Player activation remains gated.
 - Read owner-bound Play permissions through dedicated authenticated requests and retain same-key mutation retries. Recheck login ownership before every retry; compare shared credentials and login publication before applying refresh responses so stale refreshes cannot replace or clear a newer session.
 - Capture journal response timing before body processing and retain server retry metadata through malformed error bodies. Keep fresh reads independent of UI caching, parse cache directives outside quoted values, and validate exact Play acknowledgements and raw protocol fields.
 - Persist remote Play attempts and absolute engagement in an owner-fenced browser journal. Reserve requests atomically across tabs, retain final progress through delayed acknowledgements, bound recovery and honor durable retry holdoffs. Prepare fresh identity bindings with one bounded login-fence recovery; HTTP delivery and player activation remain gated.
