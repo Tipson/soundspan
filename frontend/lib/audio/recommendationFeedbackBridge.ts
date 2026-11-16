@@ -2,9 +2,14 @@
 
 import type { TrackPreferenceSignal } from "@/lib/api";
 import type { RecommendationFeedbackIntent } from "./recommendationQueueFeedback";
+import type { RecommendationQueuePreferenceMutation } from "./recommendationQueueAdmission";
 
 /** The mounted queue authority supplies its own owner/lineage admission checks. */
 export interface RecommendationFeedbackOwner {
+    /** Reserve every actual write, including like/clear with no exact-mask change. */
+    beginMutation?: () => RecommendationQueuePreferenceMutation | null;
+    /** Resource cleanup only; an old receipt can settle its original pending token. */
+    settleMutation?: (token: RecommendationQueuePreferenceMutation) => void;
     begin: (
         trackId: string,
         signal: TrackPreferenceSignal,
@@ -30,6 +35,37 @@ export interface CapturedRecommendationFeedback {
 // No preference/request state is installed during server rendering.
 let current: Registration | null = null;
 const changeListeners = new Set<() => void>();
+
+/** Pending write lifetime, separate from an exact-recording ACK or rollback. */
+export interface CapturedRecommendationPreferenceMutation {
+    finish(): void;
+}
+
+/** Capture before any preference/cache await; finish once in the caller's finally. */
+export function captureRecommendationPreferenceMutation(): CapturedRecommendationPreferenceMutation | null {
+    const registration = current;
+    if (!registration?.owner.beginMutation) return null;
+    try {
+        const token = registration.owner.beginMutation();
+        if (!token) return null;
+        let finished = false;
+        return Object.freeze({
+            finish() {
+                if (finished) return;
+                finished = true;
+                try {
+                    // Cleanup stays with the original coordinator even after replacement.
+                    registration.owner.settleMutation?.(token);
+                } catch {
+                    registration.owner.reportFailure();
+                }
+            },
+        });
+    } catch {
+        registration.owner.reportFailure();
+        return null;
+    }
+}
 
 /** Subscribe only while a mounted player owns speculative audio resources. */
 export function subscribeRecommendationFeedbackChanges(

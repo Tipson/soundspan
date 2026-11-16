@@ -359,6 +359,104 @@ const flushAsync = async () => {
     await new Promise((resolve) => setImmediate(resolve));
 };
 
+test("automatic recommendation Next waits for policy and skips denied recordings without touching current early", async () => {
+    const current = makeTrack("policy-current", "artist");
+    const denied = makeTrack("policy-denied", "artist");
+    const allowed = makeTrack("policy-allowed", "other");
+    const state = createDeferredAudioState({
+        queue: [current, denied, allowed],
+        currentIndex: 0,
+        currentTrack: current,
+        playbackType: "track",
+    });
+    let release!: (value: "ready") => void;
+    const gate = new Promise<"ready">((resolve) => {
+        release = resolve;
+    });
+    const feedback = state.recommendationFeedback as Record<string, unknown>;
+    feedback.prepareAdvance = () => gate;
+    feedback.readyFor = (track: Track) => track.id !== denied.id;
+    const playback = createPlaybackStub({ currentTime: 37, duration: 200 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+    controls.next();
+    state.commit();
+    assert.equal(
+        (state.currentTrack as Track).id,
+        current.id,
+        "current source is retained while the policy is pending",
+    );
+    assert.equal(playback.currentTime, 37);
+    assert.equal(playback.isPlaying, true);
+    release("ready");
+    await flushAsync();
+    state.commit();
+    assert.equal((state.currentTrack as Track).id, allowed.id);
+    assert.equal(state.currentIndex, 2);
+});
+
+test("Pause retires pending recommendation Next so a late policy cannot change the selected track", async () => {
+    const current = makeTrack("policy-paused", "artist"),
+        next = makeTrack("policy-next", "other");
+    const state = createDeferredAudioState({
+        queue: [current, next],
+        currentIndex: 0,
+        currentTrack: current,
+        playbackType: "track",
+    });
+    let release!: (value: "ready") => void;
+    const gate = new Promise<"ready">((resolve) => {
+        release = resolve;
+    });
+    (state.recommendationFeedback as Record<string, unknown>).prepareAdvance =
+        () => gate;
+    const playback = createPlaybackStub({ currentTime: 37 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+    controls.next();
+    controls.pause();
+    state.commit();
+    release("ready");
+    await flushAsync();
+    state.commit();
+    assert.equal((state.currentTrack as Track).id, current.id);
+    assert.equal(playback.currentTime, 37);
+    assert.equal(playback.isPlaying, false);
+});
+
+test("unavailable policy at a natural end does not restart or select an unchecked recommendation", async () => {
+    const current = makeTrack("policy-ended", "artist"),
+        next = makeTrack("policy-unknown", "other");
+    const state = createDeferredAudioState({
+        queue: [current, next],
+        currentIndex: 0,
+        currentTrack: current,
+        playbackType: "track",
+    });
+    let release!: (value: "unavailable") => void;
+    const gate = new Promise<"unavailable">((resolve) => {
+        release = resolve;
+    });
+    (state.recommendationFeedback as Record<string, unknown>).prepareAdvance =
+        () => gate;
+    const playback = createPlaybackStub({ currentTime: 200, duration: 200 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+    controls.advanceQueue(null);
+    state.commit();
+    assert.equal((state.currentTrack as Track).id, current.id);
+    assert.equal(
+        playback.isPlaying,
+        false,
+        "retire the completed track intent while waiting",
+    );
+    release("unavailable");
+    await flushAsync();
+    state.commit();
+    assert.equal((state.currentTrack as Track).id, current.id);
+    assert.equal(playback.currentTime, 200);
+});
+
 function makeTrack(id: string, artistId: string) {
     return {
         id,

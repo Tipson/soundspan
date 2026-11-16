@@ -505,6 +505,10 @@ const audioState = {
     waveMode: "for-you" as "for-you" | "new" | "familiar",
     recommendationFeedback: {
         allows: (track: { id: string }) => !excludedPreloadIds.has(track.id),
+        readyFor: undefined as ((track: { id: string }) => boolean) | undefined,
+        prepareTrack: undefined as
+            | ((track: { id: string }) => Promise<boolean>)
+            | undefined,
         reset: () => excludedPreloadIds.clear(),
         revision: 0,
     },
@@ -1441,6 +1445,8 @@ beforeEach(() => {
     resetHarnessState();
     excludedPreloadIds.clear();
     audioState.recommendationFeedback.revision = 0;
+    audioState.recommendationFeedback.readyFor = undefined;
+    audioState.recommendationFeedback.prepareTrack = undefined;
     playbackMachine.state = "IDLE";
     clearPlaybackHeartbeat();
 });
@@ -2408,6 +2414,108 @@ for (const preloadResult of [
         );
     });
 }
+
+test("a speculative source waits for server admission before any native preload", async () => {
+    const current = makeTrack("policy-source-current");
+    const upcoming = makeTrack("vk:1_2", { streamSource: "vk" });
+    let allowed = false;
+    let release!: (value: boolean) => void;
+    const gate = new Promise<boolean>((resolve) => {
+        release = resolve;
+    });
+    audioState.recommendationFeedback.readyFor = (track) =>
+        track.id === current.id || allowed;
+    audioState.recommendationFeedback.prepareTrack = () => gate;
+    audioState.currentTrack = current;
+    audioState.queue = [current, upcoming];
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 0);
+    allowed = true;
+    release(true);
+    await flushAsync(20);
+    assert.equal(engine.preloadCalls.length, 1);
+    assert.equal(audioState.currentTrack, current);
+});
+
+for (const retirement of ["pause", "no successor"] as const) {
+    test(`late admission cannot start a preload after ${retirement}`, async () => {
+        const current = makeTrack("retired-policy-current");
+        const upcoming = makeTrack("vk:1_2", { streamSource: "vk" });
+        let allowed = false;
+        let release!: (value: boolean) => void;
+        const gate = new Promise<boolean>((resolve) => {
+            release = resolve;
+        });
+        audioState.recommendationFeedback.readyFor = (track) =>
+            track.id === current.id || allowed;
+        audioState.recommendationFeedback.prepareTrack = () => gate;
+        audioState.currentTrack = current;
+        audioState.queue = [current, upcoming];
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync();
+        assert.equal(engine.preloadCalls.length, 0);
+        if (retirement === "pause") playbackState.isPlaying = false;
+        else audioState.queue = [current];
+        renderOrchestrator();
+        await flushAsync();
+        allowed = true;
+        release(true);
+        await flushAsync(20);
+        assert.equal(engine.preloadCalls.length, 0);
+        assert.equal(audioState.currentTrack, current);
+    });
+}
+
+test("mutation revokes a prepared grant synchronously while exact eligibility remains unchanged", async () => {
+    const current = makeTrack("policy-cancel-current");
+    const upcoming = makeTrack("vk:1_2", { streamSource: "vk" });
+    let allowed = true;
+    audioState.recommendationFeedback.readyFor = (track) =>
+        track.id === current.id || allowed;
+    audioState.recommendationFeedback.prepareTrack = async () => allowed;
+    audioState.currentTrack = current;
+    audioState.queue = [current, upcoming];
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+    allowed = false;
+    feedbackBridge.notifyRecommendationFeedbackChange();
+    assert.deepEqual(engine.preloadCancelCalls, [
+        "/api/music-sources/recordings/vk/1_2/stream",
+    ]);
+    assert.equal(audioState.currentTrack, current);
+});
+
+test("native repeat waits for affirmative policy rather than an unknown exact mask", async () => {
+    const current = makeTrack("policy-repeat-current");
+    let allowed = false;
+    let release!: (value: boolean) => void;
+    const gate = new Promise<boolean>((resolve) => {
+        release = resolve;
+    });
+    audioState.currentTrack = current;
+    audioState.queue = [current];
+    audioState.repeatMode = "one";
+    audioState.recommendationFeedback.readyFor = () => allowed;
+    audioState.recommendationFeedback.prepareTrack = () => gate;
+    const repeat = mock.method(engine, "setRepeatCurrent");
+    try {
+        renderOrchestrator();
+        await flushAsync();
+        assert.equal(repeat.mock.calls.at(-1)?.arguments[0], false);
+        allowed = true;
+        release(true);
+        await flushAsync();
+        feedbackBridge.notifyRecommendationFeedbackChange();
+        assert.equal(repeat.mock.calls.at(-1)?.arguments[0], true);
+    } finally {
+        repeat.mock.restore();
+    }
+});
 
 test("repeat-all warmup skips a disliked past recording", async () => {
     const blocked = makeTrack("vk:1_2", { streamSource: "vk" });

@@ -6,7 +6,18 @@ import type {
     MoodType,
     SavedMoodMixResponse,
 } from "../api";
-import { type ApiClientConstructor, type ApiData } from "./core";
+import {
+    hasApiErrorStatus,
+    type ApiClientConstructor,
+    type ApiData,
+} from "./core";
+import {
+    parseQueueAdmissionResponse,
+    snapshotQueueAdmissionReferences,
+    RECOMMENDATION_QUEUE_ADMISSION_TIMEOUT_MS,
+    type FiniteQueueAdmissionReference,
+    type RecommendationQueueAdmissionResult,
+} from "../audio/recommendationQueueAdmission";
 import { getRecommendationSessionId } from "../recommendationSession";
 import {
     buildOriginalRadioContinuationPath,
@@ -23,6 +34,76 @@ export function WithRecommendations<TBase extends ApiClientConstructor>(
     Base: TBase,
 ) {
     abstract class RecommendationsApi extends Base {
+        /** Read server admission for a finite ordered set without inferring client identities. */
+        async readmitRecommendationQueue(
+            references: readonly FiniteQueueAdmissionReference[],
+            signal?: AbortSignal,
+        ): Promise<RecommendationQueueAdmissionResult> {
+            const snapshot = snapshotQueueAdmissionReferences(references);
+            if (!snapshot || signal?.aborted) return { status: "unavailable" };
+            return new Promise((resolve) => {
+                const controller = new AbortController();
+                let finished = false;
+                const finish = (result: RecommendationQueueAdmissionResult) => {
+                    if (finished) return;
+                    finished = true;
+                    clearTimeout(timer);
+                    signal?.removeEventListener("abort", onAbort);
+                    resolve(result);
+                };
+                const onAbort = () => {
+                    controller.abort();
+                    finish({ status: "unavailable" });
+                };
+                const timer = setTimeout(
+                    onAbort,
+                    RECOMMENDATION_QUEUE_ADMISSION_TIMEOUT_MS,
+                );
+                signal?.addEventListener("abort", onAbort, { once: true });
+                try {
+                    void this.request<unknown>(
+                        "/personalized/queue-admission",
+                        {
+                            method: "POST",
+                            body: JSON.stringify({ references: snapshot }),
+                            signal: controller.signal,
+                            timeoutMs:
+                                RECOMMENDATION_QUEUE_ADMISSION_TIMEOUT_MS,
+                            retryOnTimeout: false,
+                            silent404: true,
+                            _assertSession: () => {
+                                if (controller.signal.aborted)
+                                    throw new DOMException(
+                                        "Admission request retired",
+                                        "AbortError",
+                                    );
+                            },
+                        },
+                    ).then(
+                        (value) => {
+                            const response = parseQueueAdmissionResponse(
+                                value,
+                                snapshot,
+                            );
+                            finish(
+                                response
+                                    ? { status: "ready", response }
+                                    : { status: "unavailable" },
+                            );
+                        },
+                        (error: unknown) =>
+                            finish({
+                                status: hasApiErrorStatus(error, 404)
+                                    ? "legacy_exact"
+                                    : "unavailable",
+                            }),
+                    );
+                } catch {
+                    finish({ status: "unavailable" });
+                }
+            });
+        }
+
         /** Continues the authenticated owner's original station with bounded queue exclusions. */
         async getRadioContinuation(
             input: OriginalRadioContinuationRequest,

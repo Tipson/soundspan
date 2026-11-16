@@ -43,6 +43,9 @@ interface UseNextTrackPreloadOptions {
     repeatMode: "off" | "one" | "all";
     /** Automatic recommendation admission; manual/current audio stays separate. */
     canAdvanceTo?: (index: number) => boolean;
+    /** Prepared permission is stricter than candidate discovery. */
+    canPrepareTo?: (index: number) => boolean;
+    prepareTrack?: (track: QueueItem) => Promise<boolean>;
     feedbackRevision?: number;
     refs: PlaybackOrchestratorRefs;
 }
@@ -120,6 +123,8 @@ export function useNextTrackPreload({
     shuffleIndices,
     repeatMode,
     canAdvanceTo,
+    canPrepareTo,
+    prepareTrack,
     feedbackRevision,
     refs,
 }: UseNextTrackPreloadOptions): NextTrackPreloadController {
@@ -132,6 +137,12 @@ export function useNextTrackPreload({
     const leaseController = usePlaybackSourceLeaseController();
     const preloadRequestIdRef = useRef(0);
     const speculativeTrackRef = useRef<PreloadableTrack | null>(null);
+    const pendingAdmissionRef = useRef<{
+        identity: string;
+        track: PreloadableTrack;
+        options: PreloadTrackOptions;
+        perform: NextTrackPreloadController["preloadTrack"];
+    } | null>(null);
     const failedNetworkPreloadRef = useRef<{
         identity: string;
         sourceUrl: string;
@@ -207,6 +218,7 @@ export function useNextTrackPreload({
 
     useEffect(
         () => () => {
+            pendingAdmissionRef.current = null;
             readyCurrentTrackPreloadAtCommitRef.current?.source?.release();
             readyCurrentTrackPreloadAtCommitRef.current = null;
         },
@@ -264,8 +276,10 @@ export function useNextTrackPreload({
                 5,
             );
             const tailVideoIds = upcoming
-                .filter((track) =>
-                    canAdvanceTo ? canAdvanceTo(queue.indexOf(track)) : true,
+                .filter(
+                    (track) =>
+                        (!canAdvanceTo || canAdvanceTo(queue.indexOf(track))) &&
+                        (!canPrepareTo || canPrepareTo(queue.indexOf(track))),
                 )
                 .slice(
                     upcoming[0] && upcoming[0].id === immediateTrack.id ? 1 : 0,
@@ -293,16 +307,20 @@ export function useNextTrackPreload({
             repeatMode,
             shuffleIndices,
             canAdvanceTo,
+            canPrepareTo,
         ],
     );
 
     const isPreloadAdmitted = useCallback(
         (track: PreloadableTrack) => {
-            if (!canAdvanceTo) return true;
             const index = queue.indexOf(track as QueueItem);
-            return index >= 0 && canAdvanceTo(index);
+            return (
+                index >= 0 &&
+                (!canAdvanceTo || canAdvanceTo(index)) &&
+                (!canPrepareTo || canPrepareTo(index))
+            );
         },
-        [queue, canAdvanceTo],
+        [queue, canAdvanceTo, canPrepareTo],
     );
 
     useLayoutEffect(
@@ -337,7 +355,7 @@ export function useNextTrackPreload({
         ],
     );
 
-    const preloadTrack = useCallback(
+    const performPreloadTrack = useCallback(
         (
             nextTrack: PreloadableTrack,
             options: PreloadTrackOptions = {},
@@ -608,6 +626,63 @@ export function useNextTrackPreload({
         ],
     );
 
+    const preloadTrack = useCallback(
+        (track: PreloadableTrack, options: PreloadTrackOptions = {}): void => {
+            const index = queue.indexOf(track as QueueItem);
+            if (
+                !prepareTrack ||
+                isPreloadAdmitted(track) ||
+                index < 0 ||
+                (canAdvanceTo && !canAdvanceTo(index))
+            ) {
+                pendingAdmissionRef.current = null;
+                performPreloadTrack(track, options);
+                return;
+            }
+            const identity = resolveDeviceOfflineMediaIdentity(track);
+            const existing = pendingAdmissionRef.current;
+            if (
+                existing?.identity === identity &&
+                existing.perform === performPreloadTrack
+            ) {
+                existing.options = {
+                    allowNetworkYouTube:
+                        existing.options.allowNetworkYouTube ||
+                        options.allowNetworkYouTube,
+                };
+                return;
+            }
+            const pending = {
+                identity,
+                track,
+                options,
+                perform: performPreloadTrack,
+            };
+            pendingAdmissionRef.current = pending;
+            void Promise.resolve()
+                .then(() => prepareTrack(track as QueueItem))
+                .then(
+                    (allowed) => {
+                        if (pendingAdmissionRef.current !== pending) return;
+                        pendingAdmissionRef.current = null;
+                        if (allowed && isPreloadAdmitted(track))
+                            pending.perform(pending.track, pending.options);
+                    },
+                    () => {
+                        if (pendingAdmissionRef.current === pending)
+                            pendingAdmissionRef.current = null;
+                    },
+                );
+        },
+        [
+            queue,
+            canAdvanceTo,
+            prepareTrack,
+            isPreloadAdmitted,
+            performPreloadTrack,
+        ],
+    );
+
     const preloadNetworkWhenDue = useCallback(
         (timing: NetworkPreloadTiming): void => {
             const nextTrack = getNextTrackInfo(
@@ -667,6 +742,7 @@ export function useNextTrackPreload({
                   ? Boolean(currentPodcast)
                   : false;
         if (!hasActiveQueueMedia || !isPlaying) {
+            pendingAdmissionRef.current = null;
             preloadRequestIdRef.current += 1;
             pendingYtMusicPreloadRef.current = null;
             enginePreloadLeaseRef.current?.cancel();
@@ -688,6 +764,7 @@ export function useNextTrackPreload({
         );
 
         if (!nextTrack) {
+            pendingAdmissionRef.current = null;
             preloadRequestIdRef.current += 1;
             pendingYtMusicPreloadRef.current = null;
             enginePreloadLeaseRef.current?.cancel();

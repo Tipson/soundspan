@@ -138,6 +138,9 @@ export const AudioPlaybackOrchestrator = memo(
         } = useAudioState();
         const { allows: admitsRecommendedTrack, revision: feedbackRevision } =
             recommendationFeedback;
+        const admitsPreparedTrack =
+            recommendationFeedback.readyFor ?? admitsRecommendedTrack;
+        const prepareRecommendedTrack = recommendationFeedback.prepareTrack;
         const { volume, isMuted } = useAudioVolumeMode();
         const {
             isPlaying,
@@ -162,6 +165,28 @@ export const AudioPlaybackOrchestrator = memo(
             },
             [queue, admitsRecommendedTrack],
         );
+        const canPrepareTo = useCallback(
+            (index: number) => {
+                const track = queue[index];
+                return Boolean(track && admitsPreparedTrack(track));
+            },
+            [queue, admitsPreparedTrack],
+        );
+        useEffect(() => {
+            if (
+                playbackType === "track" &&
+                repeatMode === "one" &&
+                currentTrack &&
+                prepareRecommendedTrack
+            )
+                void prepareRecommendedTrack(currentTrack);
+        }, [
+            playbackType,
+            repeatMode,
+            currentTrack,
+            prepareRecommendedTrack,
+            feedbackRevision,
+        ]);
 
         useLayoutEffect(() => {
             const syncAuthority = () => {
@@ -171,7 +196,7 @@ export const AudioPlaybackOrchestrator = memo(
                     local &&
                         playbackType === "track" &&
                         repeatMode === "one" &&
-                        (!currentTrack || admitsRecommendedTrack(currentTrack)),
+                        (!currentTrack || admitsPreparedTrack(currentTrack)),
                 );
             };
             syncAuthority();
@@ -184,7 +209,7 @@ export const AudioPlaybackOrchestrator = memo(
                 unsubscribeFeedback();
                 audioEngine.setRepeatCurrent?.(false);
             };
-        }, [playbackType, repeatMode, currentTrack, admitsRecommendedTrack]);
+        }, [playbackType, repeatMode, currentTrack, admitsPreparedTrack]);
         const orchestratorRefs = H.usePlaybackOrchestratorRefs({
             currentTrack,
             playbackType,
@@ -394,6 +419,8 @@ export const AudioPlaybackOrchestrator = memo(
             shuffleIndices,
             repeatMode,
             canAdvanceTo,
+            canPrepareTo,
+            prepareTrack: prepareRecommendedTrack,
             feedbackRevision,
             refs: orchestratorRefs,
         });
@@ -689,7 +716,7 @@ export const AudioPlaybackOrchestrator = memo(
                         repeatMode === "one" &&
                         !isListenTogether &&
                         currentTrack &&
-                        admitsRecommendedTrack(currentTrack)
+                        admitsPreparedTrack(currentTrack)
                     ) {
                         playbackProgressConfirmationRef.current =
                             restartPlaybackProgressConfirmation(

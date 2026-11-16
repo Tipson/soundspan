@@ -25,6 +25,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { publishDeviceOfflineLikedChangeForSignal } from "@/features/device-offline/likedAutomation";
 import {
     captureRecommendationFeedback,
+    captureRecommendationPreferenceMutation,
     reconcileRecommendationFeedback,
 } from "@/lib/audio/recommendationFeedbackBridge";
 import { resolveRecommendationFeedbackAck } from "@/lib/audio/recommendationQueueFeedback";
@@ -168,6 +169,7 @@ export function useTrackPreference(
         intent: ReservedTrackPreferenceIntent,
     ) => {
         if (!trackId) return null;
+        const pendingQueueWrite = captureRecommendationPreferenceMutation();
         const queueIntent = captureRecommendationFeedback(
             trackId,
             intent.signal,
@@ -219,6 +221,7 @@ export function useTrackPreference(
             );
             throw error;
         } finally {
+            pendingQueueWrite?.finish();
             releaseTrackPreferenceIntent(
                 queryClient as TrackPreferenceOptimisticQueryClient,
                 trackId,

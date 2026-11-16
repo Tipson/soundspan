@@ -15,10 +15,29 @@ GlobalRegistrator.register({ url: "https://soundspan.test/" });
 const read = mock.method(api, "getPlaybackState", async () => null);
 const save = mock.method(api, "savePlaybackState", async () => null);
 const clear = mock.method(api, "clearPlaybackState", async () => undefined);
+const admission = mock.method(
+    api,
+    "readmitRecommendationQueue",
+    async (
+        references: Parameters<typeof api.readmitRecommendationQueue>[0],
+    ) => ({
+        status: "ready" as const,
+        response: {
+            version: 1 as const,
+            appliesTo: "recommended_future" as const,
+            decisions: references.map(({ source, id }) => ({
+                source,
+                id,
+                state: "allowed" as const,
+            })),
+        },
+    }),
+);
 after(() => {
     read.mock.restore();
     save.mock.restore();
     clear.mock.restore();
+    admission.mock.restore();
     GlobalRegistrator.unregister();
 });
 beforeEach(() => {

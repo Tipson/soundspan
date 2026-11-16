@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Recheck automatic browser queue transitions, radio continuations, repeat and speculative preloads against current server feedback. Wait for pending preference writes, retire stale decisions after owner or queue changes, and preserve current playback, history and manual entries when recommendation admission is unavailable.
 - Provide bounded, owner-scoped readmission of automatic queue references using current recording feedback and provider artist suppression. Return transient unavailable decisions without creating preferences; reject client metadata authority and stop waits on cancellation or deadline.
 - Honor Play issued after an explicit Pause before the native pause callback arrives. Keep recovery reloads paused after an explicit user pause, preserving the current position and automatic retry budget.
 - Bind browser Play delivery to the authenticated player and confirmed engine starts. Preserve one listening session when past queue rows are removed or the upcoming queue changes; distinguish explicit duplicate starts and repeat, finalize before runtime retirement, and suspend delivery during history deletion. New collaborative sessions retain legacy delivery while remote solo journal creation remains capability-gated.

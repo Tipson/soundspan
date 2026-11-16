@@ -136,6 +136,9 @@ export function useVibeModeControls({
                 : null;
             const playbackIntentGeneration = getPlaybackIntentGeneration();
             const queueReplacementGeneration = getQueueReplacementGeneration();
+            const admissionCapture = getActiveListenTogetherSession()
+                ? undefined
+                : state.recommendationFeedback.captureAdmission?.();
             const replaceUpcoming =
                 options?.queueStrategy === "replace-upcoming";
             const requestContext = {
@@ -153,7 +156,12 @@ export function useVibeModeControls({
                 if (
                     requestGenerationRef.current !== requestGeneration ||
                     getQueueReplacementGeneration() !==
-                        queueReplacementGeneration
+                        queueReplacementGeneration ||
+                    (admissionCapture &&
+                        state.recommendationFeedback.isAdmissionCurrent &&
+                        !state.recommendationFeedback.isAdmissionCurrent(
+                            admissionCapture,
+                        ))
                 ) {
                     return false;
                 }
@@ -216,6 +224,29 @@ export function useVibeModeControls({
                 if (!token) return;
                 options.onLocalQueueCommit?.({ token, mutation });
             };
+            const readyFor =
+                state.recommendationFeedback.readyFor ??
+                state.recommendationFeedback.allows;
+            const prepareContinuation = async (
+                tracks: Track[],
+            ): Promise<Track[] | null> => {
+                const candidates = tracks.filter(
+                    state.recommendationFeedback.allows,
+                );
+                if (getActiveListenTogetherSession()) return candidates;
+                if (
+                    candidates.length &&
+                    state.recommendationFeedback.prepareTracks
+                ) {
+                    const result =
+                        await state.recommendationFeedback.prepareTracks(
+                            candidates,
+                        );
+                    if (result === "superseded" || !requestIsCurrent())
+                        return null;
+                }
+                return candidates.filter(readyFor);
+            };
 
             try {
                 // A series of negative actions retunes the upcoming remote
@@ -260,13 +291,18 @@ export function useVibeModeControls({
                         });
                         if (!requestIsCurrent())
                             return { success: false, trackCount: 0 };
-                        continuation = collectOriginalRadioContinuation(
-                            response,
-                            playbackContextRef.current.queue,
-                            radioOrigin,
-                            25,
-                            sessionId,
-                        ).filter(state.recommendationFeedback.allows);
+                        const prepared = await prepareContinuation(
+                            collectOriginalRadioContinuation(
+                                response,
+                                playbackContextRef.current.queue,
+                                radioOrigin,
+                                25,
+                                sessionId,
+                            ),
+                        );
+                        if (!prepared || !requestIsCurrent())
+                            return { success: false, trackCount: 0 };
+                        continuation = prepared;
                         cursor =
                             typeof response?.nextCursor === "number" &&
                             Number.isInteger(response.nextCursor) &&
@@ -325,7 +361,7 @@ export function useVibeModeControls({
                         radioOrigin,
                         25,
                         sessionId,
-                    ).filter(state.recommendationFeedback.allows);
+                    ).filter(readyFor);
                     if (!fresh.length) return { success: false, trackCount: 0 };
                     const history = replaceUpcoming
                         ? latest.queue.slice(
@@ -391,14 +427,19 @@ export function useVibeModeControls({
                         if (!requestIsCurrent()) {
                             return { success: false, trackCount: 0 };
                         }
-                        continuation = collectProviderRadioContinuation(
-                            feed,
-                            replaceUpcoming
-                                ? playbackContextRef.current.queue
-                                : state.queue,
-                            25,
-                            state.waveMode,
-                        ).filter(state.recommendationFeedback.allows);
+                        const prepared = await prepareContinuation(
+                            collectProviderRadioContinuation(
+                                feed,
+                                replaceUpcoming
+                                    ? playbackContextRef.current.queue
+                                    : state.queue,
+                                25,
+                                state.waveMode,
+                            ),
+                        );
+                        if (!prepared || !requestIsCurrent())
+                            return { success: false, trackCount: 0 };
+                        continuation = prepared;
                         cursor =
                             typeof feed.nextCursor === "number"
                                 ? feed.nextCursor
@@ -455,7 +496,7 @@ export function useVibeModeControls({
                                 latestContext.queue,
                                 25,
                                 latestContext.waveMode,
-                            ).filter(state.recommendationFeedback.allows);
+                            ).filter(readyFor);
                         if (freshContinuation.length === 0) {
                             return { success: false, trackCount: 0 };
                         }
@@ -516,7 +557,7 @@ export function useVibeModeControls({
                                 previousQueue,
                                 25,
                                 state.waveMode,
-                            ).filter(state.recommendationFeedback.allows);
+                            ).filter(readyFor);
                         return freshContinuation.length > 0
                             ? [...previousQueue, ...freshContinuation]
                             : previousQueue;
@@ -574,8 +615,8 @@ export function useVibeModeControls({
                 const sessionId =
                     currentTrack.recommendationSessionId ??
                     getRecommendationSessionId();
-                const vibeTracks: Track[] = response.tracks
-                    .map((track) => ({
+                const vibeTracks = await prepareContinuation(
+                    response.tracks.map((track) => ({
                         id: track.id,
                         title: track.title,
                         duration: track.duration,
@@ -590,9 +631,9 @@ export function useVibeModeControls({
                         },
                         audioFeatures: track.audioFeatures,
                         recommendationSessionId: sessionId,
-                    }))
-                    .filter(state.recommendationFeedback.allows);
-                if (vibeTracks.length === 0)
+                    })),
+                );
+                if (!vibeTracks?.length || !requestIsCurrent())
                     return { success: false, trackCount: 0 };
 
                 const current =

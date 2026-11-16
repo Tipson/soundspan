@@ -193,6 +193,7 @@ export class RecommendationQueueFeedback {
     /** Preserve history/current and remap shuffle positions after future pruning. */
     pruneFuture(
         input: RecommendationFeedbackQueue,
+        admitsAdditional: (track: QueueItem) => boolean = () => true,
     ): RecommendationFeedbackQueue {
         if (input.currentIndex < 0 || input.currentIndex >= input.queue.length)
             return input;
@@ -208,7 +209,7 @@ export class RecommendationQueueFeedback {
         const queue = input.queue.filter((track, index) => {
             if (
                 (upcoming?.has(index) ?? index > input.currentIndex) &&
-                !this.allows(track)
+                (!this.allows(track) || !admitsAdditional(track))
             )
                 return false;
             oldToNew.set(index, oldToNew.size);

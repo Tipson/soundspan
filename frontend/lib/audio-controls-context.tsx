@@ -376,6 +376,14 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         mutation: VibeQueueMutationKind | null;
         settled: boolean;
     } | null>(null);
+    const pendingRecommendationAdvanceRef = useRef<{
+        token: object;
+        controller: AbortController;
+    } | null>(null);
+    const latestAdvanceStateRef = useRef(state);
+    useEffect(() => {
+        latestAdvanceStateRef.current = state;
+    }, [state]);
     const [manualTailAdvanceResolution, setManualTailAdvanceResolution] =
         useState(0);
 
@@ -411,6 +419,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 clearTimeout(repeatTimeoutRef.current);
             }
             pendingManualTailAdvanceRef.current = null;
+            pendingRecommendationAdvanceRef.current?.controller.abort();
+            pendingRecommendationAdvanceRef.current = null;
             queueDebugLog("AudioControlsProvider unmounted");
         };
     }, []);
@@ -939,10 +949,13 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
     const pause = useCallback(
         (options?: { suppressListenTogetherBroadcast?: boolean }) => {
+            pendingRecommendationAdvanceRef.current?.controller.abort();
+            pendingRecommendationAdvanceRef.current = null;
             recordExplicitPlaybackPause();
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
             playbackState.setIsPlaying(false);
+            statusRef.current.setIsBuffering?.(false);
             if (
                 ltSession?.isHost &&
                 !options?.suppressListenTogetherBroadcast
@@ -1060,7 +1073,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             listenTogetherPositionMs?: number;
             listenTogetherServerTimeMs?: number;
         }) => {
+            pendingRecommendationAdvanceRef.current?.controller.abort();
+            pendingRecommendationAdvanceRef.current = null;
             const playbackState = getPlaybackView();
+            statusRef.current.setIsBuffering?.(false);
             if (!options?.suppressListenTogetherBroadcast) {
                 writePlaybackAdvanceOrigin(
                     "manual",
@@ -1127,8 +1143,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         resume();
     }, [resume]);
 
-    const advanceQueue = useCallback(
-        (origin: PlaybackAdvanceOrigin) => {
+    const advanceQueueNow = useCallback(
+        (origin: PlaybackAdvanceOrigin, originRecorded = false) => {
             const pendingTailAdvance = pendingManualTailAdvanceRef.current;
             if (
                 origin === "manual" &&
@@ -1142,7 +1158,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             ) {
                 return;
             }
-            writePlaybackAdvanceOrigin(origin, state.currentTrack?.id ?? null);
+            if (!originRecorded)
+                writePlaybackAdvanceOrigin(
+                    origin,
+                    state.currentTrack?.id ?? null,
+                );
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
@@ -1165,6 +1185,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             }
 
             if (state.queue.length === 0) return;
+            const admitsNext = (track: QueueItem) =>
+                state.recommendationFeedback.readyFor
+                    ? state.recommendationFeedback.readyFor(track)
+                    : state.recommendationFeedback.allows(track);
 
             // Handle repeat one
             if (
@@ -1172,8 +1196,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 origin !== "feedback" &&
                 state.repeatMode === "one" &&
                 state.repeatOneCount === 0 &&
-                (!state.currentTrack ||
-                    state.recommendationFeedback.allows(state.currentTrack))
+                (!state.currentTrack || admitsNext(state.currentTrack))
             ) {
                 state.setRepeatOneCount(1);
                 playbackState.setCurrentTime(0);
@@ -1227,10 +1250,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 currentIndex: feedbackQueue.currentIndex,
                 isShuffle: state.isShuffle,
                 shuffleIndices: feedbackQueue.shuffleIndices,
-                canAdvanceTo: (index) =>
-                    state.recommendationFeedback.allows(
-                        feedbackQueue.queue[index],
-                    ),
+                canAdvanceTo: (index) => admitsNext(feedbackQueue.queue[index]),
                 repeatMode:
                     origin === "feedback"
                         ? state.repeatMode === "all" &&
@@ -1371,6 +1391,130 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             getPlaybackView,
         ],
     );
+    const advanceQueueNowRef = useRef(advanceQueueNow);
+    useEffect(() => {
+        advanceQueueNowRef.current = advanceQueueNow;
+    }, [advanceQueueNow]);
+    const advanceQueue = useCallback(
+        (origin: PlaybackAdvanceOrigin) => {
+            const prepare = state.recommendationFeedback.prepareAdvance;
+            if (
+                !prepare ||
+                state.playbackType !== "track" ||
+                getActiveListenTogetherSession()
+            ) {
+                advanceQueueNow(origin);
+                return;
+            }
+            const preparationOptions = {
+                includeCurrent:
+                    origin !== "error" &&
+                    origin !== "feedback" &&
+                    state.repeatMode === "one" &&
+                    state.repeatOneCount === 0,
+                wrap: state.repeatMode === "all",
+            };
+            if (
+                state.recommendationFeedback.isAdvancePrepared?.(
+                    preparationOptions,
+                )
+            ) {
+                pendingRecommendationAdvanceRef.current?.controller.abort();
+                pendingRecommendationAdvanceRef.current = null;
+                advanceQueueNow(origin);
+                return;
+            }
+            const pendingTail = pendingManualTailAdvanceRef.current;
+            if (
+                origin === "manual" &&
+                pendingTail !== null &&
+                pendingTail.trackId === state.currentTrack?.id &&
+                pendingTail.currentIndex === state.currentIndex &&
+                playbackRadioOriginsMatch(
+                    pendingTail.radioOrigin,
+                    state.currentTrack?.radioOrigin,
+                )
+            )
+                return;
+            // Repeated end/error callbacks share the original bounded operation.
+            if (
+                pendingRecommendationAdvanceRef.current &&
+                origin !== "manual" &&
+                origin !== "feedback"
+            )
+                return;
+            pendingRecommendationAdvanceRef.current?.controller.abort();
+            const controller = new AbortController();
+            const token = {};
+            pendingRecommendationAdvanceRef.current = { controller, token };
+            const trackId = state.currentTrack?.id ?? null;
+            const occurrence = state.localTrackPlaybackOccurrence;
+            const queueGeneration = getQueueReplacementGeneration();
+            writePlaybackAdvanceOrigin(origin, trackId);
+            const intent = getPlaybackIntentGeneration();
+            const admissionCapture =
+                state.recommendationFeedback.captureAdmission?.();
+            const stillCurrent = () => {
+                const latest = latestAdvanceStateRef.current;
+                return (
+                    pendingRecommendationAdvanceRef.current?.token === token &&
+                    !controller.signal.aborted &&
+                    getPlaybackIntentGeneration() === intent &&
+                    getQueueReplacementGeneration() === queueGeneration &&
+                    (latest.currentTrack?.id ?? null) === trackId &&
+                    latest.localTrackPlaybackOccurrence === occurrence &&
+                    !getActiveListenTogetherSession() &&
+                    (!admissionCapture ||
+                        !latest.recommendationFeedback.isAdmissionCurrent ||
+                        latest.recommendationFeedback.isAdmissionCurrent(
+                            admissionCapture,
+                        ))
+                );
+            };
+            const playback = getPlaybackView();
+            if (origin === null || origin === "error") {
+                // A completed/failed source must not be restarted by the watchdog while policy waits.
+                playback.setIsPlaying(false);
+                statusRef.current.setIsBuffering?.(true);
+            }
+            void Promise.resolve()
+                .then(() =>
+                    prepare({
+                        ...preparationOptions,
+                        signal: controller.signal,
+                    }),
+                )
+                .then((result) => {
+                    if (!stillCurrent()) return;
+                    if (result === "ready")
+                        advanceQueueNowRef.current(origin, true);
+                    else if (result === "unavailable")
+                        toast.error(
+                            "Не удалось подготовить следующий трек. Повторите попытку.",
+                        );
+                })
+                .catch(() => {
+                    if (stillCurrent())
+                        toast.error(
+                            "Не удалось подготовить следующий трек. Повторите попытку.",
+                        );
+                })
+                .finally(() => {
+                    if (
+                        pendingRecommendationAdvanceRef.current?.token !== token
+                    )
+                        return;
+                    pendingRecommendationAdvanceRef.current = null;
+                    statusRef.current.setIsBuffering?.(false);
+                });
+        },
+        [
+            state,
+            advanceQueueNow,
+            getActiveListenTogetherSession,
+            getPlaybackView,
+        ],
+    );
     const next = useCallback(() => advanceQueue("manual"), [advanceQueue]);
 
     useEffect(() => {
@@ -1409,7 +1553,9 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             const nextItem = state.queue[advance.index];
             pendingManualTailAdvanceRef.current = null;
             if (nextItem) {
-                startQueueItemAtIndex(advance.index, nextItem);
+                if (state.recommendationFeedback.prepareAdvance)
+                    advanceQueue("manual");
+                else startQueueItemAtIndex(advance.index, nextItem);
             }
             return;
         }
@@ -1427,6 +1573,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         state.vibeMode,
         startQueueItemAtIndex,
         getActiveListenTogetherSession,
+        advanceQueue,
+        state.recommendationFeedback,
     ]);
 
     const previous = useCallback(() => {

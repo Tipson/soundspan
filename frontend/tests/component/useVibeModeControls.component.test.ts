@@ -10,6 +10,12 @@ import {
 import { audioSeekEmitter } from "../../lib/audio-seek-emitter";
 import { RecommendationQueueFeedback } from "../../lib/audio/recommendationQueueFeedback";
 import { getRecommendationSessionId } from "../../lib/recommendationSession";
+import { RecommendationQueueAdmissionPolicy } from "../../lib/audio/recommendationQueueAdmissionPolicy";
+import type {
+    FiniteQueueAdmissionReference,
+    RecommendationQueueAdmissionResult,
+} from "../../lib/audio/recommendationQueueAdmission";
+import type { Track } from "../../lib/audio-state-context";
 
 interface Deferred<T> {
     promise: Promise<T>;
@@ -1277,3 +1283,228 @@ test("local Audio-DNA continuation carries recommendation scope and filters a la
         selected.recommendationSessionId,
     );
 });
+
+for (const kind of [
+    "station append",
+    "Wave append",
+    "Wave replace-upcoming",
+    "Audio-DNA replace",
+] as const) {
+    async function admissionRefill() {
+        const { useVibeModeControls } =
+            await import("../../lib/audio/useVibeModeControls");
+        const harness = new HookLifecycleHarness();
+        const audio = makeAudioState(makeProviderTrack("AAAAAAAAAAA"));
+        const origin = {
+            kind: "track",
+            source: "youtube",
+            id: "ZZZZZZZZZZZ",
+        } as const;
+        const playbackTrack = (id: string): Track => ({
+            ...makeProviderTrack(id),
+            artist: { name: "Artist" },
+            album: { title: "Album" },
+        });
+        const seed: Track =
+            kind === "Audio-DNA replace"
+                ? {
+                      id: "local-seed",
+                      title: "Seed",
+                      duration: 180,
+                      artist: { id: "artist-seed", name: "Seed artist" },
+                      album: { id: "album-seed", title: "Seed album" },
+                  }
+                : {
+                      ...playbackTrack("AAAAAAAAAAA"),
+                      ...(kind === "station append"
+                          ? { radioOrigin: origin }
+                          : {}),
+                  };
+        const history = playbackTrack("HHHHHHHHHHH");
+        const oldTail = playbackTrack("TTTTTTTTTTT");
+        const initialQueue: Track[] = [history, seed, oldTail];
+        const published: Track[][] = [];
+        const selected: Track[] = [];
+        const requests: Array<{
+            references: readonly FiniteQueueAdmissionReference[];
+            reply: Deferred<RecommendationQueueAdmissionResult>;
+        }> = [];
+        const policy = new RecommendationQueueAdmissionPolicy((references) => {
+            const reply = deferred<RecommendationQueueAdmissionResult>();
+            requests.push({ references, reply });
+            return reply.promise;
+        }, {});
+        Object.assign(audio.state.recommendationFeedback, {
+            allows: (track: Track) =>
+                audio.feedback.allows(track) && policy.allows(track),
+            readyFor: (track: Track) =>
+                audio.feedback.allows(track) && policy.readyFor(track),
+            prepareTracks: (tracks: readonly Track[]) => policy.prepare(tracks),
+            captureAdmission: () => policy.coordinator.capture(),
+            isAdmissionCurrent: (
+                capture: ReturnType<typeof policy.coordinator.capture>,
+            ) => policy.coordinator.isCurrent(capture),
+        });
+        const state = {
+            ...audio.state,
+            currentTrack: seed,
+            currentIndex: 1,
+            queue: initialQueue,
+            vibeMode: kind !== "Audio-DNA replace",
+            setQueue: (value: Track[] | ((previous: Track[]) => Track[])) => {
+                published.push(
+                    typeof value === "function" ? value(initialQueue) : value,
+                );
+            },
+            setCurrentTrack: (value: Track) => selected.push(value),
+        };
+        function RenderAdmissionControls() {
+            harness.beginRender();
+            activeHarness = harness;
+            const controls = useVibeModeControls({
+                state: state as never,
+                getActiveListenTogetherSession: () => null,
+                showQueueMutationToasts: () => undefined,
+            });
+            harness.commitRender();
+            return controls;
+        }
+        const controls = RenderAdmissionControls();
+        const pending = controls.startVibeMode(
+            kind === "Wave replace-upcoming"
+                ? { queueStrategy: "replace-upcoming" }
+                : undefined,
+        );
+        const replyPage = () => {
+            const candidates = ["BBBBBBBBBBB", "CCCCCCCCCCC", "DDDDDDDDDDD"];
+            if (kind === "Audio-DNA replace") {
+                vibeRequests[0].resolve({
+                    tracks: candidates.map((id) => ({
+                        ...seed,
+                        id: `local-${id}`,
+                    })),
+                    sourceFeatures: null,
+                });
+            } else if (kind === "station append") {
+                feedRequests[0].resolve({
+                    radioOrigin: origin,
+                    tracks: candidates.map((id) => ({
+                        ...makeProviderTrack(id),
+                        source: "youtube",
+                    })),
+                    generationId: "refill-generation",
+                    nextCursor: 1,
+                });
+            } else {
+                feedRequests[0].resolve({
+                    shelves: {
+                        discovery: candidates.map(makeProviderTrack),
+                        quickPicks: [],
+                        listenAgain: [],
+                    },
+                    generationId: "refill-generation",
+                    nextCursor: 1,
+                });
+            }
+        };
+        const replyAdmission = () => {
+            const { references, reply } = requests[0];
+            reply.resolve({
+                status: "ready",
+                response: {
+                    version: 1,
+                    appliesTo: "recommended_future",
+                    decisions: references.map((reference, index) => ({
+                        source: reference.source,
+                        id: reference.id,
+                        state: (["denied", "unavailable", "allowed"] as const)[
+                            index
+                        ],
+                    })),
+                },
+            });
+        };
+        return {
+            audio,
+            policy,
+            pending,
+            published,
+            selected,
+            requests,
+            replyPage,
+            replyAdmission,
+        };
+    }
+
+    test(`${kind} rejects a delayed page after preference intent before publishing any recommendation`, async () => {
+        const refill = await admissionRefill();
+        const mutation = refill.policy.beginMutation();
+        refill.policy.settleMutation(mutation);
+        refill.replyPage();
+        assert.deepEqual(await refill.pending, {
+            success: false,
+            trackCount: 0,
+        });
+        assert.deepEqual(refill.published, []);
+        assert.deepEqual(refill.selected, []);
+        assert.deepEqual(refill.requests, []);
+    });
+
+    test(`${kind} publishes only the admitted row from a mixed finite batch`, async () => {
+        const refill = await admissionRefill();
+        refill.replyPage();
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(
+            refill.published.length,
+            0,
+            "a server page is not admission evidence",
+        );
+        assert.equal(refill.requests.length, 1);
+        assert.equal(refill.requests[0].references.length, 3);
+        refill.replyAdmission();
+        assert.deepEqual(await refill.pending, {
+            success: true,
+            trackCount: 1,
+        });
+        const allowed =
+            kind === "Audio-DNA replace"
+                ? "local-DDDDDDDDDDD"
+                : "yt:DDDDDDDDDDD";
+        const expected =
+            kind === "Audio-DNA replace"
+                ? ["local-seed", allowed]
+                : kind === "Wave replace-upcoming"
+                  ? ["yt:HHHHHHHHHHH", "yt:AAAAAAAAAAA", allowed]
+                  : [
+                        "yt:HHHHHHHHHHH",
+                        "yt:AAAAAAAAAAA",
+                        "yt:TTTTTTTTTTT",
+                        allowed,
+                    ];
+        assert.deepEqual(
+            refill.published.map((queue) => queue.map((track) => track.id)),
+            [expected],
+        );
+        assert.deepEqual(
+            refill.selected.map((track) => track.id),
+            kind === "Audio-DNA replace" ? ["local-seed"] : [],
+        );
+        assert.deepEqual(refill.audio.feedback.toCheckpoint().exclusions, []);
+    });
+
+    test(`${kind} cannot overwrite a manual queue replacement while admission is pending`, async () => {
+        const refill = await admissionRefill();
+        refill.replyPage();
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(refill.requests.length, 1);
+        reservePlaybackIntent();
+        refill.policy.replaceQueue();
+        refill.replyAdmission();
+        assert.deepEqual(await refill.pending, {
+            success: false,
+            trackCount: 0,
+        });
+        assert.deepEqual(refill.published, []);
+        assert.deepEqual(refill.selected, []);
+    });
+}
