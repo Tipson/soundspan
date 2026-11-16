@@ -150,6 +150,15 @@ export function classifyPlayAccountingFailure(
     if (error instanceof PlayAccountingError) return error;
     if (typeof error !== "object" || error === null) return null;
     const record = error as Record<string, unknown>;
+    const directCause =
+        typeof record.cause === "object" && record.cause !== null
+            ? (record.cause as Record<string, unknown>)
+            : {};
+    if (
+        record.name === "DriverAdapterError" &&
+        directCause.kind === "TransactionWriteConflict"
+    )
+        return new PlayAccountingError(503, "play_accounting_unavailable");
     const meta =
         typeof record.meta === "object" && record.meta !== null
             ? (record.meta as Record<string, unknown>)

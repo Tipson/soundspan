@@ -5,6 +5,27 @@ import {
     classifyPlayAccountingFailure,
 } from "../playAccountingProtocol";
 
+test("direct adapter serialization abort returns a same-key 503 without classifying other unknown errors", () => {
+    expect(
+        classifyPlayAccountingFailure({
+            name: "DriverAdapterError",
+            cause: { kind: "TransactionWriteConflict" },
+        }),
+    ).toMatchObject({ status: 503, code: "play_accounting_unavailable" });
+    expect(
+        classifyPlayAccountingFailure({
+            name: "DriverAdapterError",
+            cause: { kind: "ConnectionClosed" },
+        }),
+    ).toBeNull();
+    expect(
+        classifyPlayAccountingFailure({
+            name: "UnknownError",
+            cause: { kind: "TransactionWriteConflict" },
+        }),
+    ).toBeNull();
+});
+
 const issuedAt = 1_700_000_000_000;
 const key = `p1.7.${issuedAt.toString(36)}.${"A".repeat(32)}`;
 const owner = { epoch: 7, prunedThrough: null };

@@ -228,6 +228,10 @@ queues.forEach((queue) => {
     });
 
     queue.on("stalled", (job) => {
+        if (queue === scrobbleQueue && job.name === "dispatch-v1") {
+            log.warn("Durable Play dispatch wakeup stalled");
+            return;
+        }
         log.warn(`Bull job stalled (${queue.name}):`, {
             jobId: job.id,
             data: job.data,

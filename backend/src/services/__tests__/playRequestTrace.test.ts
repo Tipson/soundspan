@@ -3,6 +3,31 @@ import type { Request, Response } from "express";
 import { createPlayRequestTrace } from "../playRequestTrace";
 
 describe("play request stage attribution", () => {
+    it("observes pool/owner wait separately and leaves read-only replay without a write", () => {
+        const f = fixture();
+        const observation = f.trace.beginReadLock();
+        f.advance(120);
+        f.response.emit("close");
+        expect(f.records.at(-1)).toMatchObject({
+            stage: "request",
+            activeStage: "db_acquire_read_lock",
+            writeState: "not_started",
+        });
+        observation.acquired();
+        observation.failed();
+        expect(
+            f.records.filter((row) => row.stage === "db_acquire_read_lock"),
+        ).toEqual([
+            expect.objectContaining({
+                durationMs: 120,
+                outcome: "late_success",
+                writeState: "not_started",
+            }),
+        ]);
+        expect(f.records.some((row) => row.stage === "db_acquire_write")).toBe(
+            false,
+        );
+    });
     it("observes a transactional write only from its first mutation through outer commit", () => {
         const f = fixture();
         f.advance(5);

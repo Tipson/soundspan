@@ -40,6 +40,11 @@ import {
 import { processArtistDownloadExpansion } from "./processors/artistDownloadExpansionProcessor";
 import { processScrobble } from "./processors/scrobbleProcessor";
 import {
+    processPlayScrobbleDispatch,
+    startPlayScrobbleDispatchMaintenance,
+    stopPlayScrobbleDispatchMaintenance,
+} from "./playScrobbleDispatchRuntime";
+import {
     recordAlbumDownloadOutcome,
     recordSchedulerJobDuration,
     recordSchedulerJobSuccess,
@@ -913,6 +918,7 @@ function registerQueueProcessors(): void {
         );
     }
     scrobbleQueue.process("submit", 4, processScrobble);
+    scrobbleQueue.process("dispatch-v1", 4, processPlayScrobbleDispatch);
 }
 async function processPrimarySchedulerJob(
     job: Bull.Job<any>,
@@ -1377,6 +1383,7 @@ export function startWorkers(): void {
     registerImportQueueEvents();
     registerSchedulerQueueEvents();
     startRemoteAnalysisWorker(recordQueueProcessorEvent);
+    startPlayScrobbleDispatchMaintenance();
     log.debug("Worker processors registered and event handlers attached");
     startWorkerSchedules();
     workersStarted = true;
@@ -1389,6 +1396,7 @@ export async function shutdownWorkers(): Promise<void> {
     log.debug("Shutting down workers...");
 
     await stopRemoteAnalysisWorker();
+    await stopPlayScrobbleDispatchMaintenance();
 
     // Stop unified enrichment worker
     await stopUnifiedEnrichmentWorker();

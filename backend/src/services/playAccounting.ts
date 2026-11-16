@@ -2,6 +2,13 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { config } from "../config";
 import { prisma } from "../utils/db";
 import {
+    createPlayScrobbleIntents,
+    cancelPlayScrobbleDispatches,
+} from "./playScrobbleDispatchStore";
+import { lockPlayAccountingOwner } from "./playAccountingOwner";
+import { scrobbleDispatchTrackSchema } from "./playScrobbleProtocol";
+import type { ScrobbleTrack } from "./scrobbleTypes";
+import {
     freezePlaybackAttribution,
     projectPlaybackAttribution,
 } from "./recommendations/playAttribution";
@@ -24,26 +31,18 @@ export interface PlayCreationPolicy {
 /** Only server-resolved shared identities may be prepared outside the owner lock. */
 export interface PreparedPlayIdentity {
     trackYtMusicId?: string;
+    deliveryTrack?: ScrobbleTrack;
 }
 /** Commit observation starts at an actual write and finishes after the outer transaction. */
 export interface PlayWriteObservation {
     committed(): void;
     failed(): void;
 }
-type Owner = { id: string; epoch: number; prunedThrough: Date | null };
-
-async function lockOwner(
-    transaction: Prisma.TransactionClient,
-    userId: string,
-): Promise<Owner> {
-    const owners = await transaction.$queryRaw<Owner[]>`
-        SELECT "id", "playHistoryEpoch" AS "epoch", "playReceiptPrunedThrough" AS "prunedThrough"
-        FROM "User" WHERE "id" = ${userId} FOR NO KEY UPDATE
-    `;
-    if (!owners[0]) throw new PlayAccountingError(404, "play_owner_not_found");
-    return owners[0];
+/** Begins before transaction acquisition and ends before mutation, including read-only replay. */
+export interface PlayReadLockObservation {
+    acquired(): void;
+    failed(): void;
 }
-
 /** Owns the Play/receipt/history boundary; never performs provider HTTP under its lock. */
 export function createPlayAccounting(
     database: PrismaClient,
@@ -79,6 +78,7 @@ export function createPlayAccounting(
             payload: PlayCreationPayload,
             prepare: () => Promise<PreparedPlayIdentity>,
             observeWrite?: () => PlayWriteObservation,
+            observeReadLock?: () => PlayReadLockObservation,
         ) {
             // Snapshot at the module boundary; asynchronous preparation cannot mutate
             // what the receipt hash authorizes even for an in-process caller.
@@ -104,7 +104,10 @@ export function createPlayAccounting(
                 },
             });
             const inspect = async (transaction: Prisma.TransactionClient) => {
-                const owner = await lockOwner(transaction, userId);
+                const owner = await lockPlayAccountingOwner(
+                    transaction,
+                    userId,
+                );
                 assertPlayKeyCurrent(key, owner, clock().getTime());
                 const receipt =
                     await transaction.playCreationReceipt.findUnique({
@@ -139,18 +142,39 @@ export function createPlayAccounting(
             };
             // Replay never contacts a metadata service. Release the lock for preparation,
             // then recheck every admission invariant under the same owner's lock.
-            const replay = await database.$transaction(
-                inspect,
-                transactionOptions,
-            );
+            const preflightObservation = observeReadLock?.();
+            let replay;
+            try {
+                replay = await database.$transaction(async (transaction) => {
+                    const result = await inspect(transaction);
+                    preflightObservation?.acquired();
+                    return result;
+                }, transactionOptions);
+            } catch (error) {
+                preflightObservation?.failed();
+                throw error;
+            }
             if (replay) return replay;
-            const prepared = await prepare();
+            const preparedResult = await prepare();
+            const deliveryTrack = scrobbleDispatchTrackSchema.safeParse(
+                preparedResult.deliveryTrack,
+            );
+            const prepared = {
+                trackYtMusicId: preparedResult.trackYtMusicId,
+                deliveryTrack: deliveryTrack.success
+                    ? deliveryTrack.data
+                    : undefined,
+            };
             let observation: PlayWriteObservation | undefined;
+            const creationReadObservation = observeReadLock?.();
             try {
                 const result = await database.$transaction(
                     async (transaction) => {
                         const racedReplay = await inspect(transaction);
-                        if (racedReplay) return racedReplay;
+                        if (racedReplay) {
+                            creationReadObservation?.acquired();
+                            return racedReplay;
+                        }
                         const playedAt = clock();
                         const generation = payload.recommendationGenerationId
                             ? await transaction.recommendationGeneration.findFirst(
@@ -164,6 +188,7 @@ export function createPlayAccounting(
                                   },
                               )
                             : null;
+                        creationReadObservation?.acquired();
                         observation = observeWrite?.();
                         let data: Prisma.PlayUncheckedCreateInput;
                         const recording = payload.musicSourceRecording;
@@ -238,6 +263,13 @@ export function createPlayAccounting(
                                     attributedExposureId: exposureId,
                                 },
                             });
+                        await createPlayScrobbleIntents(transaction, {
+                            userId,
+                            playId: play.id,
+                            playedAt,
+                            source: play.source,
+                            track: prepared.deliveryTrack,
+                        });
                         await transaction.playCreationReceipt.create({
                             data: {
                                 userId,
@@ -255,6 +287,7 @@ export function createPlayAccounting(
                 observation?.committed();
                 return result;
             } catch (error) {
+                creationReadObservation?.failed();
                 observation?.failed();
                 throw error;
             }
@@ -271,7 +304,7 @@ export function createPlayAccounting(
             try {
                 const result = await database.$transaction(
                     async (transaction) => {
-                        await lockOwner(transaction, userId);
+                        await lockPlayAccountingOwner(transaction, userId);
                         const play = await transaction.play.findFirst({
                             where: { id, userId },
                         });
@@ -324,7 +357,10 @@ export function createPlayAccounting(
             range: "7d" | "30d" | "365d" | "all",
         ) {
             return database.$transaction(async (transaction) => {
-                const owner = await lockOwner(transaction, userId);
+                const owner = await lockPlayAccountingOwner(
+                    transaction,
+                    userId,
+                );
                 if (owner.epoch === 2_147_483_647)
                     throw new PlayAccountingError(
                         503,
@@ -349,6 +385,12 @@ export function createPlayAccounting(
                     where: { id: userId },
                     data: { playHistoryEpoch: { increment: 1 } },
                 });
+                await cancelPlayScrobbleDispatches(
+                    transaction,
+                    { userId, play: where },
+                    now,
+                    "history_cleared",
+                );
                 await transaction.playCreationReceipt.updateMany({
                     where: { userId, play: where },
                     data: { deletedAt: now, requestHash: null },
@@ -361,7 +403,10 @@ export function createPlayAccounting(
             if (!Number.isInteger(limit) || limit < 1 || limit > 100)
                 throw new RangeError("Receipt batch must be between 1 and 100");
             return database.$transaction(async (transaction) => {
-                const owner = await lockOwner(transaction, userId);
+                const owner = await lockPlayAccountingOwner(
+                    transaction,
+                    userId,
+                );
                 const receipts = await transaction.playCreationReceipt.findMany(
                     {
                         where: {

@@ -459,9 +459,18 @@ router.post("/idempotent", async (req, res) => {
                         ...resolved,
                     }),
                 );
-                return { trackYtMusicId: identity.id };
+                return {
+                    trackYtMusicId: identity.id,
+                    deliveryTrack: {
+                        title: resolved.title,
+                        artist: resolved.artist,
+                        album: resolved.album,
+                        durationSeconds: resolved.duration,
+                    },
+                };
             },
             () => trace.beginWrite(),
+            () => trace.beginReadLock(),
         );
         trace.respond();
         return res.json(response);

@@ -111,6 +111,11 @@ describe("workers runtime behavior", () => {
         );
         const processArtistDownloadExpansion = jest.fn(async () => undefined);
         const processScrobble = jest.fn(async () => "submitted");
+        const processPlayScrobbleDispatch = jest.fn(async () => "ignored");
+        const startPlayScrobbleDispatchMaintenance = jest.fn();
+        const stopPlayScrobbleDispatchMaintenance = jest.fn(
+            async () => undefined,
+        );
         const processRemoteAnalysis = jest.fn(async () => ({
             status: "queued",
         }));
@@ -301,6 +306,11 @@ describe("workers runtime behavior", () => {
         jest.doMock("../processors/scrobbleProcessor", () => ({
             processScrobble,
         }));
+        jest.doMock("../playScrobbleDispatchRuntime", () => ({
+            processPlayScrobbleDispatch,
+            startPlayScrobbleDispatchMaintenance,
+            stopPlayScrobbleDispatchMaintenance,
+        }));
         jest.doMock("../../services/albumDownloadQueueService", () => ({
             ARTIST_DOWNLOAD_EXPANSION_JOB_NAME: "artist-download-expand",
             recoverUnqueuedAlbumDownloads,
@@ -440,6 +450,9 @@ describe("workers runtime behavior", () => {
             requeueAlbumDownloadAfterContention,
             processArtistDownloadExpansion,
             processScrobble,
+            processPlayScrobbleDispatch,
+            startPlayScrobbleDispatchMaintenance,
+            stopPlayScrobbleDispatchMaintenance,
             processRemoteAnalysis,
             recoverExpiredRemoteAnalysisAssets,
             startRemoteAnalysisAssetRecovery,
@@ -561,6 +574,14 @@ describe("workers runtime behavior", () => {
             4,
             mocks.processScrobble,
         );
+        expect(mocks.scrobbleQueue.process).toHaveBeenCalledWith(
+            "dispatch-v1",
+            4,
+            mocks.processPlayScrobbleDispatch,
+        );
+        expect(
+            mocks.startPlayScrobbleDispatchMaintenance,
+        ).toHaveBeenCalledTimes(1);
         expect(mocks.registerRecoveryJobs).toHaveBeenCalledTimes(1);
         expect(mocks.registerFederationProcessors).not.toHaveBeenCalled();
         expect(mocks.registerFederationSchedules).not.toHaveBeenCalled();
@@ -1261,6 +1282,14 @@ describe("workers runtime behavior", () => {
         await flushPromises();
 
         await workers.shutdownWorkers();
+
+        expect(mocks.stopPlayScrobbleDispatchMaintenance).toHaveBeenCalledTimes(
+            1,
+        );
+        expect(
+            mocks.stopPlayScrobbleDispatchMaintenance.mock
+                .invocationCallOrder[0],
+        ).toBeLessThan(mocks.scrobbleQueue.close.mock.invocationCallOrder[0]);
 
         expect(mocks.stopUnifiedEnrichmentWorker).toHaveBeenCalledTimes(1);
         expect(mocks.stopMoodBucketWorker).toHaveBeenCalledTimes(1);

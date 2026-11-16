@@ -17,7 +17,11 @@ export class InvalidScrobbleAuthError extends Error {
      */
     readonly encryptedCredential?: string;
 
-    constructor(encryptedCredential?: string) {
+    constructor(
+        encryptedCredential?: string,
+        readonly connectionId?: string,
+        readonly authEpoch?: number,
+    ) {
         super("Stored scrobbling authorization is invalid");
         this.name = "InvalidScrobbleAuthError";
         this.encryptedCredential = encryptedCredential;
@@ -52,6 +56,8 @@ function isInvalidAuth(cause: unknown): boolean {
 interface LoadedCredential {
     plaintext: string;
     ciphertext: string;
+    connectionId: string;
+    authEpoch: number;
 }
 
 async function loadCredential(job: ScrobbleJobData): Promise<LoadedCredential> {
@@ -59,7 +65,12 @@ async function loadCredential(job: ScrobbleJobData): Promise<LoadedCredential> {
         where: {
             userId_service: { userId: job.userId, service: job.service },
         },
-        select: { encryptedCredential: true, enabled: true },
+        select: {
+            id: true,
+            authEpoch: true,
+            encryptedCredential: true,
+            enabled: true,
+        },
     });
     if (!connection?.enabled || !connection.encryptedCredential) {
         throw new InvalidScrobbleAuthError();
@@ -68,9 +79,15 @@ async function loadCredential(job: ScrobbleJobData): Promise<LoadedCredential> {
         return {
             plaintext: decrypt(connection.encryptedCredential),
             ciphertext: connection.encryptedCredential,
+            connectionId: connection.id,
+            authEpoch: connection.authEpoch,
         };
     } catch {
-        throw new InvalidScrobbleAuthError(connection.encryptedCredential);
+        throw new InvalidScrobbleAuthError(
+            connection.encryptedCredential,
+            connection.id,
+            connection.authEpoch,
+        );
     }
 }
 
@@ -157,7 +174,11 @@ export async function submitScrobbleJob(job: ScrobbleJobData): Promise<void> {
         await submitLastFm(job, credential.plaintext);
     } catch (error: unknown) {
         if (isInvalidAuth(error)) {
-            throw new InvalidScrobbleAuthError(credential.ciphertext);
+            throw new InvalidScrobbleAuthError(
+                credential.ciphertext,
+                credential.connectionId,
+                credential.authEpoch,
+            );
         }
         throw new ScrobbleSubmissionError();
     }

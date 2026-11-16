@@ -93,7 +93,7 @@ export function createHttpRequestMetrics(
     });
     const playStages = new Histogram({
         name: "soundspan_play_request_stage_seconds",
-        help: "Play API stage duration; db_acquire_write includes pool acquisition and commit. Acknowledged create is not listened engagement.",
+        help: "Play API stage duration; db_acquire_read_lock includes pool/owner acquisition and db_acquire_write spans the first mutation through commit. Acknowledged create is not listened engagement.",
         labelNames: [
             "request_kind",
             "path_kind",

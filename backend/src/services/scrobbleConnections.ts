@@ -6,6 +6,27 @@ import { getSystemSettings } from "../utils/systemSettings";
 import type { ScrobbleService } from "./scrobbleTypes";
 import { createLastFmApiSignature } from "./scrobbleSigning";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
+import { lockPlayAccountingOwner } from "./playAccountingOwner";
+import { PlayAccountingError } from "./playAccountingProtocol";
+import {
+    assertScrobbleAuthEpochAvailable,
+    cancelPlayScrobbleDispatches,
+    invalidateScrobbleAuthorization,
+} from "./playScrobbleDispatchStore";
+
+async function withScrobbleOwner<T>(
+    userId: string,
+    work: (transaction: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+    return prisma.$transaction(
+        async (transaction) => {
+            await lockPlayAccountingOwner(transaction, userId);
+            return work(transaction);
+        },
+        { maxWait: 5_000, timeout: 5_000 },
+    );
+}
 
 const LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/";
 const LASTFM_APPROVAL_URL = "https://www.last.fm/api/auth/";
@@ -159,20 +180,35 @@ export async function saveListenBrainzToken(
         throw new InvalidListenBrainzTokenError();
     }
     const encryptedCredential = encrypt(token);
-    await prisma.scrobbleConnection.upsert({
-        where: { userId_service: { userId, service: "listenbrainz" } },
-        create: {
-            userId,
-            service: "listenbrainz",
-            encryptedCredential,
-            username: validation.data.user_name ?? null,
-            enabled: true,
-        },
-        update: {
-            encryptedCredential,
-            username: validation.data.user_name ?? null,
-            enabled: true,
-        },
+    await withScrobbleOwner(userId, async (transaction) => {
+        const current = await transaction.scrobbleConnection.findUnique({
+            where: { userId_service: { userId, service: "listenbrainz" } },
+            select: { id: true, authEpoch: true },
+        });
+        if (current) assertScrobbleAuthEpochAvailable(current.authEpoch);
+        await transaction.scrobbleConnection.upsert({
+            where: { userId_service: { userId, service: "listenbrainz" } },
+            create: {
+                userId,
+                service: "listenbrainz",
+                encryptedCredential,
+                username: validation.data.user_name ?? null,
+                enabled: true,
+            },
+            update: {
+                encryptedCredential,
+                username: validation.data.user_name ?? null,
+                enabled: true,
+                authEpoch: { increment: 1 },
+            },
+        });
+        if (current)
+            await cancelPlayScrobbleDispatches(
+                transaction,
+                { userId, connectionId: current.id },
+                new Date(),
+                "connection_changed",
+            );
     });
 }
 
@@ -203,16 +239,18 @@ export async function startLastFmAuth(userId: string): Promise<string> {
     }
     const token = tokenResult.data.token;
     const encryptedPendingToken = encrypt(token);
-    await prisma.scrobbleConnection.upsert({
-        where: { userId_service: { userId, service: "lastfm" } },
-        create: {
-            userId,
-            service: "lastfm",
-            encryptedPendingToken,
-            enabled: true,
-        },
-        update: { encryptedPendingToken },
-    });
+    await withScrobbleOwner(userId, (transaction) =>
+        transaction.scrobbleConnection.upsert({
+            where: { userId_service: { userId, service: "lastfm" } },
+            create: {
+                userId,
+                service: "lastfm",
+                encryptedPendingToken,
+                enabled: true,
+            },
+            update: { encryptedPendingToken },
+        }),
+    );
     const approvalUrl = new URL(LASTFM_APPROVAL_URL);
     approvalUrl.searchParams.set("api_key", credentials.apiKey);
     approvalUrl.searchParams.set("token", token);
@@ -224,7 +262,7 @@ export async function completeLastFmAuth(userId: string): Promise<string> {
     const credentials = await resolveLastFmCredentials();
     const connection = await prisma.scrobbleConnection.findUnique({
         where: { userId_service: { userId, service: "lastfm" } },
-        select: { encryptedPendingToken: true },
+        select: { id: true, authEpoch: true, encryptedPendingToken: true },
     });
     if (!connection?.encryptedPendingToken) throw new LastFmAuthStateError();
     const token = decrypt(connection.encryptedPendingToken);
@@ -255,20 +293,33 @@ export async function completeLastFmAuth(userId: string): Promise<string> {
         throw new ScrobbleProviderRequestError("Last.fm");
     }
     const { key: sessionKey, name: username } = sessionResult.data.session;
-    const updateResult = await prisma.scrobbleConnection.updateMany({
-        where: {
-            userId,
-            service: "lastfm",
-            encryptedPendingToken: connection.encryptedPendingToken,
-        },
-        data: {
-            encryptedCredential: encrypt(sessionKey),
-            encryptedPendingToken: null,
-            username: username ?? null,
-            enabled: true,
-        },
+    const encryptedCredential = encrypt(sessionKey);
+    await withScrobbleOwner(userId, async (transaction) => {
+        assertScrobbleAuthEpochAvailable(connection.authEpoch);
+        const updateResult = await transaction.scrobbleConnection.updateMany({
+            where: {
+                id: connection.id,
+                userId,
+                service: "lastfm",
+                authEpoch: connection.authEpoch,
+                encryptedPendingToken: connection.encryptedPendingToken,
+            },
+            data: {
+                encryptedCredential,
+                encryptedPendingToken: null,
+                username: username ?? null,
+                enabled: true,
+                authEpoch: { increment: 1 },
+            },
+        });
+        if (!updateResult.count) throw new LastFmAuthStateError();
+        await cancelPlayScrobbleDispatches(
+            transaction,
+            { userId, connectionId: connection.id },
+            new Date(),
+            "connection_changed",
+        );
     });
-    if (updateResult.count === 0) throw new LastFmAuthStateError();
     return username ?? "";
 }
 
@@ -314,7 +365,22 @@ export async function disconnectScrobbler(
     userId: string,
     service: ScrobbleService,
 ): Promise<void> {
-    await prisma.scrobbleConnection.deleteMany({ where: { userId, service } });
+    await withScrobbleOwner(userId, async (transaction) => {
+        const current = await transaction.scrobbleConnection.findUnique({
+            where: { userId_service: { userId, service } },
+            select: { id: true },
+        });
+        if (!current) return;
+        await cancelPlayScrobbleDispatches(
+            transaction,
+            { userId, connectionId: current.id },
+            new Date(),
+            "connection_changed",
+        );
+        await transaction.scrobbleConnection.deleteMany({
+            where: { id: current.id, userId, service },
+        });
+    });
 }
 
 /** Enables or disables an existing user-owned connection. */
@@ -323,9 +389,57 @@ export async function setScrobblerEnabled(
     service: ScrobbleService,
     enabled: boolean,
 ): Promise<boolean> {
-    const result = await prisma.scrobbleConnection.updateMany({
-        where: { userId, service, encryptedCredential: { not: null } },
-        data: { enabled },
+    return withScrobbleOwner(userId, async (transaction) => {
+        const current = await transaction.scrobbleConnection.findUnique({
+            where: { userId_service: { userId, service } },
+            select: {
+                id: true,
+                authEpoch: true,
+                encryptedCredential: true,
+                enabled: true,
+            },
+        });
+        if (!current?.encryptedCredential) return false;
+        if (current.enabled === enabled) return true;
+        assertScrobbleAuthEpochAvailable(current.authEpoch);
+        await transaction.scrobbleConnection.update({
+            where: { id: current.id },
+            data: { enabled, authEpoch: { increment: 1 } },
+        });
+        await cancelPlayScrobbleDispatches(
+            transaction,
+            { userId, connectionId: current.id },
+            new Date(),
+            "connection_changed",
+        );
+        return true;
     });
-    return result.count > 0;
+}
+
+/** Applies the legacy invalid-auth outcome through the same owner/epoch/CAS boundary. */
+export async function disableInvalidScrobblerIfCurrent(
+    userId: string,
+    service: ScrobbleService,
+    failedCredential: string | undefined,
+    authorization?: { connectionId: string; authEpoch: number },
+): Promise<boolean> {
+    if (!failedCredential) return false;
+    try {
+        return await withScrobbleOwner(userId, (transaction) =>
+            invalidateScrobbleAuthorization(
+                transaction,
+                {
+                    userId,
+                    service,
+                    encryptedCredential: failedCredential,
+                    ...authorization,
+                },
+                new Date(),
+            ),
+        );
+    } catch (error) {
+        if (error instanceof PlayAccountingError && error.status === 404)
+            return false;
+        throw error;
+    }
 }

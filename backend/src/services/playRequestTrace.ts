@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
 
-/** Closed stage vocabulary; DB pool wait is included in db_acquire_write. */
+/** Closed stages; owner/pool acquisition is separate from the first mutation through commit. */
 export type PlayRequestStage =
     | "auth"
     | "validation"
@@ -9,6 +9,7 @@ export type PlayRequestStage =
     | "track_lookup"
     | "metadata"
     | "identity"
+    | "db_acquire_read_lock"
     | "db_acquire_write"
     | "attribution"
     | "response_headers"
@@ -34,6 +35,7 @@ export interface PlayRequestTrace {
     measure<T>(stage: PlayRequestStage, work: () => Promise<T> | T): Promise<T>;
     write<T>(work: () => Promise<T>): Promise<T>;
     beginWrite(): { committed(): void; failed(): void };
+    beginReadLock(): { acquired(): void; failed(): void };
     authenticated(): void;
     respond(): void;
 }
@@ -125,6 +127,27 @@ export function createPlayRequestTrace(
                 throw error;
             }
         },
+        beginReadLock() {
+            activeStage = "db_acquire_read_lock";
+            const since = now();
+            let ended = false;
+            const end = (success: boolean) => {
+                if (ended) return;
+                ended = true;
+                emit(
+                    "db_acquire_read_lock",
+                    terminal
+                        ? success
+                            ? "late_success"
+                            : "late_error"
+                        : success
+                          ? "success"
+                          : "error",
+                    since,
+                );
+            };
+            return { acquired: () => end(true), failed: () => end(false) };
+        },
         beginWrite() {
             writeState = "inflight";
             activeStage = "db_acquire_write";
@@ -201,6 +224,7 @@ const unobservedTrace: PlayRequestTrace = {
     measure: async (_stage, work) => work(),
     write: async (work) => work(),
     beginWrite: () => ({ committed: () => {}, failed: () => {} }),
+    beginReadLock: () => ({ acquired: () => {}, failed: () => {} }),
     authenticated: () => {},
     respond: () => {},
 };

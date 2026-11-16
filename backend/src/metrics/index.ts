@@ -76,6 +76,7 @@ import {
     type SoulseekAlbumFolderOutcome,
 } from "./soulseekAlbumMetrics";
 import { createScrobbleMetrics, type ScrobbleOutcome } from "./scrobbleMetrics";
+import { createPlayScrobbleDispatchMetrics } from "./playScrobbleDispatchMetrics";
 import type { ScrobbleService } from "../services/scrobbleTypes";
 import {
     createRecommendationMetrics,
@@ -130,6 +131,9 @@ const catalogMetrics = createCatalogMetrics(metricsRegistry);
 const schedulerMetrics = createSchedulerMetrics(metricsRegistry);
 const soulseekAlbumMetrics = createSoulseekAlbumMetrics(metricsRegistry);
 const scrobbleMetrics = createScrobbleMetrics(metricsRegistry);
+/** Anonymous, finite instruments for the separate durable Play delivery lane. */
+export const playScrobbleDispatchMetrics =
+    createPlayScrobbleDispatchMetrics(metricsRegistry);
 const recommendationMetrics = createRecommendationMetrics(metricsRegistry);
 const playbackMetrics = createPlaybackMetrics(metricsRegistry);
 createLoudnessMetrics(metricsRegistry, prisma, {

@@ -184,6 +184,29 @@ describe("workers/queues", () => {
         expect(artistExpansionCall![1]).toEqual(albumDownloadCall![1]);
     });
 
+    it("does not log account or dispatch identities when a durable wakeup stalls", () => {
+        const { queuesModule, logger } = loadQueues(
+            "redis://cache.example:6379/0",
+        );
+        const queue = queuesModule.scrobbleQueue;
+        const stalled = queue.on.mock.calls.find(
+            (call: any[]) => call[0] === "stalled",
+        )[1];
+        stalled({
+            name: "dispatch-v1",
+            id: "private-job",
+            data: {
+                version: 1,
+                userId: "private-owner",
+                dispatchId: "private-dispatch",
+            },
+        });
+        expect(logger.warn).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(logger.warn.mock.calls)).not.toMatch(
+            /private-job|private-owner|private-dispatch/,
+        );
+    });
+
     it("wires queue error and stalled handlers for observability", () => {
         const { bullCtor, logger } = loadQueues("redis://cache.example:6379/0");
 

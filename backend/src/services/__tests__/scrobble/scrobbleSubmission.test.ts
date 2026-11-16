@@ -33,6 +33,26 @@ const baseJob: Omit<ScrobbleJobData, "service" | "kind"> = {
 };
 
 describe("submitScrobbleJob", () => {
+    it("carries the exact loaded connection generation on invalid authorization", async () => {
+        findUnique.mockResolvedValue({
+            id: "connection-original",
+            authEpoch: 7,
+            enabled: true,
+            encryptedCredential: "encrypted-credential",
+        });
+        post.mockResolvedValue({ data: { error: 9 } });
+        await expect(
+            submitScrobbleJob({
+                ...baseJob,
+                service: "lastfm",
+                kind: "scrobble",
+            }),
+        ).rejects.toMatchObject({
+            encryptedCredential: "encrypted-credential",
+            connectionId: "connection-original",
+            authEpoch: 7,
+        });
+    });
     beforeEach(() => {
         jest.clearAllMocks();
         findUnique.mockResolvedValue({

@@ -3,11 +3,20 @@ const record = jest.fn();
 const updateMany = jest.fn();
 const findMany = jest.fn();
 const add = jest.fn();
+const disableCurrent = jest.fn();
+jest.mock("../../../services/scrobbleConnections", () => ({
+    disableInvalidScrobblerIfCurrent: (...args: unknown[]) =>
+        disableCurrent(...args),
+}));
 
 jest.mock("../../../services/scrobbleSubmission", () => ({
     submitScrobbleJob: submit,
     InvalidScrobbleAuthError: class InvalidScrobbleAuthError extends Error {
-        constructor(public readonly encryptedCredential?: string) {
+        constructor(
+            public readonly encryptedCredential?: string,
+            public readonly connectionId?: string,
+            public readonly authEpoch?: number,
+        ) {
             super();
         }
     },
@@ -41,8 +50,35 @@ const job = (attemptsMade: number, attempts = 3) =>
     }) as never;
 
 describe("processScrobble", () => {
+    it("preserves the generation fence for an in-flight failure with unchanged ciphertext", async () => {
+        submit.mockRejectedValue(
+            new InvalidScrobbleAuthError(
+                "same-cipher",
+                "connection-original",
+                7,
+            ),
+        );
+        await processScrobble(job(0));
+        expect(disableCurrent).toHaveBeenCalledWith(
+            "user-1",
+            "lastfm",
+            "same-cipher",
+            { connectionId: "connection-original", authEpoch: 7 },
+        );
+    });
+    it("uses the owner/authorization fence for a failed legacy credential", async () => {
+        disableCurrent.mockResolvedValue(true);
+        submit.mockRejectedValue(new InvalidScrobbleAuthError("cipher-old"));
+        await expect(processScrobble(job(0))).resolves.toBe("invalid_auth");
+        expect(disableCurrent).toHaveBeenCalledWith(
+            "user-1",
+            "lastfm",
+            "cipher-old",
+        );
+    });
     beforeEach(() => {
         jest.clearAllMocks();
+        disableCurrent.mockReset().mockResolvedValue(true);
         updateMany.mockResolvedValue({ count: 1 });
         add.mockResolvedValue({ id: "job-1" });
     });
@@ -63,9 +99,9 @@ describe("processScrobble", () => {
 
     it("disables invalid authentication and excludes it from later forwarding", async () => {
         let enabled = true;
-        updateMany.mockImplementation(async () => {
+        disableCurrent.mockImplementation(async () => {
             enabled = false;
-            return { count: 1 };
+            return true;
         });
         findMany.mockImplementation(async () =>
             enabled ? [{ service: "lastfm" }] : [],
@@ -73,15 +109,11 @@ describe("processScrobble", () => {
         submit.mockRejectedValue(new InvalidScrobbleAuthError("cipher-old"));
 
         await expect(processScrobble(job(0))).resolves.toEqual("invalid_auth");
-        expect(updateMany).toHaveBeenCalledWith({
-            where: {
-                userId: "user-1",
-                service: "lastfm",
-                enabled: true,
-                encryptedCredential: "cipher-old",
-            },
-            data: { enabled: false },
-        });
+        expect(disableCurrent).toHaveBeenCalledWith(
+            "user-1",
+            "lastfm",
+            "cipher-old",
+        );
         expect(record).toHaveBeenCalledWith("lastfm", "invalid_auth");
 
         await forwardScrobble({
@@ -99,25 +131,22 @@ describe("processScrobble", () => {
         // The failed submission used the OLD credential; the disable must
         // compare-and-swap on that exact ciphertext, so a row holding a new
         // credential is left untouched (updateMany matches zero rows).
-        updateMany.mockResolvedValue({ count: 0 });
+        disableCurrent.mockResolvedValue(false);
         submit.mockRejectedValue(new InvalidScrobbleAuthError("cipher-old"));
 
         await expect(processScrobble(job(0))).resolves.toEqual("invalid_auth");
-        expect(updateMany).toHaveBeenCalledWith({
-            where: {
-                userId: "user-1",
-                service: "lastfm",
-                enabled: true,
-                encryptedCredential: "cipher-old",
-            },
-            data: { enabled: false },
-        });
+        expect(disableCurrent).toHaveBeenCalledWith(
+            "user-1",
+            "lastfm",
+            "cipher-old",
+        );
     });
 
     it("skips the disable entirely when no credential was in play", async () => {
         submit.mockRejectedValue(new InvalidScrobbleAuthError());
 
         await expect(processScrobble(job(0))).resolves.toEqual("invalid_auth");
+        expect(disableCurrent).not.toHaveBeenCalled();
         expect(updateMany).not.toHaveBeenCalled();
     });
 });

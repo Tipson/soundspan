@@ -1,4 +1,5 @@
 const get = jest.fn();
+const dispatchUpdateMany = jest.fn();
 const post = jest.fn();
 const upsert = jest.fn();
 const findMany = jest.fn();
@@ -16,6 +17,19 @@ jest.mock("axios", () => ({
 jest.mock("../../../utils/db", () => ({
     prisma: {
         scrobbleConnection: { upsert, findMany, findUnique, updateMany },
+        playScrobbleDispatch: {
+            updateMany: (...args: unknown[]) => dispatchUpdateMany(...args),
+        },
+        $queryRaw: jest.fn().mockResolvedValue([
+            {
+                id: "user-1",
+                epoch: 0,
+                prunedThrough: null,
+                tokenVersion: 0,
+            },
+        ]),
+        $transaction: (work: (transaction: unknown) => unknown) =>
+            work(jest.requireMock("../../../utils/db").prisma),
     },
 }));
 jest.mock("../../../utils/encryption", () => ({ encrypt, decrypt }));
@@ -39,6 +53,10 @@ import {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    findUnique.mockReset().mockResolvedValue(null);
+    upsert.mockReset().mockResolvedValue({ id: "connection-1", authEpoch: 0 });
+    updateMany.mockReset().mockResolvedValue({ count: 1 });
+    dispatchUpdateMany.mockResolvedValue({ count: 0 });
     getSystemSettings.mockResolvedValue(null);
     lastFmConfig.apiKey = "api-key";
     lastFmConfig.sharedSecret = "shared-secret";
@@ -294,6 +312,8 @@ describe("saveListenBrainzToken", () => {
             return { id: "connection-1" };
         });
         findUnique.mockImplementation(async () => ({
+            id: "connection-1",
+            authEpoch: 0,
             encryptedPendingToken: pendingToken,
         }));
         post.mockImplementation(async () => {
@@ -326,10 +346,13 @@ describe("saveListenBrainzToken", () => {
             where: {
                 userId: "user-1",
                 service: "lastfm",
+                id: "connection-1",
+                authEpoch: 0,
                 encryptedPendingToken: "encrypted:request-token-a",
             },
             data: {
                 encryptedCredential: "encrypted:session-a",
+                authEpoch: { increment: 1 },
                 encryptedPendingToken: null,
                 username: "alice",
                 enabled: true,

@@ -9,28 +9,37 @@ import {
     scrobbleJobSchema,
     type ScrobbleJobData,
 } from "../../services/scrobbleTypes";
-import { prisma } from "../../utils/db";
+import { disableInvalidScrobblerIfCurrent } from "../../services/scrobbleConnections";
 
 export type ScrobbleProcessOutcome = "submitted" | "dropped" | "invalid_auth";
 
 async function disableInvalidConnection(
     data: ScrobbleJobData,
-    failedCredential: string | undefined,
+    failure: InvalidScrobbleAuthError,
 ): Promise<void> {
     // Compare-and-swap on the exact credential the failed submission used:
     // an in-flight job holding an old credential must never disable a
     // connection the user has since reauthenticated. No ciphertext means
     // the row was already missing or disabled - nothing to change.
+    const failedCredential = failure.encryptedCredential;
     if (!failedCredential) return;
-    await prisma.scrobbleConnection.updateMany({
-        where: {
-            userId: data.userId,
-            service: data.service,
-            enabled: true,
-            encryptedCredential: failedCredential,
-        },
-        data: { enabled: false },
-    });
+    if (failure.connectionId && failure.authEpoch !== undefined) {
+        await disableInvalidScrobblerIfCurrent(
+            data.userId,
+            data.service,
+            failedCredential,
+            {
+                connectionId: failure.connectionId,
+                authEpoch: failure.authEpoch,
+            },
+        );
+        return;
+    }
+    await disableInvalidScrobblerIfCurrent(
+        data.userId,
+        data.service,
+        failedCredential,
+    );
 }
 
 /** Processes one provider job and lets Bull own bounded transient retries. */
@@ -52,7 +61,7 @@ export async function processScrobble(
         return "submitted";
     } catch (error: unknown) {
         if (error instanceof InvalidScrobbleAuthError) {
-            await disableInvalidConnection(data, error.encryptedCredential);
+            await disableInvalidConnection(data, error);
             recordScrobbleOutcome(data.service, "invalid_auth");
             return "invalid_auth";
         }
