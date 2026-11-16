@@ -54,15 +54,10 @@ test("shares one token refresh across concurrent 401 responses", async () => {
 
         const authorization = new Headers(init?.headers).get("Authorization");
         if (authorization === "Bearer access-old") {
-            return {
-                ok: false,
-                status: 401,
-                statusText: "Unauthorized",
-                json: async () => ({
-                    error: "Not authenticated",
-                    code: "AUTH_REQUIRED",
-                }),
-            } as Response;
+            return Response.json(
+                { error: "Not authenticated", code: "AUTH_REQUIRED" },
+                { status: 401, statusText: "Unauthorized" },
+            );
         }
         if (authorization === "Bearer access-new") {
             return Response.json({ ok: true });
@@ -105,29 +100,22 @@ test("keeps the session when refresh is temporarily unavailable", async () => {
                 if (unavailableCase === "network") {
                     throw new TypeError("network unavailable");
                 }
-                return {
-                    ok: false,
-                    status: unavailableCase,
-                    statusText: "Unavailable",
-                    headers: new Headers(
-                        unavailableCase === 429
-                            ? { "Retry-After": "300" }
-                            : undefined,
-                    ),
-                    json: async () => ({
-                        error: "Authentication temporarily unavailable",
-                    }),
-                } as Response;
+                return Response.json(
+                    { error: "Authentication temporarily unavailable" },
+                    {
+                        status: unavailableCase,
+                        statusText: "Unavailable",
+                        headers:
+                            unavailableCase === 429
+                                ? { "Retry-After": "300" }
+                                : undefined,
+                    },
+                );
             }
-            return {
-                ok: false,
-                status: 401,
-                statusText: "Unauthorized",
-                json: async () => ({
-                    error: "Not authenticated",
-                    code: "AUTH_REQUIRED",
-                }),
-            } as Response;
+            return Response.json(
+                { error: "Not authenticated", code: "AUTH_REQUIRED" },
+                { status: 401, statusText: "Unauthorized" },
+            );
         }) as typeof fetch;
 
         try {
@@ -164,22 +152,15 @@ test("clears the session when refresh credentials are rejected", async () => {
         input: Parameters<typeof fetch>[0],
     ) => {
         if (String(input).endsWith("/api/auth/refresh")) {
-            return {
-                ok: false,
-                status: 401,
-                statusText: "Unauthorized",
-                json: async () => ({ error: "Invalid refresh token" }),
-            } as Response;
+            return Response.json(
+                { error: "Invalid refresh token" },
+                { status: 401, statusText: "Unauthorized" },
+            );
         }
-        return {
-            ok: false,
-            status: 401,
-            statusText: "Unauthorized",
-            json: async () => ({
-                error: "Not authenticated",
-                code: "AUTH_REQUIRED",
-            }),
-        } as Response;
+        return Response.json(
+            { error: "Not authenticated", code: "AUTH_REQUIRED" },
+            { status: 401, statusText: "Unauthorized" },
+        );
     }) as typeof fetch;
 
     try {
@@ -218,15 +199,10 @@ test("refreshes a second time after one spurious post-refresh 401", async () => 
         if (authorization === "Bearer access-2") {
             return Response.json({ ok: true });
         }
-        return {
-            ok: false,
-            status: 401,
-            statusText: "Unauthorized",
-            json: async () => ({
-                error: "Not authenticated",
-                code: "AUTH_REQUIRED",
-            }),
-        } as Response;
+        return Response.json(
+            { error: "Not authenticated", code: "AUTH_REQUIRED" },
+            { status: 401, statusText: "Unauthorized" },
+        );
     }) as typeof fetch;
 
     await assert.doesNotReject(async () => {
@@ -257,22 +233,15 @@ test("logs out when the second refresh is rejected", async () => {
                     refreshToken: "refresh-1",
                 });
             }
-            return {
-                ok: false,
-                status: 401,
-                statusText: "Unauthorized",
-                json: async () => ({ error: "Invalid refresh token" }),
-            } as Response;
+            return Response.json(
+                { error: "Invalid refresh token" },
+                { status: 401, statusText: "Unauthorized" },
+            );
         }
-        return {
-            ok: false,
-            status: 401,
-            statusText: "Unauthorized",
-            json: async () => ({
-                error: "Not authenticated",
-                code: "AUTH_REQUIRED",
-            }),
-        } as Response;
+        return Response.json(
+            { error: "Not authenticated", code: "AUTH_REQUIRED" },
+            { status: 401, statusText: "Unauthorized" },
+        );
     }) as typeof fetch;
 
     try {

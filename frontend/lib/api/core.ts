@@ -498,7 +498,7 @@ export abstract class ApiClientCore {
 
         for (let attempt = 0; attempt <= MAX_TIMEOUT_RETRIES; attempt++) {
             try {
-                const response = await this.fetchWithTimeout(
+                return await this.fetchWithTimeout(
                     `${this.getBaseUrl()}/api/auth/refresh`,
                     {
                         method: "POST",
@@ -508,8 +508,9 @@ export abstract class ApiClientCore {
                         priority: "high",
                     },
                     AUTH_REFRESH_TIMEOUT_MS,
+                    (response) =>
+                        this.applyRefreshResponse(response, generation),
                 );
-                return await this.applyRefreshResponse(response, generation);
             } catch (error) {
                 if (!this.isCurrentSession(generation)) {
                     return "unavailable";
@@ -559,18 +560,19 @@ export abstract class ApiClientCore {
     }
 
     /**
-     * Make an authenticated API request
-     * Public method for components that need custom API calls
+     * Retain timeout and upstream cancellation until the response consumer finishes.
      */
-    private async fetchWithTimeout(
+    private async fetchWithTimeout<T>(
         url: string,
         options: RequestInit,
         timeoutMs: number,
-    ): Promise<Response> {
+        consume: (response: Response) => Promise<T>,
+    ): Promise<T> {
         const controller = new AbortController();
         const upstreamSignal = options.signal;
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
         let timedOut = false;
+        let response: Response | undefined;
 
         const abortFromUpstream = () => {
             controller.abort((upstreamSignal as AbortSignal).reason);
@@ -594,10 +596,11 @@ export abstract class ApiClientCore {
         }
 
         try {
-            return await fetch(url, {
+            response = await fetch(url, {
                 ...options,
                 signal: controller.signal,
             });
+            return await consume(response);
         } catch (error) {
             if (timedOut) {
                 const timeoutError = new Error(
@@ -612,6 +615,9 @@ export abstract class ApiClientCore {
             }
             throw error;
         } finally {
+            // Status-only refresh handling can leave a body unread; do not
+            // leave its connection running after the consumer has returned.
+            if (response?.body && !response.bodyUsed) controller.abort();
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }
@@ -689,8 +695,9 @@ export abstract class ApiClientCore {
 
         const performRequest = async (): Promise<T> => {
             let response: Response;
+            let rawBody: string;
             try {
-                response = await this.fetchWithTimeout(
+                const received = await this.fetchWithTimeout(
                     url,
                     {
                         ...fetchOptions,
@@ -698,7 +705,16 @@ export abstract class ApiClientCore {
                         credentials: "include", // Still send cookies for backward compatibility
                     },
                     timeoutMs,
+                    async (response) => ({
+                        response,
+                        rawBody:
+                            response.status === 204 || response.status === 205
+                                ? ""
+                                : await response.text(),
+                    }),
                 );
+                response = received.response;
+                rawBody = received.rawBody;
             } catch (error) {
                 this.assertCurrentSession(_authSessionGeneration);
                 if (
@@ -722,9 +738,13 @@ export abstract class ApiClientCore {
             this.assertCurrentSession(_authSessionGeneration);
 
             if (!response.ok) {
-                const error = await response.json().catch(() => ({
-                    error: response.statusText,
-                }));
+                const error = (() => {
+                    try {
+                        return JSON.parse(rawBody);
+                    } catch {
+                        return { error: response.statusText };
+                    }
+                })();
                 this.assertCurrentSession(_authSessionGeneration);
 
                 // Only log non-404 errors (404s are often expected)
@@ -782,7 +802,6 @@ export abstract class ApiClientCore {
             if (response.status === 204 || response.status === 205) {
                 return undefined as T;
             }
-            const rawBody = await response.text();
             this.assertCurrentSession(_authSessionGeneration);
             if (rawBody === "") {
                 return undefined as T;

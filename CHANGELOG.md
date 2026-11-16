@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Keep API deadlines and upstream cancellation active until response bodies are consumed. Close unread refresh responses while preserving bounded read/auth retries, one-shot network behavior for mutations and existing session fences.
 - Deliver accepted Play scrobbles through durable destination-bound intents and bounded maintenance. Freeze authorization generations, retain safe retry holdoffs, cancel revoked work and preserve ambiguous external outcomes without automatic resubmission.
 - Apply cross-provider dislikes only through verified recording identities, preserving exact provider exclusions and keeping metadata-only matches eligible. Batch bounded identity evidence reads for recommendations and cached mixes; retain known VK/Yandex namespace identities for soft ranking without treating them as verified exclusion evidence. Rebuild daily compositions after transient evidence outages while keeping healthy daily caches stable.
 - Retry interrupted Android Chromium network playback in the background with the existing bounded retry budget and retained position. Preserve Play intent during recovery and explicit pause/stop/replacement authority. Hand exhausted Android network retries to normal terminal source recovery; retain browser-owned recovery on other platforms.
