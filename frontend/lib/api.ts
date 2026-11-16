@@ -460,6 +460,14 @@ export interface TrackPreferenceResponse {
     likedAt: string | null;
     dislikedAt: string | null;
     updatedAt: string | null;
+    /** Applied owner preference on write ACKs. Absent on legacy servers/reads. */
+    queuePolicy?: {
+        version: 1;
+        scope: "exact_recording";
+        appliesTo: "recommended_future";
+        trackId: string;
+        effect: "exclude" | "allow";
+    };
 }
 
 export interface AlbumPreferenceResponse {

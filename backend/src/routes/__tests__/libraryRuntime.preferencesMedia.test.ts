@@ -760,13 +760,30 @@ describe("library catalog list runtime coverage", () => {
 
     it("updates thumbs preference state for up/down/clear signals", async () => {
         mockTrackFindUnique.mockResolvedValue({ id: "track-1" });
-        mockLikedTrackUpsert.mockResolvedValue({
-            userId: "user-1",
-            trackId: "track-1",
+        let likedAt: Date | null = null;
+        let dislikedAt: Date | null = null;
+        mockLikedTrackUpsert.mockImplementation(async ({ create }) => {
+            likedAt = create.likedAt;
+            return create;
         });
-        mockLikedTrackDeleteMany.mockResolvedValue({ count: 1 });
-        mockDislikedEntityUpsert.mockResolvedValue({ id: "disliked-track-1" });
-        mockDislikedEntityDeleteMany.mockResolvedValue({ count: 1 });
+        mockLikedTrackDeleteMany.mockImplementation(async () => {
+            likedAt = null;
+            return { count: 1 };
+        });
+        mockDislikedEntityUpsert.mockImplementation(async ({ create }) => {
+            dislikedAt = create.dislikedAt;
+            return create;
+        });
+        mockDislikedEntityDeleteMany.mockImplementation(async () => {
+            dislikedAt = null;
+            return { count: 1 };
+        });
+        mockLikedTrackFindUnique.mockImplementation(async () =>
+            likedAt ? { likedAt } : null,
+        );
+        mockDislikedEntityFindUnique.mockImplementation(async () =>
+            dislikedAt ? { dislikedAt } : null,
+        );
 
         const invalidReq = {
             params: { id: "track-1" },
@@ -806,6 +823,13 @@ describe("library catalog list runtime coverage", () => {
         const thumbsDownRes = createRes();
         await setTrackPreferenceHandler(thumbsDownReq, thumbsDownRes);
         expect(thumbsDownRes.statusCode).toBe(200);
+        expect(thumbsDownRes.body.queuePolicy).toEqual({
+            version: 1,
+            scope: "exact_recording",
+            appliesTo: "recommended_future",
+            trackId: "track-1",
+            effect: "exclude",
+        });
         expect(thumbsDownRes.body).toEqual(
             expect.objectContaining({
                 signal: "thumbs_down",

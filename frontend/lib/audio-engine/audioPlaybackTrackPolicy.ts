@@ -11,6 +11,7 @@ import {
     PROVIDER_AUDIO_LOAD_TIMEOUT_MS,
     PROVIDER_AUDIO_LOAD_TIMEOUT_RETRIES,
 } from "./audioPlaybackOrchestratorConstants";
+import { resolveQueueAdvance } from "@/lib/audio/queue-advance-policy";
 
 /** Provider fields used to resolve the direct playback source. */
 export interface RuntimeProviderTrack {
@@ -57,6 +58,7 @@ export function getNextTrackInfo(
     isShuffle: boolean,
     shuffleIndices: number[],
     repeatMode: "off" | "one" | "all",
+    canAdvanceTo?: (index: number) => boolean,
 ): {
     id: string;
     playbackSourcePolicy?: "device-only";
@@ -70,6 +72,18 @@ export function getNextTrackInfo(
     youtubeAudioFormat?: "mp4" | "webm";
 } | null {
     if (queue.length === 0) return null;
+    if (canAdvanceTo) {
+        const next = resolveQueueAdvance({
+            action: "next",
+            queue,
+            currentIndex,
+            isShuffle,
+            shuffleIndices,
+            repeatMode,
+            canAdvanceTo,
+        });
+        return next.kind === "track" ? (queue[next.index] ?? null) : null;
+    }
 
     let nextIndex: number;
     if (isShuffle) {

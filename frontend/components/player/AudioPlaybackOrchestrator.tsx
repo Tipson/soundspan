@@ -43,7 +43,7 @@ import { readMigratingStorageItem } from "@/lib/storage-migration";
 import { playbackStateMachine } from "@/lib/audio";
 import { markPlaybackHeartbeat } from "@/lib/audio/playback-liveness";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, memo } from "react";
+import { useCallback, useEffect, useLayoutEffect, memo } from "react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { resolveDeviceOfflineMediaIdentity } from "@/features/device-offline/playbackResolver";
 import {
@@ -76,6 +76,7 @@ import {
 import type { DesiredLoadPlayIntent } from "./hooks";
 import * as H from "./hooks";
 import { useServerMusicSourceRecovery } from "./hooks/useServerMusicSourceRecovery";
+import { subscribeRecommendationFeedbackChanges } from "@/lib/audio/recommendationFeedbackBridge";
 
 // Native stop resets the clock. Only the explicit retry owns playback until
 // it restores the retained position for this exact occurrence and identity.
@@ -118,7 +119,10 @@ export const AudioPlaybackOrchestrator = memo(
             shuffleIndices,
             vibeMode,
             waveMode,
+            recommendationFeedback,
         } = useAudioState();
+        const { allows: admitsRecommendedTrack, revision: feedbackRevision } =
+            recommendationFeedback;
         const { volume, isMuted } = useAudioVolumeMode();
         const {
             isPlaying,
@@ -136,23 +140,36 @@ export const AudioPlaybackOrchestrator = memo(
         } = usePlaybackStatus();
         const { pause, advanceQueue: next, startVibeMode } = useAudioControls();
         const queryClient = useQueryClient();
+        const canAdvanceTo = useCallback(
+            (index: number) => {
+                const track = queue[index];
+                return Boolean(track && admitsRecommendedTrack(track));
+            },
+            [queue, admitsRecommendedTrack],
+        );
 
         useLayoutEffect(() => {
             const syncAuthority = () => {
                 const local = !isListenTogetherActiveOrPending();
                 audioEngine.setContinuousEnabled?.(local);
                 audioEngine.setRepeatCurrent?.(
-                    local && playbackType === "track" && repeatMode === "one",
+                    local &&
+                        playbackType === "track" &&
+                        repeatMode === "one" &&
+                        (!currentTrack || admitsRecommendedTrack(currentTrack)),
                 );
             };
             syncAuthority();
             const unsubscribe =
                 subscribeListenTogetherMembership(syncAuthority);
+            const unsubscribeFeedback =
+                subscribeRecommendationFeedbackChanges(syncAuthority);
             return () => {
                 unsubscribe();
+                unsubscribeFeedback();
                 audioEngine.setRepeatCurrent?.(false);
             };
-        }, [playbackType, repeatMode]);
+        }, [playbackType, repeatMode, currentTrack, admitsRecommendedTrack]);
         const orchestratorRefs = H.usePlaybackOrchestratorRefs({
             currentTrack,
             playbackType,
@@ -329,6 +346,8 @@ export const AudioPlaybackOrchestrator = memo(
             isShuffle,
             shuffleIndices,
             repeatMode,
+            canAdvanceTo,
+            feedbackRevision,
             refs: orchestratorRefs,
         });
         useLayoutEffect(() => {
@@ -619,7 +638,12 @@ export const AudioPlaybackOrchestrator = memo(
                 } else if (playbackType === "audiobook") {
                     pause();
                 } else if (playbackType === "track") {
-                    if (repeatMode === "one" && !isListenTogether) {
+                    if (
+                        repeatMode === "one" &&
+                        !isListenTogether &&
+                        currentTrack &&
+                        admitsRecommendedTrack(currentTrack)
+                    ) {
                         playbackProgressConfirmationRef.current =
                             restartPlaybackProgressConfirmation(
                                 currentTrack?.id ?? null,
@@ -645,6 +669,7 @@ export const AudioPlaybackOrchestrator = memo(
                                 isShuffle,
                                 shuffleIndices,
                                 repeatMode,
+                                canAdvanceTo,
                             );
                             if (nextTrack) {
                                 preloadNextTrack(nextTrack, {
@@ -663,6 +688,7 @@ export const AudioPlaybackOrchestrator = memo(
                                 isShuffle,
                                 shuffleIndices,
                                 repeatMode,
+                                canAdvanceTo,
                             }).kind === "stop"
                         ) {
                             pause();

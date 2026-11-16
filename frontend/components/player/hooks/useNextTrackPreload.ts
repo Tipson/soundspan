@@ -29,6 +29,7 @@ import {
 } from "@/lib/audio-engine/adaptiveQueueWarmup";
 import type { AudioPreloadLease } from "@/lib/audio-engine/types";
 import { frontendLogger } from "@/lib/logger";
+import { subscribeRecommendationFeedbackChanges } from "@/lib/audio/recommendationFeedbackBridge";
 
 interface UseNextTrackPreloadOptions {
     playbackType: "track" | "audiobook" | "podcast" | null;
@@ -40,6 +41,9 @@ interface UseNextTrackPreloadOptions {
     isShuffle: boolean;
     shuffleIndices: number[];
     repeatMode: "off" | "one" | "all";
+    /** Automatic recommendation admission; manual/current audio stays separate. */
+    canAdvanceTo?: (index: number) => boolean;
+    feedbackRevision?: number;
     refs: PlaybackOrchestratorRefs;
 }
 
@@ -115,6 +119,8 @@ export function useNextTrackPreload({
     isShuffle,
     shuffleIndices,
     repeatMode,
+    canAdvanceTo,
+    feedbackRevision,
     refs,
 }: UseNextTrackPreloadOptions): NextTrackPreloadController {
     const {
@@ -125,6 +131,7 @@ export function useNextTrackPreload({
     } = refs;
     const leaseController = usePlaybackSourceLeaseController();
     const preloadRequestIdRef = useRef(0);
+    const speculativeTrackRef = useRef<PreloadableTrack | null>(null);
     const failedNetworkPreloadRef = useRef<{
         identity: string;
         sourceUrl: string;
@@ -257,6 +264,9 @@ export function useNextTrackPreload({
                 5,
             );
             const tailVideoIds = upcoming
+                .filter((track) =>
+                    canAdvanceTo ? canAdvanceTo(queue.indexOf(track)) : true,
+                )
                 .slice(
                     upcoming[0] && upcoming[0].id === immediateTrack.id ? 1 : 0,
                 )
@@ -282,6 +292,48 @@ export function useNextTrackPreload({
             queue,
             repeatMode,
             shuffleIndices,
+            canAdvanceTo,
+        ],
+    );
+
+    const isPreloadAdmitted = useCallback(
+        (track: PreloadableTrack) => {
+            if (!canAdvanceTo) return true;
+            const index = queue.indexOf(track as QueueItem);
+            return index >= 0 && canAdvanceTo(index);
+        },
+        [queue, canAdvanceTo],
+    );
+
+    useLayoutEffect(
+        () =>
+            subscribeRecommendationFeedbackChanges(() => {
+                const candidate = speculativeTrackRef.current;
+                if (!candidate) return;
+                if (isPreloadAdmitted(candidate)) {
+                    reconcileAdaptiveWarmup(
+                        candidate,
+                        enginePreloadLeaseRef.current,
+                    );
+                    return;
+                }
+                preloadRequestIdRef.current += 1;
+                speculativeTrackRef.current = null;
+                pendingYtMusicPreloadRef.current = null;
+                enginePreloadLeaseRef.current?.cancel();
+                enginePreloadLeaseRef.current = null;
+                leaseController.release();
+                lastPreloadedTrackIdRef.current = null;
+                readyPreloadedTrackIdRef.current = null;
+                void warmupCoordinatorRef.current?.clear();
+            }),
+        [
+            isPreloadAdmitted,
+            reconcileAdaptiveWarmup,
+            enginePreloadLeaseRef,
+            leaseController,
+            lastPreloadedTrackIdRef,
+            readyPreloadedTrackIdRef,
         ],
     );
 
@@ -291,12 +343,14 @@ export function useNextTrackPreload({
             options: PreloadTrackOptions = {},
         ): void => {
             if (
+                !isPreloadAdmitted(nextTrack) ||
                 isRetiredProviderTrack(nextTrack) ||
                 (nextTrack.playbackSourcePolicy === "device-only" &&
                     !hasDeviceOfflinePlaybackCopy(nextTrack)) ||
                 nextTrack.streamSource === "audius" ||
                 nextTrack.provider?.source === "audius"
             ) {
+                speculativeTrackRef.current = null;
                 preloadRequestIdRef.current += 1;
                 pendingYtMusicPreloadRef.current = null;
                 enginePreloadLeaseRef.current?.cancel();
@@ -307,6 +361,7 @@ export function useNextTrackPreload({
                 void warmupCoordinatorRef.current?.clear();
                 return;
             }
+            speculativeTrackRef.current = nextTrack;
             const preloadIdentity =
                 resolveDeviceOfflineMediaIdentity(nextTrack);
             const hasDeviceCopy = hasDeviceOfflinePlaybackCopy(nextTrack);
@@ -368,7 +423,8 @@ export function useNextTrackPreload({
             pendingYtMusicPreloadRef.current = null;
             const isCurrentRequest = () =>
                 preloadRequestIdRef.current === requestId &&
-                lastPreloadedTrackIdRef.current === preloadIdentity;
+                lastPreloadedTrackIdRef.current === preloadIdentity &&
+                isPreloadAdmitted(nextTrack);
 
             // A YouTube Music preload starts a real sidecar spool job. The
             // default effect remains device-only; the timing policy opts one
@@ -548,6 +604,7 @@ export function useNextTrackPreload({
             leaseController,
             reconcileAdaptiveWarmup,
             readyPreloadedTrackIdRef,
+            isPreloadAdmitted,
         ],
     );
 
@@ -559,6 +616,7 @@ export function useNextTrackPreload({
                 isShuffle,
                 shuffleIndices,
                 repeatMode,
+                canAdvanceTo,
             );
             if (
                 nextTrack &&
@@ -578,6 +636,7 @@ export function useNextTrackPreload({
                 isShuffle,
                 shuffleIndices,
                 repeatMode,
+                canAdvanceTo,
                 liveTrackId: timing.liveTrackId,
                 currentTimeSec: timing.currentTimeSec,
                 loadedDurationSec: timing.loadedDurationSec,
@@ -591,6 +650,7 @@ export function useNextTrackPreload({
             repeatMode,
             preloadTrack,
             refs,
+            canAdvanceTo,
         ],
     );
 
@@ -624,6 +684,7 @@ export function useNextTrackPreload({
             isShuffle,
             shuffleIndices,
             repeatMode,
+            canAdvanceTo,
         );
 
         if (!nextTrack) {
@@ -671,6 +732,8 @@ export function useNextTrackPreload({
         lastPreloadedTrackIdRef,
         preloadTrack,
         readyPreloadedTrackIdRef,
+        canAdvanceTo,
+        feedbackRevision,
     ]);
 
     return {

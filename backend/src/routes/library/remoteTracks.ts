@@ -198,7 +198,7 @@ async function resolveLikedRemoteTrack(
  *                     type: integer
  *     responses:
  *       200:
- *         description: Updated remote track preference
+ *         description: Updated remote track preference. queuePolicy version 1 describes the persisted exact_recording signal for recommended_future only; effect is exclude for thumbs_down and allow otherwise. trackId is the exact response identity. It never asserts an artist ban or verified aliases.
  *       400:
  *         description: Invalid remote track ID or signal
  *       401:
@@ -287,7 +287,11 @@ export async function handleSetRemoteTrackPreference(
         throw error;
     }
 
-    res.json(formatTrackPreferenceResponse(req.params.id, preference));
+    res.json(
+        formatTrackPreferenceResponse(req.params.id, preference, {
+            queuePolicy: true,
+        }),
+    );
 }
 
 remoteTracksRouter.post(

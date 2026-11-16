@@ -241,16 +241,28 @@ describe("direct preference HTTP contract", () => {
             expect(mockResolveMetadata).not.toHaveBeenCalled();
         },
     );
-    it.each(["thumbs_down", "clear"])(
-        "permits %s when the exact namespace/provider is unavailable",
-        async (signal) => {
+    it.each([
+        ["yandex:123", "thumbs_down"],
+        ["yandex:123", "clear"],
+        ["vk:-12_34", "thumbs_down"],
+        ["vk:-12_34", "clear"],
+    ])(
+        "permits %s %s when the exact namespace/provider is unavailable",
+        async (trackId, signal) => {
             mockPrisma.trackMusicSource.findUnique.mockResolvedValue(null);
             const response = await request(app)
-                .post(pathFor("yandex:123"))
+                .post(pathFor(trackId))
                 .set("x-fixture-owner", "owner-a")
                 .send({ signal });
             expect(response.status).toBe(200);
             expect(response.body.signal).toBe(signal);
+            expect(response.body.queuePolicy).toEqual({
+                version: 1,
+                scope: "exact_recording",
+                appliesTo: "recommended_future",
+                trackId,
+                effect: signal === "thumbs_down" ? "exclude" : "allow",
+            });
             expect(mockEnsureRemoteTrack).not.toHaveBeenCalled();
             expect(mockResolveMetadata).not.toHaveBeenCalled();
         },

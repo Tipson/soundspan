@@ -42,6 +42,7 @@ import type {
 } from "../../lib/audio-engine/types";
 import { resetForegroundRecoveryThrottle } from "../../lib/audio-engine/foregroundRecoveryPolicy";
 import { advanceAuthRuntimeGeneration } from "../../lib/auth-runtime-generation";
+import * as feedbackBridge from "../../lib/audio/recommendationFeedbackBridge";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -486,6 +487,7 @@ const emitSeek = (time: number): void => {
     }
 };
 
+const excludedPreloadIds = new Set<string>();
 const audioState = {
     currentTrack: null as Track | null,
     currentAudiobook: null as Audiobook | null,
@@ -500,6 +502,11 @@ const audioState = {
     shuffleIndices: [] as number[],
     vibeMode: false,
     waveMode: "for-you" as "for-you" | "new" | "familiar",
+    recommendationFeedback: {
+        allows: (track: { id: string }) => !excludedPreloadIds.has(track.id),
+        reset: () => excludedPreloadIds.clear(),
+        revision: 0,
+    },
 };
 
 const playbackState = {
@@ -880,6 +887,7 @@ mock.module("@/lib/audio-state-context", {
             volume: audioState.volume,
             isMuted: audioState.isMuted,
             repeatMode: audioState.repeatMode,
+            recommendationFeedback: audioState.recommendationFeedback,
             setCurrentAudiobook: (
                 value:
                     | Audiobook
@@ -1427,6 +1435,8 @@ before(async () => {
 
 beforeEach(() => {
     resetHarnessState();
+    excludedPreloadIds.clear();
+    audioState.recommendationFeedback.revision = 0;
     playbackMachine.state = "IDLE";
     clearPlaybackHeartbeat();
 });
@@ -2395,6 +2405,74 @@ for (const preloadResult of [
     });
 }
 
+test("repeat-all warmup skips a disliked past recording", async () => {
+    const blocked = makeTrack("vk:1_2", { streamSource: "vk" });
+    const allowed = makeTrack("vk:3_4", { streamSource: "vk" });
+    const current = makeTrack("warmup-current");
+    audioState.currentTrack = current;
+    audioState.currentIndex = 2;
+    audioState.queue = [blocked, allowed, current];
+    audioState.repeatMode = "all";
+    excludedPreloadIds.add(blocked.id);
+    audioState.recommendationFeedback.revision++;
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    assert.deepEqual(engine.preloadCalls, [
+        { url: "/api/music-sources/recordings/vk/3_4/stream", format: "mp3" },
+    ]);
+});
+
+test("feedback cancels an existing speculative lease before React rerenders", async () => {
+    const current = makeTrack("playing-before-feedback");
+    const blocked = makeTrack("vk:1_2", { streamSource: "vk" });
+    const allowed = makeTrack("vk:3_4", { streamSource: "vk" });
+    audioState.currentTrack = current;
+    audioState.queue = [current, blocked, allowed];
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(
+        engine.preloadCalls.at(-1)?.url,
+        "/api/music-sources/recordings/vk/1_2/stream",
+    );
+    excludedPreloadIds.add(blocked.id);
+    audioState.recommendationFeedback.revision++;
+    feedbackBridge.notifyRecommendationFeedbackChange();
+    assert.deepEqual(engine.preloadCancelCalls, [
+        "/api/music-sources/recordings/vk/1_2/stream",
+    ]);
+    assert.equal(audioState.currentTrack, current);
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.equal(
+        engine.preloadCalls.at(-1)?.url,
+        "/api/music-sources/recordings/vk/3_4/stream",
+    );
+});
+
+test("feedback disables native repeat-one before React rerenders", async () => {
+    const track = makeTrack("no-longer-repeatable");
+    audioState.currentTrack = track;
+    audioState.queue = [track, makeTrack("next-after-dislike")];
+    audioState.repeatMode = "one";
+    const repeat = mock.method(engine, "setRepeatCurrent");
+    try {
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        assert.equal(repeat.mock.calls.at(-1)?.arguments[0], true);
+        excludedPreloadIds.add(track.id);
+        audioState.recommendationFeedback.revision++;
+        feedbackBridge.notifyRecommendationFeedbackChange();
+        assert.equal(repeat.mock.calls.at(-1)?.arguments[0], false);
+        engine.emit("end");
+        assert.equal(controlCalls.next, 1);
+    } finally {
+        repeat.mock.restore();
+    }
+});
+
 test("service catalog next track preloads through a renewable exact source", async () => {
     const currentTrack = makeTrack("service-current");
     const nextTrack = makeTrack("vk:1_2", { streamSource: "vk" });
@@ -2797,7 +2875,12 @@ test("retiring a pending next source prevents its late device lease from preload
     assert.equal(engine.preloadCalls.length, 0);
 });
 
-for (const handoffScenario of ["hidden", "foreground", "manual"] as const) {
+for (const handoffScenario of [
+    "hidden",
+    "foreground",
+    "manual",
+    "feedback",
+] as const) {
     test(`installed iOS PWA advances a preloaded next track before hidden source end: ${handoffScenario}`, async (t) => {
         const navigatorDescriptor = Object.getOwnPropertyDescriptor(
             globalThis,
@@ -2855,6 +2938,23 @@ for (const handoffScenario of ["hidden", "foreground", "manual"] as const) {
         engine.emit("timeupdate", { timeSec: 1 });
         await flushAsync();
         assert.equal(engine.preloadCalls.length, 1);
+
+        if (handoffScenario === "feedback") {
+            t.mock.timers.enable({ apis: ["setTimeout"] });
+            engine.emit("timeupdate", { timeSec: 207 });
+            excludedPreloadIds.add(nextTrack.id);
+            audioState.recommendationFeedback.revision++;
+            feedbackBridge.notifyRecommendationFeedbackChange();
+            t.mock.timers.tick(3000);
+            await flushAsync();
+            assert.equal(
+                controlCalls.next,
+                0,
+                "an armed handoff must not advance into a newly rejected recording",
+            );
+            assert.equal(audioState.currentTrack, currentTrack);
+            return;
+        }
 
         engine.emit("timeupdate", { timeSec: 209.8 });
         await flushAsync();

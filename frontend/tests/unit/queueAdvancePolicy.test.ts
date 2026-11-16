@@ -229,3 +229,62 @@ test("out-of-range current index stops", () => {
     });
     assert.deepEqual(result, { kind: "stop" });
 });
+
+test("repeat-all skips excluded past recommendations in sequential and shuffle order", () => {
+    const queue = [track("disliked"), track("allowed"), track("current")];
+    for (const isShuffle of [false, true]) {
+        assert.deepEqual(
+            resolveQueueAdvance({
+                action: "next",
+                queue,
+                currentIndex: 2,
+                isShuffle,
+                shuffleIndices: [2, 0, 1],
+                repeatMode: "all",
+                canAdvanceTo: (index) => index !== 0,
+            }),
+            { kind: "track", index: 1 },
+        );
+    }
+});
+
+test("a fully excluded queue stops after one bounded pass", () => {
+    let checked = 0;
+    const queue = [track("a"), track("b"), track("c")];
+    assert.deepEqual(
+        resolveQueueAdvance({
+            action: "next",
+            queue,
+            currentIndex: 2,
+            isShuffle: false,
+            shuffleIndices: [],
+            repeatMode: "all",
+            canAdvanceTo: () => {
+                checked++;
+                return false;
+            },
+        }),
+        { kind: "stop" },
+    );
+    assert.ok(checked <= queue.length);
+});
+
+test("an admitted episode remains the next action before later music", () => {
+    assert.deepEqual(
+        resolveQueueAdvance({
+            action: "next",
+            queue: [
+                track("current"),
+                track("disliked"),
+                episode("podcast"),
+                track("later"),
+            ],
+            currentIndex: 0,
+            isShuffle: false,
+            shuffleIndices: [],
+            repeatMode: "off",
+            canAdvanceTo: (index) => index !== 1,
+        }),
+        { kind: "episode", index: 2 },
+    );
+});

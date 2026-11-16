@@ -3,6 +3,7 @@ import { createMigratingStorageKey } from "@/lib/storage-migration";
 import {
     LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX,
     QUEUE_CLEARED_AT_KEY_SUFFIX,
+    RECOMMENDATION_FEEDBACK_STORAGE_SUFFIX,
 } from "@/lib/playback-state-cadence";
 
 type PlaybackStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -22,6 +23,7 @@ const USER_BOUND_KEYS = [
     "current_time_track_id",
     LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX,
     QUEUE_CLEARED_AT_KEY_SUFFIX,
+    RECOMMENDATION_FEEDBACK_STORAGE_SUFFIX,
 ].map((suffix) => createMigratingStorageKey(suffix));
 
 let playbackStorageGeneration = 0;

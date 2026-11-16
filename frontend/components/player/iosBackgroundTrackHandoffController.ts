@@ -17,6 +17,7 @@ interface ObserveIosBackgroundTrackHandoffOptions {
     isShuffle: boolean;
     shuffleIndices: number[];
     repeatMode: "off" | "one" | "all";
+    canAdvanceTo?: (index: number) => boolean;
     liveTrackId: string | null;
     currentTimeSec: number;
     loadedDurationSec: number;
@@ -33,6 +34,7 @@ export function observeIosBackgroundTrackHandoff({
     isShuffle,
     shuffleIndices,
     repeatMode,
+    canAdvanceTo,
     liveTrackId,
     currentTimeSec,
     loadedDurationSec,
@@ -43,6 +45,7 @@ export function observeIosBackgroundTrackHandoff({
         isShuffle,
         shuffleIndices,
         repeatMode,
+        canAdvanceTo,
     );
     const nextTrackIdentity = nextTrack
         ? resolveDeviceOfflineMediaIdentity(nextTrack)
@@ -78,6 +81,18 @@ export function observeIosBackgroundTrackHandoff({
             durationSec,
         },
         () => {
+            const admittedNext = getNextTrackInfo(
+                queue,
+                currentIndex,
+                isShuffle,
+                shuffleIndices,
+                repeatMode,
+                canAdvanceTo,
+            );
+            const sameNext =
+                admittedNext !== null &&
+                resolveDeviceOfflineMediaIdentity(admittedNext) ===
+                    nextTrackIdentity;
             const sourceStillActive =
                 refs.playbackTypeRef.current === "track" &&
                 refs.currentTrackRef.current?.id === liveTrackId &&
@@ -88,6 +103,7 @@ export function observeIosBackgroundTrackHandoff({
                 document.visibilityState === "hidden";
             if (
                 !sourceStillActive ||
+                !sameNext ||
                 !stillHidden ||
                 audioEngine.getActiveEngineDescriptor() !== "native" ||
                 !detectIosStandalonePwaEnvironment() ||

@@ -23,6 +23,8 @@ test("activating an unowned playback store clears identity state but preserves d
     const { values, storage } = mapStorage({
         soundspan_current_track: '{"id":"track-a"}',
         soundspan_queue: '[{"id":"track-a"}]',
+        soundspan_recommendation_feedback_v1:
+            '{"version":1,"privateOwnerPolicy":true}',
         soundspan_current_time: "42",
         soundspan_is_playing: "true",
         soundspan_vibe_mode: "true",
@@ -35,6 +37,7 @@ test("activating an unowned playback store clears identity state but preserves d
     assert.equal(values.get("soundspan_playback_owner_id"), "user-a");
     assert.equal(values.has("soundspan_current_track"), false);
     assert.equal(values.has("soundspan_queue"), false);
+    assert.equal(values.has("soundspan_recommendation_feedback_v1"), false);
     assert.equal(values.has("soundspan_current_time"), false);
     assert.equal(values.has("soundspan_is_playing"), false);
     assert.equal(values.has("soundspan_vibe_mode"), false);

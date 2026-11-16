@@ -373,6 +373,63 @@ describe("remote preference contention recovery", () => {
         jest.useRealTimers();
     });
 
+    it.each([
+        Object.assign(new Error("TransactionWriteConflict"), {
+            name: "DriverAdapterError",
+            cause: { kind: "TransactionWriteConflict" },
+        }),
+        {
+            code: "P2010",
+            meta: {
+                driverAdapterError: {
+                    cause: { kind: "TransactionWriteConflict" },
+                },
+            },
+        },
+    ])(
+        "retries a confirmed adapter serialization abort at commit: %#",
+        async (failure) => {
+            mockPrisma.$transaction
+                .mockRejectedValueOnce(failure)
+                .mockImplementation(
+                    async (
+                        operation: (tx: typeof mockPrisma) => Promise<unknown>,
+                    ) => operation(mockPrisma),
+                );
+            const result = reserveRemoteTrackPreferenceIntent({
+                userId: USER_ID,
+                reference: REFERENCE,
+                requestedAt: new Date(),
+            }).then(
+                () => "reserved",
+                (error) => error,
+            );
+            await jest.advanceTimersByTimeAsync(200);
+            expect(await result).toBe("reserved");
+            expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+            expect(
+                mockPrisma.remotePreferenceIntent.upsert,
+            ).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it("does not retry an adapter connection failure with uncertain commit", async () => {
+        const failure = Object.assign(new Error("ConnectionClosed"), {
+            name: "DriverAdapterError",
+            cause: { kind: "ConnectionClosed" },
+        });
+        mockPrisma.$transaction.mockRejectedValue(failure);
+        const result = reserveRemoteTrackPreferenceIntent({
+            userId: USER_ID,
+            reference: REFERENCE,
+            requestedAt: new Date(),
+        }).catch((error) => error);
+        await jest.advanceTimersByTimeAsync(200);
+        expect(await result).toBe(failure);
+        expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
     it("lets the concurrent writer finish before retrying an intent reservation", async () => {
         const busyUntil = Date.now() + 20;
         mockPrisma.$transaction.mockImplementation(

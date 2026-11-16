@@ -58,7 +58,11 @@ import {
     type QueueItem,
 } from "./queue-item";
 import { resolveQueueAdvance } from "./audio/queue-advance-policy";
-import { pruneRecommendedArtistAfterDislike } from "./audio/feedback-queue-policy";
+import {
+    captureRecommendationFeedback,
+    reconcileRecommendationFeedback,
+} from "./audio/recommendationFeedbackBridge";
+import { resolvePreferenceTrackId } from "@/lib/trackRef";
 import type { Episode } from "@/features/podcast/types";
 import { separateArtists } from "./separate-artists";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
@@ -328,6 +332,15 @@ function isCompleteShuffleOrder(
 const AudioControlsContext = createContext<
     AudioControlsContextType | undefined
 >(undefined);
+
+function manualQueueOccurrence(track: Track): Track {
+    return {
+        ...track,
+        recommendationGenerationId: undefined,
+        recommendationSessionId: undefined,
+        recommendationQueueMode: undefined,
+    };
+}
 
 /**
  * Renders the AudioControlsProvider component.
@@ -605,6 +618,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 return;
             }
             if (applyTrackClick(state, playbackState, track)) return;
+            state.recommendationFeedback.reset();
             // If vibe mode is on and this track isn't in the vibe queue, disable vibe mode
             if (state.vibeMode && !state.vibeQueueIds.includes(track.id)) {
                 state.setVibeMode(false);
@@ -717,6 +731,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 writePlaybackReplacementIntent(state.currentTrack?.id ?? null);
             } else if (applyTrackClick(state, playbackState, startTrack))
                 return;
+            state.recommendationFeedback.reset();
 
             queueDebugLog("playTracks()", {
                 tracksLen: tracks.length,
@@ -1149,7 +1164,9 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 origin !== "error" &&
                 origin !== "feedback" &&
                 state.repeatMode === "one" &&
-                state.repeatOneCount === 0
+                state.repeatOneCount === 0 &&
+                (!state.currentTrack ||
+                    state.recommendationFeedback.allows(state.currentTrack))
             ) {
                 state.setRepeatOneCount(1);
                 playbackState.setCurrentTime(0);
@@ -1168,28 +1185,23 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
             state.setRepeatOneCount(0);
 
-            const feedbackQueue =
-                origin === "feedback" &&
-                (state.currentTrack?.recommendationGenerationId ||
-                    state.currentTrack?.recommendationSessionId)
-                    ? pruneRecommendedArtistAfterDislike({
-                          queue: state.queue,
-                          currentIndex: state.currentIndex,
-                          isShuffle: state.isShuffle,
-                          shuffleIndices: state.shuffleIndices,
-                          artistName: state.currentTrack.artist.name,
-                      })
-                    : {
-                          queue: state.queue,
-                          currentIndex: state.currentIndex,
-                          shuffleIndices: state.shuffleIndices,
-                      };
+            if (origin === "feedback" && state.currentTrack) {
+                const receipt = captureRecommendationFeedback(
+                    resolvePreferenceTrackId(state.currentTrack),
+                    "thumbs_down",
+                );
+                reconcileRecommendationFeedback(receipt, "thumbs_down");
+            }
+            const feedbackQueue = state.recommendationFeedback.pruneFuture({
+                queue: state.queue,
+                currentIndex: state.currentIndex,
+                shuffleIndices: state.shuffleIndices,
+                isShuffle: state.isShuffle,
+            });
             if (feedbackQueue.queue !== state.queue) {
                 state.setQueue(feedbackQueue.queue);
+                state.setCurrentIndex(feedbackQueue.currentIndex);
                 state.setShuffleIndices(feedbackQueue.shuffleIndices);
-                if (feedbackQueue.currentIndex !== state.currentIndex) {
-                    state.setCurrentIndex(feedbackQueue.currentIndex);
-                }
             }
 
             if (state.isShuffle) {
@@ -1208,6 +1220,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 currentIndex: feedbackQueue.currentIndex,
                 isShuffle: state.isShuffle,
                 shuffleIndices: feedbackQueue.shuffleIndices,
+                canAdvanceTo: (index) =>
+                    state.recommendationFeedback.allows(
+                        feedbackQueue.queue[index],
+                    ),
                 repeatMode:
                     origin === "feedback"
                         ? state.repeatMode === "all" &&
@@ -1466,7 +1482,9 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             );
             const playbackState = getPlaybackView();
             const shouldToastSuccess = !options?.silent;
-            const validTracks = tracks.filter((track) => Boolean(track?.id));
+            const validTracks = tracks
+                .filter((track) => Boolean(track?.id))
+                .map(manualQueueOccurrence);
             if (validTracks.length === 0) {
                 return;
             }
@@ -1680,6 +1698,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 state.currentTrack?.id ?? null,
             );
             if (!track?.id) return;
+            track = manualQueueOccurrence(track);
             const playbackState = getPlaybackView();
 
             const ltSession = getActiveListenTogetherSession();
@@ -1802,6 +1821,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 state.currentTrack?.id ?? null,
             );
             if (!track?.id) return;
+            track = manualQueueOccurrence(track);
 
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
@@ -2197,6 +2217,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         }
 
         recordPlaybackReplacement();
+        state.recommendationFeedback.reset();
         state.setQueue([]);
         state.setCurrentIndex(0);
         state.setCurrentTrack(null);

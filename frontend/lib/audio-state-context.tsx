@@ -12,6 +12,11 @@ import {
     useCallback,
 } from "react";
 import { api } from "@/lib/api";
+import {
+    useRecommendationQueueFeedback,
+    type RecommendationQueueFeedbackAccess,
+} from "@/lib/audio/useRecommendationQueueFeedback";
+import type { RecommendationFeedbackQueue } from "@/lib/audio/recommendationQueueFeedback";
 import type {
     CanonicalMediaProviderIdentity,
     CanonicalMediaSource,
@@ -251,6 +256,8 @@ interface AudioStateContextType {
     repeatMode: "off" | "one" | "all";
     isRepeat: boolean;
     shuffleIndices: number[];
+    /** Owner-local exact feedback; never authorizes or starts current audio. */
+    recommendationFeedback: RecommendationQueueFeedbackAccess;
 
     // UI state
 
@@ -391,6 +398,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     const [playbackStorageGeneration] = useState(
         getUserPlaybackStorageGeneration,
     );
+    const [feedbackSessionGeneration] = useState(() =>
+        api.getSessionGeneration(),
+    );
     const [currentTrack, setCurrentTrackState] = useState<Track | null>(
         readPersistedTrack,
     );
@@ -499,6 +509,35 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         setLastServerSyncState,
         markRadioContextMutation,
     );
+
+    const feedbackOwnerIsCurrent = useCallback(
+        () =>
+            isUserPlaybackStorageGenerationCurrent(playbackStorageGeneration) &&
+            api.getSessionGeneration() === feedbackSessionGeneration,
+        [playbackStorageGeneration, feedbackSessionGeneration],
+    );
+    const feedbackIsCollaborative = useCallback(
+        () => listenTogetherSocket.hasActiveGroup,
+        [],
+    );
+    const publishFeedbackQueue = useCallback(
+        (next: RecommendationFeedbackQueue) => {
+            setQueue(next.queue);
+            setCurrentIndex(next.currentIndex);
+            setShuffleIndices(next.shuffleIndices);
+        },
+        [setQueue, setCurrentIndex, setShuffleIndices],
+    );
+    const recommendationFeedback = useRecommendationQueueFeedback({
+        queue,
+        currentIndex,
+        isShuffle,
+        shuffleIndices,
+        currentTrack,
+        publish: publishFeedbackQueue,
+        isCurrent: feedbackOwnerIsCurrent,
+        isCollaborative: feedbackIsCollaborative,
+    });
 
     // Refresh audiobook/podcast progress from API on mount, then sync with server
     useEffect(() => {
@@ -1530,6 +1569,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             repeatMode,
             isRepeat: repeatMode !== "off",
             shuffleIndices,
+            recommendationFeedback,
             vibeMode,
             waveMode,
             waveMood,
@@ -1577,6 +1617,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             lastServerSync,
             repeatOneCount,
             setCurrentIndex,
+            recommendationFeedback,
             setCurrentTrack,
             setIsShuffle,
             setLastServerSync,

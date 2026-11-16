@@ -8,6 +8,8 @@ import {
     writePlaybackAdvanceOrigin,
 } from "../../lib/audio-engine/playbackAdvanceOrigin";
 import { audioSeekEmitter } from "../../lib/audio-seek-emitter";
+import { RecommendationQueueFeedback } from "../../lib/audio/recommendationQueueFeedback";
+import { getRecommendationSessionId } from "../../lib/recommendationSession";
 
 interface Deferred<T> {
     promise: Promise<T>;
@@ -345,6 +347,7 @@ function makeAudioState(
         | null = null,
 ) {
     const mutations: string[] = [];
+    const feedback = new RecommendationQueueFeedback();
     return {
         state: {
             currentTrack: track,
@@ -354,6 +357,11 @@ function makeAudioState(
             waveMode,
             waveMood,
             waveLanguage: "ru",
+            recommendationFeedback: {
+                allows: feedback.allows.bind(feedback),
+                reset: feedback.reset.bind(feedback),
+                revision: 0,
+            },
             setIsShuffle: () => mutations.push("shuffle"),
             setShuffleIndices: () => mutations.push("shuffle-indices"),
             setVibeMode: () => mutations.push("vibe-mode"),
@@ -362,8 +370,10 @@ function makeAudioState(
             setVibeQueueIds: () => mutations.push("vibe-ids"),
             setQueue: () => mutations.push("queue"),
             setCurrentIndex: () => mutations.push("index"),
+            setCurrentTrack: () => mutations.push("track"),
         },
         mutations,
+        feedback,
     };
 }
 
@@ -766,6 +776,69 @@ test("provider radio advances to another seed page when the first continuation o
     assert.deepEqual(await result, { success: true, trackCount: 1 });
 });
 
+for (const allRejected of [false, true]) {
+    test(`late provider refill applies the live negative mask and consumes bounded pages: allRejected=${allRejected}`, async () => {
+        const { useVibeModeControls } =
+            await import("../../lib/audio/useVibeModeControls");
+        const harness = new HookLifecycleHarness();
+        const seed = makeProviderTrack("AAAAAAAAAAA");
+        const blocked = makeProviderTrack("BBBBBBBBBBB");
+        const allowed = makeProviderTrack("CCCCCCCCCCC");
+        const audio = makeAudioState(seed, [seed], 0, true);
+        let committed = audio.state.queue;
+        audio.state.setQueue = (value?: unknown) => {
+            committed = typeof value === "function" ? value(committed) : value;
+            return audio.mutations.push("queue");
+        };
+        harness.beginRender();
+        activeHarness = harness;
+        const controls = useVibeModeControls({
+            state: audio.state as never,
+            getActiveListenTogetherSession: () => null,
+            showQueueMutationToasts: () => undefined,
+        });
+        harness.commitRender();
+        const pending = controls.startVibeMode();
+        await Promise.resolve();
+        audio.feedback.begin({
+            trackId: blocked.id,
+            signal: "thumbs_down",
+            scope: `session:${getRecommendationSessionId()}`,
+        });
+        feedRequests[0].resolve({
+            shelves: { discovery: [blocked], quickPicks: [], listenAgain: [] },
+            nextCursor: 7,
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        assert.equal(feedRequests.length, 2);
+        assert.equal(
+            new URL(
+                feedRequestPaths[1],
+                "https://soundspan.test",
+            ).searchParams.get("cursor"),
+            "7",
+        );
+        feedRequests[1].resolve({
+            shelves: {
+                discovery: [allRejected ? blocked : allowed],
+                quickPicks: [],
+                listenAgain: [],
+            },
+            nextCursor: 8,
+        });
+        assert.deepEqual(await pending, {
+            success: !allRejected,
+            trackCount: allRejected ? 0 : 1,
+        });
+        assert.deepEqual(
+            committed.map((track) => track.id),
+            allRejected ? [seed.id] : [seed.id, allowed.id],
+        );
+        assert.equal(feedRequests.length, 2);
+    });
+}
+
 test("manual duplicate selection is committed before a matching Vibe token can escape", async () => {
     const { useVibeModeControls } =
         await import("../../lib/audio/useVibeModeControls");
@@ -967,6 +1040,8 @@ for (const origin of [
             waveMode: "for-you" as const,
             waveMood: null,
             isShuffle: false,
+            recommendationFeedback:
+                makeAudioState(first).state.recommendationFeedback,
             ...sharedSetters,
         };
         const advancedState = {
@@ -1133,3 +1208,72 @@ for (const continuation of ["provider append", "Audio-DNA replace"] as const) {
         });
     }
 }
+
+test("local Audio-DNA continuation carries recommendation scope and filters a late dislike", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const harness = new HookLifecycleHarness();
+    const audio = makeAudioState(makeProviderTrack("AAAAAAAAAAA"));
+    const seed = {
+        id: "local-seed",
+        title: "Seed",
+        duration: 180,
+        artist: { id: "artist-seed", name: "Seed artist" },
+        album: { id: "album-seed", title: "Seed album" },
+    };
+    let committed: Array<{ id: string; recommendationSessionId?: string }> = [
+        seed,
+    ];
+    let selected: { id: string; recommendationSessionId?: string } = seed;
+    const state = {
+        ...audio.state,
+        currentTrack: seed,
+        queue: [seed],
+        setQueue: (
+            value:
+                | typeof committed
+                | ((previous: typeof committed) => typeof committed),
+        ) => {
+            committed = typeof value === "function" ? value(committed) : value;
+        },
+        setCurrentTrack: (value: typeof selected) => {
+            selected = value;
+        },
+    };
+    harness.beginRender();
+    activeHarness = harness;
+    const controls = useVibeModeControls({
+        state: state as never,
+        getActiveListenTogetherSession: () => null,
+        showQueueMutationToasts: () => undefined,
+    });
+    harness.commitRender();
+    const pending = controls.startVibeMode();
+    await Promise.resolve();
+    audio.feedback.begin({
+        trackId: "local-blocked",
+        signal: "thumbs_down",
+        scope: `session:${getRecommendationSessionId()}`,
+    });
+    vibeRequests[0].resolve({
+        tracks: ["local-blocked", "local-allowed"].map((id) => ({
+            ...seed,
+            id,
+        })),
+        sourceFeatures: null,
+    });
+    assert.deepEqual(await pending, { success: true, trackCount: 1 });
+    assert.deepEqual(
+        committed.map((track) => track.id),
+        [seed.id, "local-allowed"],
+    );
+    assert.equal(selected.id, seed.id);
+    assert.equal(
+        selected.recommendationSessionId,
+        getRecommendationSessionId(),
+    );
+    assert.equal(
+        committed[1].recommendationSessionId,
+        selected.recommendationSessionId,
+    );
+});

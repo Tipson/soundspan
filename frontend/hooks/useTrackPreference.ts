@@ -23,6 +23,11 @@ import {
 } from "@/hooks/trackPreferenceOptimistic";
 import { queryKeys } from "@/lib/queryKeys";
 import { publishDeviceOfflineLikedChangeForSignal } from "@/features/device-offline/likedAutomation";
+import {
+    captureRecommendationFeedback,
+    reconcileRecommendationFeedback,
+} from "@/lib/audio/recommendationFeedbackBridge";
+import { resolveRecommendationFeedbackAck } from "@/lib/audio/recommendationQueueFeedback";
 
 export interface TrackPreferenceMetadata {
     title?: string;
@@ -163,6 +168,21 @@ export function useTrackPreference(
         intent: ReservedTrackPreferenceIntent,
     ) => {
         if (!trackId) return null;
+        const queueIntent = captureRecommendationFeedback(
+            trackId,
+            intent.signal,
+        );
+        const reconcileQueue = (
+            preference: TrackPreferenceResponse | null | undefined,
+        ) => {
+            const applied =
+                preference == null
+                    ? "clear"
+                    : resolveRecommendationFeedbackAck(trackId, preference);
+            if (applied !== null)
+                reconcileRecommendationFeedback(queueIntent, applied);
+            return preference;
+        };
         try {
             const response = await preferenceMutation.mutateAsync(
                 intent.signal,
@@ -177,16 +197,27 @@ export function useTrackPreference(
             // after the listener already changed or cleared the preference,
             // even before the newer onMutate callback has reached the cache.
             if (latestIntent?.token !== intent.token) {
-                return latest?.signal === latestIntent?.signal
-                    ? latest
-                    : buildOptimisticTrackPreferenceResponse(
-                          trackId,
-                          latestIntent?.signal ?? latest?.signal ?? "clear",
-                      );
+                return reconcileQueue(
+                    latest?.signal === latestIntent?.signal
+                        ? latest
+                        : buildOptimisticTrackPreferenceResponse(
+                              trackId,
+                              latestIntent?.signal ?? latest?.signal ?? "clear",
+                          ),
+                );
             }
-            return latest?.signal === response.signal
-                ? response
-                : (latest ?? response);
+            return reconcileQueue(
+                latest?.signal === response.signal
+                    ? response
+                    : (latest ?? response),
+            );
+        } catch (error) {
+            // onError has already restored the ordered preference cache. An
+            // older receipt cannot undo a more recent synchronous queue intent.
+            reconcileQueue(
+                queryClient.getQueryData<TrackPreferenceResponse>(queryKey),
+            );
+            throw error;
         } finally {
             releaseTrackPreferenceIntent(
                 queryClient as TrackPreferenceOptimisticQueryClient,

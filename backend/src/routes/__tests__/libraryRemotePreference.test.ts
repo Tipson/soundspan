@@ -757,6 +757,13 @@ describe("library remote track preference endpoints", () => {
                 expect(newerDislikeResponse.body.signal).toBe("thumbs_down");
                 expect(olderLikeResponse.status).toBe(200);
                 expect(olderLikeResponse.body.signal).toBe("thumbs_down");
+                expect(olderLikeResponse.body.queuePolicy).toEqual({
+                    version: 1,
+                    scope: "exact_recording",
+                    appliesTo: "recommended_future",
+                    trackId: "yt:race",
+                    effect: "exclude",
+                });
                 expect(likedAt).toBeNull();
                 expect(dislikedAt).toEqual(new Date(fixedTimestamp));
             } finally {
@@ -872,6 +879,28 @@ describe("library remote track preference endpoints", () => {
             });
             expect(mockPrisma.dislikedEntity.upsert).not.toHaveBeenCalled();
         });
+
+        it.each(["yt:policy"])(
+            "reports the applied exact queue policy for %s and its clear",
+            async (trackId) => {
+                for (const signal of ["thumbs_down", "clear"] as const) {
+                    const response = await request(app)
+                        .post(
+                            `/api/library/remote-tracks/${trackId}/preference`,
+                        )
+                        .set(AUTH_HEADER, AUTH_VALUE)
+                        .send({ signal });
+                    expect(response.status).toBe(200);
+                    expect(response.body.queuePolicy).toEqual({
+                        version: 1,
+                        scope: "exact_recording",
+                        appliesTo: "recommended_future",
+                        trackId,
+                        effect: signal === "thumbs_down" ? "exclude" : "allow",
+                    });
+                }
+            },
+        );
 
         it("keeps repeated thumbs_down requests idempotent on the same canonical row", async () => {
             mockPrisma.trackYtMusic.findUnique.mockResolvedValue(null);

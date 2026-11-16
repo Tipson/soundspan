@@ -27,6 +27,8 @@ export interface ResolveQueueAdvanceInput {
     isShuffle: boolean;
     shuffleIndices: readonly number[];
     repeatMode: QueueAdvanceRepeatMode;
+    /** Optional owner policy for automatic targets, bounded to one queue pass. */
+    canAdvanceTo?: (index: number) => boolean;
 }
 
 /**
@@ -96,6 +98,26 @@ function resolveShuffleIndex(
  * back to sequential order so playback never dead-ends on a stale order.
  */
 export function resolveQueueAdvance(
+    input: ResolveQueueAdvanceInput,
+): QueueAdvanceResolution {
+    if (!input.canAdvanceTo) return resolveImmediateQueueAdvance(input);
+    const visited = new Set<number>();
+    let currentIndex = input.currentIndex;
+    for (let count = 0; count < input.queue.length; count++) {
+        const candidate = resolveImmediateQueueAdvance({
+            ...input,
+            currentIndex,
+        });
+        if (candidate.kind === "stop" || visited.has(candidate.index))
+            return { kind: "stop" };
+        visited.add(candidate.index);
+        if (input.canAdvanceTo(candidate.index)) return candidate;
+        currentIndex = candidate.index;
+    }
+    return { kind: "stop" };
+}
+
+function resolveImmediateQueueAdvance(
     input: ResolveQueueAdvanceInput,
 ): QueueAdvanceResolution {
     const {

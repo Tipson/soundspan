@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { after, beforeEach, mock, test } from "node:test";
+import { after, beforeEach, mock, test, type TestContext } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
+import { registerRecommendationFeedbackOwner } from "../../lib/audio/recommendationFeedbackBridge";
+import { RecommendationQueueFeedback } from "../../lib/audio/recommendationQueueFeedback";
 
 GlobalRegistrator.register();
 (
@@ -30,6 +32,28 @@ interface DeferredPreference {
 
 const TRACK_ID = "yt:preference-ordering";
 const pendingPreferences: DeferredPreference[] = [];
+
+const queuedCandidate = {
+    id: TRACK_ID,
+    title: "Candidate",
+    duration: 180,
+    artist: { name: "Artist" },
+    album: { title: "Album" },
+    recommendationSessionId: "queue-session",
+};
+
+function installQueueOwner(context: TestContext) {
+    const guard = new RecommendationQueueFeedback();
+    const dispose = registerRecommendationFeedbackOwner({
+        begin: (trackId, signal) =>
+            guard.begin({ scope: "session:queue-session", trackId, signal }),
+        reconcile: guard.reconcile.bind(guard),
+        reportFailure: () =>
+            assert.fail("Unexpected queue feedback effect failure"),
+    });
+    context.after(dispose);
+    return guard;
+}
 
 function preferenceResponse(signal: PreferenceSignal): PreferenceResponse {
     const liked = signal === "thumbs_up";
@@ -89,7 +113,59 @@ async function flushReact() {
     }
 }
 
+test("a foreign recording ACK cannot clear the current queue's negative intent", async (context) => {
+    const guard = installQueueOwner(context);
+    const [{ useTrackPreference }, { createRoot }] = await Promise.all([
+        import("../../hooks/useTrackPreference"),
+        import("react-dom/client"),
+    ]);
+    const queryClient = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false },
+            mutations: { retry: false },
+        },
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    let controls!: ReturnType<typeof useTrackPreference>;
+    function Probe() {
+        controls = useTrackPreference(TRACK_ID);
+        return null;
+    }
+    context.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+        queryClient.clear();
+    });
+    await React.act(async () =>
+        root.render(
+            React.createElement(
+                QueryClientProvider,
+                { client: queryClient },
+                React.createElement(Probe),
+            ),
+        ),
+    );
+    await flushReact();
+    let pending!: Promise<unknown>;
+    await React.act(async () => {
+        pending = controls.setSignal("thumbs_down");
+    });
+    await flushReact();
+    assert.equal(guard.allows(queuedCandidate), false);
+    pendingPreferences[0].resolve({
+        ...preferenceResponse("clear"),
+        trackId: "yt:foreign-recording",
+    });
+    await React.act(async () => {
+        await pending;
+    });
+    assert.equal(guard.allows(queuedCandidate), false);
+});
+
 test("separate hook instances serialize writes and an older failure cannot overwrite the newer intent", async (testContext) => {
+    const queueFeedback = installQueueOwner(testContext);
     const [{ useTrackPreference }, { createRoot }] = await Promise.all([
         import("../../hooks/useTrackPreference"),
         import("react-dom/client"),
@@ -175,6 +251,11 @@ test("separate hook instances serialize writes and an older failure cannot overw
         ])?.signal,
         "thumbs_down",
     );
+    assert.equal(
+        queueFeedback.allows(queuedCandidate),
+        false,
+        "queued negative must be visible before its delayed POST begins",
+    );
 
     await React.act(async () => {
         pendingPreferences[0]?.reject(new Error("older provider failed"));
@@ -183,6 +264,11 @@ test("separate hook instances serialize writes and an older failure cannot overw
     assert.deepEqual(
         pendingPreferences.map(({ signal }) => signal),
         ["thumbs_up", "thumbs_down"],
+    );
+    assert.equal(
+        queueFeedback.allows(queuedCandidate),
+        false,
+        "old failure cannot remove a newer negative guard",
     );
 
     await React.act(async () => {

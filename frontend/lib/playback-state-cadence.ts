@@ -6,6 +6,10 @@ export const LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX =
  *  Used to prevent the server poll from re-adopting stale state after a clear. */
 export const QUEUE_CLEARED_AT_KEY_SUFFIX = "queue_cleared_at";
 
+/** Owner-bound, nonsecret feedback masks kept apart from legacy queue metadata. */
+export const RECOMMENDATION_FEEDBACK_STORAGE_SUFFIX =
+    "recommendation_feedback_v1";
+
 /** Periodic write cadence for playback progress persistence. */
 export const PLAYBACK_PROGRESS_SAVE_INTERVAL_MS = 15000;
 /** Poll cooldown window after a local write to avoid immediate redundant playback-state reads. */

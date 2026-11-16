@@ -7,6 +7,7 @@ import {
     activateUserPlaybackStorage,
     revokeUserPlaybackStorage,
 } from "../../lib/userPlaybackStorage";
+import { captureRecommendationFeedback } from "../../lib/audio/recommendationFeedbackBridge";
 
 GlobalRegistrator.register({ url: "https://soundspan.test/" });
 (
@@ -41,6 +42,66 @@ after(async () => {
     clearPlaybackStateMock.mock.restore();
     savePlaybackStateMock.mock.restore();
     await GlobalRegistrator.unregister();
+});
+
+test("the real audio state owner applies feedback only to its future recommendation queue", async (context) => {
+    getPlaybackState = async () => null;
+    localStorage.clear();
+    activateUserPlaybackStorage("feedback-owner");
+    const { createRoot } = await import("react-dom/client");
+    const { AudioStateProvider, useAudioState } =
+        await import("../../lib/audio-state-context");
+    type AudioState = ReturnType<typeof useAudioState>;
+    let state: AudioState | null = null;
+    function Probe() {
+        state = useAudioState();
+        return null;
+    }
+    const node = document.createElement("div");
+    document.body.appendChild(node);
+    const root = createRoot(node);
+    context.after(async () => {
+        await React.act(async () => root.unmount());
+        node.remove();
+    });
+    await React.act(async () =>
+        root.render(
+            React.createElement(
+                AudioStateProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        ),
+    );
+    const song = (id: string) => ({
+        id,
+        title: id,
+        duration: 180,
+        artist: { name: "One artist" },
+        album: { title: "Album" },
+        recommendationSessionId: "real-owner-wave",
+    });
+    const initial = [song("a"), song("b"), song("a"), song("c")];
+    assert.ok(state);
+    const audio = () => {
+        assert.ok(state);
+        return state;
+    };
+    await React.act(async () => {
+        audio().setQueue(initial);
+        audio().setCurrentIndex(1);
+        audio().setCurrentTrack(initial[1]);
+        audio().setPlaybackType("track");
+    });
+    await React.act(async () => {
+        captureRecommendationFeedback("a", "thumbs_down");
+    });
+    assert.deepEqual(
+        audio().queue.map((row) => row.id),
+        ["a", "b", "c"],
+    );
+    assert.equal(audio().currentIndex, 1);
+    assert.equal(audio().currentTrack, initial[1]);
 });
 
 test("revocation prevents an unmount flush from restoring the previous user's queue", async () => {

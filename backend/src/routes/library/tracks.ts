@@ -20,6 +20,7 @@ import {
     TRACK_DISLIKE_ENTITY_TYPE,
 } from "../../services/trackPreference";
 import {
+    applyLocalTrackPreferenceSignal,
     applyTrackPreferenceSignalToTrackIds,
     buildTrackPreferenceScoreMapForUser,
     formatAlbumPreferenceResponse,
@@ -1268,7 +1269,7 @@ tracksPreferenceReadRouter.get(
  *                 enum: [thumbs_up, thumbs_down, clear]
  *     responses:
  *       200:
- *         description: Track preference set successfully
+ *         description: Track preference set successfully. queuePolicy version 1 describes the persisted exact_recording signal for recommended_future only; effect is exclude for thumbs_down and allow otherwise. trackId is the exact response identity. It never asserts an artist ban or verified aliases.
  *       400:
  *         description: Invalid preference signal
  *       404:
@@ -1308,79 +1309,18 @@ export async function handleSetTrackPreference(
         return sendRouteError(res, 404, "Track not found");
     }
 
-    const now = new Date();
-
-    if (signal === "thumbs_up") {
-        await prisma.likedTrack.upsert({
-            where: {
-                userId_trackId: {
-                    userId,
-                    trackId,
-                },
-            },
-            create: {
-                userId,
-                trackId,
-                likedAt: now,
-            },
-            update: {
-                likedAt: now,
-            },
-        });
-        await prisma.dislikedEntity.deleteMany({
-            where: {
-                userId,
-                entityType: TRACK_DISLIKE_ENTITY_TYPE,
-                entityId: trackId,
-            },
-        });
-    } else if (signal === "thumbs_down") {
-        await prisma.dislikedEntity.upsert({
-            where: {
-                userId_entityType_entityId: {
-                    userId,
-                    entityType: TRACK_DISLIKE_ENTITY_TYPE,
-                    entityId: trackId,
-                },
-            },
-            create: {
-                userId,
-                entityType: TRACK_DISLIKE_ENTITY_TYPE,
-                entityId: trackId,
-                dislikedAt: now,
-            },
-            update: {
-                dislikedAt: now,
-            },
-        });
-        await prisma.likedTrack.deleteMany({
-            where: {
-                userId,
-                trackId,
-            },
-        });
-    } else {
-        await prisma.likedTrack.deleteMany({
-            where: {
-                userId,
-                trackId,
-            },
-        });
-        await prisma.dislikedEntity.deleteMany({
-            where: {
-                userId,
-                entityType: TRACK_DISLIKE_ENTITY_TYPE,
-                entityId: trackId,
-            },
-        });
-    }
-
-    const preference = resolveTrackPreference({
-        likedAt: signal === "thumbs_up" ? now : null,
-        dislikedAt: signal === "thumbs_down" ? now : null,
+    const preference = await applyLocalTrackPreferenceSignal({
+        userId,
+        trackId,
+        signal,
+        now: new Date(),
     });
 
-    res.json(formatTrackPreferenceResponse(trackId, preference));
+    res.json(
+        formatTrackPreferenceResponse(trackId, preference, {
+            queuePolicy: true,
+        }),
+    );
 }
 
 tracksPreferenceWriteRouter.post(

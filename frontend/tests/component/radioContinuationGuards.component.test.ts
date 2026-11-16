@@ -4,6 +4,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Track } from "../../lib/audio-state-context";
+import { RecommendationQueueFeedback } from "../../lib/audio/recommendationQueueFeedback";
 import type { PlaybackOrchestratorRefs } from "../../components/player/hooks/usePlaybackOrchestratorRefs";
 import type {
     AudioControlsContextType,
@@ -451,7 +452,14 @@ async function mountManualControls(currentTrack: Track) {
     const { AudioControlsProvider, useAudioControls } =
         await import("../../lib/audio-controls-context");
     const pending: Array<() => void> = [];
+    const feedback = new RecommendationQueueFeedback();
     const state: Record<string, unknown> = {
+        recommendationFeedback: {
+            allows: feedback.allows.bind(feedback),
+            reset: feedback.reset.bind(feedback),
+            pruneFuture: feedback.pruneFuture.bind(feedback),
+            revision: 0,
+        },
         currentTrack,
         currentIndex: 0,
         queue: [currentTrack],

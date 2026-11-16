@@ -323,6 +323,20 @@ function isRetryableRemotePreferenceAbort(error: unknown): boolean {
         typeof adapter?.cause === "object" && adapter.cause !== null
             ? (adapter.cause as Record<string, unknown>)
             : null;
+    const directCause =
+        typeof record.cause === "object" && record.cause !== null
+            ? (record.cause as Record<string, unknown>)
+            : null;
+    // The PostgreSQL adapter can expose a definite serialization abort at
+    // COMMIT directly, before Prisma wraps it as P2034. Other adapter failures
+    // may have an uncertain commit and must not acquire a retry here.
+    if (
+        (record.name === "DriverAdapterError" &&
+            directCause?.kind === "TransactionWriteConflict") ||
+        cause?.kind === "TransactionWriteConflict"
+    ) {
+        return true;
+    }
     if (
         [record, meta, cause].some(
             (candidate) =>
@@ -340,8 +354,10 @@ function isRetryableRemotePreferenceAbort(error: unknown): boolean {
     );
 }
 
-async function runRemotePreferenceTransaction<T>(
-    operation: (tx: RemotePreferenceTransaction) => Promise<T>,
+async function runTrackPreferenceTransaction<T>(
+    operation: (
+        tx: RemotePreferenceTransaction & Pick<typeof prisma, "likedTrack">,
+    ) => Promise<T>,
 ): Promise<T> {
     for (
         let attempt = 1;
@@ -385,7 +401,7 @@ export async function reserveRemoteTrackPreferenceIntent({
 }): Promise<string> {
     const token = randomUUID();
     const remoteTrackId = canonicalRemotePreferenceId(reference);
-    await runRemotePreferenceTransaction(async (tx) => {
+    await runTrackPreferenceTransaction(async (tx) => {
         await tx.remotePreferenceIntent.upsert({
             where: {
                 userId_remoteTrackId: { userId, remoteTrackId },
@@ -408,7 +424,7 @@ export async function cancelRemoteTrackPreferenceIntent({
     intentToken: string;
 }): Promise<void> {
     const remoteTrackId = canonicalRemotePreferenceId(reference);
-    await runRemotePreferenceTransaction(async (tx) => {
+    await runTrackPreferenceTransaction(async (tx) => {
         await tx.remotePreferenceIntent.deleteMany({
             where: { userId, remoteTrackId, token: intentToken },
         });
@@ -471,7 +487,7 @@ export async function applyRemoteTrackPreferenceSignal({
     likedTarget?: RemoteTrackLikeTarget;
 }): Promise<ResolvedTrackPreference> {
     const remoteTrackId = canonicalRemotePreferenceId(reference);
-    return runRemotePreferenceTransaction(async (tx) => {
+    return runTrackPreferenceTransaction(async (tx) => {
         const claim = await tx.remotePreferenceIntent.updateMany({
             where: { userId, remoteTrackId, token: intentToken },
             data: { token: intentToken },
@@ -495,9 +511,114 @@ export async function applyRemoteTrackPreferenceSignal({
     });
 }
 
+/** Apply a local signal and read its acknowledgement in one serializable commit.
+ * Opposite like/dislike statements cannot commit independently. Concurrent
+ * serialization aborts use the same bounded retry policy as remote preferences.
+ */
+export async function applyLocalTrackPreferenceSignal({
+    userId,
+    trackId,
+    signal,
+    now,
+}: {
+    userId: string;
+    trackId: string;
+    signal: NormalizedTrackPreferenceSignal;
+    now: Date;
+}): Promise<ResolvedTrackPreference> {
+    return runTrackPreferenceTransaction(async (tx) => {
+        if (signal === "thumbs_up") {
+            await tx.likedTrack.upsert({
+                where: {
+                    userId_trackId: {
+                        userId,
+                        trackId,
+                    },
+                },
+                create: {
+                    userId,
+                    trackId,
+                    likedAt: now,
+                },
+                update: {
+                    likedAt: now,
+                },
+            });
+            await tx.dislikedEntity.deleteMany({
+                where: {
+                    userId,
+                    entityType: TRACK_DISLIKE_ENTITY_TYPE,
+                    entityId: trackId,
+                },
+            });
+        } else if (signal === "thumbs_down") {
+            await tx.dislikedEntity.upsert({
+                where: {
+                    userId_entityType_entityId: {
+                        userId,
+                        entityType: TRACK_DISLIKE_ENTITY_TYPE,
+                        entityId: trackId,
+                    },
+                },
+                create: {
+                    userId,
+                    entityType: TRACK_DISLIKE_ENTITY_TYPE,
+                    entityId: trackId,
+                    dislikedAt: now,
+                },
+                update: {
+                    dislikedAt: now,
+                },
+            });
+            await tx.likedTrack.deleteMany({
+                where: {
+                    userId,
+                    trackId,
+                },
+            });
+        } else {
+            await tx.likedTrack.deleteMany({
+                where: {
+                    userId,
+                    trackId,
+                },
+            });
+            await tx.dislikedEntity.deleteMany({
+                where: {
+                    userId,
+                    entityType: TRACK_DISLIKE_ENTITY_TYPE,
+                    entityId: trackId,
+                },
+            });
+        }
+
+        const liked = await tx.likedTrack.findUnique({
+            where: { userId_trackId: { userId, trackId } },
+            select: { likedAt: true },
+        });
+        const disliked = await tx.dislikedEntity.findUnique({
+            where: {
+                userId_entityType_entityId: {
+                    userId,
+                    entityType: TRACK_DISLIKE_ENTITY_TYPE,
+                    entityId: trackId,
+                },
+            },
+            select: { dislikedAt: true },
+        });
+        return resolveTrackPreference({
+            likedAt: liked?.likedAt ?? null,
+            dislikedAt: disliked?.dislikedAt ?? null,
+        });
+    });
+}
+
+/** Format owner preference state; write acknowledgements describe the exact
+ * persisted signal, not the requested signal or an inferred artist ban. */
 export const formatTrackPreferenceResponse = (
     trackId: string,
     preference: ResolvedTrackPreference,
+    options: { queuePolicy?: boolean } = {},
 ) => ({
     trackId,
     signal: preference.signal,
@@ -508,6 +629,20 @@ export const formatTrackPreferenceResponse = (
         ? preference.dislikedAt.toISOString()
         : null,
     updatedAt: preference.updatedAt ? preference.updatedAt.toISOString() : null,
+    ...(options.queuePolicy
+        ? {
+              queuePolicy: {
+                  version: 1 as const,
+                  scope: "exact_recording" as const,
+                  appliesTo: "recommended_future" as const,
+                  trackId,
+                  effect:
+                      preference.signal === "thumbs_down"
+                          ? ("exclude" as const)
+                          : ("allow" as const),
+              },
+          }
+        : {}),
 });
 
 export type NormalizedTrackPreferenceSignal = Exclude<

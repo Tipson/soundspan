@@ -7,6 +7,13 @@ import assert from "node:assert/strict";
 import { after, afterEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { Track } from "../../lib/audio-state-context";
+import type { QueueItem } from "../../lib/queue-item";
+import {
+    RecommendationQueueFeedback,
+    recommendationScopeForTrack,
+} from "../../lib/audio/recommendationQueueFeedback";
+import { registerRecommendationFeedbackOwner } from "../../lib/audio/recommendationFeedbackBridge";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Episode } from "../../features/podcast/types";
 import { createConsecutiveErrorBreaker } from "../../lib/audio-engine/consecutiveErrorBreaker";
@@ -81,6 +88,7 @@ const listenTogetherSession = {
     } | null,
 };
 const listenTogetherQueueCalls: unknown[][] = [];
+let unregisterFeedback = () => {};
 const listenTogetherSocketMock = {
     hasActiveGroup: false,
     activeGroupId: null as string | null,
@@ -95,6 +103,7 @@ const listenTogetherSocketMock = {
 };
 
 afterEach(() => {
+    unregisterFeedback();
     personalizedFeedGate.current = null;
     playbackAdvanceOriginRef.current = null;
     setPlaybackAutoRestartSuppressed(false);
@@ -178,13 +187,29 @@ mock.module("@/lib/query-events", {
     namedExports: { dispatchQueryEvent: () => undefined },
 });
 
-type DeferredAudioState = Record<string, unknown> & { commit: () => void };
+type DeferredAudioState = Record<string, unknown> & {
+    commit: () => void;
+    feedback: RecommendationQueueFeedback;
+};
 
 function createDeferredAudioState(
     initial: Record<string, unknown>,
 ): DeferredAudioState {
     const pending: Array<() => void> = [];
+    const feedback = new RecommendationQueueFeedback();
     const stub: DeferredAudioState = {
+        feedback,
+        recommendationFeedback: {
+            allows: (track: QueueItem) =>
+                Boolean(listenTogetherSession.current) ||
+                feedback.allows(track),
+            reset: feedback.reset.bind(feedback),
+            pruneFuture: (queue: Parameters<typeof feedback.pruneFuture>[0]) =>
+                listenTogetherSession.current
+                    ? queue
+                    : feedback.pruneFuture(queue),
+            revision: 0,
+        },
         currentTrack: null,
         currentPodcast: null,
         currentAudiobook: null,
@@ -208,6 +233,17 @@ function createDeferredAudioState(
         commit: () => {
             while (pending.length > 0) {
                 (pending.shift() as () => void)();
+            }
+            if (!listenTogetherSession.current) {
+                const pruned = feedback.pruneFuture({
+                    queue: stub.queue as QueueItem[],
+                    currentIndex: stub.currentIndex as number,
+                    isShuffle: stub.isShuffle as boolean,
+                    shuffleIndices: stub.shuffleIndices as number[],
+                });
+                stub.queue = pruned.queue;
+                stub.currentIndex = pruned.currentIndex;
+                stub.shuffleIndices = pruned.shuffleIndices;
             }
         },
     };
@@ -267,6 +303,23 @@ async function renderControls(options: {
     playback: Record<string, unknown>;
 }) {
     stateHolder.current = options.state;
+    unregisterFeedback();
+    unregisterFeedback = registerRecommendationFeedbackOwner({
+        begin: (trackId, signal) => {
+            const track = options.state.currentTrack as Track | null;
+            return listenTogetherSession.current
+                ? null
+                : options.state.feedback.begin({
+                      trackId,
+                      signal,
+                      scope: track ? recommendationScopeForTrack(track) : null,
+                  });
+        },
+        reconcile: options.state.feedback.reconcile.bind(
+            options.state.feedback,
+        ),
+        reportFailure: () => assert.fail("Unexpected feedback queue failure"),
+    });
     playbackHolder.current = options.playback;
     apiCalls.updatePodcastProgress.length = 0;
     apiCalls.personalizedRequests.length = 0;
@@ -604,12 +657,12 @@ test("feedback advance bypasses repeat-one and selects the next track", async ()
     assert.equal((state.currentTrack as { id: string }).id, "wave-next");
 });
 
-test("disliking a recommended song removes that artist from the remaining queue", async () => {
+test("disliking a recommended song removes exact repeats while retaining another recording by the artist", async () => {
     const currentTrack = {
         ...makeTrack("disliked-current", "artist-1"),
         recommendationGenerationId: "generation-1",
     };
-    const sameArtistOne = makeTrack("same-artist-1", "artist-1");
+    const sameArtistOne = { ...currentTrack };
     const otherArtist = makeTrack("other-artist", "artist-2");
     const sameArtistTwo = makeTrack("same-artist-2", "artist-1");
     const state = createDeferredAudioState({
@@ -626,7 +679,7 @@ test("disliking a recommended song removes that artist from the remaining queue"
 
     assert.deepEqual(
         (state.queue as Array<{ id: string }>).map((item) => item.id),
-        ["disliked-current", "other-artist"],
+        ["disliked-current", "other-artist", "same-artist-2"],
     );
     assert.equal(state.currentIndex, 1);
     assert.equal((state.currentTrack as { id: string }).id, "other-artist");
@@ -639,7 +692,7 @@ test("feedback remaps shuffled recommendations while keeping played history", as
     };
     const previous = makeTrack("previous", "artist-1");
     const other = makeTrack("other", "artist-2");
-    const later = makeTrack("later", "artist-1");
+    const later = { ...currentTrack };
     const state = createDeferredAudioState({
         queue: [later, previous, other, currentTrack],
         currentIndex: 3,
@@ -689,13 +742,13 @@ test("feedback keeps the rest of an explicitly selected album queue", async () =
     assert.equal(state.currentIndex, 1);
 });
 
-test("feedback stops when only more recommendations by that artist remain", async () => {
+test("feedback stops when only exact repeats of the rejected recording remain", async () => {
     const currentTrack = {
         ...makeTrack("current", "artist-1"),
         recommendationGenerationId: "generation-1",
     };
     const state = createDeferredAudioState({
-        queue: [currentTrack, makeTrack("later", "artist-1")],
+        queue: [currentTrack, { ...currentTrack }],
         currentIndex: 0,
         currentTrack,
         playbackType: "track",
@@ -714,7 +767,7 @@ test("feedback stops when only more recommendations by that artist remain", asyn
     assert.equal(playback.isPlaying, false);
 });
 
-test("feedback also cleans an artist-heavy personal style mix without feed generation", async () => {
+test("feedback removes exact repeats from a personal style mix without rejecting its other recordings", async () => {
     const currentTrack = {
         ...makeTrack("current", "artist-1"),
         recommendationSessionId: "session-1",
@@ -722,6 +775,7 @@ test("feedback also cleans an artist-heavy personal style mix without feed gener
     const state = createDeferredAudioState({
         queue: [
             currentTrack,
+            { ...currentTrack },
             makeTrack("same-artist", "artist-1"),
             makeTrack("other", "artist-2"),
         ],
@@ -739,7 +793,7 @@ test("feedback also cleans an artist-heavy personal style mix without feed gener
 
     assert.deepEqual(
         (state.queue as Array<{ id: string }>).map((item) => item.id),
-        ["current", "other"],
+        ["current", "same-artist", "other"],
     );
 });
 

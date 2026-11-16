@@ -22,6 +22,42 @@ test("selects the next music track in queue order", () => {
     assert.equal(nextTrack?.id, "second");
 });
 
+test("preload skips an excluded repeat-all recording without crossing an episode", () => {
+    const queue = [{ id: "blocked" }, { id: "allowed" }, { id: "current" }];
+    assert.equal(
+        getNextTrackInfo(queue, 2, false, [], "all", (index) => index !== 0)
+            ?.id,
+        "allowed",
+    );
+    assert.equal(
+        getNextTrackInfo(
+            queue,
+            2,
+            true,
+            [2, 0, 1],
+            "all",
+            (index) => index !== 0,
+        )?.id,
+        "allowed",
+    );
+    assert.equal(
+        getNextTrackInfo(
+            [
+                { id: "current" },
+                { id: "blocked" },
+                { id: "episode", itemType: "episode" },
+                { id: "later" },
+            ],
+            0,
+            false,
+            [],
+            "off",
+            (index) => index !== 1,
+        ),
+        null,
+    );
+});
+
 test("does not preload a podcast episode from a mixed-media queue", () => {
     const nextTrack = getNextTrackInfo(
         [{ id: "track" }, { id: "episode", itemType: "episode" }],
