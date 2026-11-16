@@ -9,6 +9,7 @@ import '../../core/network/api_transport.dart';
 import '../../core/network/network_policy.dart';
 import '../../core/session/session_authority.dart';
 import '../../playback/playback_controller.dart';
+import '../../playback/recommendation_queue_policy.dart';
 import '../library/library_models.dart';
 import 'likes_models.dart';
 
@@ -86,7 +87,7 @@ final class PreferenceController extends ChangeNotifier {
   Future<void> _load(TrackRef ref, _PreferenceSlot slot, int revision) async {
     try {
       final response = await _request(ref, ApiMethod.get);
-      final signal = _readSignal(ref, response.data);
+      final signal = _readSignal(ref, response.data).signal;
       if (isCurrent && slot.revision == revision && !slot.running) {
         slot.confirmed = signal;
         slot.state = PreferenceState(signal: signal);
@@ -182,7 +183,8 @@ final class PreferenceController extends ChangeNotifier {
           ApiMethod.post,
           body: {'signal': intent.signal.wire},
         );
-        slot.confirmed = _readSignal(ref, response.data);
+        final ack = _readSignal(ref, response.data);
+        slot.confirmed = ack.signal;
         if (!isCurrent) throw collectionStaleSession;
         slot.pending.removeAt(0);
         slot.state = PreferenceState(
@@ -192,11 +194,13 @@ final class PreferenceController extends ChangeNotifier {
           pending: slot.pending.isNotEmpty,
         );
         _publish(ref.identityKey);
-        await _updateTail(
-          ref,
-          slot.state.signal ?? PreferenceSignal.clear,
-          intent.captured,
-        );
+        if (ack.queuePolicyAccepted) {
+          await _updateTail(
+            ref,
+            slot.state.signal ?? PreferenceSignal.clear,
+            intent.captured,
+          );
+        }
         // Notification can synchronously dispose/revoke this controller. Only
         // an admitted owner may enqueue device work after the server confirms.
         if (isCurrent && !_applied.isClosed) {
@@ -299,17 +303,28 @@ final class PreferenceController extends ChangeNotifier {
     return response;
   }
 
-  PreferenceSignal _readSignal(TrackRef ref, Object? data) {
+  ({PreferenceSignal signal, bool queuePolicyAccepted}) _readSignal(
+    TrackRef ref,
+    Object? data,
+  ) {
     final dto = collectionObject(data);
     if (dto['trackId'] != _serverId(ref)) {
       throw collectionFailure(StateError('preference identity'));
     }
-    return switch ((dto['state'], dto['signal'])) {
+    final signal = switch ((dto['state'], dto['signal'])) {
       ('liked', 'thumbs_up') => PreferenceSignal.like,
       ('disliked', 'thumbs_down') => PreferenceSignal.dislike,
       ('neutral', 'clear') => PreferenceSignal.clear,
       _ => throw collectionFailure(StateError('preference response')),
     };
+    return (
+      signal: signal,
+      queuePolicyAccepted: RecommendationQueuePolicy.acceptsFeedbackAck(
+        dto,
+        trackId: _serverId(ref),
+        exclude: signal == PreferenceSignal.dislike,
+      ),
+    );
   }
 
   void _publish(String key) {

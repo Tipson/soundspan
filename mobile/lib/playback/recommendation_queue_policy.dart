@@ -13,6 +13,23 @@ final class RecommendationQueuePolicy {
   final Map<String, Set<String>> exclusions;
   final Set<String> closedScopes;
 
+  /// Only a matching exact policy may reconcile captured queue feedback.
+  /// Missing policy retains the legacy preference response contract.
+  static bool acceptsFeedbackAck(
+    Map<String, Object?> response, {
+    required String trackId,
+    required bool exclude,
+  }) {
+    if (!response.containsKey('queuePolicy')) return true;
+    final policy = response['queuePolicy'];
+    return policy is Map &&
+        policy['version'] == 1 &&
+        policy['scope'] == 'exact_recording' &&
+        policy['appliesTo'] == 'recommended_future' &&
+        policy['trackId'] == trackId &&
+        policy['effect'] == (exclude ? 'exclude' : 'allow');
+  }
+
   /// Capture before storage awaits; absent state removes a previous guard row.
   static Map<String, Object?>? encode(QueueSnapshot state) {
     final scopes = _scopes(state.entries);

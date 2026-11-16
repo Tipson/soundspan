@@ -383,4 +383,128 @@ void main() {
       );
     },
   );
+
+  final validPolicy = <String, Object?>{
+    'version': 1,
+    'scope': 'exact_recording',
+    'appliesTo': 'recommended_future',
+    'trackId': 'local-3',
+    'effect': 'allow',
+  };
+  final invalidPolicies = <String, Object?>{
+    'null': null,
+    'array': <Object?>[],
+    'scalar': 'allow',
+    'empty': <String, Object?>{},
+    'version': {...validPolicy, 'version': 2},
+    'scope': {...validPolicy, 'scope': 'artist'},
+    'appliesTo': {...validPolicy, 'appliesTo': 'all_playback'},
+    'identity': {...validPolicy, 'trackId': 'local-4'},
+    'effect': {...validPolicy, 'effect': 'exclude'},
+    'missing effect': {...validPolicy}..remove('effect'),
+  };
+  for (final invalid in invalidPolicies.entries) {
+    test(
+      'invalid queue policy ${invalid.key} cannot clear the captured negative',
+      () async {
+        preferences.dispose();
+        var writes = 0;
+        preferences = PreferenceController(
+          authority: authority,
+          fence: collectionFence,
+          playback: queue,
+          transport: CollectionTransport((_, _) {
+            final response = preferenceResponse('local-3', 'clear');
+            return ApiResponse(200, {
+              ...response.data as Map<String, Object?>,
+              'queuePolicy': ++writes == 1 ? invalid.value : validPolicy,
+            });
+          }),
+        );
+        final entries = await seed(_recommended);
+        await queue.dispatch(const Seek(Duration(seconds: 37)));
+        final before = queue.snapshot;
+        final ref = entries.last.track.ref;
+        await preferences.set(ref, PreferenceSignal.dislike);
+        expect(preferences.current(ref).signal, PreferenceSignal.clear);
+        expect(preferences.current(ref).failure, isNull);
+        expect(queue.snapshot.allowsRecommendation(ref, _recommended), isFalse);
+        expect(queue.snapshot.currentEntryId, before.currentEntryId);
+        expect(queue.snapshot.position, const Duration(seconds: 37));
+        expect(queue.snapshot.generation, before.generation);
+        await preferences.set(ref, PreferenceSignal.clear);
+        expect(queue.snapshot.allowsRecommendation(ref, _recommended), isTrue);
+        expect(
+          queue.snapshot.entries.map((entry) => entry.entryId),
+          isNot(contains(entries.last.entryId)),
+          reason: 'a later admitted clear never reconstructs removed history',
+        );
+      },
+    );
+  }
+
+  test('invalid queue policy cannot expand a confirmed negative', () async {
+    preferences.dispose();
+    preferences = PreferenceController(
+      authority: authority,
+      fence: collectionFence,
+      playback: queue,
+      transport: CollectionTransport((_, _) {
+        final response = preferenceResponse('local-3', 'thumbs_down');
+        return ApiResponse(200, {
+          ...response.data as Map<String, Object?>,
+          'queuePolicy': {...validPolicy, 'version': 2, 'effect': 'exclude'},
+        });
+      }),
+    );
+    final entries = await seed(_recommended);
+    final ref = entries.last.track.ref;
+    await preferences.set(ref, PreferenceSignal.clear);
+    expect(preferences.current(ref).signal, PreferenceSignal.dislike);
+    expect(queue.snapshot.allowsRecommendation(ref, _recommended), isTrue);
+    expect(
+      queue.snapshot.entries.map((entry) => entry.entryId),
+      contains(entries.last.entryId),
+    );
+  });
+
+  for (final signal in ['clear', 'thumbs_up', 'thumbs_down']) {
+    for (final legacy in [false, true]) {
+      test(
+        'queue policy accepts persisted $signal with legacy=$legacy',
+        () async {
+          preferences.dispose();
+          preferences = PreferenceController(
+            authority: authority,
+            fence: collectionFence,
+            playback: queue,
+            transport: CollectionTransport((_, _) {
+              final response = preferenceResponse('local-3', signal);
+              return ApiResponse(200, {
+                ...response.data as Map<String, Object?>,
+                if (!legacy)
+                  'queuePolicy': {
+                    ...validPolicy,
+                    'effect': signal == 'thumbs_down' ? 'exclude' : 'allow',
+                  },
+              });
+            }),
+          );
+          final entries = await seed(_recommended);
+          final ref = entries.last.track.ref;
+          await preferences.set(
+            ref,
+            signal == 'thumbs_down'
+                ? PreferenceSignal.clear
+                : PreferenceSignal.dislike,
+          );
+          expect(
+            queue.snapshot.allowsRecommendation(ref, _recommended),
+            signal != 'thumbs_down',
+          );
+          expect(preferences.current(ref).failure, isNull);
+        },
+      );
+    }
+  }
 }

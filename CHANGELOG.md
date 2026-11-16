@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Admit Android queue feedback only when a present server policy matches the recording, supported version, future recommendation scope and persisted signal. Preserve local exclusions for unsupported replies while retaining saved preference state and legacy responses.
 - Keep failed or unobserved Android playback neutral in the durable Play journal. Preserve real skips and listening progress, and deliver a late final result to the original Play without creating a duplicate.
 - Recover remote Play creation with a bounded owner-scoped journal when the server explicitly advertises idempotent creation. Preserve frozen run identities, final engagement delivery, legacy one-shot requests and offline playback.
 - Remove disliked exact recordings from the upcoming recommendation queue and pending refills, retaining the current position, manual playlists and owner boundaries. Preserve exclusions through queue checkpoints and repeat mode; Undo permits future admission without restoring removed occurrences.
