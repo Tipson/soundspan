@@ -240,6 +240,49 @@ class JournalFixture {
 }
 
 void main() {
+  for (final isFinal in [false, true]) {
+    test(
+      'a persisted v1 zero skipped ${isFinal ? 'final' : 'seed'} is ${isFinal ? 'retained' : 'unobserved'}',
+      () async {
+        final f = JournalFixture();
+        try {
+          final ticket = await f.begin('v1-seed');
+          await ticket.created;
+          await f.store.transaction(collectionFence, (tx) async {
+            final row = await tx.read(
+              PlayCreateJournal.namespace,
+              ticket.key.value,
+            );
+            await tx.write(PlayCreateJournal.namespace, ticket.key.value, {
+              ...row!,
+              'totals': const PlayEngagement(
+                listenedSeconds: 0,
+                completionRatio: 0,
+                outcome: PlayOutcome.skipped,
+              ).toJson(),
+              'final': isFinal,
+            });
+          });
+          await f.journal.checkpoint(
+            ticket,
+            const PlayEngagement(
+              listenedSeconds: 0,
+              completionRatio: 0,
+              outcome: PlayOutcome.failed,
+            ),
+            finalTotals: true,
+          );
+          await f.outbox.flush(collectionFence);
+          final patch = f.transport.requests
+              .where((r) => r.method == ApiMethod.patch)
+              .single;
+          expect(patch.body!['outcome'], isFinal ? 'skipped' : 'failed');
+        } finally {
+          await f.close();
+        }
+      },
+    );
+  }
   for (final boundary in ['ten sends', 'fifteen seconds', 'expired grant']) {
     test('late READY wakes after the bounded pass: $boundary', () async {
       final f = JournalFixture();

@@ -108,11 +108,7 @@ final class PlayCreateJournal {
           'nextAt': 0,
           'maxNow': grant.serverNowMs,
           'playId': null,
-          'totals': const PlayEngagement(
-            listenedSeconds: 0,
-            completionRatio: 0,
-            outcome: PlayOutcome.skipped,
-          ).toJson(),
+          'totals': null,
           'final': false,
         });
       });
@@ -162,7 +158,8 @@ final class PlayCreateJournal {
         if (row['epoch'] != fence.epoch || row['state'] == 'terminal') return;
         await tx.write(namespace, ticket.key.value, {
           ...row,
-          'totals': _totals(row['totals']).merge(captured).toJson(),
+          'totals': (_observedTotals(row)?.merge(captured) ?? captured)
+              .toJson(),
           'final': row['final'] == true || finalTotals,
         });
       });
@@ -499,6 +496,7 @@ final class PlayCreateJournal {
 
   Future<void> _handoff(String id, {bool force = false}) async {
     var accepted = false;
+    var enqueued = false;
     await store.transaction(fence, (tx) async {
       final row = await tx.read(namespace, id);
       if (row == null ||
@@ -507,21 +505,27 @@ final class PlayCreateJournal {
           (!force && row['final'] != true && _tickets.containsKey(id))) {
         return;
       }
-      final result = await outbox.enqueueInTransaction(
-        tx,
-        row['playId'] as String,
-        _totals(row['totals']),
-        fence,
-        playbackRunId: normalizePlaybackTraceId(row['trace']),
-      );
-      if (result == FeedbackAcceptance.stale) throw _revoked;
+      final totals = _observedTotals(row);
+      if (totals != null) {
+        final result = await outbox.enqueueInTransaction(
+          tx,
+          row['playId'] as String,
+          totals,
+          fence,
+          playbackRunId: normalizePlaybackTraceId(row['trace']),
+        );
+        if (result == FeedbackAcceptance.stale) throw _revoked;
+        enqueued = true;
+      }
       await tx.remove(namespace, id);
       accepted = true;
     });
     if (accepted) {
       _tickets.remove(id);
-      outbox.notifyDurableEnqueue(fence);
-      if (_admitted) unawaited(outbox.flush(fence).catchError((Object _) {}));
+      if (enqueued) {
+        outbox.notifyDurableEnqueue(fence);
+        if (_admitted) unawaited(outbox.flush(fence).catchError((Object _) {}));
+      }
     }
   }
 
@@ -555,6 +559,20 @@ final class PlayCreateJournal {
       await _tail;
       await _flight?.done.future;
     }();
+  }
+
+  static PlayEngagement? _observedTotals(Map<String, Object?> row) {
+    if (row['totals'] == null && row['final'] == false) return null;
+    final totals = _totals(row['totals']);
+    // The v1 zero/skipped nonfinal seed is not an observation. Reporter
+    // checkpoints only meaningful nonfinal totals; a final zero skip is real.
+    if (row['final'] != true &&
+        totals.listenedSeconds == 0 &&
+        totals.completionRatio == 0 &&
+        totals.outcome == PlayOutcome.skipped) {
+      return null;
+    }
+    return totals;
   }
 
   static PlayEngagement _totals(Object? raw) {
@@ -616,7 +634,7 @@ final class PlayCreateJournal {
     }
     if (row['state'] != 'terminal') {
       FrozenPlayCreate.decode(row['dto']);
-      _totals(row['totals']);
+      _observedTotals(row);
     }
     if (row['state'] == 'known' &&
         (row['playId'] is! String ||

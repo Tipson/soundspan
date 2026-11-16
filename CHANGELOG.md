@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Keep failed or unobserved Android playback neutral in the durable Play journal. Preserve real skips and listening progress, and deliver a late final result to the original Play without creating a duplicate.
 - Recover remote Play creation with a bounded owner-scoped journal when the server explicitly advertises idempotent creation. Preserve frozen run identities, final engagement delivery, legacy one-shot requests and offline playback.
 - Remove disliked exact recordings from the upcoming recommendation queue and pending refills, retaining the current position, manual playlists and owner boundaries. Preserve exclusions through queue checkpoints and repeat mode; Undo permits future admission without restoring removed occurrences.
 - Explain a Wave preparation timeout without replacing the current queue. Preserve classified network failures and server retry metadata while keeping unexpected exception details private.

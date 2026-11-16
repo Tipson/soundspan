@@ -16,6 +16,189 @@ import 'package:soundspan/app/server_capabilities.dart';
 import 'package:soundspan/core/model/owner_key.dart';
 
 void main() {
+  for (final delayedAck in [false, true]) {
+    test(
+      'terminal provider failure remains failed with ${delayedAck ? 'delayed' : 'known'} create ACK',
+      () async {
+        final f = JournalFixture();
+        final ack = Completer<ApiResponse>();
+        if (delayedAck) f.send = (_) => ack.future;
+        await f.capabilities.refresh();
+        final controller = ReportingController();
+        final reporter = PlaybackReporter(
+          controller: controller,
+          repository: f.repository,
+          outbox: f.outbox,
+          authority: f.authority,
+          journal: f.journal,
+        );
+        try {
+          controller.emit(reportSnapshot(collectionFence), seconds: 0);
+          await journalSettle();
+          expect(f.posts.single.path, '/api/plays/idempotent');
+          controller.emit(
+            reportSnapshot(collectionFence, position: 30),
+            seconds: 30,
+          );
+          await journalSettle();
+          expect(
+            f.transport.requests.where((r) => r.method == ApiMethod.patch),
+            isEmpty,
+            reason: 'an unfinished early run is neither skipped nor failed',
+          );
+          controller.emit(
+            reportSnapshot(
+              collectionFence,
+              position: 30,
+              audible: false,
+              processing: PlaybackProcessing.failed,
+            ),
+            kind: PlaybackEventKind.failure,
+            seconds: 30,
+          );
+          await journalSettle();
+          if (delayedAck) {
+            expect(
+              f.transport.requests.where((r) => r.method == ApiMethod.patch),
+              isEmpty,
+            );
+            ack.complete(createAck(f.posts.single));
+            await journalSettle();
+          }
+          await f.outbox.flush(collectionFence);
+          final patch = f.transport.requests
+              .where((r) => r.method == ApiMethod.patch)
+              .single;
+          expect(patch.path, '/api/plays/known-play/engagement');
+          expect(patch.body, {
+            'listenedSeconds': 30,
+            'completionRatio': 0.15,
+            'outcome': 'failed',
+          });
+          expect(f.posts.length, 1);
+          expect(controller.commands, isEmpty);
+        } finally {
+          if (delayedAck && !ack.isCompleted && f.posts.isNotEmpty) {
+            ack.complete(createAck(f.posts.single));
+          }
+          await reporter.dispose();
+          await controller.dispose();
+          await f.close();
+        }
+      },
+    );
+  }
+  for (final boundary in ['restart', 'key expiry']) {
+    test(
+      'a known create without observations sends no engagement at $boundary',
+      () async {
+        final f = JournalFixture();
+        try {
+          final ticket = await f.begin('unobserved');
+          expect(await ticket.created, 'known-play');
+          if (boundary == 'restart') {
+            await f.journal.close();
+            f.journal = f.makeJournal();
+          } else {
+            f.advance(90000);
+          }
+          await f.journal.recover();
+          await f.outbox.flush(collectionFence);
+          expect(
+            f.transport.requests.where((r) => r.method == ApiMethod.patch),
+            isEmpty,
+            reason: 'create recovery cannot invent a listening outcome',
+          );
+          expect(f.posts.length, 1);
+          await f.journal.checkpoint(
+            ticket,
+            const PlayEngagement(
+              listenedSeconds: 0,
+              completionRatio: 0,
+              outcome: PlayOutcome.failed,
+            ),
+            finalTotals: true,
+          );
+          await f.outbox.flush(collectionFence);
+          final patch = f.transport.requests
+              .where((r) => r.method == ApiMethod.patch)
+              .single;
+          expect(patch.path, '/api/plays/known-play/engagement');
+          expect(patch.body!['outcome'], 'failed');
+          expect(f.posts.length, 1);
+        } finally {
+          await f.close();
+        }
+      },
+    );
+  }
+  for (final outcome in ['skipped', 'meaningful', 'completed']) {
+    test('journal reporting preserves a real $outcome observation', () async {
+      final f = JournalFixture();
+      await f.capabilities.refresh();
+      final controller = ReportingController();
+      final reporter = PlaybackReporter(
+        controller: controller,
+        repository: f.repository,
+        outbox: f.outbox,
+        authority: f.authority,
+        journal: f.journal,
+      );
+      try {
+        controller.emit(reportSnapshot(collectionFence), seconds: 0);
+        await journalSettle();
+        if (outcome == 'skipped') {
+          controller.emit(QueueSnapshot(), kind: PlaybackEventKind.transition);
+        } else if (outcome == 'meaningful') {
+          controller.emit(
+            reportSnapshot(collectionFence, position: 60),
+            seconds: 60,
+          );
+          await journalSettle();
+          controller.emit(
+            reportSnapshot(
+              collectionFence,
+              position: 60,
+              audible: false,
+              processing: PlaybackProcessing.failed,
+            ),
+            kind: PlaybackEventKind.failure,
+            seconds: 60,
+          );
+        } else {
+          controller.emit(
+            reportSnapshot(
+              collectionFence,
+              position: 200,
+              audible: false,
+              processing: PlaybackProcessing.completed,
+            ),
+            kind: PlaybackEventKind.completed,
+            seconds: 200,
+          );
+        }
+        await journalSettle();
+        await f.outbox.flush(collectionFence);
+        final patch = f.transport.requests
+            .where((r) => r.method == ApiMethod.patch)
+            .single;
+        expect(patch.body, {
+          'listenedSeconds': outcome == 'skipped'
+              ? 0
+              : (outcome == 'meaningful' ? 60 : 200),
+          'completionRatio': outcome == 'skipped'
+              ? 0
+              : (outcome == 'meaningful' ? 0.3 : 1),
+          'outcome': outcome,
+        });
+        expect(f.posts.length, 1);
+      } finally {
+        await reporter.dispose();
+        await controller.dispose();
+        await f.close();
+      }
+    });
+  }
   test('new login of the same owner purges old-epoch unknown journal without sending it', () async {
     final f = JournalFixture()..send = (_) async => throw StateError('unknown');
     ServerCapabilitiesRepository? currentCaps;
