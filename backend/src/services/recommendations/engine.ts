@@ -89,6 +89,10 @@ export interface RecommendationEngineDependencies {
     mode: RecommendationEngineMode;
     hybridRolloutPercent: number;
     explorationRate: number;
+    /** Server-owned Wave ordering before its single served exposure write; absent retains legacy order. */
+    finalizeWaveRecommendations?: (
+        recommendations: readonly ScoredRecommendation[],
+    ) => readonly ScoredRecommendation[];
     loadCandidates: (
         request: RecommendRequest,
         policyTime: Date,
@@ -525,18 +529,19 @@ export class RecommendationEngine {
         );
 
         if (this.dependencies.mode === "baseline") {
+            const served = this.finalizeWave(request, baseline);
             const generationId = await this.recordGeneration({
                 request,
                 cursor,
                 algorithm: "baseline-v1",
                 served: true,
                 degradedSources,
-                recommendations: baseline,
+                recommendations: served,
                 startedAt,
             });
-            this.scheduleHotSet(request, baseline, analysisReserve);
+            this.scheduleHotSet(request, served, analysisReserve);
             return {
-                tracks: baseline.map(({ track }) => track),
+                tracks: served.map(({ track }) => track),
                 nextCursor: loaded.nextCursor,
                 generationId,
                 degradedSources,
@@ -573,13 +578,14 @@ export class RecommendationEngine {
         );
 
         if (this.dependencies.mode === "shadow") {
+            const served = this.finalizeWave(request, baseline);
             const generationId = await this.recordGeneration({
                 request,
                 cursor,
                 algorithm: "baseline-v1",
                 served: true,
                 degradedSources,
-                recommendations: baseline,
+                recommendations: served,
                 startedAt,
             });
             superviseBackground(
@@ -598,7 +604,7 @@ export class RecommendationEngine {
             );
             this.scheduleHotSet(request, hybrid, analysisReserve);
             return {
-                tracks: baseline.map(({ track }) => track),
+                tracks: served.map(({ track }) => track),
                 nextCursor: loaded.nextCursor,
                 generationId,
                 degradedSources,
@@ -613,7 +619,10 @@ export class RecommendationEngine {
             rolloutBucket(request.userId, request.sessionId) * 100 <
             normalizedRolloutPercent;
         const servedAlgorithm = servesHybrid ? "hybrid-v2" : "baseline-v1";
-        const servedRecommendations = servesHybrid ? hybrid : baseline;
+        const servedRecommendations = this.finalizeWave(
+            request,
+            servesHybrid ? hybrid : baseline,
+        );
         const generationId = await this.recordGeneration({
             request,
             cursor,
@@ -648,6 +657,33 @@ export class RecommendationEngine {
             generationId,
             degradedSources,
         };
+    }
+
+    private finalizeWave(
+        request: RecommendRequest,
+        recommendations: ScoredRecommendation[],
+    ): ScoredRecommendation[] {
+        const finalize = this.dependencies.finalizeWaveRecommendations;
+        if (request.intent.surface !== "wave" || !finalize)
+            return recommendations;
+        const length = recommendations.length;
+        const remaining = new Map<ScoredRecommendation, number>();
+        for (const row of recommendations)
+            remaining.set(row, (remaining.get(row) ?? 0) + 1);
+        const finalized = finalize(recommendations);
+        if (!Array.isArray(finalized) || finalized.length !== length)
+            throw new Error(
+                "Wave finalization must retain admitted occurrences",
+            );
+        for (const row of finalized) {
+            const count = remaining.get(row) ?? 0;
+            if (count === 0)
+                throw new Error(
+                    "Wave finalization must retain admitted occurrences",
+                );
+            remaining.set(row, count - 1);
+        }
+        return [...finalized];
     }
 
     private async resolveCanonicalCandidates(

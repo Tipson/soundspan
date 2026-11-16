@@ -1,5 +1,6 @@
 import { RecommendationEngine } from "../engine";
-import type { RecommendationCandidate } from "../types";
+import type { RecommendationCandidate, ScoredRecommendation } from "../types";
+import { orderWaveRecommendations } from "../orderedWave";
 
 function candidate(
     id: string,
@@ -72,6 +73,116 @@ describe("unified recommendation engine", () => {
         limit: 10,
         exclude: [],
     };
+
+    it.each([
+        ["baseline", 100],
+        ["shadow", 100],
+        ["active", 0],
+        ["active", 100],
+    ] as const)(
+        "records the final served Wave order exactly once in %s with rollout %s",
+        async (mode, rollout) => {
+            const finalizeWaveRecommendations = jest.fn(
+                (rows: readonly ScoredRecommendation[]) =>
+                    orderWaveRecommendations(rows),
+            );
+            const deps = { ...dependencies(mode), finalizeWaveRecommendations };
+            deps.hybridRolloutPercent = rollout;
+            deps.explorationRate = 0;
+            deps.loadRecentExposures.mockResolvedValue([]);
+            deps.loadDislikedCanonicalKeys.mockResolvedValue(
+                new Set(["yt:blocked"]),
+            );
+            deps.loadCandidates.mockResolvedValue({
+                candidates: [
+                    candidate("a1", { artist: { id: null, name: "A" } }),
+                    candidate("a2", { artist: { id: null, name: "A" } }),
+                    candidate("d"),
+                    candidate("b"),
+                    candidate("e"),
+                    candidate("c"),
+                    candidate("blocked"),
+                ],
+                nextCursor: 1,
+                degradedSources: [],
+            });
+            const result = await new RecommendationEngine(deps).recommend(
+                request,
+            );
+            expect(finalizeWaveRecommendations).toHaveBeenCalledTimes(1);
+            const finalized: readonly ScoredRecommendation[] =
+                finalizeWaveRecommendations.mock.results[0].value;
+            expect(
+                finalized.every((row) => row.track.id !== "yt:blocked"),
+            ).toBe(true);
+            expect(result.tracks).toEqual(finalized.map((row) => row.track));
+            const served = deps.recordGeneration.mock.calls.filter(
+                ([input]) => input.served,
+            );
+            expect(served).toHaveLength(1);
+            expect(served[0][0].recommendations).toEqual(finalized);
+            if (mode === "baseline" || (mode === "active" && rollout === 0))
+                expect(result.tracks.map((track) => track.id)).toEqual([
+                    "yt:a1",
+                    "yt:d",
+                    "yt:b",
+                    "yt:a2",
+                    "yt:e",
+                    "yt:c",
+                ]);
+        },
+    );
+
+    it.each(["duplicate", "replacement"] as const)(
+        "rejects a %s finalizer row before exposure persistence",
+        async (kind) => {
+            const deps = {
+                ...dependencies("baseline"),
+                finalizeWaveRecommendations: (
+                    rows: readonly ScoredRecommendation[],
+                ) => [
+                    kind === "duplicate"
+                        ? rows[1]
+                        : { ...rows[0], track: candidate("unadmitted") },
+                    ...rows.slice(1),
+                ],
+            };
+            deps.loadRecentExposures.mockResolvedValue([]);
+            await expect(
+                new RecommendationEngine(deps).recommend(request),
+            ).rejects.toThrow("admitted occurrences");
+            expect(deps.recordGeneration).not.toHaveBeenCalled();
+            expect(deps.scheduleHotSet).not.toHaveBeenCalled();
+        },
+    );
+
+    it("honors finalization deadline failure before writing any served generation", async () => {
+        const deps = {
+            ...dependencies("baseline"),
+            finalizeWaveRecommendations: () => {
+                throw new Error("radio deadline");
+            },
+        };
+        await expect(
+            new RecommendationEngine(deps).recommend(request),
+        ).rejects.toThrow("radio deadline");
+        expect(deps.recordGeneration).not.toHaveBeenCalled();
+    });
+
+    it("retains the legacy home path even when a Wave finalizer is available", async () => {
+        const deps = {
+            ...dependencies("baseline"),
+            finalizeWaveRecommendations: jest.fn(() => {
+                throw new Error("Wave only");
+            }),
+        };
+        const result = await new RecommendationEngine(deps).recommend({
+            ...request,
+            intent: { ...request.intent, surface: "home" },
+        });
+        expect(result.tracks).not.toHaveLength(0);
+        expect(deps.finalizeWaveRecommendations).not.toHaveBeenCalled();
+    });
 
     it.each(["baseline", "shadow", "active"] as const)(
         "respects negative sound evidence in the served Wave, including the baseline rollout arm (%s)",

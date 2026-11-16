@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Permit server-owned Wave ordering before the served exposure write, retaining admitted occurrences and legacy ordering outside the opted-in finalizer. Keep counterfactual rankings separate from the final served positions.
 - Recheck automatic browser queue transitions, radio continuations, repeat and speculative preloads against current server feedback. Wait for pending preference writes, retire stale decisions after owner or queue changes, and preserve current playback, history and manual entries when recommendation admission is unavailable.
 - Provide bounded, owner-scoped readmission of automatic queue references using current recording feedback and provider artist suppression. Return transient unavailable decisions without creating preferences; reject client metadata authority and stop waits on cancellation or deadline.
 - Honor Play issued after an explicit Pause before the native pause callback arrives. Keep recovery reloads paused after an explicit user pause, preserving the current position and automatic retry budget.
