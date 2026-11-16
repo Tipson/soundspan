@@ -2,6 +2,13 @@ import { resolveApiBaseUrl } from "../api-base-url";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { syncBrowserMediaAuthCookie } from "../media-auth";
 import { publishAuthSessionChange } from "../auth-offline-session";
+import {
+    createPlayCreateLoginNonce,
+    preparePlayCreateLoginFence,
+    readPlayCreateLoginFence,
+    restorePlayCreateLoginFence,
+    retirePlayCreateLoginFence,
+} from "../playCreateLoginFence";
 
 const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
@@ -98,6 +105,7 @@ export abstract class ApiClientCore {
     private readonly inFlightGetRequests = new Map<string, Promise<unknown>>();
     private refreshPromise: Promise<TokenRefreshResult> | null = null;
     private sessionGeneration = 0;
+    private playCreateLoginNonce: string | null = null;
     private proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     private proactiveRefreshAtMs: number | null = null;
     private proactiveRefreshBackoffMs = INITIAL_PROACTIVE_REFRESH_BACKOFF_MS;
@@ -125,6 +133,7 @@ export abstract class ApiClientCore {
         if (typeof window !== "undefined") {
             this.token = localStorage.getItem(AUTH_TOKEN_KEY);
             if (this.token) {
+                this.playCreateLoginNonce = restorePlayCreateLoginFence();
                 this.tokenInitialized = true;
                 syncBrowserMediaAuthCookie(this.token);
                 this.scheduleProactiveTokenRefresh(this.token);
@@ -154,9 +163,11 @@ export abstract class ApiClientCore {
         const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
         if (storedToken) {
             this.token = storedToken;
+            this.playCreateLoginNonce = restorePlayCreateLoginFence();
             syncBrowserMediaAuthCookie(storedToken);
             this.scheduleProactiveTokenRefresh(storedToken);
         } else {
+            this.playCreateLoginNonce = null;
             syncBrowserMediaAuthCookie(null);
         }
 
@@ -183,6 +194,21 @@ export abstract class ApiClientCore {
         return this.sessionGeneration;
     }
 
+    /** A durable login fence only; online owner identity and capability are still required. */
+    getPlayCreateLoginNonce(): string | null {
+        try {
+            return this.token &&
+                this.playCreateLoginNonce &&
+                typeof window !== "undefined" &&
+                localStorage.getItem(AUTH_TOKEN_KEY) &&
+                readPlayCreateLoginFence() === this.playCreateLoginNonce
+                ? this.playCreateLoginNonce
+                : null;
+        } catch {
+            return null;
+        }
+    }
+
     // Refresh the base URL from configuration
     refreshBaseUrl(): void {
         this.baseUrl = "";
@@ -192,8 +218,16 @@ export abstract class ApiClientCore {
     setToken(token: string, refreshToken?: string) {
         this.sessionGeneration += 1;
         this.refreshPromise = null;
+        const publication = createPlayCreateLoginNonce();
+        this.playCreateLoginNonce =
+            publication && preparePlayCreateLoginFence(publication)
+                ? publication
+                : null;
         this.storeTokensForCurrentSession(token, refreshToken);
-        publishAuthSessionChange();
+        publishAuthSessionChange(
+            undefined,
+            publication ? () => publication : undefined,
+        );
     }
 
     private storeTokensForCurrentSession(
@@ -227,6 +261,8 @@ export abstract class ApiClientCore {
     clearToken() {
         this.sessionGeneration += 1;
         this.refreshPromise = null;
+        retirePlayCreateLoginFence(this.playCreateLoginNonce);
+        this.playCreateLoginNonce = null;
         this.token = null;
         this.proactiveRefreshBackoffMs = INITIAL_PROACTIVE_REFRESH_BACKOFF_MS;
         this.clearProactiveRefreshSchedule();
@@ -254,6 +290,9 @@ export abstract class ApiClientCore {
                 ? null
                 : localStorage.getItem(AUTH_TOKEN_KEY);
         this.token = storedToken;
+        this.playCreateLoginNonce = storedToken
+            ? restorePlayCreateLoginFence()
+            : null;
         this.tokenInitialized = true;
         syncBrowserMediaAuthCookie(storedToken);
         if (storedToken) {
