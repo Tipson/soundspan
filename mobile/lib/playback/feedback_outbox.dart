@@ -9,6 +9,8 @@ import '../core/storage/owner_store.dart';
 import '../features/recommendations/recommendation_repository.dart';
 import 'playback_event_models.dart';
 
+enum FeedbackAcceptance { changed, unchanged, stale }
+
 /// Durable absolute engagement PATCHes only. Ambiguous POSTs never enter here.
 /// OwnerStore provides persisted owner/epoch admission in the SQLite transaction.
 final class FeedbackOutbox {
@@ -39,34 +41,63 @@ final class FeedbackOutbox {
       throw ArgumentError('Invalid known play ID');
     }
     if (!authority.isCurrent(fence)) return;
-    final changed = await store.transaction(fence, (tx) async {
-      final old = await tx.read(namespace, playId);
-      // OwnerStore retains owner data across logins. An old row never acquires
-      // a new epoch merely because a caller presents a fresh current fence.
-      if (old != null && old['epoch'] != fence.epoch) return false;
-      final merged = old == null
-          ? engagement
-          : PlayEngagement.fromJson(old).merge(engagement);
-      final payload = merged.toJson();
-      if (old != null &&
-          payload.entries.every((entry) => old[entry.key] == entry.value)) {
-        return false;
-      }
-      await tx.write(namespace, playId, {
-        ...payload,
-        'epoch': fence.epoch,
-        'attempts': old?['attempts'] ?? 0,
-        'ackVersion': old?['ackVersion'] ?? 0,
-        'version': ((old?['version'] as int?) ?? 0) + 1,
-        'nextAttemptAtUtc': old?['nextAttemptAtUtc'] ?? 0,
-        if (normalizePlaybackTraceId(old?['playbackRunId'] ?? playbackRunId)
-            case final String traceId)
-          'playbackRunId': traceId,
-      });
-      return true;
-    });
-    if (changed) _flights[fence]?.dirty = true;
+    final result = await store.transaction(
+      fence,
+      (tx) => enqueueInTransaction(
+        tx,
+        playId,
+        engagement,
+        fence,
+        playbackRunId: playbackRunId,
+      ),
+    );
+    if (result == FeedbackAcceptance.changed) notifyDurableEnqueue(fence);
   }
+
+  /// Reuses the absolute writer inside the caller's existing owner transaction.
+  /// The caller must notify only after its outer transaction commits.
+  Future<FeedbackAcceptance> enqueueInTransaction(
+    OwnerTransaction tx,
+    String playId,
+    PlayEngagement engagement,
+    SessionFence fence, {
+    String? playbackRunId,
+  }) async {
+    if (playId.isEmpty || playId.length > 512) {
+      throw ArgumentError('Invalid known play ID');
+    }
+    if (!authority.isCurrent(fence)) return FeedbackAcceptance.stale;
+    final old = await tx.read(namespace, playId);
+    // OwnerStore retains owner data across logins. An old row never acquires
+    // a new epoch merely because a caller presents a fresh current fence.
+    if (old != null && old['epoch'] != fence.epoch) {
+      return FeedbackAcceptance.stale;
+    }
+    final merged = old == null
+        ? engagement
+        : PlayEngagement.fromJson(old).merge(engagement);
+    final payload = merged.toJson();
+    if (old != null &&
+        payload.entries.every((entry) => old[entry.key] == entry.value)) {
+      return FeedbackAcceptance.unchanged;
+    }
+    await tx.write(namespace, playId, {
+      ...payload,
+      'epoch': fence.epoch,
+      'attempts': old?['attempts'] ?? 0,
+      'ackVersion': old?['ackVersion'] ?? 0,
+      'version': ((old?['version'] as int?) ?? 0) + 1,
+      'nextAttemptAtUtc': old?['nextAttemptAtUtc'] ?? 0,
+      if (normalizePlaybackTraceId(old?['playbackRunId'] ?? playbackRunId)
+          case final String traceId)
+        'playbackRunId': traceId,
+    });
+    return FeedbackAcceptance.changed;
+  }
+
+  /// Wake a live drain only after a durable outer commit.
+  void notifyDurableEnqueue(SessionFence fence) =>
+      _flights[fence]?.dirty = true;
 
   /// One bounded flight, with no polling timer. New durable versions wake a
   /// subsequent scan inside the same flight; all scans share100 send attempts.

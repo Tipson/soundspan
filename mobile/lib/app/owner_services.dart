@@ -31,6 +31,7 @@ import '../playback/notification_artwork_bridge.dart';
 import '../playback/playback_controller.dart';
 import '../playback/playback_engine.dart';
 import '../playback/playback_reporter.dart';
+import '../playback/play_create_journal.dart';
 import '../playback/playback_resolver.dart';
 import '../playback/protected_audio_warmup.dart';
 import '../playback/resolved_media.dart';
@@ -72,6 +73,7 @@ final class NativeOwnerServices implements AppOwnerScope {
   late final WaveContinuation wave;
   late final PlaybackReporter reporter;
   late final FeedbackOutbox outbox;
+  late final PlayCreateJournal playCreates;
   late final QueueSnapshotStore queueStore;
   late final QueueCheckpointObserver checkpoint;
   late final ServerCapabilitiesRepository capabilities;
@@ -221,6 +223,36 @@ final class NativeOwnerServices implements AppOwnerScope {
       authority: authority,
       networkPolicy: policy,
     );
+    capabilities = ServerCapabilitiesRepository(
+      transport: transport,
+      store: store,
+      authority: authority,
+      fence: fence,
+      policy: policy,
+    );
+    _retire.add(capabilities.close);
+    playCreates = PlayCreateJournal(
+      store: _checkpointLease,
+      repository: recommendations,
+      outbox: outbox,
+      capabilities: capabilities,
+      authority: authority,
+      fence: fence,
+      networkPolicy: policy,
+    );
+    _retire.add(playCreates.close);
+    capabilities.onPlayCreationRefresh = () =>
+        unawaited(playCreates.flush(refresh: false).catchError((Object _) {}));
+    void playDeliveryPolicyChanged() {
+      if (policy.networkAllowed) {
+        unawaited(playCreates.recover().catchError((Object _) {}));
+      } else {
+        playCreates.cancelNetwork();
+      }
+    }
+
+    policy.addListener(playDeliveryPolicyChanged);
+    _retire.add(() async => policy.removeListener(playDeliveryPolicyChanged));
     wave = WaveContinuation(
       controller: playback,
       repository: recommendations,
@@ -240,17 +272,11 @@ final class NativeOwnerServices implements AppOwnerScope {
       outbox: outbox,
       authority: authority,
       networkPolicy: policy,
+      journal: playCreates,
     );
     _retire.add(reporter.dispose);
-    capabilities = ServerCapabilitiesRepository(
-      transport: transport,
-      store: store,
-      authority: authority,
-      fence: fence,
-      policy: policy,
-    );
-    _retire.add(capabilities.close);
     await capabilities.restore();
+    unawaited(playCreates.recover().catchError((Object _) {}));
     if (playback case ServicePlaybackController service) {
       _notification = NotificationArtworkBridge(
         handler: service.handler,

@@ -27,10 +27,13 @@ import '../downloads/download_fixture.dart';
 
 import 'package:soundspan/core/model/owner_key.dart';
 import 'package:soundspan/core/session/session_authority.dart';
+import 'package:soundspan/core/storage/owner_store.dart';
 import 'package:soundspan/core/network/dart_api_transport.dart';
 import 'package:soundspan/features/shares/native_share_actions.dart';
 
 import '../support/auth_fakes.dart' show ScriptedJsonClient;
+
+import 'package:soundspan/app/server_capabilities.dart';
 
 import '../support/collection_fixtures.dart';
 import '../support/wave_reporting_fixtures.dart';
@@ -83,6 +86,295 @@ InboxRepository inbox(CollectionAuthority a, CollectionTransport t) =>
     );
 
 void main() {
+  for (final boundary in [
+    'ttl',
+    'offline-before-release',
+    'offline-after-release',
+    'owner',
+  ]) {
+    test(
+      'capability response cannot gain admission across cache await: $boundary',
+      () async {
+        final authority = CollectionAuthority();
+        final policy = _CapabilitiesPolicy();
+        final store = _HeldCapabilitiesStore();
+        var elapsed = Duration.zero;
+        final transport = CollectionTransport(
+          (_, _) => ApiResponse(200, _playCreationFeatures()),
+        );
+        final repo = ServerCapabilitiesRepository(
+          transport: transport,
+          store: store,
+          authority: authority,
+          fence: collectionFence,
+          policy: policy,
+          elapsed: () => elapsed,
+        );
+        try {
+          final refresh = repo.refresh();
+          await store.entered.future;
+          if (boundary == 'ttl') elapsed = const Duration(seconds: 301);
+          if (boundary.startsWith('offline')) policy.change(false);
+          if (boundary == 'offline-before-release') policy.change(true);
+          if (boundary == 'owner') authority.switchOwner();
+          store.release.complete();
+          await refresh;
+          if (boundary == 'offline-after-release') policy.change(true);
+          expect(
+            repo.playCreationGrant,
+            isNull,
+            reason: 'Storage awaits cannot renew the response TTL or revive revoked online admission',
+          );
+          expect(transport.requests, hasLength(1));
+          if (boundary != 'owner') {
+            expect(repo.state.value!.discovery, isTrue);
+            expect(repo.hasFreshUnsupportedPlayCreation, isFalse);
+            await repo.refresh();
+            expect(transport.requests, hasLength(2));
+            expect(
+              repo.playCreationGrant,
+              isNotNull,
+              reason: 'A new online response can grant admission after the old response was discarded',
+            );
+          }
+        } finally {
+          if (!store.release.isCompleted) store.release.complete();
+          await repo.close();
+          await authority.updates.close();
+          policy.dispose();
+        }
+      },
+    );
+  }
+  test('capability server clock and TTL stay anchored to receipt before cache persistence', () async {
+    final authority = CollectionAuthority();
+    final store = _HeldCapabilitiesStore();
+    var elapsed = Duration.zero;
+    final repo = ServerCapabilitiesRepository(
+      transport: CollectionTransport(
+        (_, _) => ApiResponse(200, _playCreationFeatures()),
+      ),
+      store: store,
+      authority: authority,
+      fence: collectionFence,
+      policy: const NetworkPolicy.online(),
+      elapsed: () => elapsed,
+    );
+    try {
+      final refresh = repo.refresh();
+      await store.entered.future;
+      elapsed = const Duration(seconds: 100);
+      store.release.complete();
+      await refresh;
+      final grant = repo.playCreationGrant!;
+      expect(grant.serverNowMs, 1700000100000);
+      elapsed = const Duration(seconds: 299);
+      expect(grant.isFresh, isTrue);
+      elapsed = const Duration(seconds: 300);
+      expect(grant.isFresh, isFalse);
+      expect(repo.playCreationGrant, isNull);
+    } finally {
+      if (!store.release.isCompleted) store.release.complete();
+      await repo.close();
+      await authority.updates.close();
+    }
+  });
+  test('unsupported capability freshness also expires while UI cache persistence waits', () async {
+    final authority = CollectionAuthority();
+    final store = _HeldCapabilitiesStore();
+    var elapsed = Duration.zero;
+    final repo = ServerCapabilitiesRepository(
+      transport: CollectionTransport(
+        (_, _) => const ApiResponse(200, {
+          'discovery': true,
+          'autoPlaylists': false,
+          'federation': false,
+        }),
+      ),
+      store: store,
+      authority: authority,
+      fence: collectionFence,
+      policy: const NetworkPolicy.online(),
+      elapsed: () => elapsed,
+    );
+    try {
+      final refresh = repo.refresh();
+      await store.entered.future;
+      elapsed = const Duration(seconds: 301);
+      store.release.complete();
+      await refresh;
+      expect(repo.state.value!.discovery, isTrue);
+      expect(repo.playCreationGrant, isNull);
+      expect(repo.hasFreshUnsupportedPlayCreation, isFalse);
+    } finally {
+      if (!store.release.isCompleted) store.release.complete();
+      await repo.close();
+      await authority.updates.close();
+    }
+  });
+  test('background Play admission refresh does not announce unchanged UI feature flags', () async {
+    final authority = CollectionAuthority(), owners = ReportingStore();
+    var now = 1700000000000, changes = 0;
+    final repo = ServerCapabilitiesRepository(
+      transport: CollectionTransport(
+        (_, _) => ApiResponse(200, {
+          'discovery': true,
+          'autoPlaylists': false,
+          'federation': false,
+          'playCreation': {
+            'version': 1,
+            'newCreationsEnabled': true,
+            'replaySupported': true,
+            'createPath': '/api/plays/idempotent',
+            'ownerHistoryEpoch': 7,
+            'serverNowMs': now++,
+            'replayWindowSeconds': 86400,
+            'futureSkewSeconds': 300,
+            'capabilityTtlSeconds': 300,
+            'allowedSources': ['youtube'],
+          },
+        }),
+      ),
+      store: owners,
+      authority: authority,
+      fence: collectionFence,
+      policy: const NetworkPolicy.online(),
+    );
+    repo.state.addListener(() {
+      changes++;
+    });
+    try {
+      await repo.refresh();
+      final old = repo.playCreationGrant!;
+      await repo.refresh();
+      expect(changes, 1);
+      expect(repo.playCreationGrant, isNotNull);
+      expect(old.isFresh, isFalse);
+    } finally {
+      await repo.close();
+      await authority.updates.close();
+    }
+  });
+  test('unsupported Play capability never breaks cached UI flags or admits a foreign path', () async {
+    final authority = CollectionAuthority(), owners = ReportingStore();
+    final protocol = <String, Object?>{
+      'version': 1,
+      'newCreationsEnabled': true,
+      'replaySupported': true,
+      'createPath': '/api/plays/idempotent',
+      'ownerHistoryEpoch': 7,
+      'serverNowMs': 1700000000000,
+      'replayWindowSeconds': 86400,
+      'futureSkewSeconds': 300,
+      'capabilityTtlSeconds': 300,
+      'allowedSources': ['youtube'],
+    };
+    var current = Map<String, Object?>.of(protocol);
+    final repo = ServerCapabilitiesRepository(
+      transport: CollectionTransport(
+        (_, _) => ApiResponse(200, {
+          'discovery': true,
+          'autoPlaylists': false,
+          'federation': false,
+          'playCreation': current,
+        }),
+      ),
+      store: owners,
+      authority: authority,
+      fence: collectionFence,
+      policy: const NetworkPolicy.online(),
+    );
+    try {
+      await repo.refresh();
+      final old = repo.playCreationGrant!;
+      for (final invalid in [
+        <String, Object?>{'version': 2},
+        <String, Object?>{'createPath': 'https://foreign.invalid/api/plays'},
+        <String, Object?>{
+          'allowedSources': ['library'],
+        },
+        <String, Object?>{'ownerHistoryEpoch': -1},
+      ]) {
+        current = {...protocol, ...invalid};
+        await repo.refresh();
+        expect(repo.playCreationGrant, isNull);
+        expect(old.allowsNew('youtube', collectionFence), isFalse);
+        expect(repo.state.value!.discovery, isTrue);
+      }
+    } finally {
+      await repo.close();
+      await authority.updates.close();
+    }
+  });
+  test('Play create grant is online only, expires monotonically and is revoked by failed refresh', () async {
+    final authority = CollectionAuthority();
+    final owners = ReportingStore();
+    var elapsed = Duration.zero;
+    var succeeds = true;
+    final body = <String, Object?>{
+      'discovery': true,
+      'autoPlaylists': false,
+      'federation': false,
+      'playCreation': {
+        'version': 1,
+        'newCreationsEnabled': true,
+        'replaySupported': true,
+        'createPath': '/api/plays/idempotent',
+        'ownerHistoryEpoch': 7,
+        'serverNowMs': 1700000000000,
+        'replayWindowSeconds': 86400,
+        'futureSkewSeconds': 300,
+        'capabilityTtlSeconds': 300,
+        'allowedSources': ['youtube', 'vk', 'yandex'],
+      },
+    };
+    final repo = ServerCapabilitiesRepository(
+      transport: CollectionTransport(
+        (_, _) =>
+            succeeds ? ApiResponse(200, body) : const ApiResponse(503, null),
+      ),
+      store: owners,
+      authority: authority,
+      fence: collectionFence,
+      policy: const NetworkPolicy.online(),
+      elapsed: () => elapsed,
+    );
+    try {
+      await repo.refresh();
+      expect(
+        repo.playCreationGrant!.allowsNew('youtube', collectionFence),
+        isTrue,
+      );
+      expect(
+        repo.playCreationGrant!.allowsNew('library', collectionFence),
+        isFalse,
+      );
+      final stored = owners.records.values.single['capabilities/system']!;
+      expect((stored['flags'] as Map).containsKey('playCreation'), isFalse);
+      final restarted = ServerCapabilitiesRepository(
+        transport: CollectionTransport((_, _) => throw StateError('offline')),
+        store: owners,
+        authority: authority,
+        fence: collectionFence,
+        policy: const NetworkPolicy.online(),
+      );
+      await restarted.restore();
+      expect(restarted.state.value!.discovery, isTrue);
+      expect(restarted.playCreationGrant, isNull);
+      await restarted.close();
+      elapsed = const Duration(seconds: 300);
+      expect(repo.playCreationGrant, isNull);
+      elapsed = const Duration(seconds: 301);
+      await repo.refresh();
+      expect(repo.playCreationGrant, isNotNull);
+      succeeds = false;
+      await repo.refresh();
+      expect(repo.playCreationGrant, isNull);
+    } finally {
+      await repo.close();
+      await authority.updates.close();
+    }
+  });
   testWidgets(
     'explicit create sends one grant and never opens external UI automatically',
     (tester) async {
@@ -691,6 +983,56 @@ void main() {
       await drain(tester, a.updates.close());
     },
   );
+}
+
+Map<String, Object?> _playCreationFeatures() => {
+  'discovery': true,
+  'autoPlaylists': false,
+  'federation': false,
+  'playCreation': {
+    'version': 1,
+    'newCreationsEnabled': true,
+    'replaySupported': true,
+    'createPath': '/api/plays/idempotent',
+    'ownerHistoryEpoch': 7,
+    'serverNowMs': 1700000000000,
+    'replayWindowSeconds': 86400,
+    'futureSkewSeconds': 300,
+    'capabilityTtlSeconds': 300,
+    'allowedSources': ['youtube'],
+  },
+};
+
+final class _CapabilitiesPolicy extends ChangeNotifier
+    implements NetworkPolicy {
+  bool _online = true;
+  @override
+  bool get networkAllowed => _online;
+  @override
+  void requireNetwork() {
+    if (!_online) throw StateError('offline');
+  }
+
+  void change(bool online) {
+    _online = online;
+    notifyListeners();
+  }
+}
+
+final class _HeldCapabilitiesStore implements OwnerStore {
+  final _inner = ReportingStore();
+  final entered = Completer<void>(), release = Completer<void>();
+  @override
+  Future<T> transaction<T>(
+    SessionFence fence,
+    Future<T> Function(OwnerTransaction) operation,
+  ) async {
+    if (!entered.isCompleted) {
+      entered.complete();
+      await release.future;
+    }
+    return _inner.transaction(fence, operation);
+  }
 }
 
 class GateAuthority extends CollectionAuthority {

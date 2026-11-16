@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../core/model/owner_key.dart';
+import '../core/model/track_ref.dart';
 import '../core/network/network_policy.dart';
 import '../core/network/api_transport.dart';
 import '../core/session/session_authority.dart';
@@ -8,6 +9,7 @@ import '../features/recommendations/recommendation_repository.dart';
 import 'feedback_outbox.dart';
 import 'playback_controller.dart';
 import 'playback_event_models.dart';
+import 'play_create_journal.dart';
 export 'playback_event_models.dart';
 
 /// Service-owned, synchronous event accounting with detached network effects.
@@ -18,6 +20,7 @@ final class PlaybackReporter {
     required this.repository,
     required this.outbox,
     required this.authority,
+    this.journal,
     this.networkPolicy = const NetworkPolicy.online(),
   }) {
     _events = controller.events.listen(_onEvent);
@@ -32,6 +35,7 @@ final class PlaybackReporter {
   final RecommendationRepository repository;
   final FeedbackOutbox outbox;
   final SessionAuthority authority;
+  final PlayCreateJournal? journal;
   final NetworkPolicy networkPolicy;
   late final StreamSubscription<PlaybackEvent> _events;
   late final StreamSubscription<SessionState> _sessions;
@@ -121,6 +125,35 @@ final class PlaybackReporter {
       run = _Run(key: key, entry: entry, fence: fence, last: event);
       _active = run;
       _status(run);
+      final grant = journal?.capabilities.playCreationGrant;
+      final source = switch (entry.track.ref) {
+        YoutubeTrackRef() => 'youtube',
+        NativeTrackRef(:final recording) => recording.provider.name,
+        _ => null,
+      };
+      if (networkPolicy.networkAllowed &&
+          grant != null &&
+          source != null &&
+          grant.allowsNew(source, fence)) {
+        run.keyed = true;
+        try {
+          final capturedRun = run;
+          run.ticket = journal!.begin(
+            entry,
+            grant,
+            playbackRunId: run.traceId,
+            onUnknown: () {
+              if (!_disposed && authority.isCurrent(capturedRun.fence)) {
+                capturedRun.createState = PlayCreateState.ambiguous;
+                _status(capturedRun, error: 'play_create_ambiguous');
+              }
+            },
+          );
+        } catch (_) {
+          run.createState = PlayCreateState.ambiguous;
+          _status(run, error: 'play_create_store_failed');
+        }
+      }
       unawaited(_create(run));
     } else {
       final previous = run.last;
@@ -163,7 +196,8 @@ final class PlaybackReporter {
       _terminalKey = key;
       return;
     }
-    if (run.playId != null && run.listened - run.lastQueued >= 30) {
+    if ((run.playId != null || run.ticket != null) &&
+        run.listened - run.lastQueued >= 30) {
       final engagement = _engagement(run, PlayOutcome.skipped);
       // Never create an early-skip or positive training signal merely because
       // a checkpoint timer elapsed. Only an already meaningful run checkpoints.
@@ -181,6 +215,18 @@ final class PlaybackReporter {
       return;
     }
     try {
+      if (run.keyed) {
+        final ticket = run.ticket;
+        if (ticket == null) return;
+        run.playId = await ticket.created;
+        if (_disposed || !authority.isCurrent(run.fence)) return;
+        run.createState = PlayCreateState.known;
+        _status(run);
+        if (run.finalEngagement != null) {
+          await _queue(run, run.finalEngagement!);
+        }
+        return;
+      }
       await authority.assertCurrent(run.fence);
       if (_disposed || !authority.isCurrent(run.fence)) return;
       networkPolicy.requireNetwork();
@@ -223,14 +269,25 @@ final class PlaybackReporter {
   void _finish(_Run run, PlayOutcome reason) {
     if (run.finalEngagement != null) return;
     run.finalEngagement = _engagement(run, reason);
-    if (run.playId != null) unawaited(_queue(run, run.finalEngagement!));
+    if (run.playId != null || run.ticket != null) {
+      unawaited(_queue(run, run.finalEngagement!));
+    }
   }
 
   Future<void> _queue(_Run run, PlayEngagement engagement) async {
-    if (_disposed || !authority.isCurrent(run.fence) || run.playId == null) {
+    if (_disposed || !authority.isCurrent(run.fence)) {
       return;
     }
     try {
+      if (run.keyed && run.ticket != null) {
+        await journal!.checkpoint(
+          run.ticket!,
+          engagement,
+          finalTotals: run.finalEngagement != null,
+        );
+        return;
+      }
+      if (run.playId == null) return;
       await outbox.enqueue(
         run.playId!,
         engagement,
@@ -245,10 +302,19 @@ final class PlaybackReporter {
 
   Future<void> dispose() async {
     if (_disposed) return;
+    final run = _active;
+    final saved = run?.ticket != null && authority.isCurrent(run!.fence)
+        ? journal!.checkpoint(
+            run.ticket!,
+            _engagement(run, PlayOutcome.skipped),
+            finalTotals: true,
+          )
+        : null;
     _disposed = true;
     await _events.cancel();
     await _sessions.cancel();
     _active = null;
+    await saved;
     await _states.close();
   }
 }
@@ -271,4 +337,6 @@ final class _Run {
   String? playId;
   PlayCreateState createState = PlayCreateState.pending;
   PlayEngagement? finalEngagement;
+  bool keyed = false;
+  PlayCreateTicket? ticket;
 }

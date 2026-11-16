@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soundspan/core/network/api_transport.dart';
 import 'package:soundspan/core/model/app_failure.dart';
+import 'package:soundspan/core/model/owner_key.dart';
 import 'package:soundspan/core/network/network_policy.dart';
 import 'package:soundspan/core/session/credential_vault.dart';
 import 'package:soundspan/features/recommendations/recommendation_repository.dart';
@@ -13,6 +14,47 @@ import '../support/media_fixtures.dart';
 import '../support/wave_reporting_fixtures.dart';
 
 void main() {
+  test('transaction handoff distinguishes durable unchanged totals from an old login epoch', () async {
+    final authority = await mediaAuthority(Uri.parse('https://report.test'));
+    final fence = authority.requireFence();
+    final store = ReportingStore();
+    final transport = ControlledTransport();
+    final outbox = FeedbackOutbox(
+      store: store,
+      repository: RecommendationRepository(transport: transport),
+      authority: authority,
+    );
+    const totals = PlayEngagement(
+      listenedSeconds: 200,
+      completionRatio: 1,
+      outcome: PlayOutcome.completed,
+    );
+    await store.transaction(fence, (tx) async {
+      expect(
+        await outbox.enqueueInTransaction(tx, 'known', totals, fence),
+        FeedbackAcceptance.changed,
+      );
+      expect(
+        await outbox.enqueueInTransaction(tx, 'known', totals, fence),
+        FeedbackAcceptance.unchanged,
+      );
+      await tx.write('handoff', 'done', {'known': true});
+    });
+    expect(transport.requests, isEmpty);
+    final otherEpoch = SessionFence(owner: fence.owner, epoch: fence.epoch + 1);
+    await store.transaction(otherEpoch, (tx) async {
+      expect(
+        await outbox.enqueueInTransaction(tx, 'known', totals, otherEpoch),
+        FeedbackAcceptance.stale,
+      );
+    });
+    final durable = await store.transaction(
+      fence,
+      (tx) => tx.read(FeedbackOutbox.namespace, 'known'),
+    );
+    expect(durable!['epoch'], fence.epoch);
+    expect(durable['version'], 1);
+  });
   test(
     'in-flight drain wakes earlier sorted new rows without unrelated flush',
     () async {

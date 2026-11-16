@@ -201,7 +201,9 @@ final class DartJsonHttpClient implements JsonHttpClient {
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
     if (input.authenticated &&
         input.playbackRunId != null &&
-        ((input.method == ApiMethod.post && input.path == '/api/plays') ||
+        ((input.method == ApiMethod.post &&
+                (input.path == '/api/plays' ||
+                    input.path == '/api/plays/idempotent')) ||
             (input.method == ApiMethod.patch &&
                 RegExp(r'^/api/plays/[^/]+/engagement$')
                     .hasMatch(input.path)))) {

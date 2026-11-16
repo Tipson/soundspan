@@ -7,6 +7,8 @@ import '../../core/model/track_ref.dart';
 import '../../core/network/api_transport.dart';
 import '../../core/network/network_policy.dart';
 import '../../playback/playback_event_models.dart';
+import '../../playback/play_create_protocol.dart';
+import '../../core/network/request_cancellation.dart';
 import '../../playback/wave_selection.dart';
 import 'recommendation_models.dart';
 export 'recommendation_models.dart';
@@ -183,6 +185,35 @@ class RecommendationRepository {
     final id = _object(response.data)['id'];
     if (id is! String || id.trim().isEmpty || id.length > 512) throw _shape;
     return id;
+  }
+
+  /// Only the create journal calls this versioned, same-key operation.
+  Future<PlayCreateAck> createKeyedPlay(
+    FrozenPlayCreate payload,
+    PlayCreateKey key,
+    SessionFence fence, {
+    String? playbackRunId,
+    RequestCancellation? cancellation,
+  }) async {
+    networkPolicy.requireNetwork();
+    cancellation?.check();
+    final response = await transport.send(
+      ApiRequest(
+        origin: fence.owner.serverOrigin,
+        method: ApiMethod.post,
+        path: '/api/plays/idempotent',
+        body: {...payload.body, 'clientPlaybackId': key.value},
+        playbackRunId: playbackRunId,
+        cancellation: cancellation,
+      ),
+      fence: fence,
+    );
+    cancellation?.check();
+    response.requireSuccess();
+    if (response.statusCode != 200) {
+      throw const FormatException('Invalid create status');
+    }
+    return PlayCreateAck.decode(response.data, key);
   }
 
   Future<void> updatePlay(

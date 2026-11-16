@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soundspan/core/model/app_failure.dart';
@@ -10,8 +11,230 @@ import 'package:soundspan/core/session/local_session_authority.dart';
 
 import '../support/auth_fakes.dart';
 import '../support/fake_tls_server.dart';
+import '../support/media_fixtures.dart' show mediaAuthority;
+import '../playback/play_create_journal_test.dart'
+    show JournalStore, createFeatures, journalEntry;
+
+import 'package:soundspan/app/server_capabilities.dart';
+import 'package:soundspan/core/network/network_policy.dart';
+import 'package:soundspan/features/recommendations/recommendation_repository.dart';
+import 'package:soundspan/playback/feedback_outbox.dart';
+import 'package:soundspan/playback/play_create_journal.dart';
+import 'package:soundspan/playback/play_create_protocol.dart';
+import 'package:soundspan/playback/playback_event_models.dart';
 
 void main() {
+  test('TLS peer accepts a create then destroys ACK; restart replays one receipt and durable final', () async {
+    var now = 1700000000000;
+    var elapsed = Duration.zero;
+    final accepted = <String, String>{};
+    final bodies = <String>[];
+    final source = await FakeTlsServer.start((request) async {
+      if (request.method == 'GET') {
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode(createFeatures(now)));
+        await request.response.close();
+        return;
+      }
+      if (request.method == 'PATCH') {
+        await request.drain<void>();
+        request.response.headers.contentType = ContentType.json;
+        request.response.write('{"success":true}');
+        await request.response.close();
+        return;
+      }
+      final body = await utf8.decoder.bind(request).join();
+      bodies.add(body);
+      final decoded = jsonDecode(body) as Map;
+      final key = decoded['clientPlaybackId'] as String;
+      accepted.putIfAbsent(key, () => 'accepted-play');
+      if (bodies.length == 1) {
+        final socket = await request.response.detachSocket(writeHeaders: false);
+        socket.destroy();
+        return;
+      }
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(
+        jsonEncode({
+          'id': accepted[key],
+          'playCreation': {
+            'version': 1,
+            'clientPlaybackId': key,
+            'disposition': 'replayed',
+            'replayExpiresAt': DateTime.fromMillisecondsSinceEpoch(
+              PlayCreateKey.parse(key).expiresAtMs,
+              isUtc: true,
+            ).toIso8601String(),
+          },
+        }),
+      );
+      await request.response.close();
+    });
+    final authority = await mediaAuthority(source.origin);
+    final fence = authority.requireFence();
+    final client = DartJsonHttpClient(securityContext: source.clientContext);
+    final transport = DartApiTransport(client: client, authority: authority);
+    final store = JournalStore();
+    final repo = RecommendationRepository(transport: transport);
+    final outbox = FeedbackOutbox(
+      store: store,
+      repository: repo,
+      authority: authority,
+    );
+    final caps = ServerCapabilitiesRepository(
+      transport: transport,
+      store: store,
+      authority: authority,
+      fence: fence,
+      policy: const NetworkPolicy.online(),
+      elapsed: () => elapsed,
+    );
+    PlayCreateJournal makeJournal() => PlayCreateJournal(
+      store: store,
+      repository: repo,
+      outbox: outbox,
+      capabilities: caps,
+      authority: authority,
+      fence: fence,
+    );
+    var journal = makeJournal();
+    try {
+      await caps.refresh();
+      final ticket = journal.begin(
+        journalEntry('ack-loss'),
+        caps.playCreationGrant!,
+        playbackRunId: 'run_ack_loss',
+      );
+      await ticket.persisted;
+      await journal.flush(refresh: false);
+      expect(
+        bodies.length,
+        1,
+        reason: 'no transport retry after an unknown POST',
+      );
+      await journal.checkpoint(
+        ticket,
+        const PlayEngagement(
+          listenedSeconds: 200,
+          completionRatio: 1,
+          outcome: PlayOutcome.completed,
+        ),
+        finalTotals: true,
+      );
+      await journal.close();
+      journal = makeJournal();
+      now += 1000;
+      elapsed += const Duration(seconds: 1);
+      await journal.recover();
+      expect(bodies.length, 2);
+      expect(bodies[1], bodies[0]);
+      expect(accepted.length, 1);
+      expect(
+        await store.transaction(
+          fence,
+          (tx) => tx.list(PlayCreateJournal.namespace),
+        ),
+        isEmpty,
+      );
+      final finalRow = await store.transaction(
+        fence,
+        (tx) => tx.read(FeedbackOutbox.namespace, 'accepted-play'),
+      );
+      expect(finalRow, containsPair('listenedSeconds', 200));
+      expect(finalRow, containsPair('outcome', 'completed'));
+    } finally {
+      await journal.close();
+      await caps.close();
+      await client.close();
+      await source.close();
+    }
+  });
+  test('three durable create operations permit only their six conditional401 TLS wire sends', () async {
+    var now = 1700000000000, wire = 0, refreshes = 0;
+    var elapsed = Duration.zero;
+    final bodies = <String>[], attempts = <String?>[], runs = <String?>[];
+    final source = await FakeTlsServer.start((request) async {
+      request.response.headers.contentType = ContentType.json;
+      if (request.method == 'GET') {
+        expect(request.uri.path, '/api/system/features');
+        request.response.write(jsonEncode(createFeatures(now)));
+      } else {
+        expect(request.uri.path, '/api/plays/idempotent');
+        wire++;
+        bodies.add(await utf8.decoder.bind(request).join());
+        attempts.add(request.headers.value('X-Soundspan-Play-Attempt'));
+        runs.add(request.headers.value('X-Soundspan-Playback-Run'));
+        request.response.statusCode = wire.isOdd ? 401 : 503;
+        if (wire.isEven) {
+          request.response.headers.set(HttpHeaders.retryAfterHeader, '1');
+        }
+        request.response.write('{}');
+      }
+      await request.response.close();
+    });
+    final authority = await mediaAuthority(
+      source.origin,
+      refresh: (_, _) async {
+        refreshes++;
+        return TokenPair(
+          accessToken: 'fresh-$refreshes',
+          refreshToken: 'refresh-$refreshes',
+        );
+      },
+    );
+    final fence = authority.requireFence();
+    final client = DartJsonHttpClient(securityContext: source.clientContext);
+    final transport = DartApiTransport(client: client, authority: authority);
+    final store = JournalStore();
+    final repo = RecommendationRepository(transport: transport);
+    final caps = ServerCapabilitiesRepository(
+      transport: transport,
+      store: store,
+      authority: authority,
+      fence: fence,
+      policy: const NetworkPolicy.online(),
+      elapsed: () => elapsed,
+    );
+    final journal = PlayCreateJournal(
+      store: store,
+      repository: repo,
+      outbox: FeedbackOutbox(
+        store: store,
+        repository: repo,
+        authority: authority,
+      ),
+      capabilities: caps,
+      authority: authority,
+      fence: fence,
+    );
+    try {
+      await caps.refresh();
+      final ticket = journal.begin(
+        journalEntry('wire'),
+        caps.playCreationGrant!,
+        playbackRunId: 'stable_run',
+      );
+      await ticket.persisted;
+      await journal.flush(refresh: false);
+      expect(wire, 2);
+      for (var i = 0; i < 3; i++) {
+        now += 1000;
+        elapsed += const Duration(seconds: 1);
+        await journal.recover();
+      }
+      expect(wire, 6);
+      expect(refreshes, 3);
+      expect(bodies.toSet().length, 1);
+      expect(runs, everyElement('stable_run'));
+      expect(attempts.toSet().length, 6);
+      expect(attempts, everyElement(matches(RegExp(r'^[A-Za-z0-9_-]{32}$'))));
+    } finally {
+      await journal.close();
+      await caps.close();
+      await client.close();
+      await source.close();
+    }
+  });
   test(
     'play correlation reaches TLS headers with a fresh dispatch attempt',
     () async {
