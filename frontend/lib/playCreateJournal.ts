@@ -219,7 +219,9 @@ export function admitPlayCreateGrant(
         online: boolean;
         intent:
             | { kind: "new"; source: PlayCreateSource }
-            | { kind: "replay"; key: string };
+            | { kind: "replay"; key: string }
+            /** Read current lease scope; each wire send still needs new/replay admission. */
+            | { kind: "restore" };
     },
 ): PlayCreateAdmission | null {
     const data = grants.get(grant);
@@ -268,7 +270,7 @@ export function admitPlayCreateGrant(
             key.issuedAtMs > serverNowMs + futureSkewMs
         )
             return null;
-    } else return null;
+    } else if (options.intent.kind !== "restore") return null;
     return Object.freeze({
         historyEpoch: policy.ownerHistoryEpoch,
         serverNowMs,

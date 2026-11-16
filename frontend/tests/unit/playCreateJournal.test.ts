@@ -446,6 +446,48 @@ test("producer rollback permits same-key replay with new disabled and empty allo
     assert.equal(newAdmission(value), null);
     assert.equal(replay(grant({ replaySupported: false }), text), null);
 });
+
+test("restore reads fresh owner history scope during producer rollback without enabling a new create", () => {
+    const value = grant({ newCreationsEnabled: false, allowedSources: [] });
+    assert.deepEqual(
+        admit(value, {
+            binding,
+            nowMonotonicMs: receipt,
+            online: true,
+            intent: { kind: "restore" },
+        }),
+        { historyEpoch: 4, serverNowMs: now },
+    );
+    assert.equal(newAdmission(value), null);
+});
+
+test("restore scope cannot revive a cached, disabled, expired or mismatched receipt", () => {
+    const restore = (
+        value: PlayCreateGrant,
+        patch: Partial<{
+            binding: PlayCreateBinding;
+            nowMonotonicMs: number;
+            online: boolean;
+        }> = {},
+    ) =>
+        admit(value, {
+            binding,
+            nowMonotonicMs: receipt,
+            online: true,
+            intent: { kind: "restore" },
+            ...patch,
+        });
+    assert.equal(restore(grant({ replaySupported: false })), null);
+    assert.equal(restore({ ...grant() }), null);
+    assert.equal(
+        restore(grant(), { binding: { ...binding, loginNonce: "other" } }),
+        null,
+    );
+    assert.equal(restore(grant(), { nowMonotonicMs: receipt + 300_000 }), null);
+    const value = grant();
+    assert.equal(restore(value, { online: false }), null);
+    assert.equal(restore(value), null);
+});
 test("replay enforces epoch, 24h expiry and inclusive 300s future skew with projected time", () => {
     for (const text of [
         key(now, 3).value,

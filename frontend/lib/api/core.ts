@@ -1,7 +1,10 @@
 import { resolveApiBaseUrl } from "../api-base-url";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { syncBrowserMediaAuthCookie } from "../media-auth";
-import { publishAuthSessionChange } from "../auth-offline-session";
+import {
+    AUTH_SESSION_CHANGE_KEY,
+    publishAuthSessionChange,
+} from "../auth-offline-session";
 import {
     createPlayCreateLoginNonce,
     preparePlayCreateLoginFence,
@@ -76,6 +79,8 @@ export type ApiRequestOptions = RequestInit & {
     timeoutMs?: number;
     retryOnTimeout?: boolean;
     _onResponseReceipt?: (receipt: ApiResponseReceipt) => void;
+    /** Recheck logical ownership before every wire hop without passing the guard to fetch. */
+    _assertSession?: () => void;
 };
 
 /** A response from credentials that were replaced while it was in flight. */
@@ -86,7 +91,12 @@ export class SupersededAuthSessionError extends Error {
     }
 }
 
-type TokenRefreshResult = "ok" | "rejected" | "unavailable";
+type TokenRefreshResult = "ok" | "rejected" | "unavailable" | "superseded";
+type RefreshOwnership = Readonly<{
+    accessToken: string | null;
+    refreshToken: string | null;
+    publication: string | null;
+}>;
 
 /** Narrow an unknown failure to an API error with the requested HTTP status. */
 export function hasApiErrorStatus(
@@ -478,9 +488,36 @@ export abstract class ApiClientCore {
         return generation === this.sessionGeneration;
     }
 
-    private assertCurrentSession(generation: number): void {
+    private assertCurrentSession(
+        generation: number,
+        assertSession?: () => void,
+    ): void {
         if (!this.isCurrentSession(generation)) {
             throw new SupersededAuthSessionError();
+        }
+        assertSession?.();
+    }
+
+    private captureRefreshOwnership(): RefreshOwnership | null {
+        if (typeof window === "undefined") return null;
+        return {
+            accessToken: localStorage.getItem(AUTH_TOKEN_KEY),
+            refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY),
+            publication: localStorage.getItem(AUTH_SESSION_CHANGE_KEY),
+        };
+    }
+
+    private ownsRefreshCredentials(expected: RefreshOwnership | null): boolean {
+        try {
+            const current = this.captureRefreshOwnership();
+            if (!expected || !current) return expected === current;
+            return (
+                current.accessToken === expected.accessToken &&
+                current.refreshToken === expected.refreshToken &&
+                current.publication === expected.publication
+            );
+        } catch {
+            return false;
         }
     }
 
@@ -541,10 +578,12 @@ export abstract class ApiClientCore {
     private async applyRefreshResponse(
         response: Response,
         generation: number,
+        ownership: RefreshOwnership | null,
     ): Promise<TokenRefreshResult> {
         if (!this.isCurrentSession(generation)) {
             return "unavailable";
         }
+        if (!this.ownsRefreshCredentials(ownership)) return "superseded";
         if (!response.ok) {
             return response.status === 401 || response.status === 403
                 ? this.rejectRefreshForCurrentSession()
@@ -555,6 +594,7 @@ export abstract class ApiClientCore {
         if (!this.isCurrentSession(generation)) {
             return "unavailable";
         }
+        if (!this.ownsRefreshCredentials(ownership)) return "superseded";
         if (!data || typeof data !== "object") {
             return this.unavailableRefresh(generation, response);
         }
@@ -584,6 +624,14 @@ export abstract class ApiClientCore {
             }
             return "unavailable";
         }
+        let ownership: RefreshOwnership | null;
+        try {
+            ownership = this.captureRefreshOwnership();
+        } catch {
+            return "superseded";
+        }
+        if (ownership && ownership.refreshToken !== refreshToken)
+            return "superseded";
 
         for (let attempt = 0; attempt <= MAX_TIMEOUT_RETRIES; attempt++) {
             try {
@@ -598,12 +646,18 @@ export abstract class ApiClientCore {
                     },
                     AUTH_REFRESH_TIMEOUT_MS,
                     (response) =>
-                        this.applyRefreshResponse(response, generation),
+                        this.applyRefreshResponse(
+                            response,
+                            generation,
+                            ownership,
+                        ),
                 );
             } catch (error) {
                 if (!this.isCurrentSession(generation)) {
                     return "unavailable";
                 }
+                if (!this.ownsRefreshCredentials(ownership))
+                    return "superseded";
                 if (
                     this.isTimeoutError(error) &&
                     attempt < MAX_TIMEOUT_RETRIES
@@ -612,6 +666,8 @@ export abstract class ApiClientCore {
                     if (!this.isCurrentSession(generation)) {
                         return "unavailable";
                     }
+                    if (!this.ownsRefreshCredentials(ownership))
+                        return "superseded";
                     continue;
                 }
                 sharedFrontendLogger.error(
@@ -631,7 +687,7 @@ export abstract class ApiClientCore {
      * simultaneous 401s trigger exactly one POST /api/auth/refresh (mirrors the
      * inFlightGetRequests dedup pattern). The shared promise is always cleared
      * in `finally`, on both success and failure.
-     * @returns the shared tri-state refresh outcome.
+     * @returns the shared refresh outcome, including replaced cross-tab ownership.
      */
     private async refreshAccessToken(): Promise<TokenRefreshResult> {
         if (this.refreshPromise) {
@@ -739,8 +795,10 @@ export abstract class ApiClientCore {
             timeoutMs = DEFAULT_API_TIMEOUT_MS,
             retryOnTimeout = true,
             _onResponseReceipt,
+            _assertSession,
             ...fetchOptions
         } = options;
+        this.assertCurrentSession(_authSessionGeneration, _assertSession);
         const headers: HeadersInit = {
             "Content-Type": "application/json",
             ...fetchOptions.headers,
@@ -758,7 +816,10 @@ export abstract class ApiClientCore {
         const isIdempotentMethod = method === "GET" || method === "HEAD";
         const isRetryAttempt = _retryCount > 0 || _timeoutRetryCount > 0;
         const inFlightGetKey =
-            method === "GET" && !isRetryAttempt && !_onResponseReceipt
+            method === "GET" &&
+            !isRetryAttempt &&
+            !_onResponseReceipt &&
+            !_assertSession
                 ? this.buildInFlightGetKey(
                       endpoint,
                       timeoutMs,
@@ -824,7 +885,10 @@ export abstract class ApiClientCore {
                 response = received.response;
                 rawBody = received.rawBody;
             } catch (error) {
-                this.assertCurrentSession(_authSessionGeneration);
+                this.assertCurrentSession(
+                    _authSessionGeneration,
+                    _assertSession,
+                );
                 if (
                     this.isTimeoutError(error) &&
                     isIdempotentMethod &&
@@ -832,7 +896,10 @@ export abstract class ApiClientCore {
                     _timeoutRetryCount < MAX_TIMEOUT_RETRIES
                 ) {
                     await this.delay(DEFAULT_TIMEOUT_RETRY_BACKOFF_MS);
-                    this.assertCurrentSession(_authSessionGeneration);
+                    this.assertCurrentSession(
+                        _authSessionGeneration,
+                        _assertSession,
+                    );
                     return this.request<T>(endpoint, {
                         ...options,
                         _timeoutRetryCount: _timeoutRetryCount + 1,
@@ -843,7 +910,7 @@ export abstract class ApiClientCore {
                 throw error;
             }
 
-            this.assertCurrentSession(_authSessionGeneration);
+            this.assertCurrentSession(_authSessionGeneration, _assertSession);
 
             if (!response.ok) {
                 const error = (() => {
@@ -858,7 +925,10 @@ export abstract class ApiClientCore {
                         return { error: response.statusText };
                     }
                 })();
-                this.assertCurrentSession(_authSessionGeneration);
+                this.assertCurrentSession(
+                    _authSessionGeneration,
+                    _assertSession,
+                );
 
                 // Only log non-404 errors (404s are often expected)
                 if (!(silent404 && response.status === 404)) {
@@ -884,11 +954,20 @@ export abstract class ApiClientCore {
                     _retryCount < 2 &&
                     endpoint !== "/auth/refresh"
                 ) {
-                    this.assertCurrentSession(_authSessionGeneration);
+                    this.assertCurrentSession(
+                        _authSessionGeneration,
+                        _assertSession,
+                    );
                     const refreshResult = await this.refreshAccessToken();
 
+                    if (refreshResult === "superseded")
+                        throw new SupersededAuthSessionError();
+
                     if (refreshResult === "ok") {
-                        this.assertCurrentSession(_authSessionGeneration);
+                        this.assertCurrentSession(
+                            _authSessionGeneration,
+                            _assertSession,
+                        );
                         // Retry the request with new token
                         return this.request<T>(endpoint, {
                             ...options,
@@ -898,7 +977,10 @@ export abstract class ApiClientCore {
                     }
 
                     if (refreshResult === "unavailable") {
-                        this.assertCurrentSession(_authSessionGeneration);
+                        this.assertCurrentSession(
+                            _authSessionGeneration,
+                            _assertSession,
+                        );
                         throw requestError;
                     }
 
@@ -917,7 +999,7 @@ export abstract class ApiClientCore {
             if (response.status === 204 || response.status === 205) {
                 return undefined as T;
             }
-            this.assertCurrentSession(_authSessionGeneration);
+            this.assertCurrentSession(_authSessionGeneration, _assertSession);
             if (rawBody === "") {
                 return undefined as T;
             }
