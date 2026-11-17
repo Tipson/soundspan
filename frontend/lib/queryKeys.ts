@@ -74,6 +74,9 @@ export const queryKeys = {
 
     // Search
     librarySearchAll: () => ["search", "library"] as const,
+    savedMusicSearchAll: () => ["search", "saved-music"] as const,
+    savedMusicSearch: (query: string, type: "album" | "artist") =>
+        ["search", "saved-music", query, type] as const,
     serviceCatalog: (query: string) => ["service-catalog", query] as const,
     search: (query: string, type?: string, limit?: number, source?: string) =>
         ["search", "library", query, type, limit, source] as const,

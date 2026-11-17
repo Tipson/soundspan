@@ -130,14 +130,19 @@ export function WithLibrary<TBase extends ApiClientConstructor>(Base: TBase) {
         }
 
         /** List albums or artists explicitly saved to the signed-in account. */
-        async listSavedMusicEntities(params?: {
-            type?: SavedMusicEntityType;
-            limit?: number;
-            offset?: number;
-        }) {
+        async listSavedMusicEntities(
+            params?: {
+                type?: SavedMusicEntityType;
+                limit?: number;
+                offset?: number;
+                q?: string;
+            },
+            signal?: AbortSignal,
+        ) {
             const query = toSearchParams(params ?? {}).toString();
             return this.request<SavedMusicEntitiesResponse>(
                 `/library/saved${query ? `?${query}` : ""}`,
+                { signal },
             );
         }
 

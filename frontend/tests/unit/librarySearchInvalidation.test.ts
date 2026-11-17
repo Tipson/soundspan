@@ -30,3 +30,31 @@ test("liked changes invalidate personal search pages without refetching provider
         client.clear();
     }
 });
+
+test("saved membership invalidates its private result streams without refetching catalogs or liked tracks", async () => {
+    const client = new QueryClient({
+        defaultOptions: { queries: { gcTime: Infinity } },
+    });
+    const artists = queryKeys.savedMusicSearch("saved-music", "artist");
+    const albums = queryKeys.savedMusicSearch("saved-music", "album");
+    const liked = queryKeys.searchTracks("saved-music", "all");
+    const provider = queryKeys.discoverSearch(
+        "saved-music",
+        "music",
+        20,
+        "all",
+    );
+    try {
+        for (const key of [artists, albums, liked, provider])
+            client.setQueryData(key, {});
+        await client.invalidateQueries({
+            queryKey: queryKeys.savedMusicSearchAll(),
+        });
+        assert.equal(client.getQueryState(artists)?.isInvalidated, true);
+        assert.equal(client.getQueryState(albums)?.isInvalidated, true);
+        assert.equal(client.getQueryState(liked)?.isInvalidated, false);
+        assert.equal(client.getQueryState(provider)?.isInvalidated, false);
+    } finally {
+        client.clear();
+    }
+});

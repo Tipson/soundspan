@@ -138,6 +138,9 @@ export function useSavedMusicEntity(entity: SavedMusicEntityInput | null) {
                 queryClient.invalidateQueries({
                     queryKey: queryKeys.savedMusicAll(),
                 }),
+                queryClient.invalidateQueries({
+                    queryKey: queryKeys.savedMusicSearchAll(),
+                }),
             ]);
         },
     });

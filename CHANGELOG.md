@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Search saved albums and artists independently of provider availability in Web and Android. Preserve exact catalog links, separate raw pages and useful results during partial failures; retry failed refreshes without appending stale collection entries.
 - Read persisted artist discography independently of visible library albums, preserving exact artist identity, complete empty-catalog caching and owned-album visibility.
 - Find persisted YouTube, VK and Yandex favorites in owner-scoped Web and Android search without contacting their providers. Preserve exact playback identities, raw-page continuation and library results during partial failures; refresh private search after preference changes without refetching provider catalogs.
 - Reconcile adaptive Wave continuations with confirmed early-skip engagement, including delayed Play creation. Coalesce acknowledgements into one bounded follow-up refresh while preserving current playback and rejecting feedback from retired owners or stations; local journal persistence and playback failures do not trigger a retune.

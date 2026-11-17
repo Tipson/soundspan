@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SearchIcon } from "lucide-react";
 import { useSearchData } from "@/features/search/hooks/useSearchData";
+import { useSavedEntitySearch } from "@/features/search/hooks/useSavedEntitySearch";
+import { SavedEntitySearchSection } from "@/features/search/components/SavedEntitySearchSection";
 import { dedupeDiscoverTracks } from "@/features/search/songDedup";
 import { mergeSearchAlbums } from "@/features/search/albumDedup";
 import { useSoulseekSearch } from "@/features/search/hooks/useSoulseekSearch";
@@ -80,6 +82,19 @@ export default function SearchPage() {
         isAlbumsView,
         isArtistsView,
     });
+    const savedArtists = useSavedEntitySearch(
+        query,
+        "artist",
+        sectionView === null || isArtistsView,
+    );
+    const savedAlbums = useSavedEntitySearch(
+        query,
+        "album",
+        sectionView === null || isAlbumsView,
+    );
+    const hasSavedResults =
+        savedArtists.items.length > 0 || savedAlbums.items.length > 0;
+    const savedPartial = savedArtists.partial || savedAlbums.partial;
 
     const {
         libraryResults,
@@ -225,8 +240,11 @@ export default function SearchPage() {
     const isLoading =
         isLibrarySearching ||
         isDiscoverSearching ||
+        savedArtists.isLoading ||
+        savedAlbums.isLoading ||
         (showTracksView && (isSoulseekSearching || isSoulseekPolling));
     const trackLoadingState =
+        !hasSavedResults &&
         streamingTracks.length === 0 &&
         shouldShowSearchLoadingState({
             hasSearched,
@@ -243,11 +261,10 @@ export default function SearchPage() {
               : activeView === "artists"
                 ? hasArtists || visibleSimilarArtists.length > 0
                 : hasTopResult || hasTracks || hasAlbums || hasArtists;
+    const hasAnyActiveResults = activeViewHasResults || hasSavedResults;
     const showPrimaryLoadingState = showTracksView
         ? trackLoadingState
-        : hasSearched &&
-          (isLibrarySearching || isDiscoverSearching) &&
-          !activeViewHasResults;
+        : hasSearched && isLoading && !hasAnyActiveResults;
 
     const handleTVSearch = (searchQuery: string) => {
         router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
@@ -435,6 +452,37 @@ export default function SearchPage() {
                 ) : null}
 
                 <EmptyState hasSearched={hasSearched} isLoading={isLoading} />
+                {hasSearched && savedPartial ? (
+                    <div
+                        role="status"
+                        className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-content-muted"
+                    >
+                        <p className="min-w-0">
+                            Поиск по коллекции показан частично. Остальные
+                            результаты сохранены.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() =>
+                                void Promise.allSettled([
+                                    ...(sectionView === null || isArtistsView
+                                        ? [savedArtists.retry()]
+                                        : []),
+                                    ...(sectionView === null || isAlbumsView
+                                        ? [savedAlbums.retry()]
+                                        : []),
+                                ])
+                            }
+                            disabled={
+                                savedArtists.isFetching ||
+                                savedAlbums.isFetching
+                            }
+                            className="min-h-11 max-w-full rounded-lg px-3 py-2 font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-wait disabled:opacity-60"
+                        >
+                            Повторить поиск по коллекции
+                        </button>
+                    </div>
+                ) : null}
                 {catalogNotice && hasSearched ? (
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <p
@@ -573,6 +621,32 @@ export default function SearchPage() {
                     <AudiusSearchPanel key={query} query={query} />
                 ) : null}
 
+                {hasSearched && (sectionView === null || isAlbumsView) && (
+                    <SavedEntitySearchSection
+                        type="album"
+                        result={savedAlbums}
+                        preview={sectionView === null}
+                        onViewAll={() =>
+                            router.push(
+                                `/search?q=${encodeURIComponent(query)}&view=albums`,
+                            )
+                        }
+                    />
+                )}
+
+                {hasSearched && (sectionView === null || isArtistsView) && (
+                    <SavedEntitySearchSection
+                        type="artist"
+                        result={savedArtists}
+                        preview={sectionView === null}
+                        onViewAll={() =>
+                            router.push(
+                                `/search?q=${encodeURIComponent(query)}&view=artists`,
+                            )
+                        }
+                    />
+                )}
+
                 {hasSearched &&
                 (sectionView === null || isAlbumsView) &&
                 hasAlbums ? (
@@ -638,7 +712,7 @@ export default function SearchPage() {
 
                 {hasSearched &&
                 !isLoading &&
-                !activeViewHasResults &&
+                !hasAnyActiveResults &&
                 !videoInfo &&
                 !ytPlaylistInfo ? (
                     <section

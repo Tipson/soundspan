@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { asyncHandler } from "../../middleware/asyncHandler";
 import { prisma } from "../../utils/db";
+import { escapeLikePattern } from "../../utils/likePattern";
 import { sendRouteError } from "../../utils/routeErrorResponse";
 
 const SAVED_ENTITY_TYPES = new Set(["album", "artist"]);
@@ -109,7 +110,7 @@ function requireUserId(req: Request, res: Response): string | null {
     return userId;
 }
 
-/** Lists the signed-in user's explicitly saved albums or artists. */
+/** Lists or searches the signed-in user's explicitly saved albums or artists. */
 /**
  * @openapi
  * /api/library/saved:
@@ -122,14 +123,18 @@ function requireUserId(req: Request, res: Response): string | null {
  *         name: type
  *         schema: { type: string, enum: [album, artist] }
  *       - in: query
+ *         name: q
+ *         description: Optional literal title or subtitle match, case-insensitive; trimmed before matching. Empty text lists the collection with a search echo.
+ *         schema: { type: string, maxLength: 500 }
+ *       - in: query
  *         name: limit
  *         schema: { type: integer, minimum: 1, maximum: 200, default: 80 }
  *       - in: query
  *         name: offset
  *         schema: { type: integer, minimum: 0, maximum: 100000, default: 0 }
  *     responses:
- *       200: { description: Account-scoped saved music collection }
- *       400: { description: Invalid entity type }
+ *       200: { description: Account-scoped saved music collection; when q is present includes search query and effective offset/limit, ordered by createdAt descending then id ascending and private/no-store }
+ *       400: { description: Invalid entity type or search query }
  *       401: { description: Authentication required }
  */
 export async function handleListSavedMusicEntities(
@@ -143,22 +148,47 @@ export async function handleListSavedMusicEntities(
     if (requestedType && !SAVED_ENTITY_TYPES.has(requestedType)) {
         return sendRouteError(res, 400, "type must be album or artist");
     }
+    const hasQuery = Object.hasOwn(req.query, "q");
+    const rawQuery = req.query.q;
+    if (hasQuery && typeof rawQuery !== "string") {
+        return sendRouteError(res, 400, "q must be a string");
+    }
+    const query = typeof rawQuery === "string" ? rawQuery.trim() : "";
+    if (hasQuery && query.length > 500) {
+        return sendRouteError(res, 400, "q must be at most 500 characters");
+    }
     const limit = parseBoundedInt(req.query.limit, DEFAULT_LIMIT, 1, MAX_LIMIT);
     const offset = parseBoundedInt(req.query.offset, 0, 0, 100_000);
+    const contains = escapeLikePattern(query);
     const where = {
         userId,
         ...(requestedType ? { entityType: requestedType } : {}),
+        ...(hasQuery && query
+            ? {
+                  OR: [
+                      { title: { contains, mode: "insensitive" as const } },
+                      { subtitle: { contains, mode: "insensitive" as const } },
+                  ],
+              }
+            : {}),
     };
     const [items, total] = await Promise.all([
         prisma.savedMusicEntity.findMany({
             where,
-            orderBy: { createdAt: "desc" },
+            orderBy: hasQuery
+                ? [{ createdAt: "desc" }, { id: "asc" }]
+                : { createdAt: "desc" },
             skip: offset,
             take: limit,
         }),
         prisma.savedMusicEntity.count({ where }),
     ]);
-    res.json({ items, total });
+    if (hasQuery) res.setHeader("Cache-Control", "private, no-store");
+    res.json({
+        items,
+        total,
+        ...(hasQuery ? { search: { query, offset, limit } } : {}),
+    });
 }
 
 /** Returns whether one provider identity is in the user's collection. */

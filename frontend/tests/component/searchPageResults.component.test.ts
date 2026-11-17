@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { beforeEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { SavedMusicEntity } from "../../lib/api";
+import { getSavedMusicEntityHref } from "../../features/library/savedMusicEntity";
 
 const state = {
     query: "massive attack",
@@ -15,7 +17,56 @@ const state = {
     isDiscoverSearching: false,
     canRequestMoreDiscoverTracks: false,
     hasNextLibraryTracks: false,
+    savedAlbums: [] as SavedMusicEntity[],
+    savedArtists: [] as SavedMusicEntity[],
+    hasMoreSavedAlbums: false,
+    savedPartial: false,
 };
+
+mock.module("@/features/search/hooks/useSavedEntitySearch", {
+    namedExports: {
+        useSavedEntitySearch: (
+            _query: string,
+            type: "artist" | "album",
+            enabled: boolean,
+        ) => ({
+            items: enabled
+                ? type === "album"
+                    ? state.savedAlbums
+                    : state.savedArtists
+                : [],
+            hasNextPage:
+                enabled && type === "album" && state.hasMoreSavedAlbums,
+            isLoading: false,
+            isError: false,
+            isFetchingNextPage: false,
+            partial: enabled && state.savedPartial,
+            fetchNextPage: async () => undefined,
+            refetch: async () => undefined,
+            retry: async () => undefined,
+        }),
+    },
+});
+mock.module("@/features/library/components/SavedMusicGrid", {
+    namedExports: {
+        SavedMusicGrid: ({ items }: { items: SavedMusicEntity[] }) =>
+            React.createElement(
+                "div",
+                null,
+                items.map((item) =>
+                    React.createElement(
+                        "a",
+                        {
+                            key: item.id,
+                            href: getSavedMusicEntityHref(item),
+                            "data-saved-match": item.entityId,
+                        },
+                        item.title,
+                    ),
+                ),
+            ),
+    },
+});
 
 const calls = {
     searchData: [] as Array<Record<string, unknown>>,
@@ -263,6 +314,10 @@ mock.module("@/lib/features-context", {
 });
 
 beforeEach(() => {
+    state.savedAlbums = [];
+    state.savedArtists = [];
+    state.hasMoreSavedAlbums = false;
+    state.savedPartial = false;
     state.streamingTracks = [];
     state.query = "massive attack";
     state.view = null;
@@ -441,6 +496,65 @@ function likedSearchTrack(index: number) {
         album: { id: null, title: "Album", coverArt: null },
     };
 }
+
+function savedEntity(type: "album" | "artist", index = 0): SavedMusicEntity {
+    return {
+        id: `saved-${type}-${index}`,
+        entityType: type,
+        source: "ytmusic",
+        entityId: `${type === "album" ? "MPREb" : "UC"}_${index}`,
+        title: `Saved ${type} ${index}`,
+        subtitle: "Massive Attack",
+        imageUrl: null,
+    };
+}
+
+test("saved album and artist matches render exact routes while the online catalog is loading", async () => {
+    state.libraryTracks = [];
+    state.libraryAlbums = [];
+    state.libraryArtists = [];
+    state.discoverResults = [];
+    state.streamingTracks = [];
+    state.savedAlbums = [savedEntity("album")];
+    state.savedArtists = [savedEntity("artist")];
+    state.isDiscoverSearching = true;
+    const SearchPage = (await import("../../app/search/page")).default;
+    const html = renderToStaticMarkup(React.createElement(SearchPage));
+    assert.match(html, /Сохранённые альбомы/);
+    assert.match(html, /Сохранённые исполнители/);
+    assert.match(html, /href="\/explore\/yt-playlist\/MPREb_0\?type=album"/);
+    assert.match(html, /channelId=UC_0/);
+    assert.doesNotMatch(html, /search-no-results-title|min-h-\[18rem\]/);
+});
+
+test("All previews six saved albums and the Albums tab can page them independently", async () => {
+    state.savedAlbums = Array.from({ length: 7 }, (_, i) =>
+        savedEntity("album", i),
+    );
+    const SearchPage = (await import("../../app/search/page")).default;
+    let html = renderToStaticMarkup(React.createElement(SearchPage));
+    assert.equal((html.match(/data-saved-match=/g) ?? []).length, 6);
+    assert.match(html, /Все сохранённые альбомы/);
+    state.view = "albums";
+    state.hasMoreSavedAlbums = true;
+    state.isDiscoverSearching = true;
+    html = renderToStaticMarkup(React.createElement(SearchPage));
+    assert.equal((html.match(/data-saved-match=/g) ?? []).length, 7);
+    const button = html.match(
+        /<button[^>]*aria-label="Показать ещё сохранённые альбомы"[^>]*>/,
+    )?.[0];
+    assert.ok(button && !/\sdisabled(?:=|\s|>)/.test(button));
+    assert.doesNotMatch(html, /Сохранённые исполнители/);
+});
+
+test("collection search failure keeps ordinary matches and exposes a retry", async () => {
+    state.savedPartial = true;
+    const SearchPage = (await import("../../app/search/page")).default;
+    const html = renderToStaticMarkup(React.createElement(SearchPage));
+    assert.match(html, /Поиск по коллекции показан частично/);
+    assert.match(html, /Повторить поиск по коллекции/);
+    assert.match(html, /data-search-primary-grid/);
+});
 
 test("saved external matches remain visible while the online catalog is loading", async () => {
     state.libraryTracks = [];

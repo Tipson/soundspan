@@ -25,6 +25,12 @@ leaves a page empty. Only exact visible provider duplicates are suppressed.
 Personal-read failures retain other results and allow an explicit retry.
 Preference writes invalidate private library search without refetching provider
 catalogs; retiring the authenticated runtime clears its private query cache.
+Explicitly saved albums and artists use separate owner-scoped search pages and
+the existing saved-card catalog links. All previews six of each; Artists and
+Albums continue through independent raw offsets. Clients require an exact query
+and paging receipt before treating saved rows as matches. Partial responses keep
+valid cards and expose a private retry without refetching provider catalogs;
+save and unsave writes invalidate only the saved-search cache.
 The same global query returns browsable YouTube Music albums and artists;
 provider artist identities remain available even when a same-name local artist
 exists. When an exact local shadow duplicates a canonical provider artist or

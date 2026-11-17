@@ -354,6 +354,8 @@ export interface SavedMusicEntity {
 export interface SavedMusicEntitiesResponse {
     items: SavedMusicEntity[];
     total: number;
+    /** Present only when the server applied the requested account search. */
+    search?: { query: string; offset: number; limit: number };
 }
 
 /** Saved state for one exact source identity. */
