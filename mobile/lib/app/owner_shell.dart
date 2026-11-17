@@ -89,7 +89,9 @@ class _OwnerShellState extends State<OwnerShell>
   OwnerUiSession get s => widget.session;
   Future<bool> _confirmDownloadNetworkUse(int count) async {
     final session = s;
-    if (!mounted || !session.isCurrent || !widget.rootExposure.value) {
+    if (!mounted ||
+        !session.isCurrent ||
+        !identical(session.presentation, this)) {
       return false;
     }
     final accepted = await DownloadActionsSheet.confirmNetworkUse(
@@ -100,7 +102,7 @@ class _OwnerShellState extends State<OwnerShell>
         mounted &&
         identical(session, s) &&
         session.isCurrent &&
-        widget.rootExposure.value;
+        identical(session.presentation, this);
   }
 
   Future<void> _configureWave() async {

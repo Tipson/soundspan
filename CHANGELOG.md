@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Show manual download traffic confirmation above the full player while keeping the active account and presentation guards. Reject late consent after the owning session or screen is retired. Prepare Android release 0.1.14 (17).
 - Apply the same saved network rules to Android manual downloads, liked automation and speculative next-track audio. Distinguish Wi-Fi from unmetered access, restrict roaming independently, and limit manual traffic consent to the selected download generations.
 - Preserve completed files and explicit pauses when network preferences change. Defer interrupted background transfers without reviving stale jobs, and upgrade legacy work constraints before any audio transfer.
 - Keep offline settings reachable above the player and delay their initial state notification until navigation has finished building. Prepare Android release 0.1.13 (16).
