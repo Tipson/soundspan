@@ -13,3 +13,7 @@ CHANGELOG.md merge=union
 # Shell entrypoints are executed inside Linux containers even when the checkout
 # was created on Windows. CRLF makes POSIX sh fail before validation can run.
 *.sh text eol=lf
+
+# Applied migration bytes are immutable; this pair was deployed with CRLF.
+backend/prisma/migrations/20260828120000_add_remote_track_preference_intents/migration.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+backend/prisma/migrations/20260902180000_background_playlist_import/migration.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
