@@ -148,6 +148,31 @@ final class DownloadRepository {
 
   Future<DeviceDownload?> status(String id, SessionFence fence) =>
       store.transaction(fence, (tx) => _read(tx, id, fence));
+
+  /// Protect only the captured ready generation as an individual saved file.
+  /// This local action never enqueues, transfers or resurrects a replacement.
+  Future<bool> pinReadyIfCurrent(
+    String id,
+    SessionFence fence, {
+    required int expectedGeneration,
+  }) => _mutate(id, fence, (tx) async {
+    final current = await _read(tx, id, fence);
+    if (current == null ||
+        current.state != DownloadState.ready ||
+        current.generation != expectedGeneration) {
+      return false;
+    }
+    await _write(
+      tx,
+      current.patch({
+        'manual': true,
+        'origins': {...current.origins, DownloadOrigin.manual.name}.toList()
+          ..sort(),
+      }),
+    );
+    return true;
+  });
+
   Future<List<DeviceDownload>> list(SessionFence fence) =>
       store.transaction(fence, (tx) async {
         final jobs = <DeviceDownload>[];

@@ -18,6 +18,18 @@ enum DownloadsFilter { all, ready, active, failed }
 
 enum _ManualNetworkChoice { regular, once, waiting, cancelled }
 
+/// Exact journal generations admitted by one manual batch, before completion.
+/// A cancelled or rejected batch must not be interpreted as a saved mix.
+final class DownloadBatchAdmission {
+  DownloadBatchAdmission({
+    required this.accepted,
+    required this.cancelled,
+    Iterable<DeviceDownload> jobs = const [],
+  }) : jobs = List.unmodifiable(jobs);
+  final bool accepted, cancelled;
+  final List<DeviceDownload> jobs;
+}
+
 /// UI commands use only DownloadRepository and the existing native work bridge.
 final class DownloadsController extends ChangeNotifier {
   DownloadsController({
@@ -281,14 +293,18 @@ final class DownloadsController extends ChangeNotifier {
 
   /// Receives the actual selected, already bounded collection subset. No crawl,
   /// count truncation or permission prompt occurs elsewhere in the feature.
-  Future<void> downloadTracks(
+  Future<DownloadBatchAdmission> queueTracks(
     List<Track> tracks, {
     String quality = 'original',
-  }) {
+    DownloadOrigin origin = DownloadOrigin.manual,
+  }) async {
     final selected = List<Track>.of(tracks);
-    return _act(() async {
+    var accepted = false, cancelled = false;
+    final admittedJobs = <DeviceDownload>[];
+    await _act(() async {
       _requireAdmission();
       final pending = <Track>[];
+      final readyToPin = <DeviceDownload>[];
       var alreadyReady = 0;
       if (networkAccess == null) {
         pending.addAll(selected);
@@ -301,17 +317,39 @@ final class DownloadsController extends ChangeNotifier {
           final existing = await repository.status(id, fence);
           if (existing?.state == DownloadState.ready) {
             alreadyReady++;
+            readyToPin.add(existing!);
           } else {
             pending.add(track);
           }
         }
       }
+      Future<void> retainReadyFiles() async {
+        for (final job in readyToPin) {
+          if (origin == DownloadOrigin.manual &&
+              !await repository.pinReadyIfCurrent(
+                job.id,
+                fence,
+                expectedGeneration: job.generation,
+              )) {
+            continue;
+          }
+          final current = await repository.status(job.id, fence);
+          if (current?.state == DownloadState.ready &&
+              current?.generation == job.generation) {
+            admittedJobs.add(current!);
+          }
+        }
+      }
+
       if (pending.isEmpty) {
+        await retainReadyFiles();
+        accepted = true;
         notice = 'Выбранные записи уже загружены или недоступны.';
         return;
       }
       final choice = await _manualNetworkChoice(pending.length);
       if (choice == _ManualNetworkChoice.cancelled) {
+        cancelled = true;
         notice = 'Загрузка отменена.';
         return;
       }
@@ -321,6 +359,8 @@ final class DownloadsController extends ChangeNotifier {
         await repository.authority.assertCurrent(fence);
         if (!allowed) notice = 'Доступ к уведомлениям не разрешён. Загрузка может работать в приложении; фоновый запуск зависит от ограничений Android.';
       }
+      await retainReadyFiles();
+      accepted = true;
       var admitted = alreadyReady;
       var skipped = 0;
       for (final track in pending) {
@@ -336,9 +376,11 @@ final class DownloadsController extends ChangeNotifier {
             quality,
             fence,
             manual: true,
+            origin: origin,
           );
           if (!isCurrent) return;
           if (job.state == DownloadState.ready) {
+            admittedJobs.add(job);
             admitted++;
             continue;
           }
@@ -350,6 +392,7 @@ final class DownloadsController extends ChangeNotifier {
               expectedGeneration: job.generation,
             );
           }
+          admittedJobs.add(job);
           await _admitAndSchedule(job, choice);
           admitted++;
         } catch (error) {
@@ -361,6 +404,21 @@ final class DownloadsController extends ChangeNotifier {
       notice ??=
           'Выбрано ${selected.length}; в загрузках $admitted${skipped > 0 ? ', недоступно $skipped' : ''}.';
     });
+    return DownloadBatchAdmission(
+      accepted: isCurrent && accepted,
+      cancelled: cancelled,
+      jobs: isCurrent
+          ? {for (final job in admittedJobs) job.id: job}.values
+          : const [],
+    );
+  }
+
+  Future<void> downloadTracks(
+    List<Track> tracks, {
+    String quality = 'original',
+    DownloadOrigin origin = DownloadOrigin.manual,
+  }) async {
+    await queueTracks(tracks, quality: quality, origin: origin);
   }
 
   Future<void> _schedule(DeviceDownload job) async {
