@@ -2,6 +2,7 @@ import type {
     FederatedTrackPeer,
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
+import { normalizeMusicSourceRecordingSnapshot } from "./musicSourcePlaySnapshot";
 
 const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 
@@ -101,6 +102,9 @@ export interface UnifiedPlaylistItemRecord {
     track: UnifiedLocalTrackRecord | null;
     trackTidal: UnifiedTrackTidalRecord | null;
     trackYtMusic: UnifiedTrackYtMusicRecord | null;
+    trackMusicSourceId?: string | null;
+    musicSourceRecording?: unknown;
+    trackMusicSource?: { provider: string; providerTrackId: string } | null;
 }
 
 export interface UnifiedPlaylistTrackItemResponse {
@@ -109,13 +113,22 @@ export interface UnifiedPlaylistTrackItemResponse {
     trackId: string | null;
     trackTidalId: string | null;
     trackYtMusicId: string | null;
+    trackMusicSourceId?: string | null;
     sort: number;
     type: "track";
     provider: {
-        source: UnifiedTrackSource | "unknown";
-        label: "LOCAL" | "TIDAL" | "YOUTUBE" | "FEDERATED" | "UNKNOWN";
+        source: UnifiedTrackSource | "vk" | "yandex" | "unknown";
+        label:
+            | "LOCAL"
+            | "TIDAL"
+            | "YOUTUBE"
+            | "FEDERATED"
+            | "VK"
+            | "YANDEX"
+            | "UNKNOWN";
         tidalTrackId: number | null;
         youtubeVideoId: string | null;
+        providerTrackId?: string;
     };
     playback: {
         isPlayable: boolean;
@@ -339,13 +352,53 @@ function normalizeUnknownTrackItem(
     };
 }
 
+/** Native claims bypass legacy source matching, including malformed mixed records. */
+export function hasNativePlaylistSourceClaim(
+    item: UnifiedPlaylistItemRecord,
+): boolean {
+    return (
+        item.trackMusicSourceId != null ||
+        item.trackMusicSource != null ||
+        item.musicSourceRecording != null
+    );
+}
+
 /**
  * Playlist response formatter that keeps existing provider/playback wrappers while
- * emitting normalized track content from canonical local/legacy-tidal/youtube normalizers.
+ * emitting local/legacy/provider tracks and each playlist's bounded native snapshot.
  */
 export function formatUnifiedTrackItem(
     item: UnifiedPlaylistItemRecord,
 ): UnifiedPlaylistTrackItemResponse {
+    if (hasNativePlaylistSourceClaim(item)) {
+        if (
+            item.trackId != null ||
+            item.trackTidalId != null ||
+            item.trackYtMusicId != null ||
+            item.track != null ||
+            item.trackTidal != null ||
+            item.trackYtMusic != null
+        )
+            return normalizeUnknownTrackItem(item);
+        const native = normalizeMusicSourceRecordingSnapshot(
+            item.musicSourceRecording,
+            item.trackMusicSource,
+        );
+        if (!native) return normalizeUnknownTrackItem(item);
+        return {
+            ...buildBaseTrackItem(item),
+            trackMusicSourceId: item.trackMusicSourceId ?? null,
+            provider: {
+                source: native.source,
+                label: native.source === "vk" ? "VK" : "YANDEX",
+                tidalTrackId: null,
+                youtubeVideoId: null,
+                providerTrackId: native.provider.providerTrackId,
+            },
+            playback: { isPlayable: true, reason: null, message: null },
+            track: native,
+        };
+    }
     if (item.track) {
         return formatPersistedTrackItem(item);
     }

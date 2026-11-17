@@ -106,7 +106,11 @@ export function Modal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[10010] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-5">
+        <div
+            className="fixed inset-0 z-[10010] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+            role="presentation"
+            onClick={(event) => event.stopPropagation()}
+        >
             <div
                 ref={dialogRef}
                 role="dialog"

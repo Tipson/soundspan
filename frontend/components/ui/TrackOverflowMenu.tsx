@@ -45,6 +45,7 @@ import {
     isPlaybackOnlyTrack,
     normalizeActionableAudioTrack,
     toAddToPlaylistRef,
+    canAddTrackToPlaylist,
 } from "@/lib/trackRef";
 import { canShareTrack } from "@/lib/shareLinks";
 import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
@@ -120,6 +121,7 @@ export function TrackOverflowMenu({
     const isActionable = normalizedActionTrack !== null;
     const actionTrack = normalizedActionTrack ?? track;
     const canPersist = isActionable && !isPlaybackOnlyTrack(actionTrack);
+    const canAddToPlaylist = isActionable && canAddTrackToPlaylist(actionTrack);
     const canDownload =
         canPersist ||
         (isActionable && Boolean(actionTrack.musicSourceRecording));
@@ -309,11 +311,11 @@ export function TrackOverflowMenu({
     const handleAddToPlaylist = useCallback(
         (e: React.MouseEvent) => {
             e.stopPropagation();
-            if (!canPersist) return;
+            if (!canAddToPlaylist) return;
             closeMenu();
             setIsPlaylistSelectorOpen(true);
         },
-        [closeMenu, canPersist],
+        [closeMenu, canAddToPlaylist],
     );
 
     const handleShare = useCallback(
@@ -327,14 +329,14 @@ export function TrackOverflowMenu({
 
     const handleSelectPlaylist = useCallback(
         async (playlistId: string) => {
-            if (!canPersist) return;
+            if (!canAddToPlaylist) return;
             await api.addTrackToPlaylist(
                 playlistId,
                 toAddToPlaylistRef(actionTrack),
             );
             toast.success(`«${track.title}» добавлен в плейлист`);
         },
-        [actionTrack, canPersist, track.title],
+        [actionTrack, canAddToPlaylist, track.title],
     );
 
     const handleCopyTrackLink = useCallback(
@@ -587,7 +589,7 @@ export function TrackOverflowMenu({
                                 />
                             )}
 
-                            {showAddToPlaylist && canPersist && (
+                            {showAddToPlaylist && canAddToPlaylist && (
                                 <MenuButton
                                     onClick={handleAddToPlaylist}
                                     icon={<Plus className="h-4 w-4" />}
@@ -682,7 +684,7 @@ export function TrackOverflowMenu({
             </div>
 
             <PlaylistSelector
-                isOpen={canPersist && isPlaylistSelectorOpen}
+                isOpen={canAddToPlaylist && isPlaylistSelectorOpen}
                 onClose={() => setIsPlaylistSelectorOpen(false)}
                 onSelectPlaylist={handleSelectPlaylist}
             />

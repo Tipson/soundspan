@@ -13,6 +13,10 @@ type ModuleMocker = {
 type TrackOverflowHarnessOptions = {
     useAudioControls: () => Record<string, unknown>;
     useAudioState: () => Record<string, unknown>;
+    playlistSelector?: (props: {
+        isOpen: boolean;
+        onSelectPlaylist: (id: string) => Promise<void>;
+    }) => React.ReactNode;
 };
 
 export const trackOverflowIcon = (props: Record<string, unknown>) =>
@@ -43,14 +47,16 @@ export function installTrackOverflowHarness(
 
     moduleMocker.module("@/components/ui/PlaylistSelector", {
         namedExports: {
-            PlaylistSelector: (props: { isOpen: boolean }) =>
-                props.isOpen
-                    ? React.createElement(
-                          "div",
-                          { "data-testid": "playlist-selector" },
-                          "PlaylistSelector",
-                      )
-                    : null,
+            PlaylistSelector:
+                options.playlistSelector ??
+                ((props: { isOpen: boolean }) =>
+                    props.isOpen
+                        ? React.createElement(
+                              "div",
+                              { "data-testid": "playlist-selector" },
+                              "PlaylistSelector",
+                          )
+                        : null),
         },
     });
 

@@ -85,7 +85,7 @@ import {
     writePlaybackReplacementIntent,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
 import type { PlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
-import { toAddToPlaylistRef } from "@/lib/trackRef";
+import { toSharedQueueTrackRef } from "@/lib/trackRef";
 import {
     createMigratingStorageKey,
     writeMigratingStorageItem,
@@ -153,7 +153,7 @@ function toListenTogetherQueueTrack(
 ): QueueTrackInput | null {
     if (!track) return null;
     try {
-        return toAddToPlaylistRef(track);
+        return toSharedQueueTrackRef(track);
     } catch {
         return null;
     }

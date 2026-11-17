@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
+import { NativePlaylistSelectorFixture } from "../fixtures/NativePlaylistSelectorFixture";
+import type { Track } from "../../lib/audio-state-context";
+import { toMusicSourcePlaybackTrack } from "../../lib/audio/musicSourcePlayback";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
     installTrackOverflowHarness,
@@ -12,6 +15,7 @@ GlobalRegistrator.register();
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 const queued: string[] = [];
+const playlistAdds: { id: string; ref: unknown }[] = [];
 const track = {
     id: "only-track",
     title: "Единственный трек",
@@ -45,12 +49,19 @@ installTrackOverflowHarness(mock, {
         playNext: () => undefined,
     }),
     useAudioState: () => ({ currentTrack: null }),
+    playlistSelector: NativePlaylistSelectorFixture,
 });
 mock.module("next/navigation", {
     namedExports: { useRouter: () => ({ push: () => undefined }) },
 });
 mock.module("@/lib/api", {
-    namedExports: { api: { addTrackToPlaylist: async () => undefined } },
+    namedExports: {
+        api: {
+            addTrackToPlaylist: async (id: string, ref: unknown) => {
+                playlistAdds.push({ id, ref });
+            },
+        },
+    },
 });
 mock.module("@/features/device-offline/DeviceOfflineProvider", {
     namedExports: { useOptionalDeviceOffline: () => null },
@@ -70,6 +81,7 @@ let anchor = {
 const originalBounds = HTMLElement.prototype.getBoundingClientRect;
 beforeEach(() => {
     queued.length = 0;
+    playlistAdds.length = 0;
     Object.defineProperty(window, "visualViewport", {
         configurable: true,
         value: undefined,
@@ -128,9 +140,12 @@ async function pointerClick(button: HTMLElement) {
     await React.act(async () => button.click());
 }
 
-async function renderMenu(t: {
-    after: (cleanup: () => Promise<void>) => void;
-}) {
+async function renderMenu(
+    t: {
+        after: (cleanup: () => Promise<void>) => void;
+    },
+    inputTrack: Track = track,
+) {
     const { TrackOverflowMenu } =
         await import("../../components/ui/TrackOverflowMenu");
     const { MusicDetailTrackSurface } =
@@ -148,7 +163,9 @@ async function renderMenu(t: {
                 React.createElement(
                     "div",
                     { onClick: () => rowPlays++ },
-                    React.createElement(TrackOverflowMenu, { track }),
+                    React.createElement(TrackOverflowMenu, {
+                        track: inputTrack,
+                    }),
                 ),
             ),
         ),
@@ -164,6 +181,37 @@ async function renderMenu(t: {
     const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
     assert.ok(menu);
     return { container, menu, trigger, rowPlays: () => rowPlays };
+}
+
+for (const provider of ["vk", "yandex"] as const) {
+    test(`${provider} menu opens the existing playlist selector and submits its exact recording`, async (t) => {
+        const recording = {
+            provider,
+            id: provider === "vk" ? "-123_456" : "123456",
+            title: "Любимое",
+            artists: ["Исполнитель"],
+            duration: 180,
+            contentVersion: "unknown" as const,
+            preview: false as const,
+        };
+        const view = await renderMenu(t, toMusicSourcePlaybackTrack(recording));
+        const add = [
+            ...view.menu.querySelectorAll<HTMLButtonElement>(
+                '[role="menuitem"]',
+            ),
+        ].find((button) => button.textContent?.includes("Добавить в плейлист"));
+        assert.ok(add, "valid native playlist action must be visible");
+        await pointerClick(add);
+        const choice = document.querySelector<HTMLButtonElement>(
+            '[data-testid="choose-qa-playlist"]',
+        );
+        assert.ok(choice, "playlist selector must open");
+        await pointerClick(choice);
+        assert.deepEqual(playlistAdds, [
+            { id: "qa-playlist", ref: { musicSourceRecording: recording } },
+        ]);
+        assert.equal(view.rowPlays(), 0);
+    });
 }
 
 test("a single liked-track popup escapes the clipped track surface and its items remain clickable", async (t) => {

@@ -336,40 +336,40 @@ model SystemSettings {
 }
 
 model Artist {
-  id                  String                   @id @default(cuid())
-  mbid                String                   @unique
-  name                String
-  normalizedName      String                   @default("")
-  summary             String?
-  heroUrl             String?
-  genres              Json?
-  lastSynced          DateTime                 @default(now())
-  updatedAt           DateTime                 @default(now()) @updatedAt
-  lastEnriched        DateTime?
-  enrichmentStatus    String                   @default("pending")
-  searchVector        Unsupported("tsvector")?
-  similarArtistsJson  Json?
-  displayName         String?
-  hasUserOverrides    Boolean                  @default(false)
-  userGenres          Json?
-  userHeroUrl         String?
-  userSummary         String?
-  countsLastUpdated   DateTime?
-  discoveryAlbumCount Int                      @default(0)
-  libraryAlbumCount   Int                      @default(0)
-  totalTrackCount     Int                      @default(0)
-  remoteTrackCount    Int                      @default(0)
-  catalogSyncedAt     DateTime?
-  peerId              String?
-  remoteId            String?
+  id                   String                      @id @default(cuid())
+  mbid                 String                      @unique
+  name                 String
+  normalizedName       String                      @default("")
+  summary              String?
+  heroUrl              String?
+  genres               Json?
+  lastSynced           DateTime                    @default(now())
+  updatedAt            DateTime                    @default(now()) @updatedAt
+  lastEnriched         DateTime?
+  enrichmentStatus     String                      @default("pending")
+  searchVector         Unsupported("tsvector")?
+  similarArtistsJson   Json?
+  displayName          String?
+  hasUserOverrides     Boolean                     @default(false)
+  userGenres           Json?
+  userHeroUrl          String?
+  userSummary          String?
+  countsLastUpdated    DateTime?
+  discoveryAlbumCount  Int                         @default(0)
+  libraryAlbumCount    Int                         @default(0)
+  totalTrackCount      Int                         @default(0)
+  remoteTrackCount     Int                         @default(0)
+  catalogSyncedAt      DateTime?
+  peerId               String?
+  remoteId             String?
   catalogReleaseGroups ArtistCatalogReleaseGroup[]
-  albums              Album[]
-  ownedAlbums         OwnedAlbum[]
-  similarFrom         SimilarArtist[]          @relation("FromArtist")
-  similarTo           SimilarArtist[]          @relation("ToArtist")
-  tracksTidal         TrackTidal[]
-  tracksYtMusic       TrackYtMusic[]
-  federationPeer      FederationPeer?          @relation(fields: [peerId], references: [id], onDelete: Cascade)
+  albums               Album[]
+  ownedAlbums          OwnedAlbum[]
+  similarFrom          SimilarArtist[]             @relation("FromArtist")
+  similarTo            SimilarArtist[]             @relation("ToArtist")
+  tracksTidal          TrackTidal[]
+  tracksYtMusic        TrackYtMusic[]
+  federationPeer       FederationPeer?             @relation(fields: [peerId], references: [id], onDelete: Cascade)
 
   @@unique([peerId, remoteId])
   @@index([name])
@@ -887,23 +887,29 @@ model ShareLink {
 }
 
 model PlaylistItem {
-  id             String        @id @default(cuid())
-  playlistId     String
-  trackId        String?
-  trackTidalId   String?
-  trackYtMusicId String?
-  sort           Int
-  playlist       Playlist      @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  track          Track?        @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  trackTidal     TrackTidal?   @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
-  trackYtMusic   TrackYtMusic? @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  id                   String            @id @default(cuid())
+  playlistId           String
+  trackId              String?
+  trackTidalId         String?
+  trackYtMusicId       String?
+  trackMusicSourceId   String?
+  /// This playlist's bounded display/replay metadata, independent of shared catalog authority.
+  musicSourceRecording Json?
+  sort                 Int
+  playlist             Playlist          @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track                Track?            @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  trackTidal           TrackTidal?       @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
+  trackYtMusic         TrackYtMusic?     @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  trackMusicSource     TrackMusicSource? @relation(fields: [trackMusicSourceId], references: [id], onDelete: SetNull)
 
   @@unique([playlistId, trackId, sort])
   @@unique([playlistId, trackTidalId, sort])
   @@unique([playlistId, trackYtMusicId, sort])
+  @@unique([playlistId, trackMusicSourceId, sort])
   @@index([playlistId, sort])
   @@index([trackTidalId])
   @@index([trackYtMusicId])
+  @@index([trackMusicSourceId])
 }
 
 /// Durable source metadata retained while a playlist position is waiting for
@@ -1728,6 +1734,7 @@ model TrackMusicSource {
   plays                     Play[]
   mappings                  TrackMapping[]
   likedTracks               LikedRemoteTrack[]
+  playlistItems             PlaylistItem[]
 
   @@unique([provider, providerTrackId])
 }

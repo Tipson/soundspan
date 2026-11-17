@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Save exact VK and Yandex recordings to playlists in Web and Android without promoting private metadata into the shared catalog. Preserve item order, duplicate handling and snapshots when a namespace reference is removed; keep retired and unsupported providers fenced. Isolate modal clicks from the underlying track row.
 - Search saved albums and artists independently of provider availability in Web and Android. Preserve exact catalog links, separate raw pages and useful results during partial failures; retry failed refreshes without appending stale collection entries.
 - Retain complete ordered artist catalog snapshots with full release dates and secondary types, independently of shared or owned Album rows. Preserve exact artist identity, route-specific filters and owned-album visibility; serialize concurrent snapshot replacements and keep empty or failed provider results out of fresh persistent cache.
 - Find persisted YouTube, VK and Yandex favorites in owner-scoped Web and Android search without contacting their providers. Preserve exact playback identities, raw-page continuation and library results during partial failures; refresh private search after preference changes without refetching provider catalogs.

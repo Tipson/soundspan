@@ -12,6 +12,7 @@ import { sessionLog } from "../utils/playlistLogger";
 import { trackMappingService } from "../services/trackMappingService";
 import {
     formatUnifiedTrackItem,
+    hasNativePlaylistSourceClaim,
     type UnifiedPlaylistItemRecord,
 } from "../services/unifiedTrackResponse";
 import {
@@ -32,6 +33,7 @@ import {
 } from "../services/playlistMutationLock";
 import { requestCoalescedLibraryScan } from "../services/coalescedLibraryScan";
 import { patchDownloadJobMetadataFrom } from "../services/downloadJobStatus";
+import { musicSourcePlayRecordingSchema } from "../services/musicSourcePlaySnapshot";
 
 const router = Router();
 
@@ -303,6 +305,7 @@ const playlistItemInclude = {
     },
     trackTidal: true,
     trackYtMusic: true,
+    trackMusicSource: { select: { provider: true, providerTrackId: true } },
 } as const;
 
 function getFallbackToken(
@@ -389,6 +392,7 @@ function partitionResolutionItems(
     const delegatedItems: UnifiedPlaylistItemRecord[] = [];
     const delegatedIndexes: number[] = [];
     items.forEach((item, index) => {
+        if (hasNativePlaylistSourceClaim(item)) return;
         const fallbackToken = getFallbackToken(item, profile);
         if (!fallbackToken || usableFallbackTokens.has(fallbackToken)) {
             delegatedItems.push(item);
@@ -398,11 +402,26 @@ function partitionResolutionItems(
     return { delegatedItems, delegatedIndexes };
 }
 
+type PlaylistDetailResolution =
+    | ResolvedPlaylistItem
+    | {
+          original: UnifiedPlaylistItemRecord;
+          effective: UnifiedPlaylistItemRecord;
+          native: true;
+      };
+
 async function resolvePlaylistDetailItems(
     items: UnifiedPlaylistItemRecord[],
     userId: string,
-): Promise<ResolvedPlaylistItem[]> {
+): Promise<PlaylistDetailResolution[]> {
     if (items.length === 0) return [];
+    if (items.every(hasNativePlaylistSourceClaim)) {
+        return items.map((item) => ({
+            original: item,
+            effective: item,
+            native: true,
+        }));
+    }
     const profile = await getUserProviderProfile(userId);
     const usableTokens = await loadUsableFallbackTokens(items, profile);
     const partition = partitionResolutionItems(items, profile, usableTokens);
@@ -414,13 +433,14 @@ async function resolvePlaylistDetailItems(
     partition.delegatedIndexes.forEach((itemIndex, delegatedIndex) => {
         resolvedByIndex.set(itemIndex, delegated[delegatedIndex]);
     });
-    return items.map(
-        (item, index) =>
-            resolvedByIndex.get(index) ?? {
-                original: item,
-                effective: item,
-                resolution: { available: false, reason: "no-provider" },
-            },
+    return items.map((item, index) =>
+        hasNativePlaylistSourceClaim(item)
+            ? { original: item, effective: item, native: true }
+            : (resolvedByIndex.get(index) ?? {
+                  original: item,
+                  effective: item,
+                  resolution: { available: false, reason: "no-provider" },
+              }),
     );
 }
 
@@ -431,6 +451,7 @@ const addTrackSchema = z
         // error instead of silently degrading a TIDAL request into another shape.
         tidalTrackId: z.never().optional(),
         youtubeVideoId: z.string().trim().min(1).optional(),
+        musicSourceRecording: musicSourcePlayRecordingSchema.optional(),
         title: z.string().trim().min(1).optional(),
         artist: z.string().trim().min(1).optional(),
         album: z.string().trim().min(1).optional(),
@@ -441,14 +462,16 @@ const addTrackSchema = z
         thumbnailUrl: z.string().trim().min(1).optional(),
     })
     .superRefine((value, ctx) => {
-        const identifierCount = [value.trackId, value.youtubeVideoId].filter(
-            (entry) => entry !== undefined,
-        ).length;
+        const identifierCount = [
+            value.trackId,
+            value.youtubeVideoId,
+            value.musicSourceRecording,
+        ].filter((entry) => entry !== undefined).length;
         if (identifierCount !== 1) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message:
-                    "Exactly one of trackId or youtubeVideoId is required.",
+                    "Exactly one of trackId, youtubeVideoId or musicSourceRecording is required.",
                 path: ["trackId"],
             });
             return;
@@ -493,6 +516,8 @@ type PlaylistItemReference = {
     trackId: string | null;
     trackTidalId: string | null;
     trackYtMusicId: string | null;
+    trackMusicSourceId?: string;
+    musicSourceRecording?: z.infer<typeof musicSourcePlayRecordingSchema>;
 };
 
 type AddItemResult = { duplicated: boolean; item: UnifiedPlaylistItemRecord };
@@ -500,6 +525,14 @@ type AddItemResult = { duplicated: boolean; item: UnifiedPlaylistItemRecord };
 async function resolvePlaylistItemReference(
     data: AddTrackData,
 ): Promise<PlaylistItemReference | null> {
+    if (data.musicSourceRecording) {
+        return {
+            trackId: null,
+            trackTidalId: null,
+            trackYtMusicId: null,
+            musicSourceRecording: data.musicSourceRecording,
+        };
+    }
     if (data.trackId) {
         const track = await prisma.track.findUnique({
             where: { id: data.trackId, removedAt: null },
@@ -535,6 +568,31 @@ function getPlaylistItemReferenceWhere(
     playlistId: string,
     reference: PlaylistItemReference,
 ): Prisma.PlaylistItemWhereInput {
+    if (reference.trackMusicSourceId && reference.musicSourceRecording) {
+        return {
+            playlistId,
+            OR: [
+                { trackMusicSourceId: reference.trackMusicSourceId },
+                {
+                    trackMusicSourceId: null,
+                    AND: [
+                        {
+                            musicSourceRecording: {
+                                path: ["provider"],
+                                equals: reference.musicSourceRecording.provider,
+                            },
+                        },
+                        {
+                            musicSourceRecording: {
+                                path: ["id"],
+                                equals: reference.musicSourceRecording.id,
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+    }
     if (reference.trackId) {
         return { playlistId, trackId: reference.trackId };
     }
@@ -549,6 +607,18 @@ async function addLockedPlaylistItem(
     reference: PlaylistItemReference,
 ): Promise<AddItemResult> {
     await requirePlaylistMutationLock(tx, playlistId, userId);
+    if (reference.musicSourceRecording) {
+        const { provider, id } = reference.musicSourceRecording;
+        const namespace = await tx.trackMusicSource.upsert({
+            where: {
+                provider_providerTrackId: { provider, providerTrackId: id },
+            },
+            create: { provider, providerTrackId: id },
+            // Match the Play writer's atomic native upsert without accepting metadata.
+            update: { providerTrackId: id },
+        });
+        reference = { ...reference, trackMusicSourceId: namespace.id };
+    }
     const existing = (await tx.playlistItem.findFirst({
         where: getPlaylistItemReferenceWhere(playlistId, reference),
         include: playlistItemInclude,
@@ -742,9 +812,12 @@ function selectPlaylistPageEntries<
     };
 }
 
-function formatResolvedPlaylistItems(resolvedItems: ResolvedPlaylistItem[]) {
+function formatResolvedPlaylistItems(
+    resolvedItems: PlaylistDetailResolution[],
+) {
     return resolvedItems.map((resolvedItem) => {
         const formatted = formatUnifiedTrackItem(resolvedItem.effective);
+        if ("native" in resolvedItem) return formatted;
         if (
             resolvedItem.original.track?.removedAt ||
             resolvedItem.effective.track?.removedAt
@@ -1485,6 +1558,7 @@ router.delete("/:id", async (req, res) => {
  *                   anyOf:
  *                     - required: [tidalTrackId]
  *                     - required: [youtubeVideoId]
+ *                     - required: [musicSourceRecording]
  *                 properties:
  *                   trackId:
  *                     type: string
@@ -1496,6 +1570,7 @@ router.delete("/:id", async (req, res) => {
  *                   anyOf:
  *                     - required: [trackId]
  *                     - required: [tidalTrackId]
+ *                     - required: [musicSourceRecording]
  *                 properties:
  *                   youtubeVideoId:
  *                     type: string
@@ -1526,6 +1601,53 @@ router.delete("/:id", async (req, res) => {
  *                   thumbnailUrl:
  *                     type: string
  *                     minLength: 1
+ *               - type: object
+ *                 required: [musicSourceRecording]
+ *                 not:
+ *                   anyOf:
+ *                     - required: [trackId]
+ *                     - required: [tidalTrackId]
+ *                     - required: [youtubeVideoId]
+ *                 properties:
+ *                   musicSourceRecording:
+ *                     type: object
+ *                     description: This playlist's portable display and replay metadata; never a signed URL or shared verified catalog record.
+ *                     required: [provider, id, title, artists, duration, contentVersion, preview]
+ *                     properties:
+ *                       provider:
+ *                         type: string
+ *                         enum: [vk, yandex]
+ *                       id:
+ *                         type: string
+ *                         minLength: 1
+ *                         maxLength: 42
+ *                         description: Exact VK owner_track identifier or numeric Yandex identifier, validated in its provider namespace.
+ *                       title:
+ *                         type: string
+ *                         minLength: 1
+ *                         maxLength: 200
+ *                       artists:
+ *                         type: array
+ *                         minItems: 1
+ *                         maxItems: 10
+ *                         items:
+ *                           type: string
+ *                           minLength: 1
+ *                           maxLength: 100
+ *                       duration:
+ *                         type: number
+ *                         minimum: 0
+ *                         exclusiveMinimum: true
+ *                         maximum: 3600
+ *                       contentVersion:
+ *                         type: string
+ *                         enum: [explicit, clean, unknown]
+ *                       preview:
+ *                         type: boolean
+ *                         enum: [false]
+ *                       isrc:
+ *                         type: string
+ *                         pattern: '^[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}$'
  *     responses:
  *       200:
  *         description: Track added to playlist (or already exists)

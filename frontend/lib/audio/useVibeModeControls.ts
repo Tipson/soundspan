@@ -14,7 +14,7 @@ import { userFacingError } from "@/lib/i18n/ru";
 import { listenTogetherSocket } from "@/lib/listen-together-socket";
 import type { ListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
 import { frontendLogger } from "@/lib/logger";
-import { toAddToPlaylistRef } from "@/lib/trackRef";
+import { toSharedQueueTrackRef } from "@/lib/trackRef";
 import type { PersonalizedHomeFeed } from "@/features/home/types";
 import {
     PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
@@ -386,7 +386,7 @@ export function useVibeModeControls({
                             return { success: false, trackCount: 0 };
                         const queueResult =
                             await listenTogetherSocket.addToQueue(
-                                continuation.map(toAddToPlaylistRef),
+                                continuation.map(toSharedQueueTrackRef),
                             );
                         showQueueMutationToasts(queueResult, {
                             singleAccepted:
@@ -589,7 +589,7 @@ export function useVibeModeControls({
                         }
                         const queueResult =
                             await listenTogetherSocket.addToQueue(
-                                continuation.map(toAddToPlaylistRef),
+                                continuation.map(toSharedQueueTrackRef),
                             );
                         showQueueMutationToasts(queueResult, {
                             singleAccepted:

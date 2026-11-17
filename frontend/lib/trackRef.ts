@@ -3,7 +3,12 @@ import type {
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
 import type { Track as AudioTrack } from "@/lib/audio-state-context";
-import { musicSourceCandidateSchema } from "./audio/musicSourcePlayback";
+import {
+    hasNativeMusicSourceIdentity,
+    musicSourceCandidateSchema,
+    readMusicSourcePlaybackTrack,
+} from "./audio/musicSourcePlayback";
+import type { MusicSourceCandidate } from "./api/musicSources";
 
 export type TrackRef =
     | { trackId: string }
@@ -12,6 +17,7 @@ export type TrackRef =
 
 export type AddToPlaylistRef =
     | { trackId: string }
+    | { musicSourceRecording: MusicSourceCandidate }
     | {
           tidalTrackId: number;
           title: string;
@@ -58,8 +64,10 @@ type TrackRefInput = {
     streamSource?: ProviderSource | null;
     tidalTrackId?: number | string | null;
     youtubeVideoId?: string | null;
+    musicSourceRecording?: unknown;
     provider?: {
         source?: ProviderSource | null;
+        providerTrackId?: string | null;
         tidalTrackId?: number | string | null;
         youtubeVideoId?: string | null;
     } | null;
@@ -232,7 +240,7 @@ export function isTrackActionable(input: TrackRefInput): boolean {
     return !isRetiredRemoteOnlyTrack(input);
 }
 
-/** Sources accepted by personal playback but not by persistence/download contracts. */
+/** Sources excluded from the legacy TrackRef contract; native actions use bounded recordings. */
 export function isPlaybackOnlyTrack(input: TrackRefInput): boolean {
     return (
         !hasLocalTrackBacking(input) &&
@@ -589,6 +597,15 @@ export function toAddToPlaylistRef(input: TrackRefInput): AddToPlaylistRef {
     if (isRetiredRemoteOnlyTrack(input)) {
         throw new Error("Retired TIDAL tracks cannot be added to playlists");
     }
+    if (!hasLocalTrackBacking(input) && hasNativeMusicSourceIdentity(input)) {
+        const native = readMusicSourcePlaybackTrack(input);
+        if (!native?.musicSourceRecording) {
+            throw new Error(
+                "Invalid native recording for playlist persistence",
+            );
+        }
+        return { musicSourceRecording: native.musicSourceRecording };
+    }
     const trackRef = toTrackRef(input);
 
     if ("trackId" in trackRef) {
@@ -626,4 +643,27 @@ export function toAddToPlaylistRef(input: TrackRefInput): AddToPlaylistRef {
         youtubeVideoId: trackRef.youtubeVideoId,
         ...metadata,
     };
+}
+
+/** Validate playlist writes independently of device-download and legacy TrackRef capabilities. */
+export function canAddTrackToPlaylist(input: TrackRefInput): boolean {
+    try {
+        toAddToPlaylistRef(input);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** Shared queues retain their own provider contract and never carry native private snapshots. */
+export function toSharedQueueTrackRef(
+    input: TrackRefInput,
+): Exclude<AddToPlaylistRef, { musicSourceRecording: MusicSourceCandidate }> {
+    const reference = toAddToPlaylistRef(input);
+    if ("musicSourceRecording" in reference) {
+        throw new Error(
+            "Native provider tracks are unsupported in shared queues",
+        );
+    }
+    return reference;
 }

@@ -9,7 +9,8 @@ import type {
 import {
     isTrackActionable,
     resolvePreferenceTrackId,
-    toAddToPlaylistRef,
+    toSharedQueueTrackRef,
+    isPlaybackOnlyTrack,
 } from "@/lib/trackRef";
 import {
     normalizeCanonicalMediaProviderIdentity,
@@ -106,7 +107,7 @@ export function extractQueueTrackInputs(
     for (const track of source) {
         if (isEpisodeQueueItem(track) || !isTrackActionable(track)) continue;
         try {
-            queueTracks.push(toAddToPlaylistRef(track));
+            queueTracks.push(toSharedQueueTrackRef(track));
         } catch {
             continue;
         }
@@ -114,6 +115,7 @@ export function extractQueueTrackInputs(
     const currentTrackId =
         currentTrack &&
         isTrackActionable(currentTrack) &&
+        !isPlaybackOnlyTrack(currentTrack) &&
         queueTracks.length > 0
             ? resolvePreferenceTrackId(currentTrack)
             : undefined;

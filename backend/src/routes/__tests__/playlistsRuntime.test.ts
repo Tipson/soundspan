@@ -71,6 +71,9 @@ const prisma = {
         findMany: jest.fn(),
         findUnique: jest.fn(),
     },
+    trackMusicSource: {
+        upsert: jest.fn(),
+    },
     playlistPendingTrack: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
@@ -352,6 +355,181 @@ describe("playlists route runtime", () => {
             soulseekPassword: null,
         });
         requestCoalescedLibraryScan.mockResolvedValue(undefined);
+    });
+
+    describe("native saved playlist items", () => {
+        const recording = {
+            provider: "vk",
+            id: "-123_456",
+            title: "Любимая песня",
+            artists: ["Исполнитель"],
+            duration: 180.5,
+            contentVersion: "unknown",
+            preview: false,
+        };
+        const nativeItem = {
+            id: "native-item",
+            playlistId: "pl-1",
+            sort: 6,
+            trackId: null,
+            trackTidalId: null,
+            trackYtMusicId: null,
+            track: null,
+            trackTidal: null,
+            trackYtMusic: null,
+            trackMusicSourceId: "native-namespace",
+            trackMusicSource: { provider: "vk", providerTrackId: "-123_456" },
+            musicSourceRecording: recording,
+        };
+
+        it("adds an exact native item after ownership lock without publishing client metadata", async () => {
+            prisma.trackMusicSource.upsert.mockImplementation(async () => {
+                expect(prisma.$queryRaw).toHaveBeenCalled();
+                return { id: "native-namespace" };
+            });
+            prisma.playlistItem.create.mockResolvedValue(nativeItem);
+            const res = createRes();
+            await addItem(
+                {
+                    user: { id: "u1" },
+                    params: { id: "pl-1" },
+                    body: {
+                        musicSourceRecording: {
+                            ...recording,
+                            streamUrl: "https://private.invalid/audio",
+                            token: "private-token",
+                        },
+                    },
+                },
+                res,
+            );
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toMatchObject({
+                id: "native-item",
+                track: { id: "vk:-123_456" },
+            });
+            expect(prisma.trackMusicSource.upsert).toHaveBeenCalledWith({
+                where: {
+                    provider_providerTrackId: {
+                        provider: "vk",
+                        providerTrackId: "-123_456",
+                    },
+                },
+                create: { provider: "vk", providerTrackId: "-123_456" },
+                update: { providerTrackId: "-123_456" },
+            });
+            expect(prisma.playlistItem.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        trackMusicSourceId: "native-namespace",
+                        musicSourceRecording: recording,
+                        sort: 6,
+                    }),
+                }),
+            );
+            expect(
+                JSON.stringify(prisma.playlistItem.create.mock.calls),
+            ).not.toMatch(/private\.invalid|private-token/);
+            expect(
+                trackMappingService.ensureRemoteTrack,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("does not overwrite an existing saved item's metadata on duplicate add", async () => {
+            prisma.trackMusicSource.upsert.mockResolvedValue({
+                id: "native-namespace",
+            });
+            prisma.playlistItem.findFirst.mockResolvedValue(nativeItem);
+            const res = createRes();
+            await addItem(
+                {
+                    user: { id: "u1" },
+                    params: { id: "pl-1" },
+                    body: {
+                        musicSourceRecording: {
+                            ...recording,
+                            title: "Другое имя",
+                        },
+                    },
+                },
+                res,
+            );
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toMatchObject({
+                duplicated: true,
+                item: { track: { title: recording.title } },
+            });
+            expect(prisma.playlistItem.create).not.toHaveBeenCalled();
+            expect(prisma.playlist.update).not.toHaveBeenCalled();
+        });
+
+        it.each(["trackId", "youtubeVideoId", "tidalTrackId"])(
+            "rejects a native request mixed with %s",
+            async (field) => {
+                const res = createRes();
+                await addItem(
+                    {
+                        user: { id: "u1" },
+                        params: { id: "pl-1" },
+                        body: {
+                            musicSourceRecording: recording,
+                            [field]: "legacy-id",
+                            title: "Title",
+                            artist: "Artist",
+                            album: "Album",
+                            duration: 180,
+                        },
+                    },
+                    res,
+                );
+                expect(res.statusCode).toBe(400);
+                expect(prisma.trackMusicSource.upsert).not.toHaveBeenCalled();
+                expect(prisma.$transaction).not.toHaveBeenCalled();
+            },
+        );
+
+        it("checks owner access before native namespace writes", async () => {
+            const res = createRes();
+            await addItem(
+                {
+                    user: { id: "another-user" },
+                    params: { id: "pl-1" },
+                    body: { musicSourceRecording: recording },
+                },
+                res,
+            );
+            expect(res.statusCode).toBe(403);
+            expect(prisma.trackMusicSource.upsert).not.toHaveBeenCalled();
+            expect(prisma.$transaction).not.toHaveBeenCalled();
+        });
+
+        it("returns an owner snapshot without legacy rematching or requiring a provider connection", async () => {
+            const current = await prisma.playlist.findUnique({});
+            prisma.playlist.findUnique.mockResolvedValue({
+                ...current,
+                _count: { items: 1, pendingTracks: 0 },
+                items: [nativeItem],
+            });
+            prisma.playlist.findUnique.mockClear();
+            const res = createRes();
+            await getPlaylist(
+                { user: { id: "u1" }, params: { id: "pl-1" }, query: {} },
+                res,
+            );
+            expect(res.statusCode).toBe(200);
+            expect(res.body.items).toEqual([
+                expect.objectContaining({
+                    id: "native-item",
+                    playback: { isPlayable: true, reason: null, message: null },
+                    track: expect.objectContaining({
+                        id: "vk:-123_456",
+                        musicSourceRecording: recording,
+                    }),
+                }),
+            ]);
+            expect(prisma.trackMapping.findMany).not.toHaveBeenCalled();
+            expect(prisma.userSettings.findUnique).not.toHaveBeenCalled();
+        });
     });
 
     it("requires admin authorization for pending-track retries", () => {

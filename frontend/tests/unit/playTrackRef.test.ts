@@ -14,7 +14,7 @@ for (const provider of ["vk", "yandex"] as const) {
         contentVersion: "explicit",
         preview: false,
     });
-    test(`${provider} play reference strips credentials and keeps the full exact recording without opening playlist writes`, () => {
+    test(`${provider} play and playlist references keep the full exact recording through their dedicated payload`, () => {
         assert.deepEqual(
             toPlayTrackRef({
                 ...track,
@@ -26,7 +26,9 @@ for (const provider of ["vk", "yandex"] as const) {
             }),
             { musicSourceRecording: track.musicSourceRecording },
         );
-        assert.throws(() => toAddToPlaylistRef(track));
+        assert.deepEqual(toAddToPlaylistRef(track), {
+            musicSourceRecording: track.musicSourceRecording,
+        });
     });
     test(`${provider} malformed or conflicting direct identity cannot log a play`, () => {
         for (const changed of [

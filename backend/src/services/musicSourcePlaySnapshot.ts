@@ -22,22 +22,18 @@ export const musicSourcePlayRecordingSchema = z
         ).test(recording.id),
     );
 
-/** Project only the owner's immutable snapshot, checking any surviving namespace reference. */
-export function normalizeMusicSourcePlaySnapshot(play: {
-    source: string;
-    musicSourceRecording?: unknown;
-    trackMusicSource?: { provider: string; providerTrackId: string } | null;
-}) {
-    const parsed = musicSourcePlayRecordingSchema.safeParse(
-        play.musicSourceRecording,
-    );
+/** Project bounded saved metadata, independently of shared verified catalog metadata. */
+export function normalizeMusicSourceRecordingSnapshot(
+    snapshot: unknown,
+    namespace?: { provider: string; providerTrackId: string } | null,
+) {
+    const parsed = musicSourcePlayRecordingSchema.safeParse(snapshot);
     if (!parsed.success) return null;
     const recording = parsed.data;
     if (
-        play.source !== (recording.provider === "vk" ? "VK" : "YANDEX") ||
-        (play.trackMusicSource &&
-            (play.trackMusicSource.provider !== recording.provider ||
-                play.trackMusicSource.providerTrackId !== recording.id))
+        namespace &&
+        (namespace.provider !== recording.provider ||
+            namespace.providerTrackId !== recording.id)
     )
         return null;
     return {
@@ -65,4 +61,22 @@ export function normalizeMusicSourcePlaySnapshot(play: {
         },
         musicSourceRecording: recording,
     };
+}
+
+/** Project only the owner's play snapshot and preserve its exact listen-source fence. */
+export function normalizeMusicSourcePlaySnapshot(play: {
+    source: string;
+    musicSourceRecording?: unknown;
+    trackMusicSource?: { provider: string; providerTrackId: string } | null;
+}) {
+    const normalized = normalizeMusicSourceRecordingSnapshot(
+        play.musicSourceRecording,
+        play.trackMusicSource,
+    );
+    if (
+        !normalized ||
+        play.source !== (normalized.source === "vk" ? "VK" : "YANDEX")
+    )
+        return null;
+    return normalized;
 }
