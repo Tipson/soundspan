@@ -45,10 +45,13 @@ class _OfflineMixWatchState extends State<OfflineMixWatch>
   }
 
   void _sync() {
-    _poll?.cancel();
-    _poll = null;
     if (_exposed && widget.controller.isCurrent) {
-      _poll = Timer.periodic(const Duration(seconds: 2), (_) => _load());
+      // Parent download polling may rebuild this widget every second. Keep the
+      // running deadline so those rebuilds cannot postpone this observer forever.
+      _poll ??= Timer.periodic(const Duration(seconds: 2), (_) => _load());
+    } else {
+      _poll?.cancel();
+      _poll = null;
     }
   }
 

@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Keep offline mix progress updating while the download list refreshes. Preserve the observer deadline across parent rebuilds and stop it when its surface or application is hidden.
 - Limit Android background download engines to two across the process, including foreground greedy scheduling. Waiting and cancelled work cannot consume another engine or leak a slot. Prepare Android release 0.1.16 (19).
 - Save a complete mix for offline listening from its action menu. Show finite download progress and the retained playable mix in Downloads, and provide an offline detail screen with exact file-generation playback, retry and individual pinning. Keep ordinary queues compatible and prepare Android release 0.1.15 (18); automatic daily rotation remains opt-in work outside this manual stage.
 - Preserve manual, liked and legacy download ownership when preparing an offline mix. Keep ordered duplicate occurrences and the previous complete snapshot until every replacement file is verified under the original account and generation. Treat an individual save of a ready mix file as a pin without starting another transfer; cancelling traffic consent leaves existing files unchanged.

@@ -147,6 +147,77 @@ void main() {
   );
 
   testWidgets(
+    'download list rebuilding every second cannot starve offline progress polling',
+    (tester) async {
+      await prepare(tester);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(tester.binding.lifecycleState, AppLifecycleState.resumed);
+      immediate = false;
+      await tester.runAsync(
+        () => offline.save(
+          mix([
+            DownloadHarness.track,
+            const Track(
+              ref: LibraryTrackRef('second'),
+              title: 'Другой',
+              artist: 'Автор',
+            ),
+          ]),
+        ),
+      );
+      late String completedKey;
+      late Map<String, Object?> readyRow;
+      await tester.runAsync(() async {
+        final first = (await h.repo.list(h.fence)).first;
+        completedKey = h.store.rows.keys.singleWhere(
+          (key) => key.endsWith('|${first.id}'),
+        );
+        final queuedRow = h.store.rows[completedKey]!;
+        await h.runner.run(first.id, h.fence, first.generation);
+        readyRow = h.store.rows[completedKey]!;
+        expect(readyRow['state'], 'ready');
+        h.store.rows[completedKey] = queuedRow;
+      });
+      final rebuild = ValueNotifier(0);
+      final visible = ValueNotifier(false);
+      addTearDown(rebuild.dispose);
+      addTearDown(visible.dispose);
+      await tester.pumpWidget(
+        app(
+          Scaffold(
+            body: ValueListenableBuilder<int>(
+              valueListenable: rebuild,
+              builder: (_, value, child) => OfflineMixCard(
+                controller: offline,
+                onOpen: () {},
+                visible: visible,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Загружено 0 из 2'), findsOneWidget);
+      visible.value = true;
+      // External worker commit: publish the real prepared row in the fixture
+      // without running socket/file IO across Flutter's fake-async boundary.
+      h.store.rows[completedKey] = readyRow;
+      expect(offline.busy, isFalse);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(seconds: 1));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+        rebuild.value++;
+        await tester.pump();
+      }
+      expect(find.text('Загружено 1 из 2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'offline detail plays the frozen generation, pins a row and returns with Back',
     (tester) async {
       await prepare(tester);
