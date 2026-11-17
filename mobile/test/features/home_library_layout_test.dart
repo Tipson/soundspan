@@ -296,7 +296,7 @@ void main() {
         await tester.ensureVisible(find.text('Микс rock'));
         await tester.pumpAndSettle();
         final horizontal = find
-            .ancestor(of: first, matching: find.byType(ListView))
+            .ancestor(of: first, matching: find.byType(SingleChildScrollView))
             .first;
         await tester.drag(horizontal, const Offset(-240, 0));
         await tester.pumpAndSettle();

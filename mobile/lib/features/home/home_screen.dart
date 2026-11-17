@@ -10,6 +10,7 @@ import '../../design_system/design_system.dart';
 import '../library/library_models.dart';
 import 'home_controller.dart';
 import 'home_models.dart';
+import 'mix_snapshot.dart';
 
 /// Editorial home. Route callbacks open screens without changing playback.
 class HomeScreen extends StatefulWidget {
@@ -348,6 +349,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       style: Theme.of(context).textTheme.labelSmall
                           ?.copyWith(color: MusicColors.textMuted),
                     ),
+                    MixSnapshotDetails(snapshot: mix.snapshot),
                   ],
                 ),
               ),
@@ -439,13 +441,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: () => _run(widget.onOpenDownloads!),
             ),
           ),
-        if (daily.isNotEmpty) ...[
+        if (daily.isNotEmpty || feed.mixStatuses.isNotEmpty)
           _heading(context, 'Миксы для вас'),
+        if (daily.isNotEmpty)
           _MixShelf(
             mixes: daily,
             onOpen: (mix) => _run(() => widget.onOpenMix(mix)),
           ),
-        ],
+        for (final status in feed.mixStatuses)
+          Padding(
+            key: ValueKey('empty-mix-${status.id}'),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  status.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  'Пока нет готовой подборки',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: MusicColors.textSecondary),
+                ),
+                MixSnapshotDetails(snapshot: status.snapshot),
+              ],
+            ),
+          ),
         for (final mix in feed.mixes.where(
           (m) =>
               m.kind == MusicMixKind.dailyBlend ||
@@ -591,27 +613,38 @@ class _MixShelf extends StatelessWidget {
   final void Function(MusicMix) onOpen;
   @override
   Widget build(BuildContext context) {
-    final width = MusicShelf.cardWidth(MediaQuery.sizeOf(context).width),
-        scale = MediaQuery.textScalerOf(context).scale(16) / 16;
-    return SizedBox(
-      height: width + 88 * scale + 4,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: mixes.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
-        itemBuilder: (_, i) => MusicCard(
-          width: width,
-          title: mixes[i].title,
-          subtitle: musicQuantity(
-            mixes[i].trackCount,
-            one: 'трек',
-            few: 'трека',
-            many: 'треков',
-          ),
-          artwork: mixes[i].cover,
-          onOpen: () => onOpen(mixes[i]),
-        ),
+    final width = MusicShelf.cardWidth(MediaQuery.sizeOf(context).width);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < mixes.length; i++) ...[
+            if (i != 0) const SizedBox(width: 12),
+            SizedBox(
+              width: width,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  MusicCard(
+                    width: width,
+                    title: mixes[i].title,
+                    subtitle: musicQuantity(
+                      mixes[i].trackCount,
+                      one: 'трек',
+                      few: 'трека',
+                      many: 'треков',
+                    ),
+                    artwork: mixes[i].cover,
+                    onOpen: () => onOpen(mixes[i]),
+                  ),
+                  MixSnapshotDetails(snapshot: mixes[i].snapshot),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

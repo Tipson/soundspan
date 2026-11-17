@@ -93,7 +93,7 @@ final class HomeRepository {
           await _get('/api/personalized/home', _query(request, 'home')),
         ),
       ),
-      part('daily', dailyMixes),
+      part('daily', _daily),
       part(
         'dailyBlend',
         () async => _personalMix(
@@ -128,7 +128,9 @@ final class HomeRepository {
     ]);
     await _guard();
     final main = results[0] as HomeFeed?;
-    final daily = results[1] as List<MusicMix>?;
+    final dailyResult =
+        results[1] as ({List<MusicMix> mixes, List<HomeMixStatus> statuses})?;
+    final daily = dailyResult?.mixes;
     var index = 4;
     final weeklyMix = request.discovery ? results[index++] as MusicMix? : null;
     final legacy = request.autoPlaylists
@@ -136,6 +138,7 @@ final class HomeRepository {
         : null;
     return HomeFeed(
       shelves: main?.shelves ?? [],
+      mixStatuses: dailyResult?.statuses ?? [],
       mixes: [
         ...?daily,
         if (daily?.isEmpty == true &&
@@ -155,20 +158,48 @@ final class HomeRepository {
     );
   }
 
-  Future<List<MusicMix>> dailyMixes() async {
+  Future<List<MusicMix>> dailyMixes() async => (await _daily()).mixes;
+
+  Future<({List<MusicMix> mixes, List<HomeMixStatus> statuses})>
+  _daily() async {
     final value = _map(await _get('/api/personalized/daily-mixes'));
-    return _list(value['mixes']).map((row) {
-      final dto = _map(row);
-      return MusicMix(
-        id: _string(dto['key']),
-        title: _string(dto['title']),
-        description: _text(dto['description']),
-        kind: MusicMixKind.daily,
-        tracks: _list(dto['tracks'])
-            .map((t) => const HomeTrackMapper().map(_map(t))),
-        generationId: _optional(dto['generationId']),
-      );
-    }).toList();
+    final mixes = _list(value['mixes'])
+        .map((row) {
+          final dto = _map(row);
+          return MusicMix(
+            id: _string(dto['key']),
+            title: _string(dto['title']),
+            description: _text(dto['description']),
+            kind: MusicMixKind.daily,
+            tracks: _list(dto['tracks'])
+                .map((t) => const HomeTrackMapper().map(_map(t))),
+            generationId: _optional(dto['generationId']),
+            snapshot: MixSnapshot.tryParse(dto['snapshot']),
+          );
+        })
+        .where((mix) => mix.tracks.isNotEmpty)
+        .toList();
+    final available = mixes.map((mix) => mix.id).toSet();
+    final seen = <String>{};
+    final statuses = <HomeMixStatus>[];
+    if (value['statuses'] case final List rows) {
+      for (final row in rows) {
+        if (row is! Map || row['key'] is! String || row['title'] is! String) {
+          continue;
+        }
+        final id = row['key'] as String, title = row['title'] as String;
+        final snapshot = MixSnapshot.tryParse(row['snapshot']);
+        if (id.isEmpty ||
+            title.isEmpty ||
+            available.contains(id) ||
+            snapshot == null ||
+            !seen.add(id)) {
+          continue;
+        }
+        statuses.add(HomeMixStatus(id: id, title: title, snapshot: snapshot));
+      }
+    }
+    return (mixes: mixes, statuses: statuses);
   }
 
   Future<MusicMix> weekly() async {
@@ -189,6 +220,7 @@ final class HomeRepository {
       generationId: _optional(dto['generationId']),
       weekStart: _optional(dto['weekStart']),
       weekEnd: _optional(dto['weekEnd']),
+      snapshot: MixSnapshot.tryParse(dto['snapshot']),
     );
   }
 

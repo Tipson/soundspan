@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soundspan/core/model/app_failure.dart';
 import 'package:soundspan/core/model/play_context.dart';
@@ -19,6 +20,49 @@ import 'package:soundspan/features/home/mix_screen.dart';
 import '../support/collection_fixtures.dart';
 import '../support/auth_fakes.dart' show ScriptedJsonClient;
 import '../support/wave_reporting_fixtures.dart' show waveDto, waveFeed;
+
+const snapshotDto = {
+  'generatedAt': '2026-11-17T01:30:00+03:00',
+  'compositionDay': '2026-11-16',
+  'refreshAfter': '2026-11-17T00:00:00Z',
+  'requestedCount': 40,
+  'snapshotCount': 3,
+  'availableCount': 1,
+  'reasons': ['provider_degraded', 'feedback_filtered', 'pool_limited'],
+};
+
+ApiResponse snapshotResponse(ApiRequest request) {
+  if (request.path == '/api/personalized/daily-mixes') {
+    return ApiResponse(200, {
+      'mixes': [
+        for (final key in ['rock', 'jazz', 'indie'])
+          {
+            'key': key,
+            'title': 'Микс $key',
+            'description': '',
+            'tracks': [waveDto(key)],
+            'snapshot': snapshotDto,
+          },
+        {
+          'key': 'empty',
+          'title': 'Микс без записей',
+          'description': '',
+          'tracks': [],
+          'snapshot': {...snapshotDto, 'availableCount': 0},
+        },
+      ],
+      'statuses': [
+        {'key': 'rock', 'title': 'Микс rock', 'snapshot': snapshotDto},
+        {
+          'key': 'empty',
+          'title': 'Микс без записей',
+          'snapshot': {...snapshotDto, 'availableCount': 0},
+        },
+      ],
+    });
+  }
+  return ApiResponse(200, waveFeed([]));
+}
 
 ApiResponse homeResponse(ApiRequest request) => switch (request.path) {
   '/api/personalized/home' => ApiResponse(
@@ -108,6 +152,229 @@ class _GrantedHomeAuthority extends CollectionAuthority {
 }
 
 void main() {
+  test('snapshot metadata preserves composition counts and missing dates stay unknown', () async {
+    final repository = repo(
+      CollectionAuthority(),
+      CollectionTransport((r, _) => snapshotResponse(r)),
+    );
+    final feed = await repository.load(request());
+    final mix = feed.mixes.first;
+    expect(mix.snapshot?.generatedAt, DateTime.utc(2026, 11, 16, 22, 30));
+    expect(mix.snapshot?.compositionDay, '2026-11-16');
+    expect(mix.snapshot?.refreshAfter, DateTime.utc(2026, 11, 17));
+    expect(mix.snapshot?.requestedCount, 40);
+    expect(mix.snapshot?.snapshotCount, 3);
+    expect(mix.snapshot?.availableCount, 1);
+    expect(mix.trackCount, 1);
+    expect(mix.tracks.map((track) => track.title), ['rock']);
+    expect(await repository.detail(mix), same(mix));
+    expect(feed.mixes.any((mix) => mix.id == 'empty'), isFalse);
+    expect(feed.mixStatuses.map((status) => status.id), ['empty']);
+    final undated = MixSnapshot.tryParse(
+      {...snapshotDto}..remove('generatedAt'),
+    );
+    expect(undated?.generatedAt, isNull);
+    expect(undated?.labels, [
+      'Часть музыки временно недоступна',
+      'С учётом ваших оценок',
+      'Пока меньше подходящих треков',
+    ]);
+  });
+
+  test('malformed or legacy snapshots never discard playable daily or weekly tracks', () async {
+    for (final snapshot in <Object?>[
+      null,
+      'broken',
+      {...snapshotDto, 'generatedAt': 'not-a-date'},
+      {...snapshotDto, 'generatedAt': '2026-11-17T01:30:00'},
+      {...snapshotDto, 'generatedAt': '2026-02-30T01:30:00Z'},
+      {...snapshotDto, 'generatedAt': '2026-11-17T01:30:00+99:99'},
+      {...snapshotDto, 'compositionDay': '2026-02-30'},
+      {...snapshotDto, 'availableCount': -1},
+      {
+        ...snapshotDto,
+        'reasons': [7],
+      },
+      {...snapshotDto}..remove('refreshAfter'),
+    ]) {
+      final repository = repo(
+        CollectionAuthority(),
+        CollectionTransport((r, _) {
+          if (r.path == '/api/personalized/daily-mixes') {
+            return ApiResponse(200, {
+              'mixes': [
+                {
+                  'key': 'legacy',
+                  'title': 'Без даты',
+                  'description': '',
+                  'tracks': [waveDto('kept'), waveDto('kept')],
+                  'snapshot': snapshot,
+                },
+              ],
+            });
+          }
+          return ApiResponse(200, {
+            'tracks': [],
+            'unavailable': [],
+            'totalCount': 0,
+            'snapshot': snapshot,
+          });
+        }),
+      );
+      final mix = (await repository.dailyMixes()).single;
+      expect(mix.snapshot, isNull, reason: '$snapshot');
+      expect(mix.tracks.map((track) => track.title), ['kept', 'kept']);
+      expect(mix.trackCount, 2);
+      expect((await repository.weekly()).snapshot, isNull);
+    }
+  });
+
+  for (final scale in [2.0, 3.0]) {
+    testWidgets(
+      'snapshot date and full reasons fit at 320dp scale $scale without autoplay',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 760);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        var failDaily = false, plays = 0;
+        MusicMix? opened;
+        final controller = HomeController(
+          repository: repo(
+            CollectionAuthority(),
+            CollectionTransport((r, _) {
+              if (failDaily && r.path == '/api/personalized/daily-mixes') {
+                return const ApiResponse(503, null);
+              }
+              return snapshotResponse(r);
+            }),
+          ),
+          request: request(),
+        );
+        await controller.refresh();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: SoundspanTheme.dark(),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+            home: HomeScreen(
+              controller: controller,
+              autoLoad: false,
+              onOpenWave: () {},
+              onOpenMix: (mix) => opened = mix,
+              onPlay: (_) => plays++,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Микс rock'),
+          400,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Составлен 16 ноября 2026'), findsWidgets);
+        final firstCard = find
+            .ancestor(
+              of: find.widgetWithText(MusicCard, 'Микс rock'),
+              matching: find.byType(Column),
+            )
+            .first;
+        for (final label in [
+          'Составлен 16 ноября 2026',
+          'Часть музыки временно недоступна',
+          'С учётом ваших оценок',
+          'Пока меньше подходящих треков',
+        ]) {
+          final reason = find.descendant(
+            of: firstCard,
+            matching: find.text(label),
+          );
+          final paragraph = tester.renderObject<RenderParagraph>(reason);
+          final full = TextPainter(
+            text: paragraph.text,
+            textDirection: paragraph.textDirection,
+            textScaler: paragraph.textScaler,
+          )..layout(maxWidth: paragraph.size.width);
+          expect(paragraph.size.height, greaterThanOrEqualTo(full.height));
+          full.dispose();
+          expect(
+            tester.getBottomLeft(reason).dy,
+            lessThanOrEqualTo(tester.getBottomLeft(firstCard).dy),
+          );
+        }
+        await tester.ensureVisible(find.text('Микс rock'));
+        await tester.pumpAndSettle();
+        final beforeSwipe = tester.getTopLeft(find.text('Микс indie')).dx;
+        await tester.drag(find.text('Микс rock'), const Offset(-350, 0));
+        await tester.pumpAndSettle();
+        expect(
+          tester.getTopLeft(find.text('Микс indie')).dx,
+          lessThan(beforeSwipe),
+        );
+        await tester.ensureVisible(find.text('Микс indie'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Микс indie'));
+        await tester.pump();
+        expect(opened?.id, 'indie');
+        await controller.refresh();
+        failDaily = true;
+        await controller.refresh();
+        await tester.pumpAndSettle();
+        final refreshed = controller.state.feed.mixes.first;
+        expect(
+          refreshed.snapshot?.generatedAt,
+          DateTime.utc(2026, 11, 16, 22, 30),
+        );
+        expect(refreshed.tracks.map((track) => track.title), ['rock']);
+        expect(controller.state.feed.mixStatuses.map((status) => status.id), [
+          'empty',
+        ]);
+        await tester.scrollUntilVisible(
+          find.byKey(const ValueKey('empty-mix-empty')),
+          400,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(
+          find.widgetWithText(MusicCard, 'Микс без записей'),
+          findsNothing,
+        );
+        expect(
+          find.ancestor(
+            of: find.text('Микс без записей'),
+            matching: find.byType(MusicTapTarget),
+          ),
+          findsNothing,
+        );
+        expect(find.text('Пока нет готовой подборки'), findsOneWidget);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: SoundspanTheme.dark(),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+            home: MixScreen(
+              controller: controller,
+              mix: opened!,
+              onPlay: (_) => plays++,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Составлен 16 ноября 2026'), findsOneWidget);
+        expect(find.text('С учётом ваших оценок'), findsOneWidget);
+        expect(plays, 0);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      },
+    );
+  }
+
   test('visibility revoked during authoritative guard neither reports nor consumes dedup', () async {
     final authority = _GrantedHomeAuthority();
     final transport = CollectionTransport(
@@ -560,6 +827,7 @@ void main() {
               'title': 'Родное',
               'description': '',
               'generationId': 'native-gen',
+              'snapshot': snapshotDto,
               'tracks': [native],
             },
           ],
@@ -569,6 +837,11 @@ void main() {
         return ApiResponse(200, {
           'kind': 'online-weekly',
           'generationId': 'week-gen',
+          'snapshot': {
+            ...snapshotDto,
+            'weekStart': '2026-11-16T00:00:00Z',
+            'weekEnd': '2026-11-23T00:00:00Z',
+          },
           'weekStart': '2026-10-12',
           'weekEnd': '2026-10-19',
           'tracks': [
@@ -593,6 +866,11 @@ void main() {
     expect((daily.tracks.single.ref as NativeTrackRef).recording.id, '42');
     expect(weekly.tracks.single.ref, daily.tracks.single.ref);
     expect(weekly.generationId, 'week-gen');
+    expect(daily.snapshot?.generatedAt, DateTime.utc(2026, 11, 16, 22, 30));
+    expect(weekly.snapshot?.generatedAt, daily.snapshot?.generatedAt);
+    expect(weekly.snapshot?.weekStart, DateTime.utc(2026, 11, 16));
+    expect(weekly.snapshot?.weekEnd, DateTime.utc(2026, 11, 23));
+    expect(weekly.trackCount, 1);
     final legacy = await repository.detail(
       (await repository.legacyMixes()).single,
     );

@@ -9,6 +9,7 @@ import '../../playback/playback_controller.dart';
 import '../library/library_models.dart';
 import 'home_controller.dart';
 import 'home_models.dart';
+import 'mix_snapshot.dart';
 
 /// Lazy ordered mix detail. Opening never submits a playback command.
 class MixScreen extends StatefulWidget {
@@ -342,6 +343,7 @@ class _MixOverview extends StatelessWidget {
               : trackCount,
           style: type.bodySmall?.copyWith(color: MusicColors.textMuted),
         ),
+        MixSnapshotDetails(snapshot: mix.snapshot),
       ],
     );
     final artwork = Artwork(uri: mix.cover, size: 104, radius: 16);

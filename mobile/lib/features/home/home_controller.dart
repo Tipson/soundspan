@@ -135,6 +135,7 @@ final class HomeController extends ChangeNotifier {
       _publish(
         feed: HomeFeed(
           shelves: mainFailed ? before.shelves : feed.shelves,
+          mixStatuses: preserve('daily') ? before.mixStatuses : feed.mixStatuses,
           mixes: [
             ...feed.mixes,
             ...before.mixes.where(
