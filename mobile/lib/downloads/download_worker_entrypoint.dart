@@ -23,6 +23,7 @@ import 'device_network_monitor.dart';
 import 'download_network_access.dart';
 import 'download_network_policy.dart';
 import 'download_repository.dart';
+import 'offline_mix_repository.dart';
 import 'download_verifier.dart';
 import 'download_worker_bridge.dart';
 import 'private_media_paths.dart';
@@ -162,6 +163,20 @@ Future<void> runDownloadWorker({
         request.originalFence,
         request.generation,
       );
+      if (result == DownloadRunResult.ready) {
+        // Manifest failure retains the last complete mix and the verified file.
+        // It must not turn a completed transfer into a new download attempt.
+        try {
+          final mixes = OfflineMixRepository(
+            downloads: repository,
+            fence: request.originalFence,
+          );
+          final pending = (await mixes.read()).pending;
+          if (pending != null) await mixes.commit(pending.generation);
+        } catch (_) {
+          // The retained pending intent is retried by the owner's UI/recovery.
+        }
+      }
       var delay = 0;
       if (result == DownloadRunResult.retry) {
         final latest = await repository.status(

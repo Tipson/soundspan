@@ -36,6 +36,7 @@ enum AppRouteKind {
   shares,
   inbox,
   downloads,
+  offlineMix,
 }
 
 /// Typed UI destination. IDs are exact domain identities, never display titles.
@@ -63,7 +64,7 @@ class AppCapabilities {
   final bool related;
   bool allowsTab(AppTab tab) => tab != AppTab.downloads || downloads;
   bool allows(AppDestination destination) => switch (destination.kind) {
-    AppRouteKind.downloads => downloads,
+    AppRouteKind.downloads || AppRouteKind.offlineMix => downloads,
     AppRouteKind.importPlaylist => importPlaylist,
     AppRouteKind.account ||
     AppRouteKind.settings ||

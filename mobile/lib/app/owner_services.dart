@@ -18,6 +18,7 @@ import '../downloads/download_models.dart';
 import '../downloads/device_network_monitor.dart';
 import '../downloads/download_network_access.dart';
 import '../downloads/download_repository.dart';
+import '../downloads/offline_mix_repository.dart';
 import '../downloads/download_verifier.dart';
 import '../downloads/download_worker_bridge.dart';
 import '../downloads/private_media_paths.dart';
@@ -72,6 +73,7 @@ final class NativeOwnerServices implements AppOwnerScope {
   late final FiniteQueueAdmissionCoordinator finiteAdmission;
   late final DartJsonHttpClient _json;
   late final DownloadRepository downloads;
+  late final OfflineMixRepository offlineMix;
   late final DeviceNetworkMonitor downloadNetwork;
   late final DownloadNetworkAccess downloadAccess;
   late final ArtworkRepository artwork;
@@ -200,6 +202,7 @@ final class NativeOwnerServices implements AppOwnerScope {
       verifier: DownloadVerifier(probe: probe),
       beforeRemove: _beforeRemove,
     );
+    offlineMix = OfflineMixRepository(downloads: downloads, fence: fence);
     downloadNetwork = DeviceNetworkMonitor();
     _retire.add(downloadNetwork.close);
     downloadAccess = DownloadNetworkAccess(
@@ -548,6 +551,23 @@ final class NativeOwnerServices implements AppOwnerScope {
   void downloadRulesChanged() => _warmup?.cancelNetwork();
 
   Future<PreparedAudio> _prepare(QueueEntry entry) async {
+    final offlineGeneration = entry.context.offlineMixGeneration;
+    if (offlineGeneration != null) {
+      await _guard();
+      final file = await offlineMix.openVerifiedFile(
+        offlineGeneration,
+        entry.track.ref,
+      );
+      await _guard();
+      if (file == null) {
+        throw const AppFailure(
+          code: 'offline_mix_file_unavailable',
+          message: 'Сохранённый файл недоступен. Откройте микс в загрузках и повторите сохранение.',
+        );
+      }
+      if (_blockedFiles.containsKey(file.uri)) throw _busyFile;
+      return PreparedAudio(uri: file.uri, revoke: () async {});
+    }
     final networkRevision = _networkRevision;
     await _guard();
     final selected = quality.value;

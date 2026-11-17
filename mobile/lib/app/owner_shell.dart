@@ -15,6 +15,7 @@ import '../features/artist/artist_repository.dart';
 import '../features/artist/artist_screen.dart';
 import '../features/downloads/downloads_screen.dart';
 import '../features/downloads/download_actions_sheet.dart';
+import '../features/downloads/offline_mix_screen.dart';
 import '../features/inbox/inbox_models.dart';
 import '../features/inbox/inbox_screen.dart';
 import '../features/shares/share_models.dart';
@@ -235,6 +236,19 @@ class _OwnerShellState extends State<OwnerShell>
     } else {
       await s.router.push<void>(destination);
     }
+  }
+
+  void _chooseOfflineMix() {
+    if (!mounted || !s.isCurrent) return;
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).popUntil((route) => route.isFirst);
+    s.router.selectTab(AppTab.home);
+    s.router
+        .navigatorKey(AppTab.home)
+        .currentState
+        ?.popUntil((route) => route.isFirst);
   }
 
   void _launch(AppDestination destination, {bool overlay = false}) =>
@@ -759,6 +773,21 @@ class _OwnerShellState extends State<OwnerShell>
                       message: 'Плейлист сохранён',
                     );
             },
+            offlineMix: s.offlineMix,
+            onOpenOfflineMix: () =>
+                _open(const AppDestination(AppRouteKind.offlineMix)),
+            onSaveOffline: (mix) async {
+              await s.guard();
+              await s.offlineMix.save(mix, quality: owner.quality.value);
+              await s.guard();
+              final failure = s.offlineMix.failure;
+              if (failure != null) throw failure;
+              s.notice.value =
+                  s.offlineMix.notice ??
+                  (s.offlineMix.state.pending == null
+                      ? 'Микс сохранён для офлайна.'
+                      : 'Сохраняем микс для офлайна.');
+            },
             onOpenPlaylists: () =>
                 _open(const AppDestination(AppRouteKind.playlist)),
             onTrackActions: (mix, index) async {
@@ -1027,7 +1056,27 @@ class _OwnerShellState extends State<OwnerShell>
                 _extrasActions(track, target, sourceContext: context),
           );
         case AppRouteKind.downloads:
-          return DownloadsScreen(controller: s.downloads, onPlay: _play);
+          return DownloadsScreen(
+            controller: s.downloads,
+            onPlay: _play,
+            offlineMix: s.offlineMix,
+            onOpenOfflineMix: () =>
+                _open(const AppDestination(AppRouteKind.offlineMix)),
+            onChooseMix: _chooseOfflineMix,
+          );
+        case AppRouteKind.offlineMix:
+          final generation = destination.id == null
+              ? null
+              : int.tryParse(destination.id!);
+          if (destination.id != null &&
+              (generation == null || generation < 1)) {
+            return _missing();
+          }
+          return OfflineMixScreen(
+            controller: s.offlineMix,
+            generation: generation,
+            onPlay: _play,
+          );
         case AppRouteKind.importPlaylist:
           return ImportScreen(
             controller: s.imports,
@@ -1164,6 +1213,10 @@ class _OwnerShellState extends State<OwnerShell>
                 controller: s.downloads,
                 onPlay: _play,
                 visible: _visibility.downloads,
+                offlineMix: s.offlineMix,
+                onOpenOfflineMix: () =>
+                    _open(const AppDestination(AppRouteKind.offlineMix)),
+                onChooseMix: _chooseOfflineMix,
               ),
             },
           ),

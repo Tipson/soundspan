@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
 import '../core/model/app_failure.dart';
 import '../core/model/track.dart';
+import '../core/model/track_ref.dart';
 import '../core/storage/music_codec.dart';
 import '../core/storage/owner_store.dart';
 import '../features/home/home_models.dart';
@@ -39,18 +41,26 @@ final class OfflineMixSnapshot {
     this.quality = 'original',
     this.ownerEpoch = 0,
     this.createdAt = 0,
+    this.sourceGenerationId,
   });
   final int generation;
   final String title, sourceIdentity, revision;
   final String quality;
   final int ownerEpoch, createdAt;
+  final String? sourceGenerationId;
   final List<OfflineMixItem> items;
   List<Track> get tracks => List.unmodifiable(items.map((item) => item.track));
 }
 
 final class OfflineMixState {
-  const OfflineMixState({this.active, this.previous, this.pending});
+  const OfflineMixState({
+    this.active,
+    this.previous,
+    this.pending,
+    this.pendingReadyCount = 0,
+  });
   final OfflineMixSnapshot? active, previous, pending;
+  final int pendingReadyCount;
 }
 
 /// Owner-scoped manifest switching; byte transfers stay in the existing worker.
@@ -75,8 +85,77 @@ final class OfflineMixRepository {
   Future<OfflineMixState> read() =>
       downloads.store.transaction(fence, (tx) async {
         final record = await _read(tx);
-        return record.state;
+        final state = record.state;
+        final pending = state.pending;
+        if (pending == null) return state;
+        final jobs = <String, DeviceDownload?>{};
+        var ready = 0;
+        for (final item in pending.items) {
+          if (!jobs.containsKey(item.downloadId)) {
+            jobs[item.downloadId] = await _job(tx, item, pending);
+          }
+          if (_readyBound(jobs[item.downloadId], item)) ready++;
+        }
+        return OfflineMixState(
+          active: state.active,
+          previous: state.previous,
+          pending: pending,
+          pendingReadyCount: ready,
+        );
       });
+
+  /// Resolve the frozen file of an active or retained previous snapshot.
+  /// Newer jobs for the same recording must not replace its exact checkpoint.
+  Future<File?> openVerifiedFile(int generation, TrackRef ref) async {
+    ({OfflineMixSnapshot snapshot, OfflineMixItem item})? pick(
+      OfflineMixState state,
+    ) {
+      for (final snapshot in [state.active, state.previous].nonNulls) {
+        if (snapshot.generation != generation) continue;
+        final items = snapshot.items.where((item) => item.track.ref == ref);
+        if (items.isNotEmpty) return (snapshot: snapshot, item: items.first);
+      }
+      return null;
+    }
+
+    final selected = await downloads.store.transaction(fence, (tx) async {
+      final record = await _read(tx);
+      final found = pick(record.state);
+      if (found == null) return null;
+      final job = await _job(tx, found.item, found.snapshot);
+      if (job == null || job.state == DownloadState.removing) return null;
+      return found;
+    });
+    if (selected == null) return null;
+    final cp = selected.item.verified!;
+    final file = await downloads.paths.file(
+      fence.owner,
+      selected.item.downloadId,
+      cp.generation,
+      cp.claim,
+      ready: true,
+    );
+    if (!await downloads.verifier.matches(
+      file,
+      bytes: cp.bytes,
+      digest: cp.sha256!,
+    )) {
+      return null;
+    }
+    final current = await downloads.store.transaction(fence, (tx) async {
+      final record = await _read(tx);
+      final found = pick(record.state);
+      if (found == null ||
+          found.item.downloadId != selected.item.downloadId ||
+          found.snapshot.revision != selected.snapshot.revision ||
+          !_sameFile(found.item.verified!, cp)) {
+        return false;
+      }
+      final job = await _job(tx, found.item, found.snapshot);
+      return job != null && job.state != DownloadState.removing;
+    });
+    return current ? file : null;
+  }
 
   /// Persist the exact intent before any file admission or scheduling. Replacing
   /// pending work never clears the last fully verified active generation.
@@ -92,6 +171,7 @@ final class OfflineMixRepository {
         source.title.isEmpty ||
         source.title.length > 200 ||
         source.identity.length > 512 ||
+        (source.generationId != null && source.generationId!.length > 1024) ||
         !_qualities.contains(quality)) {
       throw const AppFailure(
         code: 'offline_mix_source_incomplete',
@@ -123,6 +203,7 @@ final class OfflineMixRepository {
         quality: quality,
         ownerEpoch: fence.epoch,
         createdAt: DateTime.now().millisecondsSinceEpoch,
+        sourceGenerationId: source.generationId,
         items: List.unmodifiable([
           for (var i = 0; i < source.tracks.length; i++)
             OfflineMixItem(
@@ -337,6 +418,7 @@ final class OfflineMixRepository {
     quality: source.quality,
     ownerEpoch: source.ownerEpoch,
     createdAt: source.createdAt,
+    sourceGenerationId: source.sourceGenerationId,
     items: List.unmodifiable(items),
   );
 
@@ -410,6 +492,7 @@ final class OfflineMixRepository {
           'quality': snapshot.quality,
           'epoch': snapshot.ownerEpoch,
           'createdAt': snapshot.createdAt,
+          'sourceGenerationId': snapshot.sourceGenerationId,
           'items': [
             for (final item in snapshot.items)
               {
@@ -442,6 +525,9 @@ final class OfflineMixRepository {
         raw['sourceIdentity'] is! String ||
         (raw['sourceIdentity'] as String).isEmpty ||
         (raw['sourceIdentity'] as String).length > 512 ||
+        (raw['sourceGenerationId'] != null &&
+            (raw['sourceGenerationId'] is! String ||
+                (raw['sourceGenerationId'] as String).length > 1024)) ||
         raw['revision'] is! String ||
         !RegExp(r'^[a-f0-9]{64}$').hasMatch(raw['revision'] as String) ||
         !_qualities.contains(raw['quality']) ||
@@ -494,6 +580,7 @@ final class OfflineMixRepository {
       quality: raw['quality'] as String,
       ownerEpoch: epoch,
       createdAt: raw['createdAt'] as int,
+      sourceGenerationId: raw['sourceGenerationId'] as String?,
       items: List.unmodifiable(decoded),
     );
   }

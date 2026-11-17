@@ -5,6 +5,7 @@ import 'package:soundspan/core/model/app_failure.dart';
 import 'package:soundspan/core/model/track.dart';
 import 'package:soundspan/core/model/track_ref.dart';
 import 'package:soundspan/downloads/download_models.dart';
+import 'package:soundspan/downloads/download_repository.dart';
 import 'package:soundspan/downloads/offline_mix_repository.dart';
 import 'package:soundspan/features/home/home_models.dart';
 
@@ -103,6 +104,97 @@ void main() {
       expect(
         await h.repo.openReady(DownloadHarness.track.ref, 'original', h.fence),
         isNotNull,
+      );
+    },
+  );
+
+  test(
+    'frozen file survives a newer ready representation of the same track',
+    () async {
+      final saved = await install([DownloadHarness.track]);
+      final old = (await h.repo.list(h.fence)).single;
+      await h.store.transaction(
+        h.fence,
+        (tx) => tx.write(
+          DownloadRepository.namespace,
+          old.id,
+          old.patch({
+            'generation': old.generation + 1,
+            'state': 'failed',
+            'checkpoint': null,
+            'writer': null,
+            'leaseUntil': 0,
+          }).toJson(),
+        ),
+      );
+      final retry = await h.repo.resume(
+        old.id,
+        h.fence,
+        expectedGeneration: old.generation + 1,
+      );
+      h.handler = (request) => h.send(request, bytes: wavBytes(8000));
+      expect(
+        await h.runner.run(retry.id, h.fence, retry.generation),
+        DownloadRunResult.ready,
+      );
+      final frozen = await offline.openVerifiedFile(
+        saved.generation,
+        DownloadHarness.track.ref,
+      );
+      expect(frozen, isNotNull);
+      expect(await frozen!.length(), old.bytes);
+      final newest = await h.repo.openReady(
+        DownloadHarness.track.ref,
+        'original',
+        h.fence,
+      );
+      expect(await newest!.length(), isNot(old.bytes));
+      expect(frozen.uri, isNot(newest.uri));
+    },
+  );
+
+  test('cold reader opens exact snapshot locally and refuses explicitly removed media', () async {
+    final saved = await install([DownloadHarness.track]);
+    final cold = OfflineMixRepository(
+      downloads: h.newRepository(),
+      fence: h.fence,
+    );
+    final requests = h.requests.length;
+    expect(
+      await cold.openVerifiedFile(saved.generation, DownloadHarness.track.ref),
+      isNotNull,
+    );
+    expect(h.requests.length, requests);
+    final job = (await h.repo.list(h.fence)).single;
+    await h.repo.remove(job.id, h.fence, expectedGeneration: job.generation);
+    expect(
+      await cold.openVerifiedFile(saved.generation, DownloadHarness.track.ref),
+      isNull,
+    );
+  });
+
+  test(
+    'file lookup admits only active or previous generation and current owner',
+    () async {
+      final a = await install([DownloadHarness.track]);
+      final b = await install([DownloadHarness.track]);
+      final c = await install([DownloadHarness.track]);
+      expect(
+        await offline.openVerifiedFile(a.generation, DownloadHarness.track.ref),
+        isNull,
+      );
+      expect(
+        await offline.openVerifiedFile(b.generation, DownloadHarness.track.ref),
+        isNotNull,
+      );
+      expect(
+        await offline.openVerifiedFile(c.generation, DownloadHarness.track.ref),
+        isNotNull,
+      );
+      await h.authority.invalidate();
+      await expectLater(
+        offline.openVerifiedFile(c.generation, DownloadHarness.track.ref),
+        throwsA(isA<AppFailure>()),
       );
     },
   );

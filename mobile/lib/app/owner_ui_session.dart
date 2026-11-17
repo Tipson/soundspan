@@ -11,6 +11,7 @@ import '../downloads/reschedule_network_downloads.dart';
 import '../features/account/account_controller.dart';
 import '../features/account/account_repository.dart';
 import '../features/downloads/downloads_controller.dart';
+import '../features/downloads/offline_mix_controller.dart';
 import '../features/home/home_controller.dart';
 import '../features/home/home_models.dart';
 import '../features/home/home_repository.dart';
@@ -178,6 +179,14 @@ final class OwnerUiSession {
     lifetime.add(() async {
       await downloads.close();
       downloads.dispose();
+    });
+    offlineMix = OfflineMixController(
+      repository: owner.offlineMix,
+      downloads: downloads,
+    );
+    lifetime.add(() async {
+      await offlineMix.close();
+      offlineMix.dispose();
     });
     final settingsRepository = SettingsRepository(
       transport: owner.transport,
@@ -364,6 +373,7 @@ final class OwnerUiSession {
   late final WaveController wave;
   late final LikedDownloadAutomation automation;
   late final DownloadsController downloads;
+  late final OfflineMixController offlineMix;
   late final SettingsController settings;
   late final TasteController tastes;
   late final AccountController account;
@@ -442,6 +452,7 @@ final class OwnerUiSession {
   void start() {
     if (_started || !isCurrent) return;
     _started = true;
+    observe(offlineMix.refresh());
     observe(settings.load());
     observe(tastes.load());
     observe(owner.capabilities.refresh());

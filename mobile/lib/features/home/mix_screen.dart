@@ -10,6 +10,8 @@ import '../library/library_models.dart';
 import 'home_controller.dart';
 import 'home_models.dart';
 import 'mix_snapshot.dart';
+import '../downloads/offline_mix_card.dart';
+import '../downloads/offline_mix_controller.dart';
 
 /// Lazy ordered mix detail. Opening never submits a playback command.
 class MixScreen extends StatefulWidget {
@@ -23,6 +25,9 @@ class MixScreen extends StatefulWidget {
     this.onReconcileSave,
     this.onOpenPlaylists,
     this.onTrackActions,
+    this.onSaveOffline,
+    this.offlineMix,
+    this.onOpenOfflineMix,
   });
   final HomeController controller;
   final PlaybackController? playback;
@@ -32,6 +37,9 @@ class MixScreen extends StatefulWidget {
   final ReconcileMusicMix? onReconcileSave;
   final FutureOr<void> Function()? onOpenPlaylists;
   final FutureOr<void> Function(MusicMix mix, int index)? onTrackActions;
+  final Future<void> Function(MusicMix)? onSaveOffline;
+  final OfflineMixController? offlineMix;
+  final VoidCallback? onOpenOfflineMix;
   @override
   State<MixScreen> createState() => _MixScreenState();
 }
@@ -81,6 +89,23 @@ class _MixScreenState extends State<MixScreen> {
   Future<void> _actions(MusicMix mix) {
     final owner = widget.controller, revision = owner.selectionRevision;
     return MusicActionSheet.show(context, [
+      if (widget.onSaveOffline != null)
+        MusicAction(
+          id: 'offline',
+          label: 'Сохранить офлайн',
+          icon: Icons.download_outlined,
+          disabledReason:
+              !mix.loaded ||
+                  mix.tracks.length != mix.trackCount ||
+                  mix.playableCount != mix.trackCount ||
+                  mix.tracks.isEmpty
+              ? 'Сначала дождитесь полного доступного состава подборки.'
+              : widget.offlineMix?.busy == true
+              ? 'Подборка уже сохраняется.'
+              : null,
+          onSelected: () =>
+              _run(() => widget.onSaveOffline!(mix), owner, revision),
+        ),
       if (mix.kind == MusicMixKind.legacy || widget.onSaveMix != null)
         MusicAction(
           id: 'save',
@@ -158,6 +183,7 @@ class _MixScreenState extends State<MixScreen> {
         ),
       );
       final showActions =
+          widget.onSaveOffline != null ||
           mix.kind == MusicMixKind.legacy ||
           widget.onSaveMix != null ||
           widget.onOpenPlaylists != null;
@@ -250,6 +276,26 @@ class _MixScreenState extends State<MixScreen> {
                         ),
                       if (state.saveStatus == MixSaveStatus.saving)
                         const MusicStatus(message: 'Сохраняем подборку…'),
+                      if (widget.offlineMix != null &&
+                          widget.onOpenOfflineMix != null)
+                        ListenableBuilder(
+                          listenable: widget.offlineMix!,
+                          builder: (context, _) {
+                            final stored = widget.offlineMix!.state;
+                            if (stored.active?.sourceIdentity != mix.identity &&
+                                stored.pending?.sourceIdentity !=
+                                    mix.identity) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: OfflineMixCard(
+                                controller: widget.offlineMix!,
+                                onOpen: widget.onOpenOfflineMix!,
+                              ),
+                            );
+                          },
+                        ),
                       if (state.saveReceipt != null)
                         MusicStatus(
                           message: state.saveReceipt!.message,

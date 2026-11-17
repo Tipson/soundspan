@@ -191,6 +191,8 @@ abstract final class MusicCodec {
         'waveMode': context.waveMode?.name,
         'recommendationGenerationId': context.recommendationGenerationId,
         'recommendationSessionId': context.recommendationSessionId,
+        if (context.offlineMixGeneration != null)
+          'offlineMixGeneration': context.offlineMixGeneration,
       }, decodePlayContext);
 
   static PlayContext decodePlayContext(Object? value) {
@@ -199,7 +201,19 @@ abstract final class MusicCodec {
       'waveMode',
       'recommendationGenerationId',
       'recommendationSessionId',
+      'offlineMixGeneration',
     });
+    int? offlineGeneration;
+    final offline = row['offlineMixGeneration'];
+    if (offline != null) {
+      if (offline is! int ||
+          offline < 1 ||
+          offline > 9007199254740991 ||
+          row['surface'] != PlaySurface.library.name) {
+        _fail();
+      }
+      offlineGeneration = offline;
+    }
     return PlayContext(
       surface: _enum(row['surface'], PlaySurface.values),
       waveMode: row['waveMode'] == null
@@ -211,6 +225,7 @@ abstract final class MusicCodec {
       recommendationSessionId: _optionalIdentity(
         row['recommendationSessionId'],
       ),
+      offlineMixGeneration: offlineGeneration,
     );
   }
 

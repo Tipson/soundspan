@@ -9,6 +9,8 @@ import '../library/library_models.dart';
 import 'download_actions_sheet.dart';
 import 'downloads_controller.dart';
 import 'storage_status_card.dart';
+import 'offline_mix_controller.dart';
+import 'offline_mix_card.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({
@@ -17,11 +19,16 @@ class DownloadsScreen extends StatefulWidget {
     required this.onPlay,
     this.autoLoad = true,
     this.visible,
+    this.offlineMix,
+    this.onOpenOfflineMix,
+    this.onChooseMix,
   });
   final DownloadsController controller;
   final Future<void> Function(CollectionPlaybackRequest) onPlay;
   final bool autoLoad;
   final ValueListenable<bool>? visible;
+  final OfflineMixController? offlineMix;
+  final VoidCallback? onOpenOfflineMix, onChooseMix;
   @override
   State<DownloadsScreen> createState() => _DownloadsScreenState();
 }
@@ -133,6 +140,14 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (widget.offlineMix != null &&
+                              widget.onOpenOfflineMix != null)
+                            OfflineMixCard(
+                              controller: widget.offlineMix!,
+                              onOpen: widget.onOpenOfflineMix!,
+                              onChoose: widget.onChooseMix,
+                              visible: widget.visible,
+                            ),
                           StorageStatusCard(
                             jobs: controller.jobs,
                             ready: controller.storageReady(),
