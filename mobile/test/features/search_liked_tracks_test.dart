@@ -74,6 +74,16 @@ Map<String, Object?> rawPage(int offset, {bool hasMore = false}) => {
   'hasMore': hasMore,
 };
 
+Map<String, Object?> emptySavedSearch(ApiRequest request) => {
+  'items': [],
+  'total': 0,
+  'search': {
+    'query': request.query['q'],
+    'offset': int.parse(request.query['offset']!),
+    'limit': 50,
+  },
+};
+
 SearchRepository repository(
   CollectionTransport transport,
   CollectionAuthority authority,
@@ -99,6 +109,9 @@ void main() {
         final requested = <int>[];
         var unavailable = true;
         final transport = CollectionTransport((request, _) {
+          if (request.path == '/api/library/saved') {
+            return ApiResponse(200, emptySavedSearch(request));
+          }
           if (request.path != '/api/search') return const ApiResponse(200, {});
           final offset = int.parse(request.query['offset']!);
           if (request.query['type'] != kind.name &&
@@ -144,6 +157,7 @@ void main() {
   test('stored VK, Yandex and YouTube survive provider HTTP 503', () async {
     final transport = CollectionTransport(
       (request, _) => switch (request.path) {
+        '/api/library/saved' => ApiResponse(200, emptySavedSearch(request)),
         '/api/search' => ApiResponse(200, {
           'tracks': [localTrack()],
           'streamingTracks': [
@@ -330,6 +344,7 @@ void main() {
       var unavailable = true;
       final transport = CollectionTransport(
         (request, _) => ApiResponse(200, switch (request.path) {
+          '/api/library/saved' => emptySavedSearch(request),
           '/api/search' => {
             'tracks': [localTrack()],
             'streamingTracks': unavailable ? [] : [savedYoutube('recovered')],
@@ -445,11 +460,16 @@ void main() {
   for (final kind in [SearchKind.artists, SearchKind.albums]) {
     test('$kind cannot admit unexpected personal fields', () async {
       final transport = CollectionTransport(
-        (request, _) => ApiResponse(200, {
-          'streamingTracks': [savedYoutube('unexpected')],
-          'streamingPage': rawPage(0, hasMore: true),
-          'streamingUnavailable': true,
-        }),
+        (request, _) => ApiResponse(
+          200,
+          request.path == '/api/library/saved'
+              ? emptySavedSearch(request)
+              : {
+                  'streamingTracks': [savedYoutube('unexpected')],
+                  'streamingPage': rawPage(0, hasMore: true),
+                  'streamingUnavailable': true,
+                },
+        ),
       );
       final page = await repository(
         transport,

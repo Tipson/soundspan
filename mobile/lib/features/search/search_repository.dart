@@ -33,6 +33,7 @@ final class SearchRepository extends CatalogRepository {
     final offset = previous?.localOffset ?? 0,
         limit = (previous?.discoveryLimit ?? 0) + 50;
     final failures = <String, AppFailure>{...?previous?.failures};
+    final saved = _searchSaved(q, kind, previous: previous);
     Future<Map<String, Object?>?> part(
       String key,
       Future<Object?> Function() action,
@@ -86,7 +87,7 @@ final class SearchRepository extends CatalogRepository {
       };
     }
 
-    final results = await Future.wait([
+    final results = await Future.wait<Object?>([
       if (previous == null || previous.localHasMore)
         part('library', localPage)
       else
@@ -109,9 +110,13 @@ final class SearchRepository extends CatalogRepository {
         part('native', () => get('/api/music-sources/catalog', {'query': q}))
       else
         Future<Map<String, Object?>?>.value(null),
+      saved,
     ]);
     await guard();
-    final local = results[0], discovery = results[1], native = results[2];
+    final local = results[0] as Map<String, Object?>?,
+        discovery = results[1] as Map<String, Object?>?,
+        native = results[2] as Map<String, Object?>?,
+        savedPage = results[3] as SearchPage;
     final tracks = <Track>[...?previous?.tracks],
         artists = <CatalogEntity>[...?previous?.artists],
         albums = <CatalogEntity>[...?previous?.albums];
@@ -298,6 +303,225 @@ final class SearchRepository extends CatalogRepository {
       alias:
           textOrNull(objectOrEmpty(discovery?['aliasInfo'])['canonical']) ??
           previous?.alias,
+      // Saved failures belong to their independent streams, not public paging.
+      // Replace their old notices only after both private parts have settled.
+    ).withSaved(
+      artists: savedPage.savedArtists,
+      albums: savedPage.savedAlbums,
+      artistsOffset: savedPage.savedArtistsOffset,
+      albumsOffset: savedPage.savedAlbumsOffset,
+      artistsHasMore: savedPage.savedArtistsHasMore,
+      albumsHasMore: savedPage.savedAlbumsHasMore,
+      artistsRefreshPending: savedPage.savedArtistsRefreshPending,
+      albumsRefreshPending: savedPage.savedAlbumsRefreshPending,
+      artistsPartialSeen: savedPage.savedArtistsPartialSeen,
+      albumsPartialSeen: savedPage.savedAlbumsPartialSeen,
+      savedFailures: savedPage.failures,
+    );
+  }
+
+  /// Recheck collection membership without querying external catalogues again.
+  Future<SearchPage> refreshSaved(
+    String query,
+    SearchKind kind,
+    SearchPage previous,
+  ) => _searchSaved(query.trim(), kind, previous: previous, refresh: true);
+
+  /// Retry private failed windows without resetting their independent offsets.
+  Future<SearchPage> retrySaved(
+    String query,
+    SearchKind kind,
+    SearchPage previous,
+  ) => _searchSaved(query.trim(), kind, previous: previous, retry: true);
+
+  Future<SearchPage> _searchSaved(
+    String query,
+    SearchKind kind, {
+    SearchPage? previous,
+    bool refresh = false,
+    bool retry = false,
+  }) async {
+    final before = previous ?? SearchPage();
+    if (query.isEmpty || kind == SearchKind.tracks) return before;
+    final failures = <String, AppFailure>{
+      for (final entry in before.failures.entries)
+        if (entry.key.startsWith('saved:')) entry.key: entry.value,
+    };
+    Future<
+      ({
+        List<CatalogEntity> items,
+        int offset,
+        bool hasMore,
+        bool refreshPending,
+        bool partialSeen,
+      })
+    >
+    load(
+      CatalogEntityKind entityKind,
+      List<CatalogEntity> old,
+      int oldOffset,
+      bool hadMore,
+      bool refreshPending,
+      bool partialSeen,
+    ) async {
+      final key = 'saved:${entityKind.name}';
+      if ((kind == SearchKind.artists &&
+              entityKind != CatalogEntityKind.artist) ||
+          (kind == SearchKind.albums &&
+              entityKind != CatalogEntityKind.album) ||
+          (retry && !failures.containsKey(key)) ||
+          (!refresh &&
+              !retry &&
+              !refreshPending &&
+              previous != null &&
+              !hadMore)) {
+        return (
+          items: old,
+          offset: oldOffset,
+          hasMore: hadMore,
+          refreshPending: refreshPending,
+          partialSeen: partialSeen,
+        );
+      }
+      final replace = refresh || refreshPending;
+      final offset = replace ? 0 : oldOffset;
+      const partial = AppFailure(
+        code: 'partial_saved_search',
+        message: 'Часть поиска по сохранённым альбомам и исполнителям недоступна. Повторите попытку.',
+        retryable: true,
+      );
+      try {
+        final dto = collectionObject(
+          await get('/api/library/saved', {
+            'type': entityKind.name,
+            'q': query,
+            'limit': '50',
+            'offset': '$offset',
+          }),
+        );
+        final echo = collectionObject(dto['search']);
+        if (echo['query'] != query ||
+            echo['offset'] is! int ||
+            echo['offset'] != offset ||
+            echo['limit'] is! int ||
+            echo['limit'] != 50) {
+          throw partial;
+        }
+        final rows = collectionList(dto['items']),
+            total = collectionCount(dto['total']);
+        if (rows.isEmpty && offset < total) {
+          failures[key] = partial;
+          return (
+            items: old,
+            offset: oldOffset,
+            hasMore: false,
+            refreshPending: replace,
+            partialSeen: partialSeen,
+          );
+        }
+        if (total > 9007199254740991 ||
+            rows.length > 50 ||
+            (rows.isNotEmpty && offset + rows.length > total)) {
+          throw partial;
+        }
+        final items = <CatalogEntity>[if (!replace) ...old];
+        final identities = items.map((e) => e.ref.identityKey).toSet();
+        var malformed = false;
+        for (final raw in rows) {
+          try {
+            final row = collectionObject(raw);
+            if (row['entityType'] != entityKind.name) throw partial;
+            final source = switch (row['source']) {
+              'library' => CatalogSource.library,
+              'discovery' => CatalogSource.discovery,
+              'ytmusic' => CatalogSource.ytmusic,
+              _ => throw partial,
+            };
+            final id = collectionString(row['entityId']);
+            final title = collectionString(row['title']);
+            if (id.trim().isEmpty ||
+                title.trim().isEmpty ||
+                (row['subtitle'] != null && row['subtitle'] is! String) ||
+                (row['imageUrl'] != null && row['imageUrl'] is! String)) {
+              throw partial;
+            }
+            final entity = CatalogEntity(
+              CatalogEntityRef(
+                kind: entityKind,
+                source: source,
+                id: id,
+                name: title,
+                subtitle: row['subtitle'] as String?,
+                artwork: coverUri(row['imageUrl']),
+              ),
+            );
+            if (identities.add(entity.ref.identityKey)) items.add(entity);
+          } on AppFailure {
+            malformed = true;
+          }
+        }
+        final next = offset + rows.length;
+        final incomplete =
+            (!replace && partialSeen) ||
+            malformed ||
+            (next < total && next > 100000);
+        if (incomplete) {
+          failures[key] = partial;
+        } else {
+          failures.remove(key);
+        }
+        return (
+          items: items,
+          offset: next,
+          hasMore: next < total && next <= 100000,
+          refreshPending: false,
+          partialSeen: incomplete,
+        );
+      } catch (_) {
+        if (!isCurrent) rethrow;
+        failures[key] = partial;
+        // A failed request never consumes its raw window or drops good rows.
+        return (
+          items: old,
+          offset: oldOffset,
+          hasMore: hadMore,
+          refreshPending: replace,
+          partialSeen: partialSeen,
+        );
+      }
+    }
+
+    final pages = await Future.wait([
+      load(
+        CatalogEntityKind.artist,
+        before.savedArtists,
+        before.savedArtistsOffset,
+        before.savedArtistsHasMore,
+        before.savedArtistsRefreshPending,
+        before.savedArtistsPartialSeen,
+      ),
+      load(
+        CatalogEntityKind.album,
+        before.savedAlbums,
+        before.savedAlbumsOffset,
+        before.savedAlbumsHasMore,
+        before.savedAlbumsRefreshPending,
+        before.savedAlbumsPartialSeen,
+      ),
+    ]);
+    await guard();
+    return before.withSaved(
+      artists: pages[0].items,
+      albums: pages[1].items,
+      artistsOffset: pages[0].offset,
+      albumsOffset: pages[1].offset,
+      artistsHasMore: pages[0].hasMore,
+      albumsHasMore: pages[1].hasMore,
+      artistsRefreshPending: pages[0].refreshPending,
+      albumsRefreshPending: pages[1].refreshPending,
+      artistsPartialSeen: pages[0].partialSeen,
+      albumsPartialSeen: pages[1].partialSeen,
+      savedFailures: failures,
     );
   }
 

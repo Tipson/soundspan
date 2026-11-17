@@ -97,7 +97,15 @@ class _SearchScreenState extends State<SearchScreen> {
             showCatalogHint: true,
             onTap: open == null
                 ? null
-                : () => _run(owner, revision, () => open(e.ref)),
+                : () => _run(owner, revision, () async {
+                    await open(e.ref);
+                    if (mounted &&
+                        identical(owner, widget.controller) &&
+                        owner.isCurrent &&
+                        owner.revision == revision) {
+                      await owner.refreshSaved();
+                    }
+                  }),
           ),
         ),
       ],
@@ -226,8 +234,11 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                       if (state.failure ?? _failure case final failure?)
                         CatalogNotice(failure.message),
-                      for (final failure in state.page.failures.values)
-                        CatalogNotice(failure.message),
+                      for (final message
+                          in state.page.failures.values
+                              .map((e) => e.message)
+                              .toSet())
+                        CatalogNotice(message),
                       if (state.page.hasUnresolvedTracks &&
                           !state.page.failures.containsKey('discovery'))
                         const CatalogNotice(
@@ -239,9 +250,22 @@ class _SearchScreenState extends State<SearchScreen> {
                         MusicButton(
                           label: 'Повторить поиск',
                           icon: Icons.refresh,
-                          onPressed: state.loading
+                          busy: state.refreshingSaved,
+                          onPressed: state.loading || state.refreshingSaved
                               ? null
-                              : () => owner.submit(state.query),
+                              : () =>
+                                    state.failure == null &&
+                                        !state.page.hasUnresolvedTracks &&
+                                        state.page.failures.keys.every(
+                                          (key) => key.startsWith('saved:'),
+                                        )
+                                    ? owner.retrySaved()
+                                    : owner.submit(state.query),
+                        ),
+                      if (state.refreshingSaved)
+                        const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Center(child: CircularProgressIndicator()),
                         ),
                       if (state.page.alias case final alias?)
                         CatalogNotice('Результаты для «$alias»'),
@@ -253,18 +277,33 @@ class _SearchScreenState extends State<SearchScreen> {
                           icon: Icons.search_rounded,
                         ),
                       if (!state.loading &&
+                          !state.refreshingSaved &&
                           state.query.isNotEmpty &&
                           state.failure == null &&
                           state.page.failures.isEmpty &&
                           state.page.tracks.isEmpty &&
                           state.page.artists.isEmpty &&
-                          state.page.albums.isEmpty)
+                          state.page.albums.isEmpty &&
+                          state.page.savedArtists.isEmpty &&
+                          state.page.savedAlbums.isEmpty)
                         const CatalogNotice(
                           'Ничего не найдено. Попробуйте другое название.',
                         ),
                     ],
                   ),
                 ),
+                if (state.page.savedArtists.isNotEmpty)
+                  _entities(
+                    'Сохранённые исполнители',
+                    state.page.savedArtists,
+                    widget.onOpenArtist,
+                  ),
+                if (state.page.savedAlbums.isNotEmpty)
+                  _entities(
+                    'Сохранённые альбомы',
+                    state.page.savedAlbums,
+                    widget.onOpenAlbum,
+                  ),
                 if (state.page.artists.isNotEmpty)
                   _entities(
                     'Исполнители',
@@ -324,7 +363,8 @@ class _SearchScreenState extends State<SearchScreen> {
                           child: MusicButton(
                             label: 'Показать ещё',
                             busy: state.loadingMore,
-                            onPressed: state.loadingMore
+                            onPressed:
+                                state.loadingMore || state.refreshingSaved
                                 ? null
                                 : owner.loadMore,
                           ),

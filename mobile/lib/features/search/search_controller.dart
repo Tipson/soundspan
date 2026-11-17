@@ -18,13 +18,14 @@ final class SearchState {
     SearchPage? page,
     this.loading = false,
     this.loadingMore = false,
+    this.refreshingSaved = false,
     this.failure,
     this.stale = false,
   }) : page = page ?? SearchPage();
   final String query;
   final SearchKind kind;
   final SearchPage page;
-  final bool loading, loadingMore, stale;
+  final bool loading, loadingMore, refreshingSaved, stale;
   final AppFailure? failure;
 }
 
@@ -110,6 +111,7 @@ final class SearchController extends ChangeNotifier {
     if (!isCurrent ||
         _state.loading ||
         _state.loadingMore ||
+        _state.refreshingSaved ||
         !_state.page.hasMore) {
       return;
     }
@@ -127,6 +129,53 @@ final class SearchController extends ChangeNotifier {
         before.kind,
         previous: before.page,
       );
+      if (isCurrent && revision == _revision) {
+        _state = SearchState(
+          query: before.query,
+          kind: before.kind,
+          page: page,
+        );
+        notifyListeners();
+      }
+    } catch (e) {
+      if (isCurrent && revision == _revision) {
+        _state = SearchState(
+          query: before.query,
+          kind: before.kind,
+          page: before.page,
+          failure: collectionFailure(e),
+        );
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Detail changes only invalidate saved membership, never the playing queue.
+  Future<void> refreshSaved() => _saved();
+
+  /// Retry the failed private page while keeping ordinary results intact.
+  Future<void> retrySaved() => _saved(retry: true);
+
+  Future<void> _saved({bool retry = false}) async {
+    if (!isCurrent ||
+        _state.loading ||
+        _state.refreshingSaved ||
+        _state.query.trim().isEmpty ||
+        _state.kind == SearchKind.tracks) {
+      return;
+    }
+    final before = _state, revision = ++_revision;
+    _state = SearchState(
+      query: before.query,
+      kind: before.kind,
+      page: before.page,
+      refreshingSaved: true,
+    );
+    notifyListeners();
+    try {
+      final page = await (retry
+          ? repository.retrySaved
+          : repository.refreshSaved)(before.query, before.kind, before.page);
       if (isCurrent && revision == _revision) {
         _state = SearchState(
           query: before.query,

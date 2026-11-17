@@ -49,6 +49,15 @@ Map<String, Object?> discoveryTrack(int i) => {
   'duration': 180,
 };
 ApiResponse emptyFor(ApiRequest r) => ApiResponse(200, switch (r.path) {
+  '/api/library/saved' => {
+    'items': [],
+    'total': 0,
+    'search': {
+      'query': r.query['q'],
+      'offset': int.parse(r.query['offset']!),
+      'limit': 50,
+    },
+  },
   '/api/search' => {'tracks': [], 'artists': [], 'albums': []},
   '/api/search/discover' => {'results': []},
   _ => {'tracks': [], 'unavailable': []},
@@ -1459,7 +1468,7 @@ void main() {
       off.dispose();
       final online = repository(t, a);
       await online.search('Тест', SearchKind.all);
-      expect(t.requests.length, 3);
+      expect(t.requests.length, 5);
       online.dispose();
       await a.updates.close();
     },

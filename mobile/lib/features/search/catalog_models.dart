@@ -52,26 +52,91 @@ final class SearchPage {
     Iterable<Track> tracks = const [],
     Iterable<CatalogEntity> artists = const [],
     Iterable<CatalogEntity> albums = const [],
+    Iterable<CatalogEntity> savedArtists = const [],
+    Iterable<CatalogEntity> savedAlbums = const [],
     Map<String, AppFailure> failures = const {},
     this.localHasMore = false,
     this.discoveryHasMore = false,
     this.localOffset = 0,
     this.discoveryLimit = 50,
+    this.savedArtistsOffset = 0,
+    this.savedAlbumsOffset = 0,
+    this.savedArtistsHasMore = false,
+    this.savedAlbumsHasMore = false,
+    this.savedArtistsRefreshPending = false,
+    this.savedAlbumsRefreshPending = false,
+    this.savedArtistsPartialSeen = false,
+    this.savedAlbumsPartialSeen = false,
     this.alias,
   }) : tracks = List.unmodifiable(tracks),
        artists = List.unmodifiable(artists),
        albums = List.unmodifiable(albums),
+       savedArtists = List.unmodifiable(savedArtists),
+       savedAlbums = List.unmodifiable(savedAlbums),
        failures = Map.unmodifiable(failures);
   final List<Track> tracks;
   final List<CatalogEntity> artists;
   final List<CatalogEntity> albums;
+  final List<CatalogEntity> savedArtists, savedAlbums;
   final Map<String, AppFailure> failures;
   final bool localHasMore, discoveryHasMore;
   final int localOffset, discoveryLimit;
+  final int savedArtistsOffset, savedAlbumsOffset;
+  final bool savedArtistsHasMore, savedAlbumsHasMore;
+
+  /// Failed replacement reads must retry from zero without appending stale rows.
+  final bool savedArtistsRefreshPending, savedAlbumsRefreshPending;
+
+  /// Omitted raw rows remain disclosed until a successful replacement read.
+  final bool savedArtistsPartialSeen, savedAlbumsPartialSeen;
   final String? alias;
-  bool get hasMore => localHasMore || discoveryHasMore;
+  bool get hasMore =>
+      localHasMore ||
+      discoveryHasMore ||
+      savedArtistsHasMore ||
+      savedAlbumsHasMore;
   bool get hasUnresolvedTracks =>
       tracks.any((t) => t.unavailableReason == 'missing_provider_track');
+
+  /// Replace private groups while retaining the ordinary search and queue order.
+  SearchPage withSaved({
+    required Iterable<CatalogEntity> artists,
+    required Iterable<CatalogEntity> albums,
+    required int artistsOffset,
+    required int albumsOffset,
+    required bool artistsHasMore,
+    required bool albumsHasMore,
+    required bool artistsRefreshPending,
+    required bool albumsRefreshPending,
+    required bool artistsPartialSeen,
+    required bool albumsPartialSeen,
+    required Map<String, AppFailure> savedFailures,
+  }) => SearchPage(
+    tracks: tracks,
+    artists: this.artists,
+    albums: this.albums,
+    localOffset: localOffset,
+    localHasMore: localHasMore,
+    discoveryLimit: discoveryLimit,
+    discoveryHasMore: discoveryHasMore,
+    alias: alias,
+    savedArtists: artists,
+    savedAlbums: albums,
+    savedArtistsOffset: artistsOffset,
+    savedAlbumsOffset: albumsOffset,
+    savedArtistsHasMore: artistsHasMore,
+    savedAlbumsHasMore: albumsHasMore,
+    savedArtistsRefreshPending: artistsRefreshPending,
+    savedAlbumsRefreshPending: albumsRefreshPending,
+    savedArtistsPartialSeen: artistsPartialSeen,
+    savedAlbumsPartialSeen: albumsPartialSeen,
+    failures: {
+      for (final entry in failures.entries)
+        if (!entry.key.startsWith('saved:')) entry.key: entry.value,
+      for (final entry in savedFailures.entries)
+        if (entry.key.startsWith('saved:')) entry.key: entry.value,
+    },
+  );
 }
 
 /// A detail's tracks have already passed its endpoint-specific adapter.
