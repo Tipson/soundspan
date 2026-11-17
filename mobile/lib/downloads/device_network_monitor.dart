@@ -10,10 +10,10 @@ import 'download_network_rules.dart';
 /// Snapshot replies cannot overwrite a newer route event or another refresh.
 final class DeviceNetworkMonitor extends ChangeNotifier {
   DeviceNetworkMonitor({
-    MethodChannel channel = const MethodChannel('soundspan/download_network'),
+    MethodChannel? channel,
     Stream<Object?>? events,
     this.timeout = const Duration(seconds: 3),
-  }) : _channel = channel,
+  }) : _channel = channel ?? const MethodChannel('soundspan/download_network'),
        _events =
            events ??
            const EventChannel('soundspan/download_network_events')
@@ -119,14 +119,17 @@ final class DeviceNetworkMonitor extends ChangeNotifier {
 
   Future<void> close() {
     if (_closing != null) return _closing!;
+    dispose();
+    return _closing!;
+  }
+
+  @override
+  void dispose() {
+    if (_closed) return;
     _closed = true;
     _requestRevision++;
     _eventRevision++;
     _closing = _subscription?.cancel() ?? Future.value();
     super.dispose();
-    return _closing!;
   }
-
-  @override
-  void dispose() => unawaited(close());
 }
