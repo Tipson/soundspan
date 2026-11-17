@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Prepare Android release 0.1.12 (15) with the bounded playback retry and saved streaming album interfaces.
 - Preserve the typed cause of local audio gateway failures and retry one transient transport failure before playback headers or bytes are committed. Keep the exact recording, queue and session fences; retain one-shot downloads and server retry holdoffs.
 - Show the listener's saved streaming albums separately on artist pages. Preserve the original album and recording identities, retain the section after track pagination, and remove the retired account's data when the session changes.
 - Add exact VK and Yandex recordings to playlists through the existing picker and collection editor, preserving provider identifiers and portable metadata without promoting display fields into identity.
