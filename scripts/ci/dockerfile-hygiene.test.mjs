@@ -4,6 +4,7 @@ import childProcess from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import "./__tests__/aio-migration-startup.test.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
 const dockerfilePaths = [

@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Fail closed when a legacy AIO database cannot be baselined, and clear stale schema readiness before migration startup.
 - Show owner-liked YouTube albums separately in artist discographies without claiming local ownership. Match duplicate release groups by canonical identity while preserving distinct editions and exact playback links.
 - Resolve streaming album acquisition through confident MusicBrainz matches while preserving original playback identities. Reject ambiguous editions and incompatible musical versions, and avoid repeated acquisition when a visible library copy exists.
 - Save exact VK and Yandex recordings to playlists in Web and Android without promoting private metadata into the shared catalog. Preserve item order, duplicate handling and snapshots when a namespace reference is removed; keep retired and unsupported providers fenced. Isolate modal clicks from the underlying track row.

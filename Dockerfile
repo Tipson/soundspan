@@ -606,6 +606,7 @@ echo "Creating pgvector extension..."
 gosu postgres psql -d soundspan -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 # Run Prisma migrations
+rm -f /data/.schema_ready
 cd /app/backend
 export DATABASE_URL
 echo "Running Prisma migrations..."
@@ -636,7 +637,10 @@ elif [ "$USER_TABLE_EXIST" = "t" ]; then
     echo "Existing database detected without migration history."
     echo "Creating baseline from current schema..."
     # Mark the init migration as already applied (baseline)
-    ./node_modules/.bin/prisma migrate resolve --applied 20241130000000_init 2>&1 || true
+    if ! ./node_modules/.bin/prisma migrate resolve --applied 20251130000000_init 2>&1; then
+        echo "FATAL: Database baseline failed! Check logs above."
+        exit 1
+    fi
     # Now run any subsequent migrations
     if ! ./node_modules/.bin/prisma migrate deploy 2>&1; then
         echo "FATAL: Migration after baseline failed!"
