@@ -28,6 +28,7 @@ import ru.agentik007.soundspan.NativeEnginePlugins
 import java.util.concurrent.TimeUnit
 
 class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
+    companion object { private val executionPool = DownloadExecutionPool() }
     private var engine: FlutterEngine? = null
     private var channel: MethodChannel? = null
     private val done = CompletableDeferred<DownloadWorkOutcome>()
@@ -48,7 +49,7 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
                 throw cancelled
             } catch (_: Exception) { Result.retry() }
         }
-        return try {
+        return executionPool.run { try {
             // Foreground admission is subject to Android quotas/start limits.
             setForeground(foreground())
             withContext(Dispatchers.Main) { start(identity) }
@@ -94,7 +95,7 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
                 engine = null
                 channel = null
             }
-        }
+        } }
     }
     private fun updatedRequest(work: DownloadWorkRequest, backoffMillis: Long) =
         OneTimeWorkRequestBuilder<SoundspanDownloadWorker>()
