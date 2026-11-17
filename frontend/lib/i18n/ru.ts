@@ -141,6 +141,7 @@ export const ru = {
         refreshing: "Обновляем персональные подборки",
         refresh: "Обновить персональные подборки",
         discoverWeekly: "Открытия недели",
+        discoverWeeklyDescription: "Новая музыка для вас",
         refreshedForYou: "обновлено для вас",
         quickPicks: "Быстрый выбор",
         freshFinds: "Новые находки",

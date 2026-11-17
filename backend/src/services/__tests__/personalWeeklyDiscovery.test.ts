@@ -51,6 +51,7 @@ function fixture() {
                     weekStart: week,
                     tracks,
                     cleared: false,
+                    generatedAt: now.toISOString(),
                 };
                 rows.set(key, saved);
                 return saved;
@@ -91,6 +92,155 @@ function fixture() {
 }
 
 describe("online weekly discoveries", () => {
+    it("does not label a healthy native feedback exclusion as provider downtime", async () => {
+        const f = fixture();
+        const original = await f.service.getCurrent("alice");
+        const current = await new PersonalWeeklyDiscoveryService({
+            ...f.dependencies,
+            filterNativeCandidates: async (_owner, tracks) => tracks.slice(1),
+        }).getCurrent("alice");
+        expect(current.tracks.map((track) => track.id)).toEqual(
+            original.tracks.slice(1).map((track) => track.id),
+        );
+        expect(current.snapshot).toMatchObject({
+            generatedAt: original.snapshot!.generatedAt,
+            snapshotCount: 40,
+            availableCount: 39,
+            reasons: ["feedback_filtered"],
+        });
+        expect(f.dependencies.getCandidates).toHaveBeenCalledTimes(1);
+    });
+    it("keeps explicit native admission outage separate from feedback", async () => {
+        const f = fixture();
+        const original = await f.service.getCurrent("alice");
+        const current = await new PersonalWeeklyDiscoveryService({
+            ...f.dependencies,
+            filterNativeCandidates: async (_owner, tracks) => ({
+                tracks: tracks.slice(1),
+                providerDegraded: true,
+            }),
+        }).getCurrent("alice");
+        expect(current.tracks.map((track) => track.id)).toEqual(
+            original.tracks.slice(1).map((track) => track.id),
+        );
+        expect(current.snapshot).toMatchObject({
+            generatedAt: original.snapshot!.generatedAt,
+            snapshotCount: 40,
+            availableCount: 39,
+            reasons: ["provider_degraded"],
+        });
+        expect(f.dependencies.getCandidates).toHaveBeenCalledTimes(1);
+    });
+    it("keeps current cross-provider admission outage separate from a taste exclusion", async () => {
+        const f = fixture();
+        const original = await f.service.getCurrent("alice");
+        const current = await new PersonalWeeklyDiscoveryService({
+            ...f.dependencies,
+            filterCurrentFeedback: async (_owner, tracks) => ({
+                tracks: tracks.slice(1),
+                providerDegraded: true,
+            }),
+        }).getCurrent("alice");
+        expect(current.tracks.map((track) => track.id)).toEqual(
+            original.tracks.slice(1).map((track) => track.id),
+        );
+        expect(current.snapshot).toMatchObject({
+            snapshotCount: 40,
+            availableCount: 39,
+            reasons: ["provider_degraded"],
+        });
+    });
+    it("preserves snapshot time and original count after current feedback filters the saved week", async () => {
+        const f = fixture();
+        const first = await f.service.getCurrent("alice");
+        expect(first.snapshot).toEqual({
+            generatedAt: "2026-10-07T12:00:00.000Z",
+            weekStart: "2026-10-05T00:00:00.000Z",
+            weekEnd: "2026-10-11T23:59:59.999Z",
+            refreshAfter: "2026-10-12T00:00:00.000Z",
+            requestedCount: 40,
+            snapshotCount: 40,
+            availableCount: 40,
+            reasons: [],
+        });
+        f.setNow("2026-10-10T22:00:00Z");
+        f.dependencies.filterCurrentFeedback.mockImplementation(
+            async (_owner, tracks) => tracks.slice(1),
+        );
+        const filtered = await f.service.getCurrent("alice");
+        expect(filtered.snapshot).toEqual({
+            ...first.snapshot,
+            availableCount: 39,
+            reasons: ["feedback_filtered"],
+        });
+    });
+
+    it("does not invent a generation date for a legacy stored week", async () => {
+        const f = fixture();
+        f.dependencies.store.find.mockResolvedValue({
+            id: "legacy",
+            weekStart: "2026-10-05T00:00:00.000Z",
+            cleared: false,
+            tracks: Array.from({ length: 20 }, (_, i) => track(i)),
+        });
+        const result = await f.service.getCurrent("alice");
+        expect(result.snapshot).toMatchObject({
+            snapshotCount: 20,
+            availableCount: 20,
+            reasons: ["pool_limited"],
+        });
+        expect(result.snapshot!.generatedAt).toBeUndefined();
+    });
+
+    it("reports the snapshot that wins a concurrent save rather than the discarded degraded attempt", async () => {
+        const f = fixture();
+        const saved = {
+            id: "winner",
+            weekStart: "2026-10-05T00:00:00.000Z",
+            cleared: false,
+            generatedAt: "2026-10-06T07:00:00.000Z",
+            tracks: Array.from({ length: 40 }, (_, i) => track(i)),
+        };
+        const service = new PersonalWeeklyDiscoveryService({
+            ...f.dependencies,
+            getCandidates: async () => ({
+                tracks: saved.tracks,
+                providerDegraded: true,
+            }),
+            store: { ...f.dependencies.store, save: async () => saved },
+        });
+        const result = await service.getCurrent("alice");
+        expect(result.generationId).toBe("winner");
+        expect(result.snapshot).toMatchObject({
+            generatedAt: "2026-10-06T07:00:00.000Z",
+            reasons: [],
+        });
+    });
+
+    it("distinguishes a short observed pool from a failed generation without inventing a snapshot", async () => {
+        const f = fixture();
+        f.dependencies.getCandidates.mockResolvedValue(
+            Array.from({ length: 19 }, (_, i) => track(i)),
+        );
+        const limited = await f.service.getCurrent("alice");
+        expect(limited.snapshot).toMatchObject({
+            snapshotCount: 0,
+            availableCount: 0,
+            reasons: ["pool_limited"],
+        });
+        expect(limited.snapshot!.generatedAt).toBeUndefined();
+        f.dependencies.getCandidates.mockRejectedValue(
+            new Error("provider secret"),
+        );
+        const failed = await f.service.getCurrent("alice");
+        expect(failed.snapshot).toMatchObject({
+            snapshotCount: 0,
+            availableCount: 0,
+            reasons: ["provider_degraded"],
+        });
+        expect(failed.snapshot!.generatedAt).toBeUndefined();
+        expect(JSON.stringify(failed)).not.toContain("provider secret");
+    });
     it("re-admits saved tracks against current feedback without reranking, refill, or another generation", async () => {
         const f = fixture();
         const original = await f.service.getCurrent("alice");

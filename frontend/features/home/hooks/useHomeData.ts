@@ -9,7 +9,12 @@ import { useFeatures } from "@/lib/features-context";
 import { frontendLogger as log } from "@/lib/logger";
 import { useAudioState } from "@/lib/audio-state-context";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
-import type { Mix, PersonalDailyMix, PersonalizedHomeFeed } from "../types";
+import type {
+    Mix,
+    PersonalDailyMix,
+    PersonalDailyMixStatus,
+    PersonalizedHomeFeed,
+} from "../types";
 import { timeOfDayMixForHour, type TimeOfDayMix } from "../timeOfDayMix";
 import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
 import {
@@ -25,6 +30,7 @@ export interface UseHomeDataReturn {
     personalizedFeed: PersonalizedHomeFeed | null;
     dailyMixFeed: PersonalizedHomeFeed | null;
     dailyStyleMixes: PersonalDailyMix[] | null;
+    dailyMixStatuses?: PersonalDailyMixStatus[];
     timeOfDayFeed: PersonalizedHomeFeed | null;
     timeOfDayMix: TimeOfDayMix | null;
     isLoading: boolean;
@@ -86,10 +92,14 @@ export function useHomeData(): UseHomeDataReturn {
     const dailyStyleMixQuery = useQuery({
         queryKey: queryKeys.personalDailyMixes(mixClock?.utcDay),
         queryFn: ({ signal }) =>
-            api.request<{ mixes: PersonalDailyMix[] }>(
-                "/personalized/daily-mixes",
-                { method: "GET", signal, timeoutMs: 60_000 },
-            ),
+            api.request<{
+                mixes: PersonalDailyMix[];
+                statuses?: PersonalDailyMixStatus[];
+            }>("/personalized/daily-mixes", {
+                method: "GET",
+                signal,
+                timeoutMs: 60_000,
+            }),
         enabled: isAuthenticated && mixClock !== null,
         staleTime: 60 * 60 * 1000,
         retry: 1,
@@ -141,6 +151,7 @@ export function useHomeData(): UseHomeDataReturn {
             weekStart: discoverData.weekStart,
             weekEnd: discoverData.weekEnd,
             totalCount: discoverData.totalCount,
+            snapshot: discoverData.snapshot,
             coverUrl: firstCover ? api.getCoverArtUrl(firstCover, 200) : null,
         };
     }, [discovery, discoverQuery.data]);
@@ -167,6 +178,7 @@ export function useHomeData(): UseHomeDataReturn {
         dailyStyleMixes: dailyStyleMixQuery.isPending
             ? null
             : (dailyStyleMixQuery.data?.mixes ?? []),
+        dailyMixStatuses: dailyStyleMixQuery.data?.statuses ?? [],
         timeOfDayFeed: timeOfDayQuery.data ?? null,
         timeOfDayMix,
         isLoading: !isAuthenticated || (!hasPrimaryData && allPrimaryLoading),

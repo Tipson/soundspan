@@ -113,7 +113,12 @@ const snapshotSchema = z
     })
     .strict();
 const ALGORITHM = "weekly-discovery-v1";
-const selection = { id: true, context: true } as const;
+const selection = {
+    id: true,
+    context: true,
+    createdAt: true,
+    degradedSources: true,
+} as const;
 
 /** Validated weekly snapshot owned by its generation row. */
 export interface StoredWeeklyDiscovery {
@@ -121,6 +126,10 @@ export interface StoredWeeklyDiscovery {
     weekStart: string;
     cleared: boolean;
     tracks: WeeklyDiscoveryTrack[];
+    /** Persisted generation time; absent only at legacy storage/test boundaries. */
+    generatedAt?: string;
+    /** The snapshot was created from an explicitly degraded candidate batch. */
+    providerDegraded?: boolean;
 }
 
 /** Store boundary; provider requests must finish before calling save. */
@@ -134,12 +143,18 @@ export interface WeeklyDiscoveryStorage {
         weekStart: string,
         tracks: WeeklyDiscoveryTrack[],
         latencyMs: number,
+        options?: { providerDegraded?: boolean },
     ): Promise<StoredWeeklyDiscovery>;
     clear(userId: string, weekStart: string): Promise<number>;
 }
 
 function decode(
-    row: { id: string; context: unknown },
+    row: {
+        id: string;
+        context: unknown;
+        createdAt?: Date;
+        degradedSources?: string[];
+    },
     weekStart: string,
 ): StoredWeeklyDiscovery {
     const value = snapshotSchema.parse(row.context).weeklyDiscovery;
@@ -151,7 +166,16 @@ function decode(
     ) {
         throw new Error("Invalid weekly discovery snapshot");
     }
-    return { id: row.id, ...value };
+    return {
+        id: row.id,
+        ...value,
+        ...(row.createdAt && Number.isFinite(row.createdAt.getTime())
+            ? { generatedAt: row.createdAt.toISOString() }
+            : {}),
+        ...(row.degradedSources?.includes("weekly-provider")
+            ? { providerDegraded: true }
+            : {}),
+    };
 }
 
 function scope(userId: string, weekStart: string) {
@@ -284,6 +308,7 @@ export class PrismaWeeklyDiscoveryStore implements WeeklyDiscoveryStorage {
         weekStart: string,
         tracks: WeeklyDiscoveryTrack[],
         latencyMs: number,
+        options?: { providerDegraded?: boolean },
     ): Promise<StoredWeeklyDiscovery> {
         if (tracks.length < 20 || tracks.length > 40)
             throw new RangeError("Weekly discovery needs 20 to 40 tracks");
@@ -298,7 +323,9 @@ export class PrismaWeeklyDiscoveryStore implements WeeklyDiscoveryStorage {
                 data: {
                     ...scope(userId, weekStart),
                     direction: "new",
-                    degradedSources: [],
+                    degradedSources: options?.providerDegraded
+                        ? ["weekly-provider"]
+                        : [],
                     latencyMs,
                     context: savedContext,
                     exposures: {

@@ -18,6 +18,7 @@ import { PersonalizedMixCard } from "@/features/home/components/PersonalizedMixC
 import type { Mix, PersonalizedHomeFeed } from "@/features/home/types";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
 import { pluralRu } from "@/lib/i18n/ru";
+import { MixSnapshotCaption } from "@/features/home/components/MixSnapshotCaption";
 
 interface MadeForYouSectionProps {
     discoverWeekly: DiscoverWeeklySummary | null;
@@ -132,6 +133,9 @@ export function MadeForYouSection({
                                 />
                             }
                             index={personalizedShelves.length}
+                        />
+                        <MixSnapshotCaption
+                            snapshot={playableDiscoverWeekly.snapshot}
                         />
                     </CarouselItem>
                 )}

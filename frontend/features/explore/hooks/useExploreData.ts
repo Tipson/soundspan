@@ -45,6 +45,7 @@ export interface DiscoverWeeklySummary {
     weekEnd: string;
     totalCount: number;
     coverUrl: string | null;
+    snapshot?: import("@/features/home/mixSnapshot").MixSnapshot;
 }
 
 /** Provider-backed Explore queries that currently have no usable result. */
@@ -291,6 +292,7 @@ export function useExploreData(options?: {
             weekStart: discoverData.weekStart,
             weekEnd: discoverData.weekEnd,
             totalCount: discoverData.totalCount,
+            snapshot: discoverData.snapshot,
             coverUrl: firstCover ? api.getCoverArtUrl(firstCover, 200) : null,
         };
     }, [discovery, discoverData]);

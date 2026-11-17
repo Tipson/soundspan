@@ -659,6 +659,8 @@ router.get(
  *               generationId:
  *                 type: string
  *                 description: Account-owned composition for playback attribution; absent when recording is unavailable.
+ *               snapshot:
+ *                 $ref: '#/components/schemas/PersonalMixSnapshot'
  *               key:
  *                 type: string
  *               title:
@@ -670,6 +672,64 @@ router.get(
  *                 maxItems: 40
  *                 items:
  *                   $ref: '#/components/schemas/PersonalizedTrack'
+ *         statuses:
+ *           type: array
+ *           maxItems: 6
+ *           description: Selected directions, including those without enough playable tracks. A status is not a playable mix.
+ *           items:
+ *             type: object
+ *             required: [key, title, snapshot]
+ *             properties:
+ *               key:
+ *                 type: string
+ *               title:
+ *                 type: string
+ *               snapshot:
+ *                 $ref: '#/components/schemas/PersonalMixSnapshot'
+ *     PersonalMixSnapshot:
+ *       type: object
+ *       description: Original composition metadata. Refetch and feedback filtering do not renew generatedAt; older clients may omit the whole object.
+ *       required: [refreshAfter, requestedCount, snapshotCount, availableCount, reasons]
+ *       properties:
+ *         generatedAt:
+ *           type: string
+ *           format: date-time
+ *           description: Actual original composition time; absent if no composition or no trustworthy legacy timestamp.
+ *         compositionDay:
+ *           type: string
+ *           format: date
+ *           description: Daily composition's UTC day.
+ *         weekStart:
+ *           type: string
+ *           description: Weekly composition's inclusive UTC boundary.
+ *         weekEnd:
+ *           type: string
+ *           format: date-time
+ *         refreshAfter:
+ *           type: string
+ *           format: date-time
+ *           description: Earliest refresh boundary, not a promise of a changed composition or track count.
+ *         requestedCount:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 40
+ *         snapshotCount:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 40
+ *           description: Original finite snapshot count before current feedback filtering.
+ *         availableCount:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 40
+ *           description: Current returned track count, without padding.
+ *         reasons:
+ *           type: array
+ *           maxItems: 3
+ *           uniqueItems: true
+ *           items:
+ *             type: string
+ *             enum: [provider_degraded, pool_limited, feedback_filtered]
  */
 
 /**

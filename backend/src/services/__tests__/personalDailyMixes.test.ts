@@ -97,6 +97,125 @@ function dependencies(
 }
 
 describe("PersonalDailyMixService", () => {
+    it("retains the real composition timestamp on cache hits and rolls at UTC midnight", async () => {
+        let now = new Date("2026-11-17T23:58:00Z");
+        const service = new PersonalDailyMixService(
+            dependencies({ loadFamiliar: async () => [], now: () => now }),
+        );
+        const first = await service.getMixes("alice");
+        expect(first.mixes[0].snapshot).toEqual({
+            generatedAt: "2026-11-17T23:58:00.000Z",
+            compositionDay: "2026-11-17",
+            refreshAfter: "2026-11-18T00:00:00.000Z",
+            requestedCount: 40,
+            snapshotCount: 40,
+            availableCount: 40,
+            reasons: [],
+        });
+        now = new Date("2026-11-17T23:59:00Z");
+        expect((await service.getMixes("alice")).mixes[0].snapshot).toEqual(
+            first.mixes[0].snapshot,
+        );
+        now = new Date("2026-11-18T00:01:00Z");
+        expect(
+            (await service.getMixes("alice")).mixes[0].snapshot,
+        ).toMatchObject({
+            generatedAt: "2026-11-18T00:01:00.000Z",
+            compositionDay: "2026-11-18",
+            refreshAfter: "2026-11-18T00:11:00.000Z",
+        });
+    });
+
+    it.each([19, 20, 39])(
+        "explains an eligible pool of %s without inventing a playable mix",
+        async (size) => {
+            const pool = Array.from({ length: size }, (_, index) =>
+                song(`short-${index}`, `Artist ${index}`),
+            );
+            const service = new PersonalDailyMixService(
+                dependencies({
+                    loadDirections: async () => [
+                        { key: "rock", label: "Рок", query: "rock music" },
+                    ],
+                    loadFamiliar: async () => [],
+                    searchSongs: async () => [pool[0]],
+                    getRadio: async () => pool,
+                }),
+            );
+            const result = await service.getMixes("alice");
+            expect(result.mixes).toHaveLength(size < 20 ? 0 : 1);
+            expect(result.statuses).toEqual([
+                {
+                    key: "rock",
+                    title: "Рок для вас",
+                    snapshot: expect.objectContaining({
+                        compositionDay: "2026-09-26",
+                        requestedCount: 40,
+                        snapshotCount: size < 20 ? 0 : size,
+                        availableCount: size < 20 ? 0 : size,
+                        reasons: ["pool_limited"],
+                        refreshAfter: "2026-09-26T08:10:00.000Z",
+                    }),
+                },
+            ]);
+            if (size < 20)
+                expect(
+                    result.statuses![0].snapshot.generatedAt,
+                ).toBeUndefined();
+            else
+                expect(result.mixes[0].snapshot).toEqual(
+                    result.statuses![0].snapshot,
+                );
+        },
+    );
+
+    it("reports an unavailable direction without claiming a newly generated snapshot or a limited catalog", async () => {
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                getRadio: async () => {
+                    throw new Error("provider secret");
+                },
+            }),
+        );
+        const result = await service.getMixes("alice");
+        expect(result.mixes).toEqual([]);
+        expect(result.statuses?.[0]?.snapshot).toMatchObject({
+            availableCount: 0,
+            snapshotCount: 0,
+            reasons: ["provider_degraded"],
+        });
+        expect(result.statuses![0].snapshot.generatedAt).toBeUndefined();
+        expect(JSON.stringify(result)).not.toContain("provider secret");
+    });
+
+    it("explains current feedback exclusion without mislabelling a healthy catalog as limited", async () => {
+        const pool = Array.from({ length: 20 }, (_, index) =>
+            song(`blocked-${index}`, `Artist ${index}`),
+        );
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                searchSongs: async () => [pool[0]],
+                getRadio: async () => pool,
+                loadDislikedIds: async () =>
+                    new Set(pool.map((entry) => entry.videoId)),
+            }),
+        );
+        const result = await service.getMixes("alice");
+        expect(result.mixes).toEqual([]);
+        expect(result.statuses?.[0]?.snapshot).toMatchObject({
+            snapshotCount: 0,
+            availableCount: 0,
+            reasons: ["feedback_filtered"],
+        });
+    });
     it.each(["all", "one-direction", "diagnostic-only"] as const)(
         "rebuilds after transient admission coverage recovers: %s",
         async (outage) => {
@@ -246,6 +365,17 @@ describe("PersonalDailyMixService", () => {
         expect(second.mixes[0].tracks.map((track) => track.id)).toEqual(
             original.filter((id) => !blocked.has(id)),
         );
+        expect(second.mixes[0].snapshot).toMatchObject({
+            generatedAt: "2026-09-26T08:00:00.000Z",
+            snapshotCount: 40,
+            availableCount: 39,
+            reasons: ["feedback_filtered"],
+        });
+        expect(
+            second.statuses!.find(
+                (status) => status.key === second.mixes[0].key,
+            )?.snapshot,
+        ).toEqual(second.mixes[0].snapshot);
         expect(recorded).toHaveBeenCalledTimes(recordsBefore);
         const bob = await service.getMixes("bob");
         observeDaily(

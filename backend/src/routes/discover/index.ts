@@ -96,6 +96,13 @@ router.get("/generate/status/:jobId", handleGenerateStatus);
  *     responses:
  *       200:
  *         description: Current local discovery playlist, or stable online weekly discoveries when local tracks are absent
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 snapshot:
+ *                   $ref: '#/components/schemas/PersonalMixSnapshot'
  *       401:
  *         description: Not authenticated
  */

@@ -11,6 +11,7 @@ import type { PersonalizedTrack } from "../types";
 import { getRecommendationSessionId } from "@/lib/recommendationSession";
 import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
 import { recommendationTrackKey } from "../recommendationIdentity";
+import { MixSnapshotCaption } from "./MixSnapshotCaption";
 
 interface PersonalizedMixCardProps {
     title: string;
@@ -19,6 +20,7 @@ interface PersonalizedMixCardProps {
     tone: "violet" | "blue" | "amber";
     index: number;
     generationId?: string;
+    snapshot?: unknown;
 }
 
 const toneClasses: Record<PersonalizedMixCardProps["tone"], string> = {
@@ -35,6 +37,7 @@ export function PersonalizedMixCard({
     tone,
     index,
     generationId,
+    snapshot,
 }: PersonalizedMixCardProps) {
     const { playTracks } = useAudioControls();
     const queue = useMemo(
@@ -134,6 +137,7 @@ export function PersonalizedMixCard({
                 {pluralRu(tracks.length, ["трек", "трека", "треков"])} ·{" "}
                 {description}
             </span>
+            <MixSnapshotCaption snapshot={snapshot} />
         </button>
     );
 }

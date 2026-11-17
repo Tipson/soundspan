@@ -23,13 +23,32 @@ import {
 } from "./recommendations/personalNativeCandidates";
 import { toNativeRecommendationCandidate } from "./recommendations/nativeCandidates";
 import { nativeArtistCreditKey } from "./recommendations/nativeSourceAdmission";
-import { filterCurrentDislikedCandidates } from "./recommendations/featureStore";
+import {
+    loadCurrentDislikeAdmission,
+    isCurrentDislikeAdmissionAllowed,
+    type CurrentDislikeAdmission,
+} from "./recommendations/featureStore";
 import { providerTrackIdentityToCandidate } from "./recommendations/canonicalIdentity";
+import type {
+    MixSnapshotMetadata,
+    MixSnapshotReason,
+} from "./recommendations/mixSnapshotMetadata";
 
 const log = logger.child("PersonalWeeklyDiscovery");
 const TARGET_TRACKS = 40;
 const MIN_TRACKS = 20;
 const GENERATION_TIMEOUT_MS = 12_000;
+
+/** Optional source health carried alongside finite candidates; old array-only providers remain supported. */
+export interface WeeklyDiscoveryCandidateBatch {
+    tracks: WeeklyDiscoveryTrack[];
+    providerDegraded?: boolean;
+}
+
+interface WeeklyGenerationResult {
+    saved: StoredWeeklyDiscovery | null;
+    providerDegraded: boolean;
+}
 
 /** Testable boundaries for weekly persistence, candidates and user feedback. */
 export interface PersonalWeeklyDiscoveryDependencies {
@@ -38,7 +57,7 @@ export interface PersonalWeeklyDiscoveryDependencies {
         userId: string,
         cursor: number,
         excludedVideoIds: string[],
-    ): Promise<WeeklyDiscoveryTrack[]>;
+    ): Promise<WeeklyDiscoveryTrack[] | WeeklyDiscoveryCandidateBatch>;
     loadNoveltyExclusions(
         userId: string,
         candidates: WeeklyDiscoveryTrack[],
@@ -50,12 +69,12 @@ export interface PersonalWeeklyDiscoveryDependencies {
     filterNativeCandidates?(
         userId: string,
         tracks: WeeklyDiscoveryTrack[],
-    ): Promise<WeeklyDiscoveryTrack[]>;
+    ): Promise<WeeklyDiscoveryTrack[] | WeeklyDiscoveryCandidateBatch>;
     /** Current exact/verified feedback for a saved finite list, preserving listening order. */
     filterCurrentFeedback?(
         userId: string,
         tracks: WeeklyDiscoveryTrack[],
-    ): Promise<WeeklyDiscoveryTrack[]>;
+    ): Promise<WeeklyDiscoveryTrack[] | WeeklyDiscoveryCandidateBatch>;
 }
 
 /** Current-week online playlist with owned generation attribution. */
@@ -71,6 +90,8 @@ export interface WeeklyDiscoveryPlaylist {
     totalCount: number;
     count: number;
     unavailableCount: number;
+    /** Original UTC-week snapshot time/count, separated from current feedback-filtered availability. */
+    snapshot?: MixSnapshotMetadata;
 }
 
 function weekStart(now: Date): string {
@@ -84,11 +105,21 @@ function artistKey(artist: string): string {
     return artist.trim().toLocaleLowerCase("en-US");
 }
 
+function admissionUnavailable(feedback: CurrentDislikeAdmission): boolean {
+    return (
+        feedback.unavailableCanonicalKeys.size > 0 ||
+        (feedback.unavailableCandidateReferences?.size ?? 0) > 0 ||
+        feedback.diagnostics.unavailableGroups > 0 ||
+        (feedback.diagnostics.aliasLookupFailures ?? 0) > 0 ||
+        (feedback.diagnostics.forwardUnavailableReferences ?? 0) > 0
+    );
+}
+
 /** Stable weekly discoveries: familiarity is checked on creation, feedback on every read. */
 export class PersonalWeeklyDiscoveryService {
     private readonly pending = new Map<
         string,
-        Promise<StoredWeeklyDiscovery | null>
+        Promise<WeeklyGenerationResult>
     >();
     constructor(
         private readonly dependencies: PersonalWeeklyDiscoveryDependencies,
@@ -97,7 +128,10 @@ export class PersonalWeeklyDiscoveryService {
     /** Read or create the account's week, without reranking a saved playlist. */
     async getCurrent(userId: string): Promise<WeeklyDiscoveryPlaylist> {
         if (!userId.trim()) throw new TypeError("A user id is required");
-        const week = weekStart(this.dependencies.now());
+        const policyTime = this.dependencies.now();
+        const week = weekStart(policyTime);
+        let providerDegraded = false;
+        let feedbackFiltered = false;
         // Read persisted state before joining only an unfinished generation.
         // Another API process can have cleared the week since our pending read.
         let saved = await this.dependencies.store.find(userId, week);
@@ -109,7 +143,9 @@ export class PersonalWeeklyDiscoveryService {
                 this.pending.set(key, pending);
             }
             try {
-                saved = await pending;
+                const generated = await pending;
+                saved = generated.saved;
+                providerDegraded = generated.providerDegraded;
             } finally {
                 if (this.pending.get(key) === pending) this.pending.delete(key);
             }
@@ -125,18 +161,33 @@ export class PersonalWeeklyDiscoveryService {
                 ),
                 this.dependencies.loadSuppressedArtistKeys(userId),
             ]);
-            const nativeAdmitted = this.dependencies.filterNativeCandidates
+            const nativeBatch = this.dependencies.filterNativeCandidates
                 ? await this.dependencies.filterNativeCandidates(
                       userId,
                       saved.tracks,
                   )
                 : saved.tracks;
-            const current = this.dependencies.filterCurrentFeedback
+            const nativeAdmitted = Array.isArray(nativeBatch)
+                ? nativeBatch
+                : nativeBatch.tracks;
+            const nativeDegraded =
+                !Array.isArray(nativeBatch) &&
+                Boolean(nativeBatch.providerDegraded);
+            providerDegraded ||=
+                Boolean(saved.providerDegraded) || nativeDegraded;
+            const feedbackBatch = this.dependencies.filterCurrentFeedback
                 ? await this.dependencies.filterCurrentFeedback(
                       userId,
                       nativeAdmitted,
                   )
                 : nativeAdmitted;
+            const current = Array.isArray(feedbackBatch)
+                ? feedbackBatch
+                : feedbackBatch.tracks;
+            const feedbackDegraded =
+                !Array.isArray(feedbackBatch) &&
+                Boolean(feedbackBatch.providerDegraded);
+            providerDegraded ||= feedbackDegraded;
             tracks = current
                 .filter(
                     (t) =>
@@ -145,7 +196,23 @@ export class PersonalWeeklyDiscoveryService {
                             !suppressed.has(artistKey(t.artist))),
                 )
                 .map((t) => ({ ...t, recommendationGenerationId: saved.id }));
+            feedbackFiltered =
+                (!nativeDegraded &&
+                    nativeAdmitted.length < saved.tracks.length) ||
+                (!feedbackDegraded && tracks.length < nativeAdmitted.length);
         }
+        const nextWeek = Date.parse(week) + 7 * 86_400_000;
+        const snapshotCount = saved?.tracks.length ?? 0;
+        const reasons: MixSnapshotReason[] = [];
+        if (providerDegraded && !saved?.cleared)
+            reasons.push("provider_degraded");
+        if (feedbackFiltered) reasons.push("feedback_filtered");
+        if (
+            !saved?.cleared &&
+            snapshotCount < TARGET_TRACKS &&
+            !providerDegraded
+        )
+            reasons.push("pool_limited");
         return {
             kind: "online-weekly",
             weekStart: new Date(week),
@@ -156,6 +223,20 @@ export class PersonalWeeklyDiscoveryService {
             totalCount: tracks.length,
             count: tracks.length,
             unavailableCount: 0,
+            snapshot: {
+                ...(saved?.generatedAt
+                    ? { generatedAt: saved.generatedAt }
+                    : {}),
+                weekStart: week,
+                weekEnd: new Date(nextWeek - 1).toISOString(),
+                refreshAfter: new Date(
+                    saved ? nextWeek : policyTime.getTime(),
+                ).toISOString(),
+                requestedCount: TARGET_TRACKS,
+                snapshotCount,
+                availableCount: tracks.length,
+                reasons,
+            },
         };
     }
 
@@ -171,14 +252,18 @@ export class PersonalWeeklyDiscoveryService {
     private async loadOrGenerate(
         userId: string,
         week: string,
-    ): Promise<StoredWeeklyDiscovery | null> {
+    ): Promise<WeeklyGenerationResult> {
         const existing = await this.dependencies.store.find(userId, week);
-        if (existing) return existing;
+        if (existing)
+            return {
+                saved: existing,
+                providerDegraded: Boolean(existing.providerDegraded),
+            };
         let expired = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         const started = Date.now();
         try {
-            const tracks = await Promise.race([
+            const batch = await Promise.race([
                 this.collect(userId, () => expired),
                 new Promise<null>((resolve) => {
                     timer = setTimeout(() => {
@@ -187,20 +272,27 @@ export class PersonalWeeklyDiscoveryService {
                     }, GENERATION_TIMEOUT_MS);
                 }),
             ]);
-            if (!tracks || tracks.length < MIN_TRACKS) return null;
-            return await this.dependencies.store.save(
+            if (!batch) return { saved: null, providerDegraded: true };
+            if (batch.tracks.length < MIN_TRACKS)
+                return {
+                    saved: null,
+                    providerDegraded: Boolean(batch.providerDegraded),
+                };
+            const saved = await this.dependencies.store.save(
                 userId,
                 week,
-                tracks,
+                batch.tracks,
                 Date.now() - started,
+                { providerDegraded: batch.providerDegraded },
             );
+            return { saved, providerDegraded: Boolean(saved.providerDegraded) };
         } catch (error) {
             log.warn(
                 "Weekly candidate generation unavailable",
                 { userId },
                 error,
             );
-            return null;
+            return { saved: null, providerDegraded: true };
         } finally {
             expired = true;
             if (timer) clearTimeout(timer);
@@ -210,16 +302,20 @@ export class PersonalWeeklyDiscoveryService {
     private async collect(
         userId: string,
         expired: () => boolean,
-    ): Promise<WeeklyDiscoveryTrack[]> {
+    ): Promise<WeeklyDiscoveryCandidateBatch> {
         const pool: WeeklyDiscoveryTrack[] = [];
         let selected: WeeklyDiscoveryTrack[] = [];
+        let providerDegraded = false;
         for (let cursor = 0; cursor < 2 && !expired(); cursor++) {
-            const candidates = await this.dependencies.getCandidates(
+            const batch = await this.dependencies.getCandidates(
                 userId,
                 cursor,
                 pool.map(weeklyDiscoveryTrackIdentity),
             );
-            if (expired()) return [];
+            const candidates = Array.isArray(batch) ? batch : batch.tracks;
+            if (!Array.isArray(batch))
+                providerDegraded ||= Boolean(batch.providerDegraded);
+            if (expired()) return { tracks: [], providerDegraded };
             for (const candidate of candidates.slice(0, TARGET_TRACKS)) {
                 const parsed = weeklyDiscoveryTrackSchema.safeParse(candidate);
                 if (
@@ -238,11 +334,16 @@ export class PersonalWeeklyDiscoveryService {
                 ),
                 this.dependencies.loadSuppressedArtistKeys(userId),
             ]);
-            if (expired()) return [];
-            const current = this.dependencies.filterNativeCandidates
+            if (expired()) return { tracks: [], providerDegraded };
+            const nativeBatch = this.dependencies.filterNativeCandidates
                 ? await this.dependencies.filterNativeCandidates(userId, pool)
                 : pool;
-            if (expired()) return [];
+            const current = Array.isArray(nativeBatch)
+                ? nativeBatch
+                : nativeBatch.tracks;
+            if (!Array.isArray(nativeBatch))
+                providerDegraded ||= Boolean(nativeBatch.providerDegraded);
+            if (expired()) return { tracks: [], providerDegraded };
             const ids = new Set<string>();
             const recordings = new Set<string>();
             const artists = new Map<string, number>();
@@ -278,7 +379,7 @@ export class PersonalWeeklyDiscoveryService {
                 .slice(0, TARGET_TRACKS);
             if (selected.length === TARGET_TRACKS) break;
         }
-        return selected;
+        return { tracks: selected, providerDegraded };
     }
 }
 
@@ -406,7 +507,7 @@ export const personalWeeklyDiscoveryService =
                 TARGET_TRACKS,
                 { surface: "weekly", mode: "new", cursor, excludeVideoIds },
             );
-            return feed.shelves.discovery.flatMap((t) => {
+            const tracks = feed.shelves.discovery.flatMap((t) => {
                 const parsed = weeklyDiscoveryTrackSchema.safeParse({
                     id: t.id,
                     ...(t.source === "youtube"
@@ -431,6 +532,7 @@ export const personalWeeklyDiscoveryService =
                 });
                 return parsed.success ? [parsed.data] : [];
             });
+            return { tracks, providerDegraded: feed.degraded };
         },
         loadNoveltyExclusions: loadWeeklyNoveltyExclusions,
         loadDislikedIds: loadDislikedYouTubeIds,
@@ -460,10 +562,13 @@ export const personalWeeklyDiscoveryService =
                 candidates,
             );
             const allowed = new Set(batch.fresh.map((track) => track.id));
-            return tracks.filter(
-                (track) =>
-                    track.sourceType === "youtube" || allowed.has(track.id),
-            );
+            return {
+                tracks: tracks.filter(
+                    (track) =>
+                        track.sourceType === "youtube" || allowed.has(track.id),
+                ),
+                providerDegraded: batch.degradedSources.length > 0,
+            };
         },
         filterCurrentFeedback: async (userId, tracks) => {
             const candidates = tracks.flatMap((track) =>
@@ -485,12 +590,18 @@ export const personalWeeklyDiscoveryService =
                           "saved-weekly-feedback",
                       ) ?? []),
             );
-            const admitted = await filterCurrentDislikedCandidates(
+            const admission = await loadCurrentDislikeAdmission(
                 userId,
                 candidates,
             );
+            const admitted = candidates.filter((candidate) =>
+                isCurrentDislikeAdmissionAllowed(candidate, admission),
+            );
             const allowed = new Set(admitted.map((candidate) => candidate.id));
-            return tracks.filter((track) => allowed.has(track.id));
+            return {
+                tracks: tracks.filter((track) => allowed.has(track.id)),
+                providerDegraded: admissionUnavailable(admission),
+            };
         },
         now: () => new Date(),
     });

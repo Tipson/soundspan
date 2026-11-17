@@ -129,6 +129,68 @@ const timeFeed: PersonalizedHomeFeed = {
     },
 };
 
+test("empty directions explain scarcity without a playable placeholder", async () => {
+    const { HomeMadeForYou } =
+        await import("../../features/home/components/HomeMadeForYou");
+    const html = renderToStaticMarkup(
+        React.createElement(HomeMadeForYou, {
+            discoverWeekly: null,
+            mixes: [],
+            personalizedFeed: null,
+            dailyStyleMixes: [],
+            dailyMixStatuses: [
+                {
+                    key: "rock",
+                    title: "Ваш рок",
+                    snapshot: {
+                        requestedCount: 40,
+                        snapshotCount: 0,
+                        availableCount: 0,
+                        refreshAfter: "2026-11-17T08:10:00.000Z",
+                        reasons: ["pool_limited"],
+                    },
+                },
+            ],
+            isRefreshingMixes: false,
+            handleRefreshMixes: async () => {},
+        }),
+    );
+    assert.match(html, /Ваш рок/);
+    assert.match(html, /меньше подходящих треков/i);
+    assert.doesNotMatch(html, /data-home-made-card/);
+    assert.doesNotMatch(html, /<time/);
+});
+
+test("weekly card shows the saved snapshot date rather than claiming a refresh", async () => {
+    const { HomeMadeForYou } =
+        await import("../../features/home/components/HomeMadeForYou");
+    const html = renderToStaticMarkup(
+        React.createElement(HomeMadeForYou, {
+            discoverWeekly: {
+                weekStart: "2026-11-02",
+                weekEnd: "2026-11-09",
+                totalCount: 20,
+                coverUrl: null,
+                snapshot: {
+                    generatedAt: "2026-11-02T08:00:00.000Z",
+                    refreshAfter: "2026-11-09T00:00:00.000Z",
+                    requestedCount: 40,
+                    snapshotCount: 20,
+                    availableCount: 20,
+                    reasons: ["pool_limited"],
+                },
+            },
+            mixes: [],
+            personalizedFeed: null,
+            dailyStyleMixes: [],
+            isRefreshingMixes: false,
+            handleRefreshMixes: async () => {},
+        }),
+    );
+    assert.match(html, /dateTime="2026-11-02T08:00:00.000Z"/i);
+    assert.match(html, /меньше подходящих треков/i);
+});
+
 test("real style mixes replace reordered daily copies and keep the time mix", async () => {
     const { buildHomePersonalMixes, timeOfDayMixForHour } =
         await import("../../features/home/components/HomeMadeForYou");

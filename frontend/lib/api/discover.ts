@@ -37,6 +37,7 @@ export function WithDiscover<TBase extends ApiClientConstructor>(Base: TBase) {
             return this.request<{
                 kind?: "online-weekly";
                 generationId?: string;
+                snapshot?: import("@/features/home/mixSnapshot").MixSnapshot;
                 weekStart: string;
                 weekEnd: string;
                 tracks: ApiData[];

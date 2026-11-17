@@ -78,6 +78,85 @@ beforeEach(() => {
     document.body.innerHTML = "";
 });
 
+test("snapshot refresh keeps its real date and does not replace a playing mix", async () => {
+    const { PersonalizedMixCard } =
+        await import("../../features/home/components/PersonalizedMixCard");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const firstTracks = [
+        track("first", "First", null),
+        track("second", "Second", null),
+    ];
+    const snapshot = {
+        generatedAt: "2026-11-01T23:59:00.000Z",
+        refreshAfter: "2026-11-02T00:09:00.000Z",
+        requestedCount: 40,
+        snapshotCount: 2,
+        availableCount: 2,
+        reasons: ["pool_limited"],
+    };
+    const props = {
+        title: "Мой микс",
+        description: "Знакомое и новые находки",
+        tracks: firstTracks,
+        tone: "violet" as const,
+        index: 0,
+        generationId: "original-snapshot",
+        snapshot,
+    };
+    await act(async () =>
+        root.render(React.createElement(PersonalizedMixCard, props)),
+    );
+    assert.equal(
+        container.querySelector("time")?.getAttribute("datetime"),
+        snapshot.generatedAt,
+    );
+    assert.match(container.textContent ?? "", /2 трека/);
+    assert.match(container.textContent ?? "", /меньше подходящих треков/i);
+    assert.equal(calls.length, 0);
+    await act(async () => container.querySelector("button")?.click());
+    assert.equal(calls.length, 1);
+    await act(async () =>
+        root.render(
+            React.createElement(PersonalizedMixCard, {
+                ...props,
+                tracks: [track("new", "New", null)],
+                generationId: "new-snapshot",
+                snapshot: {
+                    ...snapshot,
+                    generatedAt: "2026-11-02T08:00:00.000Z",
+                    availableCount: 1,
+                },
+            }),
+        ),
+    );
+    assert.equal(calls.length, 1, "refetch must not dispatch playback");
+    assert.deepEqual(
+        (calls[0][0] as Array<{ id: string }>).map((t) => t.id),
+        ["yt:first", "yt:second"],
+    );
+    assert.equal(
+        container.querySelector("time")?.getAttribute("datetime"),
+        "2026-11-02T08:00:00.000Z",
+    );
+    await act(async () =>
+        root.render(
+            React.createElement(PersonalizedMixCard, {
+                ...props,
+                snapshot: { ...snapshot, generatedAt: "not-a-date" },
+            }),
+        ),
+    );
+    assert.equal(
+        container.querySelector("time"),
+        null,
+        "invalid metadata must not invent an update date",
+    );
+    assert.equal(calls.length, 1);
+    await act(async () => root.unmount());
+});
+
 test("personalized mix card renders real shelf artwork and starts its complete queue", async () => {
     const { PersonalizedMixCard } =
         await import("../../features/home/components/PersonalizedMixCard");

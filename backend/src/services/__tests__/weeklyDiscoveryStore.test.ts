@@ -4,6 +4,7 @@ import { PrismaWeeklyDiscoveryStore } from "../weeklyDiscoveryStore";
 function fixture(error?: unknown) {
     const row = {
         id: "generation",
+        createdAt: new Date("2026-10-07T12:34:56Z"),
         context: {
             weeklyDiscovery: {
                 version: 1,
@@ -35,6 +36,22 @@ function fixture(error?: unknown) {
         row,
     };
 }
+it("reads the persisted generation time instead of manufacturing a fresh timestamp", async () => {
+    const f = fixture();
+    const saved = await f.store.find("owner", "2026-10-05T00:00:00.000Z");
+    expect(saved?.generatedAt).toBe("2026-10-07T12:34:56.000Z");
+    expect(f.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+            select: expect.objectContaining({ createdAt: true }),
+        }),
+    );
+});
+it("keeps a legacy row without generation time readable without a fabricated date", async () => {
+    const f = fixture();
+    Reflect.deleteProperty(f.row, "createdAt");
+    const saved = await f.store.find("owner", "2026-10-05T00:00:00.000Z");
+    expect(saved?.generatedAt).toBeUndefined();
+});
 it("retries the actual Prisma PostgreSQL adapter's commit-time write conflict", async () => {
     const f = fixture({
         name: "DriverAdapterError",

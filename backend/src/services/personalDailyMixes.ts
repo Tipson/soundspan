@@ -37,6 +37,10 @@ import {
     buildRecommendationAlbumKey,
     normalizeRecommendationArtistKey,
 } from "./recommendations/identityKeys";
+import type {
+    MixSnapshotMetadata,
+    MixSnapshotReason,
+} from "./recommendations/mixSnapshotMetadata";
 
 const MAX_DIRECTIONS = 6;
 const DIRECTION_CONCURRENCY = 3;
@@ -114,6 +118,31 @@ export interface PersonalDailyMix {
     description: string;
     tracks: PersonalizedTrack[];
     generationId?: string;
+    /** Original composition time and current finite availability; optional for old clients. */
+    snapshot?: MixSnapshotMetadata;
+}
+
+/** A selected direction's availability, including directions without a playable composition. */
+export interface PersonalDailyMixStatus {
+    key: string;
+    title: string;
+    snapshot: MixSnapshotMetadata;
+}
+
+/** Account daily mixes plus bounded explanations for absent directions. */
+export interface PersonalDailyMixResult {
+    mixes: PersonalDailyMix[];
+    statuses?: PersonalDailyMixStatus[];
+}
+
+function admissionUnavailable(feedback: CurrentDislikeAdmission): boolean {
+    return (
+        feedback.unavailableCanonicalKeys.size > 0 ||
+        (feedback.unavailableCandidateReferences?.size ?? 0) > 0 ||
+        feedback.diagnostics.unavailableGroups > 0 ||
+        (feedback.diagnostics.aliasLookupFailures ?? 0) > 0 ||
+        (feedback.diagnostics.forwardUnavailableReferences ?? 0) > 0
+    );
 }
 
 function artistKey(value: string): string {
@@ -256,14 +285,14 @@ export class PersonalDailyMixService {
         string,
         {
             expiresAt: number;
-            result: Promise<{ mixes: PersonalDailyMix[] }>;
+            result: Promise<PersonalDailyMixResult>;
             partialCompleted?: boolean;
         }
     >();
 
     constructor(private readonly dependencies: PersonalDailyMixDependencies) {}
 
-    async getMixes(userId: string): Promise<{ mixes: PersonalDailyMix[] }> {
+    async getMixes(userId: string): Promise<PersonalDailyMixResult> {
         if (!userId.trim()) throw new TypeError("A user id is required");
         const startedAt = Date.now();
         const policyTime = this.dependencies.now();
@@ -381,7 +410,7 @@ export class PersonalDailyMixService {
                 return true;
             })
             .slice(0, MAX_DIRECTIONS);
-        if (chosen.length === 0) return { mixes: [] };
+        if (chosen.length === 0) return { mixes: [], statuses: [] };
         const key = JSON.stringify([
             userId,
             Math.floor(now / 86_400_000),
@@ -451,7 +480,7 @@ export class PersonalDailyMixService {
                     nativeProfile,
                 ),
             )
-            .then(async ({ mixes, cacheable }) => {
+            .then(async ({ mixes, statuses, cacheable }) => {
                 const served = await Promise.all(
                     mixes.map(async (mix) => {
                         try {
@@ -480,7 +509,7 @@ export class PersonalDailyMixService {
                     this.cache.get(key)!.partialCompleted = true;
                     this.cache.delete(key);
                 }
-                return { mixes: served };
+                return { mixes: served, statuses };
             });
         this.cache.set(key, { expiresAt: now + CACHE_TTL_MS, result });
         if (this.cache.size > MAX_CACHED_ACCOUNTS) {
@@ -494,8 +523,8 @@ export class PersonalDailyMixService {
 
     private async readmitCachedFeedback(
         userId: string,
-        composition: { mixes: PersonalDailyMix[] },
-    ): Promise<{ mixes: PersonalDailyMix[] }> {
+        composition: PersonalDailyMixResult,
+    ): Promise<PersonalDailyMixResult> {
         if (!this.dependencies.loadDislikeAdmission) return composition;
         const candidates = composition.mixes
             .flatMap((mix) => mix.tracks)
@@ -512,13 +541,39 @@ export class PersonalDailyMixService {
                 )
                 .map((candidate) => candidate.id),
         );
+        const unavailable = admissionUnavailable(feedback);
+        const current = composition.mixes.map((mix) => {
+            const tracks = mix.tracks.filter((track) => allowed.has(track.id));
+            const reasons = new Set<MixSnapshotReason>(mix.snapshot?.reasons);
+            if (unavailable) reasons.add("provider_degraded");
+            if (tracks.length < mix.tracks.length && !unavailable)
+                reasons.add("feedback_filtered");
+            return {
+                ...mix,
+                tracks,
+                ...(mix.snapshot
+                    ? {
+                          snapshot: {
+                              ...mix.snapshot,
+                              availableCount: tracks.length,
+                              reasons: [...reasons],
+                          },
+                      }
+                    : {}),
+            };
+        });
         return {
-            mixes: composition.mixes
-                .map((mix) => ({
-                    ...mix,
-                    tracks: mix.tracks.filter((track) => allowed.has(track.id)),
-                }))
-                .filter((mix) => mix.tracks.length > 0),
+            mixes: current.filter((mix) => mix.tracks.length > 0),
+            ...(composition.statuses
+                ? {
+                      statuses: composition.statuses.map((status) => ({
+                          ...status,
+                          snapshot:
+                              current.find((mix) => mix.key === status.key)
+                                  ?.snapshot ?? status.snapshot,
+                      })),
+                  }
+                : {}),
         };
     }
 
@@ -530,9 +585,20 @@ export class PersonalDailyMixService {
         suppressedArtists: ReadonlySet<string>,
         generatedAtMs: number,
         nativeProfile?: NativePersonalProfile,
-    ): Promise<{ mixes: PersonalDailyMix[]; cacheable: boolean }> {
+    ): Promise<PersonalDailyMixResult & { cacheable: boolean }> {
         const day = Math.floor(generatedAtMs / 86_400_000);
         let sourcesDegraded = (nativeProfile?.degradedSources.length ?? 0) > 0;
+        const degradedDirections = new Set(
+            sourcesDegraded
+                ? chosen
+                      .filter((direction) => direction.nativeSeedId)
+                      .map((direction) => direction.key)
+                : [],
+        );
+        const markDegraded = (key: string) => {
+            sourcesDegraded = true;
+            degradedDirections.add(key);
+        };
         const allowedArtist = (song: DailyMixCandidate) =>
             "source" in song || !suppressedArtists.has(artistKey(song.artist));
         const recentTimes = new Map<string, number>();
@@ -593,7 +659,7 @@ export class PersonalDailyMixService {
                                         [seed],
                                     );
                                 if (batch.degradedSources.length)
-                                    sourcesDegraded = true;
+                                    markDegraded(direction.key);
                                 const rows = [
                                     ...batch.fresh,
                                     ...batch.fallback,
@@ -626,7 +692,7 @@ export class PersonalDailyMixService {
                                     ? await this.dependencies
                                           .loadGenreArtists(direction.label)
                                           .catch((error: unknown) => {
-                                              sourcesDegraded = true;
+                                              markDegraded(direction.key);
                                               log.warn(
                                                   "Daily mix genre lookup unavailable",
                                                   {
@@ -719,7 +785,7 @@ export class PersonalDailyMixService {
                                             );
                                             if (hasFreshPool(songs)) break;
                                         } catch (error) {
-                                            sourcesDegraded = true;
+                                            markDegraded(direction.key);
                                             log.warn(
                                                 "Daily mix seed unavailable",
                                                 {
@@ -732,7 +798,7 @@ export class PersonalDailyMixService {
                                     }
                                     if (hasFreshPool(songs)) break;
                                 } catch (error) {
-                                    sourcesDegraded = true;
+                                    markDegraded(direction.key);
                                     log.warn(
                                         "Daily mix seed unavailable",
                                         {
@@ -745,7 +811,7 @@ export class PersonalDailyMixService {
                             }
                             return distinct(songs);
                         } catch (error) {
-                            sourcesDegraded = true;
+                            markDegraded(direction.key);
                             log.warn(
                                 "Daily mix direction unavailable",
                                 {
@@ -783,15 +849,11 @@ export class PersonalDailyMixService {
                       feedbackCandidates,
                   )
                 : null;
-        if (
-            feedback &&
-            (feedback.unavailableCanonicalKeys.size > 0 ||
-                (feedback.unavailableCandidateReferences?.size ?? 0) > 0 ||
-                feedback.diagnostics.unavailableGroups > 0 ||
-                (feedback.diagnostics.aliasLookupFailures ?? 0) > 0 ||
-                (feedback.diagnostics.forwardUnavailableReferences ?? 0) > 0)
-        )
+        if (feedback && admissionUnavailable(feedback)) {
             sourcesDegraded = true;
+            for (const direction of chosen)
+                degradedDirections.add(direction.key);
+        }
         const allowed = feedback
             ? new Set(
                   feedbackCandidates
@@ -811,14 +873,57 @@ export class PersonalDailyMixService {
             (recentTimes.get(songIdentity(left)) ?? 0) -
             (recentTimes.get(songIdentity(right)) ?? 0);
         const usedAcrossMixes = new Set<string>();
+        const statuses: PersonalDailyMixStatus[] = [];
         const mixes = chosen.flatMap((direction, index) => {
+            const title =
+                direction.kind === "artist"
+                    ? `${direction.label} и похожее`
+                    : `${direction.label} для вас`;
+            const feedbackReduced = pools[index].some(
+                (song) => disliked.has(songIdentity(song)) || !admitted(song),
+            );
+            const status = (count: number): MixSnapshotMetadata => {
+                const degraded = degradedDirections.has(direction.key);
+                const reasons: MixSnapshotReason[] = degraded
+                    ? ["provider_degraded"]
+                    : feedbackReduced
+                      ? ["feedback_filtered"]
+                      : count < MAX_TRACKS
+                        ? ["pool_limited"]
+                        : [];
+                const snapshot: MixSnapshotMetadata = {
+                    ...(count > 0
+                        ? { generatedAt: new Date(generatedAtMs).toISOString() }
+                        : {}),
+                    compositionDay: new Date(generatedAtMs)
+                        .toISOString()
+                        .slice(0, 10),
+                    refreshAfter: new Date(
+                        degraded
+                            ? generatedAtMs
+                            : Math.min(
+                                  generatedAtMs + CACHE_TTL_MS,
+                                  (day + 1) * 86_400_000,
+                              ),
+                    ).toISOString(),
+                    requestedCount: MAX_TRACKS,
+                    snapshotCount: count,
+                    availableCount: count,
+                    reasons,
+                };
+                statuses.push({ key: direction.key, title, snapshot });
+                return snapshot;
+            };
             const pool = pools[index].filter(
                 (song) =>
                     !disliked.has(songIdentity(song)) &&
                     admitted(song) &&
                     !usedAcrossMixes.has(compositionIdentity(song)),
             );
-            if (pool.length < MIN_TRACKS) return [];
+            if (pool.length < MIN_TRACKS) {
+                status(0);
+                return [];
+            }
             const artistNames = new Set(
                 pool.map((song) => artistKey(songArtist(song))),
             );
@@ -905,22 +1010,23 @@ export class PersonalDailyMixService {
                     ? selectedOlder
                     : spaceLaneArtists(selectedOlder)),
             ];
-            if (tracks.length < MIN_TRACKS) return [];
+            if (tracks.length < MIN_TRACKS) {
+                status(0);
+                return [];
+            }
             for (const track of tracks)
                 usedAcrossMixes.add(compositionIdentity(track));
             return [
                 {
                     key: direction.key,
-                    title:
-                        direction.kind === "artist"
-                            ? `${direction.label} и похожее`
-                            : `${direction.label} для вас`,
+                    title,
                     description: "Знакомое и новые находки",
                     tracks: tracks.map(toTrack),
+                    snapshot: status(tracks.length),
                 },
             ];
         });
-        return { mixes, cacheable: !sourcesDegraded };
+        return { mixes, statuses, cacheable: !sourcesDegraded };
     }
 }
 

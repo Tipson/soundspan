@@ -151,4 +151,12 @@ export interface PersonalDailyMix {
     description: string;
     tracks: PersonalizedTrack[];
     generationId?: string;
+    snapshot?: import("./mixSnapshot").MixSnapshot;
+}
+
+/** Status of a selected direction, including one without a playable mix. */
+export interface PersonalDailyMixStatus {
+    key: string;
+    title: string;
+    snapshot?: import("./mixSnapshot").MixSnapshot;
 }
