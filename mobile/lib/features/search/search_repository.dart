@@ -1,6 +1,8 @@
+import '../../core/mapping/liked_track_mapper.dart';
 import '../../core/mapping/search_track_mapper.dart';
 import '../../core/model/track.dart';
 import '../../core/model/app_failure.dart';
+import '../../core/model/track_ref.dart';
 import '../library/library_models.dart';
 import 'catalog_adapters.dart';
 import 'catalog_models.dart';
@@ -75,6 +77,12 @@ final class SearchRepository extends CatalogRepository {
       return {
         for (final (i, category) in kinds.indexed)
           category.name: pages[i]?[category.name] ?? [],
+        for (final key in [
+          'streamingTracks',
+          'streamingPage',
+          'streamingUnavailable',
+        ])
+          if (pages[0]?.containsKey(key) == true) key: pages[0]![key],
       };
     }
 
@@ -122,7 +130,62 @@ final class SearchRepository extends CatalogRepository {
       }
     }
 
+    var personalHasMore = false;
+    var personalPageFailed = false;
     if (local != null) {
+      if (kind == SearchKind.all || kind == SearchKind.tracks) {
+        var partial = local['streamingUnavailable'] == true;
+        final hasPersonalFields = [
+          'streamingTracks',
+          'streamingPage',
+          'streamingUnavailable',
+        ].any(local.containsKey);
+        if (hasPersonalFields) {
+          final rows = local['streamingTracks'], page = local['streamingPage'];
+          final validPage =
+              page is Map &&
+              page['offset'] is int &&
+              page['offset'] == offset &&
+              page['limit'] is int &&
+              page['limit'] == 50 &&
+              page['hasMore'] is bool;
+          personalPageFailed =
+              partial ||
+              rows is! List ||
+              !validPage ||
+              (local.containsKey('streamingUnavailable') &&
+                  local['streamingUnavailable'] is! bool);
+          partial = personalPageFailed;
+          if (rows is List && local['streamingUnavailable'] != true) {
+            for (final row in rows) {
+              try {
+                final track = const LikedTrackMapper().map(
+                  collectionObject(row),
+                );
+                if (track.ref is! NativeTrackRef &&
+                    track.ref is! YoutubeTrackRef) {
+                  partial = true;
+                  continue;
+                }
+                addTrack(track);
+              } on AppFailure {
+                partial = true;
+              }
+            }
+            // The server filters malformed metadata after its raw take. A
+            // short or empty visible page still consumes the requested 50 rows.
+            personalHasMore = validPage && page['hasMore'] == true;
+          }
+        }
+        if (partial) {
+          failures['liked'] = const AppFailure(
+            code: 'partial_search',
+            message: 'Часть поиска по любимым трекам недоступна.',
+          );
+        } else {
+          failures.remove('liked');
+        }
+      }
       for (final row in listOrEmpty(local['tracks'])) {
         addTrack(const LibrarySearchAdapter().map(collectionObject(row)));
       }
@@ -211,6 +274,7 @@ final class SearchRepository extends CatalogRepository {
       failures: failures,
       localOffset:
           local == null ||
+              personalPageFailed ||
               failures.keys.any((key) => key.startsWith('library:'))
           ? offset
           : offset + 50,
@@ -220,6 +284,7 @@ final class SearchRepository extends CatalogRepository {
               ? failures.containsKey('library') &&
                     (previous?.localHasMore ?? false)
               : localCount >= 50 ||
+                    personalHasMore ||
                     failures.keys.any((key) => key.startsWith('library:'))),
       discoveryLimit: discovery == null
           ? (previous?.discoveryLimit ?? 50)

@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Find saved YouTube, VK and Yandex tracks in global search using their exact playback identities while providers are unavailable. Retry an unavailable personal search page at the same offset, retaining local results without duplicate rows or hidden gaps.
 - Show original daily and weekly composition dates, explain partial mixes and keep empty directions informational. Preserve saved metadata during a failed refresh and retain natural shelf height with large text.
 
 - Preserve explicitly enabled server Wave sequences across pages without reshuffling or dropping admitted sources. Reset edited order without interrupting current playback, keep natural refill after feedback, pause and seek, and retain strict source-selection and owner fences.
