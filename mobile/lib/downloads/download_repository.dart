@@ -96,6 +96,7 @@ final class DownloadRepository {
     String quality,
     SessionFence fence, {
     bool manual = true,
+    DownloadOrigin? origin,
   }) async {
     if (!track.playable ||
         !const {
@@ -112,12 +113,20 @@ final class DownloadRepository {
       throw ArgumentError('Unsupported download');
     }
     final id = key(track.ref, quality, fence.owner);
+    final fileOrigin =
+        origin ?? (manual ? DownloadOrigin.manual : DownloadOrigin.liked);
     return _mutate(id, fence, (tx) async {
       final old = await _read(tx, id, fence);
       if (old != null &&
           old.state != DownloadState.removing &&
           (old.state == DownloadState.ready || old.originalFence == fence)) {
-        return _write(tx, old.patch({'manual': old.manual || manual}));
+        return _write(
+          tx,
+          old.patch({
+            'manual': old.manual || manual,
+            'origins': {...old.origins, fileOrigin.name}.toList()..sort(),
+          }),
+        );
       }
       return _write(
         tx,
@@ -129,6 +138,7 @@ final class DownloadRepository {
           generation: (old?.generation ?? 0) + 1,
           state: DownloadState.queued,
           manual: manual,
+          origins: Set.unmodifiable({...?old?.origins, fileOrigin.name}),
           files: old?.files ?? const [],
           retryNotBefore: old?.retryNotBefore ?? 0,
         ),

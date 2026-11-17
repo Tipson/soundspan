@@ -15,6 +15,10 @@ enum DownloadState {
 
 enum DownloadRunResult { ready, busy, cancelled, retry, failed }
 
+/// File retention ownership is independent of the job's manual-start admission.
+/// Unknown persisted origins are retained and protect the file from eviction.
+enum DownloadOrigin { manual, liked, offlineMix, legacy }
+
 /// Immutable durable job. A new user retry receives a new generation; a worker
 /// always keeps the fence and generation originally delivered to it.
 final class DeviceDownload {
@@ -26,6 +30,7 @@ final class DeviceDownload {
     required this.generation,
     required this.state,
     required this.manual,
+    this.origins = const {'legacy'},
     this.checkpoint,
     this.writer,
     this.leaseUntil = 0,
@@ -40,6 +45,12 @@ final class DeviceDownload {
   final int generation;
   final DownloadState state;
   final bool manual;
+
+  /// Additive ownership: an individual save or liked automation protects a file
+  /// originally created for a rotating mix. Legacy ownership is conservative.
+  final Set<String> origins;
+  bool get exclusivelyOfflineMixOwned =>
+      origins.length == 1 && origins.contains(DownloadOrigin.offlineMix.name);
   final DownloadCheckpoint? checkpoint;
   final String? writer;
   final int leaseUntil;
@@ -65,6 +76,7 @@ final class DeviceDownload {
     'generation': generation,
     'state': state.name,
     'manual': manual,
+    'origins': origins.toList()..sort(),
     'checkpoint': checkpoint?.toJson(),
     'writer': writer,
     'leaseUntil': leaseUntil,
@@ -74,6 +86,18 @@ final class DeviceDownload {
   };
   factory DeviceDownload.fromJson(Map<String, Object?> json) {
     if (json['version'] != 1) throw const FormatException('Download version');
+    final rawOrigins = json['origins'];
+    if (rawOrigins != null &&
+        (rawOrigins is! List ||
+            rawOrigins.isEmpty ||
+            rawOrigins.length > 16 ||
+            rawOrigins.any(
+              (origin) =>
+                  origin is! String ||
+                  !RegExp(r'^[A-Za-z][A-Za-z0-9]{0,31}$').hasMatch(origin),
+            ))) {
+      throw const FormatException('Download origins');
+    }
     final result = DeviceDownload(
       id: json['id'] as String,
       track: MusicCodec.decodeTrack(json['track']),
@@ -88,6 +112,9 @@ final class DeviceDownload {
       generation: json['generation'] as int,
       state: DownloadState.values.byName(json['state'] as String),
       manual: json['manual'] as bool,
+      origins: rawOrigins == null
+          ? const {'legacy'}
+          : Set.unmodifiable((rawOrigins as List).cast<String>()),
       checkpoint: json['checkpoint'] == null
           ? null
           : DownloadCheckpoint.fromJson(

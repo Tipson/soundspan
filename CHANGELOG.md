@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Preserve manual, liked and legacy download ownership when preparing an offline mix. Keep ordered duplicate occurrences and the previous complete snapshot until every replacement file is verified under the original account and generation.
 - Show manual download traffic confirmation above the full player while keeping the active account and presentation guards. Reject late consent after the owning session or screen is retired. Prepare Android release 0.1.14 (17).
 - Apply the same saved network rules to Android manual downloads, liked automation and speculative next-track audio. Distinguish Wi-Fi from unmetered access, restrict roaming independently, and limit manual traffic consent to the selected download generations.
 - Preserve completed files and explicit pauses when network preferences change. Defer interrupted background transfers without reviving stale jobs, and upgrade legacy work constraints before any audio transfer.
