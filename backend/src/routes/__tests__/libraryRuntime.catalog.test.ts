@@ -910,7 +910,7 @@ describe("library catalog list runtime coverage", () => {
         });
         mockGetArtistImage.mockResolvedValueOnce("hero-fetched.jpg");
         mockRedisGet.mockImplementation(async (key: string) => {
-            if (key === "discography:artist-real-mbid") {
+            if (key === "discography:v2:artist-real-mbid") {
                 return null;
             }
             if (key === "caa:rg-new-1") {
@@ -955,7 +955,7 @@ describe("library catalog list runtime coverage", () => {
             ],
         });
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "discography:artist-real-mbid",
+            "discography:v2:artist-real-mbid",
             24 * 60 * 60,
             expect.any(String),
         );
@@ -1068,7 +1068,7 @@ describe("library catalog list runtime coverage", () => {
         );
         mockGetArtistImage.mockResolvedValueOnce("hero-from-cache.jpg");
         mockRedisGet.mockImplementation(async (key: string) => {
-            if (key === "discography:mbid-error") {
+            if (key === "discography:v2:mbid-error") {
                 return null;
             }
             if (key === "top-tracks:artist-err") {
@@ -1091,7 +1091,7 @@ describe("library catalog list runtime coverage", () => {
 
         expect(res.statusCode).toBe(200);
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "discography:mbid-error",
+            "discography:v2:mbid-error",
             120,
             "[]",
         );
@@ -1207,7 +1207,7 @@ describe("library catalog list runtime coverage", () => {
         mockArtistFindUnique.mockResolvedValueOnce(null);
         mockMusicBrainzGetReleaseGroups.mockResolvedValueOnce([]);
         mockRedisGet.mockImplementation(async (key: string) => {
-            if (key === "discography:artist-unknown-resolved") {
+            if (key === "discography:v2:artist-unknown-resolved") {
                 return null;
             }
             if (key === "top-tracks:artist-default-unknown") {
@@ -1268,7 +1268,7 @@ describe("library catalog list runtime coverage", () => {
             ],
         });
         mockRedisGet.mockImplementation(async (key: string) => {
-            if (key === "discography:mbid-cacheless") {
+            if (key === "discography:v2:mbid-cacheless") {
                 return null;
             }
             if (key === "top-tracks:artist-cacheless") {

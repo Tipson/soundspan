@@ -148,11 +148,15 @@ export function readFreshCatalogReleaseGroups(
     return albums.map(releaseGroupFromCatalogAlbum);
 }
 
-/** Loads a fresh local artist catalog by MusicBrainz artist ID. */
-export async function findFreshCatalogReleaseGroups(artistMbid: string) {
+/** Loads fresh catalog metadata, optionally fenced to the requested local artist. */
+export async function findFreshCatalogReleaseGroups(
+    artistMbid: string,
+    artistId?: string,
+) {
     if (!isCatalogPersistenceEnabled()) return null;
     const artist = await prisma.artist.findFirst({
         where: {
+            ...(artistId === undefined ? {} : { id: artistId }),
             mbid: artistMbid,
             peerId: null,
             catalogSyncedAt: {

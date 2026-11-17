@@ -34,6 +34,7 @@ jest.mock("../../services/metadata/artistImageResolver", () => ({
     resolveArtistImage: jest.fn(),
 }));
 jest.mock("../../services/metadata/catalogPersistence", () => ({
+    findFreshCatalogReleaseGroups: jest.fn(async () => null),
     logCatalogPersistenceError: jest.fn(),
     persistCatalogReleaseGroups: jest.fn(),
     readFreshCatalogReleaseGroups: jest.fn(),

@@ -339,6 +339,50 @@ describe("catalog persistence", () => {
         expect(prisma.album.updateMany).not.toHaveBeenCalled();
     });
 
+    it("does not borrow a catalog from another local artist after MBID resolution", async () => {
+        const catalogOwner = {
+            id: "artist-canonical",
+            mbid: "resolved-mbid",
+            peerId: null,
+            catalogSyncedAt: NOW,
+            albums: [],
+        };
+        prisma.artist.findFirst.mockImplementation(async ({ where }) => {
+            const matches =
+                where.mbid === catalogOwner.mbid &&
+                (where.id === undefined || where.id === catalogOwner.id) &&
+                where.peerId === null &&
+                catalogOwner.catalogSyncedAt > where.catalogSyncedAt.gt;
+            return matches ? catalogOwner : null;
+        });
+
+        await expect(
+            findFreshCatalogReleaseGroups("resolved-mbid", "artist-requested"),
+        ).resolves.toBeNull();
+        expect(prisma.album.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("retains a complete empty catalog as a fresh negative cache", async () => {
+        await persistCatalogReleaseGroups({
+            artistId: "artist-empty",
+            releaseGroups: [],
+        });
+        expect(prisma.artist.update).toHaveBeenCalledWith({
+            where: { id: "artist-empty" },
+            data: { catalogSyncedAt: NOW },
+        });
+        prisma.artist.findFirst.mockResolvedValueOnce({
+            id: "artist-empty",
+            catalogSyncedAt: NOW,
+            albums: [],
+        });
+
+        await expect(
+            findFreshCatalogReleaseGroups("empty-mbid", "artist-empty"),
+        ).resolves.toEqual([]);
+        expect(prisma.album.createMany).not.toHaveBeenCalled();
+    });
+
     it("treats a catalog sync exactly seven days old as stale", () => {
         const groups = readFreshCatalogReleaseGroups({
             artistId: "artist-boundary",

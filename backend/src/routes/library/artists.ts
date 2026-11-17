@@ -65,7 +65,7 @@ import { filterLibraryArtistReleaseGroups } from "../../services/metadata/discog
 import {
     logCatalogPersistenceError,
     persistCatalogReleaseGroups,
-    readFreshCatalogReleaseGroups,
+    findFreshCatalogReleaseGroups,
 } from "../../services/metadata/catalogPersistence";
 
 /**
@@ -577,7 +577,8 @@ export async function handleGetArtist(
         const shouldFetchDiscography = isRealArtistMbid(effectiveMbid);
 
         if (shouldFetchDiscography) {
-            const discoCacheKey = `discography:${effectiveMbid}`;
+            // Keep metadata-backed entries separate from visibility-filtered cache entries.
+            const discoCacheKey = `discography:v2:${effectiveMbid}`;
             try {
                 let releaseGroups: any[] = [];
                 let fetchedFromProvider = false;
@@ -589,11 +590,12 @@ export async function handleGetArtist(
                         `[Artist] Using cached discography (${releaseGroups.length} albums)`,
                     );
                 } else {
-                    const catalogReleaseGroups = readFreshCatalogReleaseGroups({
-                        artistId: artist.id,
-                        catalogSyncedAt: artist.catalogSyncedAt,
-                        albums: artist.albums,
-                    });
+                    // The library read intentionally excludes metadata-only albums.
+                    const catalogReleaseGroups =
+                        await findFreshCatalogReleaseGroups(
+                            effectiveMbid,
+                            artist.id,
+                        );
                     if (catalogReleaseGroups !== null) {
                         releaseGroups = catalogReleaseGroups;
                     } else {

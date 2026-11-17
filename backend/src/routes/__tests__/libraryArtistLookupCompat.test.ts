@@ -33,6 +33,9 @@ jest.mock("../../utils/db", () => ({
         artist: {
             findFirst: jest.fn(),
         },
+        album: {
+            updateMany: jest.fn(),
+        },
         play: {
             groupBy: jest.fn(),
         },
@@ -56,6 +59,7 @@ jest.mock("../../utils/redis", () => ({
 jest.mock("../../config", () => ({
     config: {
         underJest: true,
+        catalogPersistence: { enabled: true },
         music: {
             musicPath: "/music",
             transcodeCachePath: "/tmp/soundspan-cache",
@@ -161,12 +165,12 @@ jest.mock("../../services/imageProxy", () => ({
     normalizeExternalImageUrl: jest.fn(() => null),
 }));
 
-const mockReadFreshCatalogReleaseGroups = jest.fn();
+jest.mock("../../metrics", () => ({ recordCatalogWrite: jest.fn() }));
+
 jest.mock("../../services/metadata/catalogPersistence", () => ({
-    logCatalogPersistenceError: jest.fn(),
+    ...jest.requireActual("../../services/metadata/catalogPersistence"),
     persistCatalogReleaseGroups: jest.fn(async () => undefined),
     persistCatalogTracklist: jest.fn(async () => undefined),
-    readFreshCatalogReleaseGroups: mockReadFreshCatalogReleaseGroups,
 }));
 
 import router from "../library";
@@ -179,6 +183,7 @@ import { musicBrainzService } from "../../services/musicbrainz";
 import { redisClient } from "../../utils/redis";
 
 const mockArtistFindFirst = prisma.artist.findFirst as jest.Mock;
+const mockAlbumUpdateMany = prisma.album.updateMany as jest.Mock;
 const mockPlayGroupBy = prisma.play.groupBy as jest.Mock;
 const mockLastFmGetArtistTopTracks =
     lastFmService.getArtistTopTracks as jest.Mock;
@@ -229,6 +234,79 @@ function createMockArtist(name = "AC/DC") {
     };
 }
 
+function mockStoredArtistCatalog(catalogSyncedAt: Date) {
+    const artist = {
+        ...createMockArtist(),
+        peerId: null,
+        catalogSyncedAt,
+        albums: [
+            {
+                id: "owned-album-1",
+                title: "Owned Album",
+                rgMbid: "rg-owned-1",
+                year: 2010,
+                primaryType: "Album",
+                coverUrl: "owned-cover.jpg",
+                location: "LIBRARY",
+                tracks: [{ id: "owned-track-1", removedAt: null }],
+            },
+            {
+                id: "catalog-album-1",
+                title: "Catalog Album",
+                rgMbid: "rg-catalog-1",
+                year: 2012,
+                primaryType: "Album",
+                coverUrl: null,
+                location: "CATALOG",
+                tracks: [],
+            },
+        ],
+    };
+    const visibleReads: string[][] = [];
+    const metadataReads: any[] = [];
+    mockArtistFindFirst.mockImplementation(async (args: any) => {
+        const { where } = args;
+        const albumRead = args.include?.albums ?? args.select?.albums;
+        if (
+            (where.OR &&
+                !where.OR.some(
+                    (candidate: any) =>
+                        candidate.id === artist.id ||
+                        candidate.mbid === artist.mbid ||
+                        candidate.name?.equals?.toLowerCase() ===
+                            artist.name.toLowerCase(),
+                )) ||
+            (where.id !== undefined && where.id !== artist.id) ||
+            (where.mbid !== undefined && where.mbid !== artist.mbid) ||
+            (where.peerId === null && artist.peerId !== null) ||
+            (where.catalogSyncedAt?.gt &&
+                artist.catalogSyncedAt <= where.catalogSyncedAt.gt)
+        ) {
+            return null;
+        }
+        if (!albumRead) throw new Error("Unexpected artist query projection");
+
+        // Apply the actual Prisma boundary predicates. The public artist read
+        // cannot receive CATALOG rows or albums without a visible track.
+        const location = albumRead.where?.location;
+        const albums = artist.albums.filter(
+            (album) =>
+                (typeof location === "string"
+                    ? album.location === location
+                    : (location?.in?.includes(album.location) ?? true)) &&
+                (!albumRead.where?.tracks?.some ||
+                    album.tracks.some((track) => track.removedAt === null)),
+        );
+        if (args.include?.albums) {
+            visibleReads.push(albums.map((album) => album.id));
+        } else {
+            metadataReads.push(args);
+        }
+        return { ...artist, albums };
+    });
+    return { artist, visibleReads, metadataReads };
+}
+
 describe("library artist lookup compatibility", () => {
     const artistHandler = getGetHandler("/artists/:id");
 
@@ -241,7 +319,7 @@ describe("library artist lookup compatibility", () => {
         mockDataCacheGetArtistImage.mockResolvedValue(null);
         mockMusicBrainzGetReleaseGroups.mockResolvedValue([]);
         mockRedisGet.mockResolvedValue(null);
-        mockReadFreshCatalogReleaseGroups.mockReturnValue(null);
+        mockAlbumUpdateMany.mockResolvedValue({ count: 1 });
     });
 
     it.each([
@@ -420,8 +498,9 @@ describe("library artist lookup compatibility", () => {
     });
 
     it("keeps discovery off and avoids extra enrichment when all lookup flags are disabled", async () => {
+        const { metadataReads } = mockStoredArtistCatalog(new Date());
         const req = {
-            params: { id: "artist-local-id-123" },
+            params: { id: "artist-1" },
             query: {
                 includeDiscography: "0",
                 includeTopTracks: "0",
@@ -437,12 +516,15 @@ describe("library artist lookup compatibility", () => {
         expect(res.body).toEqual(
             expect.objectContaining({
                 id: "artist-1",
-                albums: [],
+                albums: [expect.objectContaining({ id: "owned-album-1" })],
                 topTracks: [],
                 similarArtists: [],
                 discographyComplete: true,
             }),
         );
+        expect(metadataReads).toEqual([]);
+        expect(mockAlbumUpdateMany).not.toHaveBeenCalled();
+        expect(mockMusicBrainzGetReleaseGroups).not.toHaveBeenCalled();
     });
 
     it("exposes the album artist on matched Last.fm top tracks", async () => {
@@ -631,36 +713,13 @@ describe("library artist lookup compatibility", () => {
         expect(res.body.discographyComplete).toBe(true);
     });
 
-    it("uses a fresh persisted discography on Redis miss without MusicBrainz", async () => {
-        const artist = {
-            ...createMockArtist(),
-            catalogSyncedAt: new Date("2026-08-24T00:00:00.000Z"),
-            albums: [
-                {
-                    id: "catalog-album-1",
-                    title: "Catalog Album",
-                    rgMbid: "rg-catalog-1",
-                    year: 2012,
-                    primaryType: "Album",
-                    coverUrl: null,
-                    location: "CATALOG",
-                    tracks: [],
-                },
-            ],
-        };
-        mockArtistFindFirst.mockResolvedValueOnce(artist);
-        mockReadFreshCatalogReleaseGroups.mockReturnValueOnce([
-            {
-                id: "rg-catalog-1",
-                title: "Catalog Album",
-                "first-release-date": "2012",
-                "primary-type": "Album",
-                "secondary-types": [],
-            },
-        ]);
+    it("reads hidden catalog metadata separately while preserving the visible owned album", async () => {
+        const { artist, visibleReads, metadataReads } = mockStoredArtistCatalog(
+            new Date(),
+        );
 
         const req = {
-            params: { id: "artist-local-id-123" },
+            params: { id: "artist-1" },
             query: {
                 includeDiscography: "true",
                 includeTopTracks: "false",
@@ -672,25 +731,36 @@ describe("library artist lookup compatibility", () => {
 
         await artistHandler(req, res);
 
-        expect(mockReadFreshCatalogReleaseGroups).toHaveBeenCalledWith({
-            artistId: artist.id,
-            catalogSyncedAt: artist.catalogSyncedAt,
-            albums: artist.albums,
-        });
+        expect(res.statusCode).toBe(200);
+        expect(res.body.albums).toHaveLength(2);
+        expect(res.body.albums).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    id: "owned-album-1",
+                    title: "Owned Album",
+                    owned: true,
+                    source: "database",
+                }),
+                expect.objectContaining({
+                    id: "rg-catalog-1",
+                    title: "Catalog Album",
+                    year: 2012,
+                    owned: false,
+                    source: "musicbrainz",
+                }),
+            ]),
+        );
+        expect(visibleReads).toEqual([["owned-album-1"]]);
+        expect(metadataReads).toHaveLength(1);
+        expect(metadataReads[0].where).toEqual(
+            expect.objectContaining({ id: artist.id, peerId: null }),
+        );
         expect(mockMusicBrainzGetReleaseGroups).not.toHaveBeenCalled();
-        expect(res.body.albums).toEqual([
-            expect.objectContaining({
-                id: "rg-catalog-1",
-                title: "Catalog Album",
-                year: 2012,
-                owned: false,
-                source: "musicbrainz",
-            }),
-        ]);
         expect(res.body.discographyComplete).toBe(true);
     });
 
     it("keeps Redis ahead of persisted discography reads", async () => {
+        const { metadataReads } = mockStoredArtistCatalog(new Date());
         mockRedisGet.mockResolvedValueOnce(
             JSON.stringify([
                 {
@@ -704,7 +774,7 @@ describe("library artist lookup compatibility", () => {
         );
 
         const req = {
-            params: { id: "artist-local-id-123" },
+            params: { id: "artist-1" },
             query: {
                 includeDiscography: "true",
                 includeTopTracks: "false",
@@ -716,11 +786,99 @@ describe("library artist lookup compatibility", () => {
 
         await artistHandler(req, res);
 
-        expect(mockReadFreshCatalogReleaseGroups).not.toHaveBeenCalled();
+        expect(metadataReads).toEqual([]);
+        expect(mockAlbumUpdateMany).not.toHaveBeenCalled();
         expect(mockMusicBrainzGetReleaseGroups).not.toHaveBeenCalled();
-        expect(res.body.albums).toEqual([
-            expect.objectContaining({ id: "rg-redis", title: "Redis Album" }),
+        expect(res.body.albums).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ id: "owned-album-1", owned: true }),
+                expect.objectContaining({
+                    id: "rg-redis",
+                    title: "Redis Album",
+                }),
+            ]),
+        );
+    });
+
+    it("does not reuse an empty legacy cache written from filtered library albums", async () => {
+        const { artist, metadataReads } = mockStoredArtistCatalog(new Date());
+        const legacyKey = `discography:${artist.mbid}`;
+        mockRedisGet.mockImplementation(async (key: string) =>
+            key === legacyKey ? JSON.stringify([]) : null,
+        );
+        const res = createRes();
+        await artistHandler(
+            {
+                params: { id: artist.id },
+                query: {
+                    includeDiscography: "true",
+                    includeTopTracks: "false",
+                    includeSimilarArtists: "false",
+                },
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.albums).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ id: "rg-catalog-1", owned: false }),
+            ]),
+        );
+        expect(metadataReads).toHaveLength(1);
+        expect(mockMusicBrainzGetReleaseGroups).not.toHaveBeenCalled();
+    });
+
+    it("falls back to MusicBrainz for stale persisted catalog metadata", async () => {
+        mockStoredArtistCatalog(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000));
+        mockMusicBrainzGetReleaseGroups.mockResolvedValueOnce([
+            {
+                id: "rg-provider-fresh",
+                title: "Provider Album",
+                "first-release-date": "2024-01-02",
+                "primary-type": "Album",
+                "secondary-types": [],
+            },
         ]);
+        const res = createRes();
+
+        await artistHandler(
+            {
+                params: { id: "artist-1" },
+                query: {
+                    includeDiscography: "true",
+                    includeTopTracks: "false",
+                    includeSimilarArtists: "false",
+                },
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.albums).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ id: "owned-album-1", owned: true }),
+                expect.objectContaining({
+                    id: "rg-provider-fresh",
+                    title: "Provider Album",
+                    owned: false,
+                }),
+            ]),
+        );
+        expect(res.body.albums).not.toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ id: "rg-catalog-1" }),
+            ]),
+        );
+        expect(mockMusicBrainzGetReleaseGroups).toHaveBeenCalledWith(
+            "11111111-1111-4111-8111-111111111111",
+            ["album", "ep"],
+            100,
+        );
+        expect(mockAlbumUpdateMany).not.toHaveBeenCalled();
+        expect(res.body.discographyComplete).toBe(true);
     });
 
     it("hydrates unmatched Last.fm top tracks and skips cover resolution for unknown albums", async () => {
