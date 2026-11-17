@@ -73,11 +73,12 @@ export const queryKeys = {
         ["recommendations", "albums", seedAlbumId, limit] as const,
 
     // Search
+    librarySearchAll: () => ["search", "library"] as const,
     serviceCatalog: (query: string) => ["service-catalog", query] as const,
     search: (query: string, type?: string, limit?: number, source?: string) =>
-        ["search", query, type, limit, source] as const,
+        ["search", "library", query, type, limit, source] as const,
     searchTracks: (query: string, source?: string) =>
-        ["search", "tracks", query, source] as const,
+        ["search", "library", "tracks", query, source] as const,
     discoverSearch: (
         query: string,
         type?: string,

@@ -18,6 +18,13 @@ identity play directly; only metadata-only rows use provider fuzzy matching.
 An incomplete discovery response retains its successful matches, exposes a
 partial-catalogue notice and an explicit repeat action, and remains stale in
 the client cache. Successful complete discovery keeps its normal cache window.
+Persisted YouTube, VK and Yandex favorites appear in an owner-scoped
+"Из любимого" group without contacting providers. The All view previews five
+rows; Tracks continues through raw personal pages even when invalid metadata
+leaves a page empty. Only exact visible provider duplicates are suppressed.
+Personal-read failures retain other results and allow an explicit retry.
+Preference writes invalidate private library search without refetching provider
+catalogs; retiring the authenticated runtime clears its private query cache.
 The same global query returns browsable YouTube Music albums and artists;
 provider artist identities remain available even when a same-name local artist
 exists. When an exact local shadow duplicates a canonical provider artist or
@@ -86,6 +93,7 @@ unpassed strict-policy live gate and unsupported storage redirects.
 | `discoverySelection.ts` | root |
 | `albumDedup.ts` | root |
 | `songDedup.ts` | root |
+| `streamingSearchTracks.ts` | Exact persisted favorite identities and visible provider duplicate suppression |
 | `types.ts` | root |
 
 ## Update Rule

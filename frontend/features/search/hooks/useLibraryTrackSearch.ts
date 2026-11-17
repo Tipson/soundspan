@@ -2,6 +2,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import type { LibraryTrack, SearchResult } from "../types";
+import type { LikedPlaylistTrack } from "@/lib/api";
 
 /** One bounded page supported by the local `/search` offset contract. */
 export const LIBRARY_TRACK_SEARCH_PAGE_SIZE = 50;
@@ -26,23 +27,40 @@ export function useLibraryTrackSearch(
         initialPageParam: 0,
         getNextPageParam: (lastPage, allPages) => {
             const pageTracks = lastPage.tracks ?? [];
-            return pageTracks.length === LIBRARY_TRACK_SEARCH_PAGE_SIZE
-                ? allPages.length * LIBRARY_TRACK_SEARCH_PAGE_SIZE
+            const personal = lastPage.streamingPage;
+            const nextOffset = allPages.length * LIBRARY_TRACK_SEARCH_PAGE_SIZE;
+            const hasMorePersonal =
+                personal?.hasMore === true &&
+                personal.limit === LIBRARY_TRACK_SEARCH_PAGE_SIZE &&
+                personal.offset === nextOffset - LIBRARY_TRACK_SEARCH_PAGE_SIZE;
+            return pageTracks.length === LIBRARY_TRACK_SEARCH_PAGE_SIZE ||
+                hasMorePersonal
+                ? nextOffset
                 : undefined;
         },
         enabled: enabled && query.trim().length >= 2,
-        staleTime: 5 * 60 * 1000,
+        staleTime: (search) =>
+            search.state.data?.pages.some(
+                (page) => page.streamingUnavailable === true,
+            )
+                ? 0
+                : 5 * 60 * 1000,
     });
 
     const seen = new Set<string>();
     const tracks: LibraryTrack[] = [];
+    const streamingTracks: LikedPlaylistTrack[] = [];
+    let streamingUnavailable = false;
     for (const page of search.data?.pages ?? []) {
         for (const track of page.tracks ?? []) {
             if (seen.has(track.id)) continue;
             seen.add(track.id);
             tracks.push(track);
         }
+        if (Array.isArray(page.streamingTracks))
+            streamingTracks.push(...page.streamingTracks);
+        streamingUnavailable ||= page.streamingUnavailable === true;
     }
 
-    return { ...search, tracks };
+    return { ...search, tracks, streamingTracks, streamingUnavailable };
 }

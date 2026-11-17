@@ -8,6 +8,7 @@ const state = {
     catalogNotice: null as string | null,
     view: null as string | null,
     libraryTracks: [] as unknown[],
+    streamingTracks: [] as unknown[],
     libraryAlbums: [] as unknown[],
     libraryArtists: [] as unknown[],
     discoverResults: [] as unknown[],
@@ -103,6 +104,7 @@ mock.module("@/features/search/hooks/useSearchData", {
                 catalogNotice: state.catalogNotice,
                 libraryResults: {
                     tracks: state.libraryTracks,
+                    streamingTracks: state.streamingTracks,
                     albums: state.libraryAlbums,
                     artists: state.libraryArtists,
                 },
@@ -261,6 +263,7 @@ mock.module("@/lib/features-context", {
 });
 
 beforeEach(() => {
+    state.streamingTracks = [];
     state.query = "massive attack";
     state.view = null;
     state.libraryTracks = Array.from({ length: 3 }, (_, index) =>
@@ -423,4 +426,59 @@ test("an empty search still discloses a partial provider outage", async () => {
         renderToStaticMarkup(React.createElement(SearchPage)),
         /Повторить поиск/,
     );
+});
+
+function likedSearchTrack(index: number) {
+    const videoId = String(index).padStart(11, "0");
+    return {
+        id: `yt:${videoId}`,
+        title: `Saved track ${index}`,
+        duration: 180,
+        source: "youtube",
+        streamSource: "youtube",
+        youtubeVideoId: videoId,
+        artist: { id: null, name: "Massive Attack" },
+        album: { id: null, title: "Album", coverArt: null },
+    };
+}
+
+test("saved external matches remain visible while the online catalog is loading", async () => {
+    state.libraryTracks = [];
+    state.libraryArtists = [];
+    state.libraryAlbums = [];
+    state.discoverResults = [];
+    state.streamingTracks = [likedSearchTrack(1)];
+    state.isDiscoverSearching = true;
+    const SearchPage = (await import("../../app/search/page")).default;
+    const html = renderToStaticMarkup(React.createElement(SearchPage));
+    assert.match(html, /Из любимого/);
+    assert.doesNotMatch(html, /search-no-results-title/);
+    assert.doesNotMatch(html, /min-h-\[18rem\]/);
+    assert.deepEqual(calls.discoverTrackLimits, [5]);
+});
+
+test("the Tracks view can continue saved matches even without a live catalog match", async () => {
+    state.view = "tracks";
+    state.libraryTracks = [];
+    state.libraryArtists = [];
+    state.libraryAlbums = [];
+    state.discoverResults = [];
+    state.streamingTracks = Array.from({ length: 50 }, (_, i) =>
+        likedSearchTrack(i),
+    );
+    state.hasNextLibraryTracks = true;
+    state.isDiscoverSearching = true;
+    const SearchPage = (await import("../../app/search/page")).default;
+    const html = renderToStaticMarkup(React.createElement(SearchPage));
+    assert.match(html, /Из любимого/);
+    assert.match(html, /Загрузить следующую часть каталога треков/);
+    const continuation = html.match(
+        /<button[^>]*aria-label="Загрузить следующую часть каталога треков"[^>]*>/,
+    )?.[0];
+    assert.ok(
+        continuation && !/\sdisabled(?:=|\s|>)/.test(continuation),
+        "saved paging must not wait for the online catalog",
+    );
+    assert.doesNotMatch(html, /search-no-results-title/);
+    assert.deepEqual(calls.discoverTrackLimits, [null]);
 });

@@ -62,6 +62,7 @@ export function useSearchData({
         data: libraryResults,
         isLoading: isLibrarySearching,
         isFetching: isLibraryFetching,
+        refetch: refetchLibrary,
     } = useSearchQuery(
         query,
         libraryType,
@@ -118,8 +119,18 @@ export function useSearchData({
         if (libraryType !== "tracks") {
             return libraryResults as SearchResult | undefined;
         }
-        return { tracks: libraryTrackSearch.tracks };
-    }, [libraryResults, libraryTrackSearch.tracks, libraryType]);
+        return {
+            tracks: libraryTrackSearch.tracks,
+            streamingTracks: libraryTrackSearch.streamingTracks,
+            streamingUnavailable: libraryTrackSearch.streamingUnavailable,
+        };
+    }, [
+        libraryResults,
+        libraryTrackSearch.tracks,
+        libraryTrackSearch.streamingTracks,
+        libraryTrackSearch.streamingUnavailable,
+        libraryType,
+    ]);
 
     // Derive top artist for the similar artists query, using the same
     // exact-match-aware selection the search page shows as the top result.
@@ -147,6 +158,8 @@ export function useSearchData({
     }, [similarData]);
 
     const hasSearched = query.trim().length >= 2;
+    const personalUnavailable =
+        effectiveLibraryResults?.streamingUnavailable === true;
     const serviceNotice =
         serviceSearchEnabled && serviceCatalog.isError
             ? "VK и Яндекс сейчас недоступны. Показаны результаты остальных каталогов."
@@ -161,6 +174,9 @@ export function useSearchData({
                     ? "Часть онлайн-каталога временно недоступна. Доступные результаты сохранены."
                     : null,
                 serviceNotice,
+                personalUnavailable
+                    ? "Не удалось найти треки в любимом. Остальные результаты сохранены."
+                    : null,
             ]
                 .filter(Boolean)
                 .join(" ") || null,
@@ -170,6 +186,13 @@ export function useSearchData({
                 refetchDiscover({ cancelRefetch: false }),
                 ...(serviceSearchEnabled
                     ? [serviceCatalog.refetch({ cancelRefetch: false })]
+                    : []),
+                ...(personalUnavailable
+                    ? [
+                          libraryType === "tracks"
+                              ? libraryTrackSearch.refetch()
+                              : refetchLibrary(),
+                      ]
                     : []),
             ]);
         },

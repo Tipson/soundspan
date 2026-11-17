@@ -139,6 +139,9 @@ export function useTrackPreference(
             queryClient.invalidateQueries({
                 queryKey: queryKeys.personalizedHomeAll(),
             });
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.librarySearchAll(),
+            });
             publishDeviceOfflineLikedChangeForSignal(data.signal);
         },
         onError: (_error, _signal, context) => {
@@ -154,6 +157,9 @@ export function useTrackPreference(
                 context.canonicalQueryKey,
                 completion.rollbackPreference,
             );
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.librarySearchAll(),
+            });
             queryClient.invalidateQueries({
                 queryKey: context.canonicalQueryKey,
                 exact: true,

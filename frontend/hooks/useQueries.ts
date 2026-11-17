@@ -631,7 +631,10 @@ export function useSearchQuery(
         queryKey: queryKeys.search(query, type, limit, source),
         queryFn: ({ signal }) => api.search(query, type, limit, signal, source),
         enabled: enabled && query.length >= 2, // Only search if query is at least 2 characters
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: (search) =>
+            search.state.data?.streamingUnavailable === true
+                ? 0
+                : 5 * 60 * 1000,
     });
 }
 

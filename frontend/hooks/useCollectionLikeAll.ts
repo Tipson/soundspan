@@ -158,6 +158,9 @@ export function useCollectionLikeAll(tracks: LikeableTrack[]) {
                 });
             }
         } finally {
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.librarySearchAll(),
+            });
             setIsApplying(false);
         }
     };

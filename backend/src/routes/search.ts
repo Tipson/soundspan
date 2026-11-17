@@ -19,6 +19,7 @@ import {
     type YtMusicCatalogArtistResult,
 } from "../services/youtubeMusic";
 import { searchYtMusicDiscoveryCatalog } from "../services/ytMusicDiscoveryCatalog";
+import { searchLikedRemoteTracks } from "../services/likedRemoteSearch";
 import type { YtMusicDiscoveryCatalogFilter } from "../services/ytMusicDiscoveryCatalog";
 import { getSystemSettings } from "../utils/systemSettings";
 import { ytMusicSearchLimiter } from "../middleware/rateLimiter";
@@ -669,7 +670,7 @@ router.use(requireAuth);
  * /api/search:
  *   get:
  *     summary: Search across your music library
- *     description: Search for artists, albums, tracks, audiobooks, and podcasts in your library using PostgreSQL full-text search
+ *     description: Search library music, audiobooks and podcasts. Unfiltered all/tracks searches also return the current user's persisted external likes in additive streamingTracks and streamingPage fields, without contacting providers. Personal pages use offset and limit over raw liked rows; invalid metadata can produce an empty page with hasMore true. A personal-read failure sets streamingUnavailable without removing library results. Other types, genre filters and local/peers source filters omit the personal fields.
  *     tags: [Search]
  *     security:
  *       - apiKeyAuth: []
@@ -744,6 +745,21 @@ router.use(requireAuth);
  *                   type: array
  *                   items:
  *                     type: object
+ *                 streamingTracks:
+ *                   type: array
+ *                   description: Existing external liked-track DTOs; present for unfiltered all/tracks searches only
+ *                   items:
+ *                     type: object
+ *                 streamingPage:
+ *                   type: object
+ *                   description: Raw external-like page; all searches use offset zero, track searches use the requested offset
+ *                   properties:
+ *                     offset: { type: integer }
+ *                     limit: { type: integer }
+ *                     hasMore: { type: boolean }
+ *                 streamingUnavailable:
+ *                   type: boolean
+ *                   description: Present and true when the personal liked-track read fails
  *       401:
  *         description: Not authenticated
  *         content:
@@ -762,40 +778,73 @@ router.get("/", async (req, res) => {
         const searchLimit = parsed.data.limit;
         const sourceOption = req.query.source === undefined ? {} : { source };
 
-        if (!query) {
-            return res.json({
-                artists: [],
-                albums: [],
-                tracks: [],
-                audiobooks: [],
-                podcasts: [],
-                episodes: [],
-            });
+        let response: ReturnType<typeof transformSearchResults> = {
+            artists: [],
+            albums: [],
+            tracks: [],
+            audiobooks: [],
+            podcasts: [],
+            episodes: [],
+        };
+        if (query) {
+            // Shared library caches never contain account-specific likes.
+            const serviceResults =
+                type === "all"
+                    ? await searchService.searchAll({
+                          query,
+                          limit: searchLimit,
+                          genre,
+                          ...sourceOption,
+                      })
+                    : await searchService.searchByType({
+                          query,
+                          type,
+                          limit: searchLimit,
+                          offset,
+                          genre,
+                          ...sourceOption,
+                      });
+            response = transformSearchResults(serviceResults);
         }
 
-        // Delegate to service (handles caching + parallel execution + genre filtering)
-        if (type === "all") {
-            const serviceResults = await searchService.searchAll({
-                query,
+        const userId = req.user?.id;
+        if (
+            userId &&
+            (type === "all" || type === "tracks") &&
+            source === "all" &&
+            !genre
+        ) {
+            res.setHeader("Cache-Control", "private, no-store");
+            const streamingPage = {
+                offset: type === "all" ? 0 : offset,
                 limit: searchLimit,
-                genre: genre as string | undefined,
-                ...sourceOption,
-            });
-
-            return res.json(transformSearchResults(serviceResults));
+                hasMore: false,
+            };
+            if (!query) {
+                return res.json({
+                    ...response,
+                    streamingTracks: [],
+                    streamingPage,
+                });
+            }
+            try {
+                const personal = await searchLikedRemoteTracks({
+                    userId,
+                    query,
+                    offset: streamingPage.offset,
+                    limit: searchLimit,
+                });
+                return res.json({ ...response, ...personal });
+            } catch {
+                return res.json({
+                    ...response,
+                    streamingTracks: [],
+                    streamingPage,
+                    streamingUnavailable: true,
+                });
+            }
         }
-
-        // Single-type search (service handles caching)
-        const serviceResults = await searchService.searchByType({
-            query,
-            type: type as string,
-            limit: searchLimit,
-            offset,
-            genre: genre as string | undefined,
-            ...sourceOption,
-        });
-
-        res.json(transformSearchResults(serviceResults));
+        return res.json(response);
     } catch (error) {
         logger.error("Search error:", error);
         res.status(500).json({ error: "Search failed" });

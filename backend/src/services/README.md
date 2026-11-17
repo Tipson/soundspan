@@ -107,6 +107,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/libraryHealthDashboard/qualityOutliers.ts` | Lossy album bitrate outlier analytics |
 | `backend/src/services/libraryHealthDashboard/storageAnalytics.ts` | MIME, storage, bitrate, and artist analytics |
 | `backend/src/services/libraryTrackPreferences.ts` | Core |
+| `backend/src/services/likedRemoteSearch.ts` | Owner-scoped persisted YouTube/VK/Yandex favorites, raw-page continuation without provider requests |
 | `backend/src/services/lidarr.ts` | Core |
 | `backend/src/services/lidarr/lidarrAlbumSelection.ts` | Pure Lidarr album catalog matching and edition fallback selection |
 | `backend/src/services/lidarr/lidarrArtistCatalog.ts` | Artist presence and bounded album-catalog polling |

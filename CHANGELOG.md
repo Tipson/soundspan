@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Find persisted YouTube, VK and Yandex favorites in owner-scoped Web and Android search without contacting their providers. Preserve exact playback identities, raw-page continuation and library results during partial failures; refresh private search after preference changes without refetching provider catalogs.
 - Reconcile adaptive Wave continuations with confirmed early-skip engagement, including delayed Play creation. Coalesce acknowledgements into one bounded follow-up refresh while preserving current playback and rejecting feedback from retired owners or stations; local journal persistence and playback failures do not trigger a retune.
 - Share an authoritative finite time-of-day mix across Web and Android, with exact ordered membership and honest check/scarcity metadata. Refresh daily and daypart views without replacing playback; distinguish a completed check from a new composition, and detect UTC-day changes independently of local-hour changes on Android.
 - Explain individual recommendation generations in an interactive administrator-only reader: bounded score components, observed source coverage, rejection counters and final positions. Keep diagnostics opt-in, private and independent of ranking decisions; replay frozen synthetic pools through the actual baseline, shadow and active engines without production services.

@@ -268,6 +268,10 @@ export function useArtistActions() {
                     error,
                 );
                 toast.error(artistRu.likeAllFailed);
+            } finally {
+                queryClient.invalidateQueries({
+                    queryKey: queryKeys.librarySearchAll(),
+                });
             }
         },
         [queryClient],

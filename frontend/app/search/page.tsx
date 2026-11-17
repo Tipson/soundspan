@@ -41,6 +41,10 @@ import {
     shouldShowSearchLoadingState,
 } from "@/features/search/searchSongsPriority";
 import { ru } from "@/lib/i18n/ru";
+import {
+    toStreamingSearchTracks,
+    excludeVisibleStreamingMatches,
+} from "@/features/search/streamingSearchTracks";
 
 type SearchSectionView = Exclude<SearchResultView, "all"> | null;
 
@@ -131,6 +135,12 @@ export default function SearchPage() {
     const libraryArtists = libraryResults?.artists ?? [];
     const libraryTracks = libraryResults?.tracks ?? [];
     const libraryAlbums = libraryResults?.albums ?? [];
+    const streamingTracks = toStreamingSearchTracks(
+        libraryResults?.streamingTracks,
+    );
+    const visibleStreamingTracks = isTracksView
+        ? streamingTracks
+        : streamingTracks.slice(0, 5);
     const exactLibraryTopArtist = libraryArtists.find((artist) =>
         isExactArtistSearchMatch(artist.name, query, aliasInfo?.canonical),
     );
@@ -172,9 +182,9 @@ export default function SearchPage() {
                   normalizeArtistName(displayedTopName),
           )
         : [];
-    const unownedDiscoverTracks = dedupeDiscoverTracks(
-        discoverTracks,
-        libraryTracks,
+    const unownedDiscoverTracks = excludeVisibleStreamingMatches(
+        dedupeDiscoverTracks(discoverTracks, libraryTracks),
+        visibleStreamingTracks,
     );
     const mergedAlbums = mergeSearchAlbums(discoverAlbums, libraryAlbums);
     const trackLimits = isTracksView
@@ -191,14 +201,16 @@ export default function SearchPage() {
         totalLimit: searchCatalogPolicy.albumDisplayLimit,
     });
 
-    const hasTracks = hasVisibleTrackResults({
-        libraryTrackCount: libraryTracks.length,
-        discoverTrackCount: unownedDiscoverTracks.length,
-        soulseekResultCount: soulseekResults.length,
-        showLibrary: true,
-        showDiscover: true,
-        showSoulseek: true,
-    });
+    const hasTracks =
+        streamingTracks.length > 0 ||
+        hasVisibleTrackResults({
+            libraryTrackCount: libraryTracks.length,
+            discoverTrackCount: unownedDiscoverTracks.length,
+            soulseekResultCount: soulseekResults.length,
+            showLibrary: true,
+            showDiscover: true,
+            showSoulseek: true,
+        });
     const hasAlbums =
         mergedAlbums.libraryAlbums.length > 0 ||
         mergedAlbums.discoverAlbums.length > 0;
@@ -214,13 +226,15 @@ export default function SearchPage() {
         isLibrarySearching ||
         isDiscoverSearching ||
         (showTracksView && (isSoulseekSearching || isSoulseekPolling));
-    const trackLoadingState = shouldShowSearchLoadingState({
-        hasSearched,
-        anySourceSearching: isLoading,
-        hasArtistResult: libraryArtists.length > 0,
-        discoverResultCount: discoverResults.length,
-        primarySongsSurface,
-    });
+    const trackLoadingState =
+        streamingTracks.length === 0 &&
+        shouldShowSearchLoadingState({
+            hasSearched,
+            anySourceSearching: isLoading,
+            hasArtistResult: libraryArtists.length > 0,
+            discoverResultCount: discoverResults.length,
+            primarySongsSurface,
+        });
     const activeViewHasResults =
         activeView === "tracks"
             ? hasTracks
@@ -304,40 +318,6 @@ export default function SearchPage() {
                                 tracks={unownedDiscoverTracks}
                                 limit={trackLimits.secondaryLimit}
                             />
-                        ) : null}
-                        {isTracksView &&
-                        (hasNextLibraryTracks ||
-                            canRequestMoreDiscoverTracks) ? (
-                            <div className="mt-5 flex flex-col items-center gap-2 border-t border-white/[0.07] pt-5">
-                                <button
-                                    type="button"
-                                    aria-label="Загрузить следующую часть каталога треков"
-                                    onClick={() => {
-                                        if (hasNextLibraryTracks) {
-                                            void fetchNextLibraryTracks();
-                                        }
-                                        if (canRequestMoreDiscoverTracks) {
-                                            setTrackPagination((current) => ({
-                                                query,
-                                                limit:
-                                                    current.query === query
-                                                        ? current.limit + 50
-                                                        : 100,
-                                            }));
-                                        }
-                                    }}
-                                    disabled={
-                                        isFetchingNextLibraryTracks ||
-                                        isDiscoverSearching
-                                    }
-                                    className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition duration-200 hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
-                                >
-                                    {isFetchingNextLibraryTracks ||
-                                    isDiscoverSearching
-                                        ? ru.search.loadingMore
-                                        : `${ru.search.loadMore} (${libraryTracks.length + unownedDiscoverTracks.length} ${ru.search.loaded})`}
-                                </button>
-                            </div>
                         ) : null}
                     </>
                 ) : primarySongsSurface === "soulseek" ? (
@@ -515,6 +495,79 @@ export default function SearchPage() {
                         {tracksSection}
                     </>
                 )}
+
+                {hasSearched &&
+                showTracksView &&
+                visibleStreamingTracks.length > 0 ? (
+                    <section
+                        aria-label="Из любимого"
+                        className="min-w-0 border-t border-white/[0.08] pt-5"
+                    >
+                        <SearchSectionHeader
+                            title="Из любимого"
+                            description="Сохранённые вами треки"
+                            status={
+                                !isTracksView &&
+                                (streamingTracks.length > 5 ||
+                                    libraryResults?.streamingPage?.hasMore ===
+                                        true) ? (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            router.push(
+                                                `/search?q=${encodeURIComponent(query)}&view=tracks`,
+                                            )
+                                        }
+                                        aria-label="Показать все найденные треки из любимого"
+                                        className="min-h-11 rounded-full px-4 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                                    >
+                                        Все треки
+                                    </button>
+                                ) : undefined
+                            }
+                        />
+                        <DiscoverTracksList
+                            tracks={streamingTracks}
+                            limit={isTracksView ? null : 5}
+                        />
+                    </section>
+                ) : null}
+
+                {hasSearched &&
+                isTracksView &&
+                (hasNextLibraryTracks || canRequestMoreDiscoverTracks) ? (
+                    <div className="mt-5 flex flex-col items-center gap-2 border-t border-white/[0.07] pt-5">
+                        <button
+                            type="button"
+                            aria-label="Загрузить следующую часть каталога треков"
+                            onClick={() => {
+                                if (hasNextLibraryTracks)
+                                    void fetchNextLibraryTracks();
+                                if (
+                                    canRequestMoreDiscoverTracks &&
+                                    !isDiscoverSearching
+                                )
+                                    setTrackPagination((current) => ({
+                                        query,
+                                        limit:
+                                            current.query === query
+                                                ? current.limit + 50
+                                                : 100,
+                                    }));
+                            }}
+                            disabled={
+                                isFetchingNextLibraryTracks ||
+                                (!hasNextLibraryTracks && isDiscoverSearching)
+                            }
+                            className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition duration-200 hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
+                        >
+                            {isFetchingNextLibraryTracks ||
+                            (!hasNextLibraryTracks && isDiscoverSearching)
+                                ? ru.search.loadingMore
+                                : `${ru.search.loadMore} (${libraryTracks.length + unownedDiscoverTracks.length + streamingTracks.length} ${ru.search.loaded})`}
+                        </button>
+                    </div>
+                ) : null}
 
                 {showTracksView && query.trim() ? (
                     <AudiusSearchPanel key={query} query={query} />

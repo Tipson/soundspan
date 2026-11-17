@@ -2,6 +2,7 @@ import type {
     FederatedTrackPeer,
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
+import type { LikedPlaylistTrack } from "@/lib/api";
 
 export type SearchResultView = "all" | "tracks" | "artists" | "albums";
 
@@ -91,6 +92,10 @@ export interface SearchResult {
     tracks?: LibraryTrack[];
     audiobooks?: Audiobook[];
     episodes?: Episode[];
+    /** Account-owned saved rows, read separately from shared catalog caching. */
+    streamingTracks?: LikedPlaylistTrack[];
+    streamingPage?: { offset: number; limit: number; hasMore: boolean };
+    streamingUnavailable?: boolean;
 }
 
 export interface DiscoverResult {
