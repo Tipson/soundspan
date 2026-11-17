@@ -143,6 +143,17 @@ void main() {
       (tester) async {
         final auth = CollectionAuthority();
         final transport = CollectionTransport((request, _) {
+          if (request.path == '/api/library/saved') {
+            return ApiResponse(200, {
+              'items': [],
+              'total': 0,
+              'search': {
+                'query': request.query['q'],
+                'offset': int.parse(request.query['offset']!),
+                'limit': 50,
+              },
+            });
+          }
           if (request.path == '/api/search/discover') {
             return providerFailed
                 ? const ApiResponse(503, {})

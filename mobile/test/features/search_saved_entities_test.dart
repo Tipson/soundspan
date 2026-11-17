@@ -682,59 +682,73 @@ void main() {
     },
   );
 
-  testWidgets(
-    'private retry button retries failed raw page without public refetch',
-    (tester) async {
-      var fail = true;
-      final authority = CollectionAuthority();
-      final transport = CollectionTransport((r, _) {
-        if (r.path != '/api/library/saved') return const ApiResponse(200, {});
-        final offset = int.parse(r.query['offset']!);
-        if (offset == 50 && fail) return const ApiResponse(503, {});
-        return savedResponse(
-          r,
-          offset == 0
-              ? List.generate(50, (i) => savedRow('artist', '$i'))
-              : [savedRow('artist', '50')],
-          total: 51,
+  for (final providerFailed in [false, true]) {
+    testWidgets(
+      'private retry button retries failed raw page without public refetch providerFailed=$providerFailed',
+      (tester) async {
+        var fail = true;
+        final authority = CollectionAuthority();
+        final transport = CollectionTransport((r, _) {
+          if (r.path == '/api/search/discover' && providerFailed) {
+            return const ApiResponse(503, {});
+          }
+          if (r.path != '/api/library/saved') return const ApiResponse(200, {});
+          final offset = int.parse(r.query['offset']!);
+          if (offset == 50 && fail) return const ApiResponse(503, {});
+          return savedResponse(
+            r,
+            offset == 0
+                ? List.generate(50, (i) => savedRow('artist', '$i'))
+                : [savedRow('artist', '50')],
+            total: 51,
+          );
+        });
+        final controller = SearchController(
+          repository: savedRepository(transport, authority),
         );
-      });
-      final controller = SearchController(
-        repository: savedRepository(transport, authority),
-      );
-      addTearDown(() async {
-        controller.dispose();
-        await authority.updates.close();
-      });
-      await controller.submit('Артист', kind: SearchKind.artists);
-      await controller.loadMore();
-      final publicCalls = transport.requests
-          .where((r) => r.path != '/api/library/saved')
-          .length;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: SoundspanTheme.dark(),
-          home: SearchScreen(controller: controller),
-        ),
-      );
-      fail = false;
-      await tester.tap(find.text('Повторить поиск'));
-      await tester.pumpAndSettle();
-      expect(controller.state.page.savedArtists, hasLength(51));
-      expect(controller.state.page.failures, isEmpty);
-      expect(
-        transport.requests
-            .where((r) => r.path == '/api/library/saved')
-            .map((r) => r.query['offset']),
-        ['0', '50', '50'],
-      );
-      expect(
-        transport.requests.where((r) => r.path != '/api/library/saved').length,
-        publicCalls,
-      );
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
+        addTearDown(() async {
+          controller.dispose();
+          await authority.updates.close();
+        });
+        await controller.submit('Артист', kind: SearchKind.artists);
+        await controller.loadMore();
+        final publicCalls = transport.requests
+            .where((r) => r.path != '/api/library/saved')
+            .length;
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: SoundspanTheme.dark(),
+            home: SearchScreen(controller: controller),
+          ),
+        );
+        fail = false;
+        await tester.tap(find.text('Повторить поиск'));
+        await tester.pumpAndSettle();
+        expect(controller.state.page.savedArtists, hasLength(51));
+        expect(
+          controller.state.page.failures.keys,
+          providerFailed ? ['discovery'] : <String>[],
+        );
+        expect(
+          find.text('Повторить поиск'),
+          providerFailed ? findsOneWidget : findsNothing,
+        );
+        expect(
+          transport.requests
+              .where((r) => r.path == '/api/library/saved')
+              .map((r) => r.query['offset']),
+          ['0', '50', '50'],
+        );
+        expect(
+          transport.requests
+              .where((r) => r.path != '/api/library/saved')
+              .length,
+          publicCalls,
+        );
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
 
   for (final type in ['artist', 'album']) {
     for (final source in ['library', 'discovery', 'ytmusic']) {

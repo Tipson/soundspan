@@ -256,7 +256,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               : () =>
                                     state.failure == null &&
                                         !state.page.hasUnresolvedTracks &&
-                                        state.page.failures.keys.every(
+                                        state.page.failures.keys.any(
                                           (key) => key.startsWith('saved:'),
                                         )
                                     ? owner.retrySaved()
