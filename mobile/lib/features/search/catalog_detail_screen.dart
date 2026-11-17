@@ -531,6 +531,46 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
                         ),
                       ),
                     ),
+                  if (detail.streamingAlbums.isNotEmpty) ...[
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 28, bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Semantics(
+                              header: true,
+                              child: Text(
+                                'Альбомы из любимых',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Любимые треки из этих альбомов · онлайн',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: MusicColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverList.builder(
+                      itemCount: detail.streamingAlbums.length,
+                      itemBuilder: (context, i) => CatalogEntityTile(
+                        entity: detail.streamingAlbums[i],
+                        onTap: widget.onOpenAlbum == null
+                            ? null
+                            : () => _run(
+                                owner,
+                                revision,
+                                () => widget.onOpenAlbum!(
+                                  detail.streamingAlbums[i].ref,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
                   if (detail.albums.isNotEmpty)
                     SliverToBoxAdapter(
                       child: Padding(

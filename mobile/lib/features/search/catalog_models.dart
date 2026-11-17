@@ -146,6 +146,7 @@ final class CatalogDetail {
     Iterable<Track> tracks = const [],
     Iterable<CatalogEntity> albums = const [],
     Iterable<CatalogEntity> similar = const [],
+    Iterable<CatalogEntity> streamingAlbums = const [],
     this.artist,
     this.bio,
     this.year,
@@ -156,11 +157,15 @@ final class CatalogDetail {
     this.popularTrackCount = 0,
   }) : tracks = List.unmodifiable(tracks),
        albums = List.unmodifiable(albums),
+       streamingAlbums = List.unmodifiable(streamingAlbums),
        similar = List.unmodifiable(similar);
   final CatalogEntityRef ref;
   final CatalogEntityRef? artist;
   final List<Track> tracks;
   final List<CatalogEntity> albums, similar;
+
+  /// Owner-saved remote releases, separate from locally held/catalog albums.
+  final List<CatalogEntity> streamingAlbums;
   final String? bio, year;
   final int? total;
   final bool hasMore, continuationLoaded;

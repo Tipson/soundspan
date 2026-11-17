@@ -96,6 +96,41 @@ final class ArtistRepository extends CatalogRepository {
       );
     }
     final similar = <CatalogEntity>[];
+    final streamingAlbums = <CatalogEntity>[];
+    if (ref.source == CatalogSource.library) {
+      final seen = <String>{};
+      for (final raw in listOrEmpty(dto['streamingAlbums'])) {
+        final row = collectionObject(raw);
+        final id = textOrNull(row['id']);
+        final originalIdentity = textOrNull(row['rgMbid']);
+        if (row['owned'] != false ||
+            row['source'] != 'youtube' ||
+            row['streamSource'] != 'youtube' ||
+            id == null ||
+            originalIdentity == null ||
+            !seen.add(id)) {
+          continue;
+        }
+        streamingAlbums.add(
+          CatalogEntity(
+            CatalogEntityRef(
+              kind: CatalogEntityKind.album,
+              source: CatalogSource.library,
+              id: id,
+              name: collectionString(row['title']),
+              // Remote playback keeps its original lookup. A canonical UUID
+              // must not grant discovery fallback after this album vanishes.
+              mbid: originalIdentity.startsWith('remote:')
+                  ? originalIdentity
+                  : null,
+              subtitle: name,
+              artwork: coverUri(row['coverArt'] ?? row['coverUrl']),
+            ),
+            year: row['year']?.toString(),
+          ),
+        );
+      }
+    }
     for (final raw in listOrEmpty(dto['similarArtists'])) {
       final row = collectionObject(raw), local = row['inLibrary'] == true;
       final id = textOrNull(local ? row['id'] : row['mbid']);
@@ -136,6 +171,7 @@ final class ArtistRepository extends CatalogRepository {
                 ),
       ],
       albums: albums,
+      streamingAlbums: streamingAlbums,
       similar: similar,
       bio: textOrNull(dto['bio'] ?? dto['summary'] ?? dto['description']),
       hasMore: ref.source == CatalogSource.library,
@@ -177,6 +213,7 @@ final class ArtistRepository extends CatalogRepository {
           ),
       ].where((t) => seen.add(t.ref.identityKey)),
       albums: detail.albums,
+      streamingAlbums: detail.streamingAlbums,
       similar: detail.similar,
       bio: detail.bio,
       total: total,
