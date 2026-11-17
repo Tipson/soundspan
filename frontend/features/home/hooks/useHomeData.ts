@@ -133,10 +133,7 @@ export function useHomeData(): UseHomeDataReturn {
     const handleRefreshMixes = async () => {
         try {
             await refreshMixes();
-            await queryClient.invalidateQueries({
-                queryKey: queryKeys.personalDailyMixes(),
-            });
-            toast.success("Миксы обновлены — новые подборки уже готовы");
+            toast.success("Обновление миксов запрошено");
         } catch (error) {
             log.error("Failed to refresh mixes:", error);
             toast.error("Не удалось обновить миксы");

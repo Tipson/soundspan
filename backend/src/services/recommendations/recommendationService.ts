@@ -28,6 +28,7 @@ import {
     type RadioContinuationTrack,
 } from "./radioContinuation";
 import { orderWaveRecommendations } from "./orderedWave";
+import { buildTimeOfDayMix, type TimeOfDayMix } from "./timeOfDayMix";
 import {
     createWaveSequenceContext,
     encodeWaveSequenceCursor,
@@ -135,6 +136,8 @@ export interface OrderedWaveFeedV1 {
 }
 
 export type PersonalizedRecommendationFeed = PersonalizedHomeFeed & {
+    /** Exact finite daypart view; legacy shelves remain available to older clients. */
+    timeOfDayMix?: TimeOfDayMix;
     orderedWave?: OrderedWaveFeedV1;
     languageStatus?: {
         selection: WaveLanguage;
@@ -636,8 +639,25 @@ export class UnifiedRecommendationService {
             }
             const baseline = sourceState.feed;
             execution.check();
+            const timeOfDayMix =
+                input.timeOfDay &&
+                input.surface === "made-for-you" &&
+                input.context?.localHour !== undefined &&
+                input.context.timezoneOffsetMinutes !== undefined
+                    ? buildTimeOfDayMix({
+                          shelves,
+                          checkedAt: this.dependencies.now(),
+                          localHour: input.context.localHour,
+                          timezoneOffsetMinutes:
+                              input.context.timezoneOffsetMinutes,
+                          providerDegraded:
+                              baseline?.reason === "provider_partial_failure" ||
+                              baseline?.reason === "provider_unavailable",
+                      })
+                    : undefined;
             return {
                 shelves,
+                ...(timeOfDayMix ? { timeOfDayMix } : {}),
                 degraded:
                     Boolean(baseline?.degraded) ||
                     result.degradedSources.length > 0,

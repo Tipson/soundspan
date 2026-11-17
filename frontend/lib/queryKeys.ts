@@ -123,7 +123,10 @@ export const queryKeys = {
     // Home browse feed
     homeFeaturedPlaylists: (limit?: number) =>
         ["home", "featured-playlists", limit] as const,
-    personalizedHomeAll: () => ["home", "personalized"] as const,
+    personalizedHomeAll: (surface?: "home" | "wave" | "made-for-you") =>
+        surface
+            ? (["home", "personalized", surface] as const)
+            : (["home", "personalized"] as const),
     personalizedHome: (
         limit: number,
         mode: "for-you" | "new" | "familiar" = "for-you",

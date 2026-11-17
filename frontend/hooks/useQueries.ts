@@ -979,9 +979,16 @@ export function useRefreshMixesMutation() {
 
     return useMutation({
         mutationFn: () => api.refreshMixes(),
-        onSuccess: () => {
-            // Invalidate mixes query to refetch
-            queryClient.invalidateQueries({ queryKey: queryKeys.mixes() });
+        onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: queryKeys.mixes() }),
+                queryClient.invalidateQueries({
+                    queryKey: queryKeys.personalDailyMixes(),
+                }),
+                queryClient.invalidateQueries({
+                    queryKey: queryKeys.personalizedHomeAll("made-for-you"),
+                }),
+            ]);
         },
     });
 }

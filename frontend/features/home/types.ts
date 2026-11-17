@@ -119,6 +119,11 @@ export interface PersonalizedTrack {
 }
 
 export interface PersonalizedHomeFeed {
+    /** Finite server projection; an explicitly empty list must not reuse legacy shelves. */
+    timeOfDayMix?: {
+        tracks: PersonalizedTrack[];
+        snapshot?: import("./mixSnapshot").MixSnapshot;
+    };
     /** Untrusted additive protocol data; consumers validate it before use. */
     orderedWave?: unknown;
     languageStatus?: {

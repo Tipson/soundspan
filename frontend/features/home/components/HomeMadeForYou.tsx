@@ -27,6 +27,15 @@ import { MixSnapshotCaption } from "./MixSnapshotCaption";
 const MAX_PERSONAL_MIX_TRACKS = 40;
 const MAX_HOME_MADE_CARDS = 5;
 
+function finiteTimeOfDayMix(feed: PersonalizedHomeFeed | null) {
+    const mix = feed?.timeOfDayMix;
+    return mix &&
+        Array.isArray(mix.tracks) &&
+        mix.tracks.length <= MAX_PERSONAL_MIX_TRACKS
+        ? mix
+        : null;
+}
+
 interface HomePersonalMix {
     key: string;
     title: string;
@@ -117,14 +126,16 @@ export function buildHomePersonalMixes(
     const discovery = uniqueTracks(feed?.shelves.discovery ?? []);
     const listenAgain = uniqueTracks(feed?.shelves.listenAgain ?? []);
     const timeDiscovery = uniqueTracks(timeOfDayFeed?.shelves.discovery ?? []);
+    const authoritativeTimeMix = finiteTimeOfDayMix(timeOfDayFeed);
     const timeCandidates = timeOfDayMix
-        ? limitArtistRepetition(
+        ? (authoritativeTimeMix?.tracks ??
+          limitArtistRepetition(
               uniqueTracks([
                   ...timeDiscovery,
                   ...(timeOfDayFeed?.shelves.quickPicks ?? []),
                   ...(timeOfDayFeed?.shelves.listenAgain ?? []),
               ]),
-          )
+          ))
         : [];
     const fallbackRecipes: Array<
         Omit<HomePersonalMix, "tracks"> & {
@@ -167,6 +178,7 @@ export function buildHomePersonalMixes(
             candidates: timeCandidates,
             tone: timeOfDayMix.key === "morning" ? "amber" : "blue",
             generationId: timeOfDayFeed?.generationId,
+            snapshot: authoritativeTimeMix?.snapshot,
         });
     }
 
@@ -246,12 +258,24 @@ export function HomeMadeForYou({
         (playableDiscoverWeekly ? 1 : 0) +
         playableMixes.length;
 
-    const unavailableDirections = dailyMixStatuses.filter(
-        (status) =>
-            !dailyStyleMixes?.some(
-                (mix) => mix.key === status.key && mix.tracks.length > 0,
-            ),
-    );
+    const authoritativeTimeMix = finiteTimeOfDayMix(timeOfDayFeed ?? null);
+    const unavailableDirections = [
+        ...dailyMixStatuses.filter(
+            (status) =>
+                !dailyStyleMixes?.some(
+                    (mix) => mix.key === status.key && mix.tracks.length > 0,
+                ),
+        ),
+        ...(timeOfDayMix && authoritativeTimeMix?.tracks.length === 0
+            ? [
+                  {
+                      key: `time-${timeOfDayMix.key}`,
+                      title: timeOfDayMix.title,
+                      snapshot: authoritativeTimeMix.snapshot,
+                  },
+              ]
+            : []),
+    ];
     if (availableCount === 0 && unavailableDirections.length === 0) return null;
 
     const weeklyOffset = playableDiscoverWeekly ? 1 : 0;

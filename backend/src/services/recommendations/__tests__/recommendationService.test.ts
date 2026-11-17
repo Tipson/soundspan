@@ -46,7 +46,22 @@ describe("unified recommendation compatibility facade", () => {
             context: { localHour: 9, timezoneOffsetMinutes: 180 },
         };
 
-        await service.getPersonalizedFeed({ ...input, timeOfDay: true });
+        const daypart = await service.getPersonalizedFeed({
+            ...input,
+            timeOfDay: true,
+        });
+        expect(daypart.timeOfDayMix).toMatchObject({
+            tracks: [],
+            snapshot: {
+                checkedAt: "2026-09-01T12:00:00.000Z",
+                requestedCount: 40,
+                availableCount: 0,
+                reasons: ["pool_limited"],
+            },
+        });
+        expect(daypart.timeOfDayMix?.snapshot).not.toHaveProperty(
+            "generatedAt",
+        );
         expect(loadPersonalizedFeed).toHaveBeenLastCalledWith(
             "alice",
             expect.any(Number),
@@ -57,7 +72,8 @@ describe("unified recommendation compatibility facade", () => {
                 },
             }),
         );
-        await service.getPersonalizedFeed(input);
+        const ordinary = await service.getPersonalizedFeed(input);
+        expect(ordinary).not.toHaveProperty("timeOfDayMix");
         expect(loadPersonalizedFeed).toHaveBeenLastCalledWith(
             "alice",
             expect.any(Number),
@@ -66,6 +82,64 @@ describe("unified recommendation compatibility facade", () => {
             }),
         );
     });
+    it("projects only freshly admitted daypart tracks without another source pass or served write", async () => {
+        const source = jest.fn().mockResolvedValue({
+            shelves: {
+                discovery: [track("allowed"), track("blocked")],
+                quickPicks: [],
+                listenAgain: [],
+            },
+            degraded: false,
+            reason: null,
+            seedCount: 2,
+            nextCursor: 1,
+        });
+        const record = jest.fn().mockResolvedValue("daypart-generation");
+        const service = new UnifiedRecommendationService({
+            mode: "baseline",
+            hybridRolloutPercent: 0,
+            explorationRate: 0,
+            loadPersonalizedFeed: source,
+            resolveCanonical: async (c) => ({
+                id: c.id,
+                canonicalKey: c.canonicalKey,
+            }),
+            loadRecentExposures: async () => [],
+            loadDislikedCanonicalKeys: async () => new Set(["yt:blocked"]),
+            loadTasteContext: async () => ({
+                positiveCentroids: [],
+                negativeCentroids: [],
+            }),
+            recordGeneration: record,
+            scheduleHotSet: async () => undefined,
+            loadSimilarCandidates: jest.fn(),
+            now: () => new Date("2026-11-17T06:00:00Z"),
+        });
+        const feed = await service.getPersonalizedFeed({
+            userId: "alice",
+            sessionId: "daypart-session",
+            surface: "made-for-you",
+            limit: 25,
+            cursor: 0,
+            direction: "for-you",
+            mood: null,
+            timeOfDay: true,
+            excludeVideoIds: [],
+            context: { localHour: 6, timezoneOffsetMinutes: 0 },
+        });
+        expect(feed.timeOfDayMix?.tracks.map((t) => t.id)).toEqual([
+            "yt:allowed",
+        ]);
+        expect(feed.shelves.discovery.map((t) => t.id)).toEqual(["yt:allowed"]);
+        expect(source).toHaveBeenCalledTimes(1);
+        expect(record).toHaveBeenCalledTimes(1);
+        expect(
+            record.mock.calls[0][0].recommendations.map(
+                (row: { track: { id: string } }) => row.track.id,
+            ),
+        ).toEqual(["yt:allowed"]);
+    });
+
     it.each(["baseline", "shadow", "active"] as const)(
         "isolates diagnostic Wave generations in %s mode",
         async (mode) => {

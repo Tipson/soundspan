@@ -8,6 +8,10 @@ export type MixSnapshotReason =
 export interface MixSnapshotMetadata {
     /** Real composition/generation time, absent when no snapshot or legacy time is known. */
     generatedAt?: string;
+    /** Completed admission check for a computed view; never a claim of new composition. */
+    checkedAt?: string;
+    /** Stable versioned fingerprint of the actually returned ordered membership. */
+    compositionKey?: string;
     /** Daily composition's UTC calendar day; independent of the client's local midnight. */
     compositionDay?: string;
     /** Weekly composition's inclusive UTC start. */

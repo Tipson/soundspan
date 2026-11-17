@@ -512,6 +512,63 @@ test("Home Made For You expands and collapses every collection inline on one sur
     container.remove();
 });
 
+test("daypart uses the authoritative finite view and retains its exact membership metadata", async () => {
+    const { buildHomePersonalMixes, timeOfDayMixForHour } =
+        await import("../../features/home/components/HomeMadeForYou");
+    const tracks = [track("authoritative-z"), track("authoritative-a")];
+    const snapshot = {
+        checkedAt: "2026-11-17T08:00:00.000Z",
+        compositionKey: `daypart-v1:${"a".repeat(64)}`,
+        refreshAfter: "2026-11-17T08:10:00.000Z",
+        requestedCount: 40,
+        snapshotCount: 2,
+        availableCount: 2,
+        reasons: ["pool_limited" as const],
+    };
+    const mixes = buildHomePersonalMixes(
+        null,
+        { ...richFeed, timeOfDayMix: { tracks, snapshot } },
+        timeOfDayMixForHour(9),
+        [],
+    );
+    assert.deepEqual(
+        mixes[0]?.tracks.map((t) => t.id),
+        tracks.map((t) => t.id),
+    );
+    assert.equal(mixes[0]?.snapshot, snapshot);
+});
+
+test("an empty authoritative daypart explains scarcity instead of replaying a stale legacy shelf", async () => {
+    const { HomeMadeForYou, timeOfDayMixForHour } =
+        await import("../../features/home/components/HomeMadeForYou");
+    const snapshot = {
+        checkedAt: "2026-11-17T08:00:00.000Z",
+        refreshAfter: "2026-11-17T08:10:00.000Z",
+        requestedCount: 40,
+        snapshotCount: 0,
+        availableCount: 0,
+        reasons: ["provider_degraded" as const, "pool_limited" as const],
+    };
+    const html = renderToStaticMarkup(
+        React.createElement(HomeMadeForYou, {
+            discoverWeekly: null,
+            mixes: [],
+            personalizedFeed: null,
+            timeOfDayFeed: {
+                ...richFeed,
+                timeOfDayMix: { tracks: [], snapshot },
+            },
+            timeOfDayMix: timeOfDayMixForHour(9),
+            dailyStyleMixes: [],
+            isRefreshingMixes: false,
+            handleRefreshMixes: async () => {},
+        }),
+    );
+    assert.match(html, /Ваше утро/);
+    assert.match(html, /временно недоступна/);
+    assert.doesNotMatch(html, /data-mix=/);
+});
+
 test("Home Made For You hides the whole shelf when nothing is playable", async () => {
     const { HomeMadeForYou } =
         await import("../../features/home/components/HomeMadeForYou");

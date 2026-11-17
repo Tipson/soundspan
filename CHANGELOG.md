@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Share an authoritative finite time-of-day mix across Web and Android, with exact ordered membership and honest check/scarcity metadata. Refresh daily and daypart views without replacing playback; distinguish a completed check from a new composition, and detect UTC-day changes independently of local-hour changes on Android.
 - Explain individual recommendation generations in an interactive administrator-only reader: bounded score components, observed source coverage, rejection counters and final positions. Keep diagnostics opt-in, private and independent of ranking decisions; replay frozen synthetic pools through the actual baseline, shadow and active engines without production services.
 - Show original daily and weekly composition dates and explain short or unavailable mixes. Keep snapshot counts separate from current feedback-filtered availability, preserve timestamps on cache reads, and leave playing queues unchanged when cards refresh.
 - Offer an explicitly enabled personal Wave sequence with exact owned continuation tails, stable server order and matching exposure positions. Preserve legacy shelves; reset invalidated continuation without replacing current playback or history, and discard late pages after queue edits.

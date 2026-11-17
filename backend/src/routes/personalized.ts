@@ -566,6 +566,18 @@ router.get(
  *       type: object
  *       required: [shelves, degraded, reason, seedCount, nextCursor]
  *       properties:
+ *         timeOfDayMix:
+ *           type: object
+ *           description: Optional authoritative finite view for an explicit time-of-day request. Consume its tracks in order, including an empty result; legacy shelves remain compatible.
+ *           required: [tracks, snapshot]
+ *           properties:
+ *             tracks:
+ *               type: array
+ *               maxItems: 40
+ *               items:
+ *                 $ref: '#/components/schemas/PersonalizedTrack'
+ *             snapshot:
+ *               $ref: '#/components/schemas/PersonalMixSnapshot'
  *         orderedWave:
  *           type: object
  *           additionalProperties: false
@@ -695,6 +707,15 @@ router.get(
  *           type: string
  *           format: date-time
  *           description: Actual original composition time; absent if no composition or no trustworthy legacy timestamp.
+ *         checkedAt:
+ *           type: string
+ *           format: date-time
+ *           description: Completed availability and feedback check for a computed view; never a claim that its composition changed.
+ *         compositionKey:
+ *           type: string
+ *           maxLength: 75
+ *           pattern: '^daypart-v1:[a-f0-9]{64}$'
+ *           description: Deterministic versioned identity of the actual ordered finite membership; not an authorization token.
  *         compositionDay:
  *           type: string
  *           format: date
