@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
 import { api } from "@/lib/api";
 import { useDownloadContext } from "@/lib/download-context";
-import { ArtistSource } from "../types";
+import { Album, ArtistSource } from "../types";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import {
     normalizeYtMusicArtist,
@@ -218,28 +218,32 @@ export function useArtistData() {
     const [sortBy, setSortBy] = useState<"year" | "dateAdded">("year");
 
     // Sort albums by year or dateAdded (auto-memoized by React Compiler)
-    const albums = !artist?.albums
-        ? []
-        : [...artist.albums].sort((a, b) => {
-              if (sortBy === "dateAdded") {
-                  if (!a.lastSynced && !b.lastSynced) return 0;
-                  if (!a.lastSynced) return 1;
-                  if (!b.lastSynced) return -1;
-                  return (
-                      new Date(b.lastSynced).getTime() -
-                      new Date(a.lastSynced).getTime()
-                  );
-              }
+    const sortAlbums = (items: Album[] | undefined): Album[] =>
+        !items
+            ? []
+            : [...items].sort((a, b) => {
+                  if (sortBy === "dateAdded") {
+                      if (!a.lastSynced && !b.lastSynced) return 0;
+                      if (!a.lastSynced) return 1;
+                      if (!b.lastSynced) return -1;
+                      return (
+                          new Date(b.lastSynced).getTime() -
+                          new Date(a.lastSynced).getTime()
+                      );
+                  }
 
-              if (a.year == null && b.year == null) return 0;
-              if (a.year == null) return 1;
-              if (b.year == null) return -1;
-              return b.year - a.year;
-          });
+                  if (a.year == null && b.year == null) return 0;
+                  if (a.year == null) return 1;
+                  if (b.year == null) return -1;
+                  return b.year - a.year;
+              });
+    const albums = sortAlbums(artist?.albums);
+    const streamingAlbums = sortAlbums(artist?.streamingAlbums);
 
     return {
         artist,
         albums,
+        streamingAlbums,
         providerAlbums: providerArtistData?.providerAlbums ?? [],
         artistProvider: isYtMusicArtist ? ("ytmusic" as const) : null,
         loading: isYtMusicArtist ? isProviderLoading : isCoreLoading,

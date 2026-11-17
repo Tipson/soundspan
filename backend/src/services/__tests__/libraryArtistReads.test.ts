@@ -71,4 +71,55 @@ describe("library artist reads", () => {
         expect(args.include.albums.include.tracks.take).toBe(10);
         expect(args.include.albums.orderBy).toEqual([{ year: "desc" }]);
     });
+
+    it("reads existing REMOTE YT albums only for the requesting liked owner", async () => {
+        const matches = (row: any, filter: any): boolean => {
+            if (filter === null || typeof filter !== "object")
+                return row === filter;
+            return Object.entries(filter).every(
+                ([key, value]: [string, any]) => {
+                    if (key === "OR")
+                        return value.some((part: any) => matches(row, part));
+                    if (key === "AND")
+                        return value.every((part: any) => matches(row, part));
+                    if (key === "some")
+                        return (
+                            Array.isArray(row) &&
+                            row.some((part) => matches(part, value))
+                        );
+                    if (key === "in") return value.includes(row);
+                    return matches(row?.[key], value);
+                },
+            );
+        };
+        const albums = ["owner-a", "owner-b"].map((userId) => ({
+            id: userId + "-remote",
+            location: "REMOTE",
+            tracks: [],
+            tracksYtMusic: [{ id: userId + "-yt", likedBy: [{ userId }] }],
+        }));
+        prisma.artist.findFirst.mockImplementation(async (args) => ({
+            id: "artist",
+            albums: albums.filter((row) =>
+                matches(row, args.include.albums.where),
+            ),
+        }));
+        for (const owner of ["owner-a", "owner-b"]) {
+            const options = {
+                lookup: { id: "artist" },
+                albumLocations: ["LIBRARY", "REMOTE"] as const,
+                requireVisibleAlbum: false,
+                albumOrder: "year" as const,
+                likedRemoteAlbumsUserId: owner,
+            };
+            const result = await readLibraryArtist(options);
+            expect(result?.albums.map((row: any) => row.id)).toEqual([
+                owner + "-remote",
+            ]);
+            const args = prisma.artist.findFirst.mock.calls.at(-1)![0];
+            expect(args.include.albums.include.tracksYtMusic.where).toEqual({
+                likedBy: { some: { userId: owner } },
+            });
+        }
+    });
 });

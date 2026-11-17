@@ -74,6 +74,7 @@ describe("shared library artist read divergence guard", () => {
 
     it("links both artist handlers to the same visibility-aware service", async () => {
         const libraryResponse = {
+            setHeader: jest.fn(),
             status: jest.fn().mockReturnThis(),
             json: jest.fn().mockReturnThis(),
         } as unknown as Response;
@@ -102,7 +103,11 @@ describe("shared library artist read divergence guard", () => {
             expect.objectContaining({
                 albumLocations: ["LIBRARY", "DISCOVER", "REMOTE", "FEDERATED"],
                 requireVisibleAlbum: false,
+                likedRemoteAlbumsUserId: "user-1",
             }),
+        );
+        expect(mockReadLibraryArtist.mock.calls[1][0]).not.toHaveProperty(
+            "likedRemoteAlbumsUserId",
         );
         expect(mockReadLibraryArtist).toHaveBeenNthCalledWith(
             2,

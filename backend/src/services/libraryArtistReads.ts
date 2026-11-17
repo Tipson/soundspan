@@ -19,6 +19,8 @@ export interface LibraryArtistReadOptions {
     requireVisibleAlbum: boolean;
     albumOrder: "year" | "year-title";
     maxTracksPerAlbum?: number;
+    /** Opt in to this owner's existing liked YT albums; omitted by shared/Subsonic reads. */
+    likedRemoteAlbumsUserId?: string;
 }
 
 /** Builds the visible track predicate shared by library artist consumers. */
@@ -84,6 +86,7 @@ function buildAlbumRead(
     options: LibraryArtistReadOptions,
     albumWhere: Prisma.AlbumWhereInput,
     trackWhere: Prisma.TrackWhereInput,
+    likedYtWhere?: Prisma.TrackYtMusicWhereInput,
 ) {
     const trackTake =
         options.maxTracksPerAlbum === undefined
@@ -98,6 +101,21 @@ function buildAlbumRead(
         orderBy,
         include: {
             federationPeer: { select: federationPeerSelect },
+            ...(likedYtWhere
+                ? {
+                      tracksYtMusic: {
+                          where: likedYtWhere,
+                          orderBy: [
+                              { createdAt: Prisma.SortOrder.asc },
+                              { id: Prisma.SortOrder.asc },
+                          ],
+                          ...trackTake,
+                      },
+                      _count: {
+                          select: { tracksYtMusic: { where: likedYtWhere } },
+                      },
+                  }
+                : {}),
             tracks: {
                 where: trackWhere,
                 orderBy: [
@@ -131,11 +149,29 @@ function buildAlbumRead(
  */
 export async function readLibraryArtist(options: LibraryArtistReadOptions) {
     const trackWhere = buildLibraryTrackWhere(options.albumLocations);
-    const albumWhere = buildLibraryAlbumWhere(options.albumLocations);
+    const visibleAlbumWhere = buildLibraryAlbumWhere(options.albumLocations);
+    const likedYtWhere: Prisma.TrackYtMusicWhereInput | undefined =
+        options.likedRemoteAlbumsUserId &&
+        options.albumLocations.includes("REMOTE")
+            ? { likedBy: { some: { userId: options.likedRemoteAlbumsUserId } } }
+            : undefined;
+    const albumWhere: Prisma.AlbumWhereInput = likedYtWhere
+        ? {
+              OR: [
+                  visibleAlbumWhere,
+                  { location: "REMOTE", tracksYtMusic: { some: likedYtWhere } },
+              ],
+          }
+        : visibleAlbumWhere;
     return prisma.artist.findFirst({
         where: buildArtistWhere(options, albumWhere),
         include: {
-            albums: buildAlbumRead(options, albumWhere, trackWhere),
+            albums: buildAlbumRead(
+                options,
+                albumWhere,
+                trackWhere,
+                likedYtWhere,
+            ),
             ownedAlbums: true,
             federationPeer: { select: federationPeerSelect },
         },

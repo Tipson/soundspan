@@ -10,6 +10,7 @@ import {
     getCollectionPlaybackGeneration,
     markCollectionPlayback,
 } from "../../lib/collectionPlayback";
+import { advanceAuthRuntimeGeneration } from "../../lib/auth-runtime-generation";
 
 GlobalRegistrator.register();
 (
@@ -20,6 +21,8 @@ let inGroup = true;
 let pathname = "/artist/artist-one";
 let load: () => Promise<{ tracks: unknown[] }>;
 const played: unknown[][] = [];
+const albumReads: string[] = [];
+let deferredAlbumRead: (() => Promise<unknown>) | null = null;
 let currentTrack: typeof track | null = null;
 let resumed = 0;
 let artistStarts = 0;
@@ -56,7 +59,21 @@ mock.module("@/lib/audio-context", {
     },
 });
 mock.module("@/lib/api", {
-    namedExports: { api: { getRadioTracks: () => load() } },
+    namedExports: {
+        api: {
+            getRadioTracks: () => load(),
+            getAlbum: async (id: string) => {
+                albumReads.push(id);
+                if (deferredAlbumRead) return deferredAlbumRead();
+                return {
+                    id,
+                    title: "Любимый альбом",
+                    artist: track.artist,
+                    tracks: [track],
+                };
+            },
+        },
+    },
 });
 mock.module("sonner", {
     namedExports: { toast: { success: noop, error: noop, info: noop } },
@@ -93,9 +110,9 @@ const hookResults: Record<string, unknown> = {
     useProviderArtistTracks: { tracks: [] },
     useProviderArtistFallback: {},
 };
-for (const [name, result] of Object.entries(hookResults)) {
+for (const name of Object.keys(hookResults)) {
     mock.module(`@/features/artist/hooks/${name}`, {
-        namedExports: { [name]: () => result },
+        namedExports: { [name]: () => hookResults[name] },
     });
 }
 for (const name of [
@@ -304,4 +321,164 @@ test("artist Play resumes its paused non-first track but starts a new queue for 
     assert.equal(resumed, 1);
     currentTrack = null;
     await view.close();
+});
+
+test("artist displays saved streaming albums separately and plays the original album identity", async () => {
+    const previous = hookResults.useArtistData;
+    hookResults.useArtistData = {
+        ...(previous as object),
+        streamingAlbums: [
+            {
+                id: "remote-original-album",
+                rgMbid: "remote:original-album",
+                matchedRgMbid: "11111111-1111-4111-8111-111111111111",
+                title: "Любимый альбом",
+                source: "youtube",
+                owned: false,
+                trackCount: 1,
+                tracks: [track],
+            },
+        ],
+    };
+    albumReads.length = 0;
+    inGroup = false;
+    currentTrack = null;
+    const view = await mount();
+    try {
+        const section = view.container.querySelector(
+            '[aria-label="Альбомы из любимых"]',
+        );
+        assert.ok(section, "Owner's saved streaming albums must be visible");
+        assert.ok(section.textContent?.includes("онлайн"));
+        assert.equal(
+            section.querySelector("a")?.getAttribute("href"),
+            "/album/remote-original-album",
+        );
+        const play = section.querySelector<HTMLButtonElement>(
+            'button[aria-label="Слушать любимые треки альбома Любимый альбом"]',
+        );
+        assert.ok(play);
+        await React.act(async () => play.click());
+        assert.deepEqual(albumReads, ["remote-original-album"]);
+        assert.equal(played.length, 1);
+        assert.equal(
+            (played[0][0] as (typeof track)[])[0].youtubeVideoId,
+            track.youtubeVideoId,
+        );
+
+        hookResults.useArtistData = previous;
+        await view.render();
+        assert.equal(
+            view.container.querySelector('[aria-label="Альбомы из любимых"]'),
+            null,
+            "A replacement response with no saved albums removes the section",
+        );
+    } finally {
+        hookResults.useArtistData = previous;
+        await view.close();
+    }
+});
+
+for (const supersession of ["playback", "account", "navigation"]) {
+    test(`a late saved-album response is ignored after ${supersession} changes`, async () => {
+        const previous = hookResults.useArtistData;
+        hookResults.useArtistData = {
+            ...(previous as object),
+            streamingAlbums: [{ id: "late-remote", title: "Поздний альбом" }],
+        };
+        let finish!: (value: unknown) => void;
+        deferredAlbumRead = () =>
+            new Promise((resolve) => {
+                finish = resolve;
+            });
+        const view = await mount();
+        try {
+            const play = view.container.querySelector<HTMLButtonElement>(
+                'button[aria-label="Слушать любимые треки альбома Поздний альбом"]',
+            );
+            assert.ok(play);
+            await React.act(async () => play.click());
+            assert.equal(play.disabled, true);
+            if (supersession === "account") {
+                advanceAuthRuntimeGeneration();
+            } else if (supersession === "navigation") {
+                pathname = "/artist/another-artist";
+                await view.render();
+            } else {
+                writePlaybackReplacementIntent(
+                    "listener-selected-a-different-track",
+                );
+            }
+            await React.act(async () =>
+                finish({
+                    id: "late-remote",
+                    title: "Поздний альбом",
+                    tracks: [track],
+                    artist: track.artist,
+                }),
+            );
+            assert.equal(played.length, 0);
+        } finally {
+            deferredAlbumRead = null;
+            hookResults.useArtistData = previous;
+            await view.close();
+        }
+    });
+}
+
+test("newer saved-album request supersedes older loading artist radio", async () => {
+    const previous = hookResults.useArtistData;
+    hookResults.useArtistData = {
+        ...(previous as object),
+        streamingAlbums: [{ id: "latest-album", title: "Newer album" }],
+    };
+    let finishRadio!: (value: { tracks: unknown[] }) => void;
+    let finishAlbum!: (value: unknown) => void;
+    load = () =>
+        new Promise((resolve) => {
+            finishRadio = resolve;
+        });
+    deferredAlbumRead = () =>
+        new Promise((resolve) => {
+            finishAlbum = resolve;
+        });
+    inGroup = false;
+    currentTrack = null;
+    const view = await mount();
+    try {
+        await view.click("start-radio");
+        const play = view.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Слушать любимые треки альбома Newer album"]',
+        );
+        assert.ok(play);
+        await React.act(async () => play.click());
+        await React.act(async () => finishRadio({ tracks: [track] }));
+        const olderRadioPlaybackCalls = played.length;
+        await React.act(async () =>
+            finishAlbum({
+                id: "latest-album",
+                title: "Newer album",
+                tracks: [track],
+                artist: track.artist,
+            }),
+        );
+        assert.equal(
+            olderRadioPlaybackCalls,
+            0,
+            "An older pending radio request must not play after a newer saved-album Play intent",
+        );
+        assert.equal(
+            played.length,
+            1,
+            "The latest album request still starts playback",
+        );
+        assert.equal(
+            (played[0][0] as Array<{ album: { id: string } }>)[0].album.id,
+            "latest-album",
+        );
+    } finally {
+        deferredAlbumRead = null;
+        hookResults.useArtistData = previous;
+        await view.close();
+    }
 });

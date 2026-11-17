@@ -1346,6 +1346,118 @@ describe("library catalog list runtime coverage", () => {
         );
     });
 
+    it("projects owner-liked streaming albums separately without physical ownership or private match fields", async () => {
+        const { albumMatchInputHash } =
+            await import("../../services/remoteAlbumMatchInput");
+        const artist = {
+            id: "artist-streaming",
+            name: "Artist",
+            mbid: "temp-streaming",
+        };
+        const remote = {
+            id: "original-remote",
+            rgMbid: "remote:stable",
+            title: "Orbit",
+            location: "REMOTE",
+            year: 2024,
+            primaryType: "Single",
+            coverUrl: "cover.jpg",
+            tracks: [],
+            matchedRgMbid: "11111111-1111-4111-8111-111111111111",
+            rgMbidCheckedAt: new Date(),
+            rgMbidMatchInputHash: albumMatchInputHash({
+                title: "Orbit",
+                artist,
+            }),
+            tracksYtMusic: [
+                {
+                    id: "yt-db",
+                    videoId: "video-exact",
+                    title: "Liked song",
+                    artist: artist.name,
+                    album: "Orbit",
+                    duration: 180,
+                    artistId: artist.id,
+                    albumId: "original-remote",
+                },
+            ],
+            _count: { tracksYtMusic: 1 },
+        };
+        mockArtistFindFirst.mockResolvedValue({
+            ...artist,
+            albums: [
+                remote,
+                {
+                    id: "local-existing",
+                    title: "Local",
+                    rgMbid: "local-rg",
+                    location: "LIBRARY",
+                    tracks: [],
+                    tracksYtMusic: [],
+                    _count: { tracksYtMusic: 0 },
+                },
+            ],
+            ownedAlbums: [],
+        });
+        const res = createRes();
+        await artistByIdHandler(
+            {
+                params: { id: artist.id },
+                query: {
+                    includeDiscography: "false",
+                    includeTopTracks: "false",
+                    includeSimilarArtists: "false",
+                },
+                user: { id: "owner-a" },
+            } as any,
+            res,
+        );
+        expect(res.statusCode).toBe(200);
+        expect(res.body.albums).toEqual([
+            expect.objectContaining({ id: "local-existing" }),
+        ]);
+        expect(res.body.albums[0]).not.toHaveProperty("tracksYtMusic");
+        expect(res.body.albums[0]).not.toHaveProperty("_count");
+        expect(res.body.streamingAlbums).toEqual([
+            expect.objectContaining({
+                id: remote.id,
+                rgMbid: remote.rgMbid,
+                type: "Single",
+                owned: false,
+                source: "youtube",
+                streamSource: "youtube",
+                matchedRgMbid: remote.matchedRgMbid,
+                tracks: [
+                    expect.objectContaining({
+                        id: "yt:video-exact",
+                        youtubeVideoId: "video-exact",
+                        source: "youtube",
+                        streamSource: "youtube",
+                    }),
+                ],
+            }),
+        ]);
+        expect(JSON.stringify(res.body.streamingAlbums)).not.toMatch(
+            /rgMbidMatchInputHash|rgMbidCheckedAt|likedBy|userId/,
+        );
+        expect(res.headers["Cache-Control"]).toBe("private, no-store");
+        remote.title = "Changed";
+        const stale = createRes();
+        await artistByIdHandler(
+            {
+                params: { id: artist.id },
+                query: {
+                    includeDiscography: "false",
+                    includeTopTracks: "false",
+                    includeSimilarArtists: "false",
+                },
+                user: { id: "owner-a" },
+            } as any,
+            stale,
+        );
+        expect(stale.body.streamingAlbums[0].matchedRgMbid).toBeNull();
+    });
+
     it("returns 404 when artist detail lookup misses", async () => {
         mockArtistFindFirst.mockResolvedValueOnce(null);
         const req = {

@@ -19,6 +19,7 @@ export interface Artist {
     genres?: string[];
     tags?: string[];
     albums?: Album[];
+    streamingAlbums?: Album[];
     topTracks?: Track[];
     similarArtists?: SimilarArtist[];
     // User overrides (non-destructive edits)

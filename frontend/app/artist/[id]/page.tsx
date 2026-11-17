@@ -31,7 +31,11 @@ import { useArtistAlbumRequests } from "@/features/artist/hooks/useArtistAlbumRe
 import { useArtistActions } from "@/features/artist/hooks/useArtistActions";
 import { useDownloadActions } from "@/features/artist/hooks/useDownloadActions";
 import { useYtMusicTopTracks } from "@/features/artist/hooks/useYtMusicTopTracks";
-import { getPlaybackIntentGeneration } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    getPlaybackIntentGeneration,
+    reservePlaybackIntent,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { getAuthRuntimeGeneration } from "@/lib/auth-runtime-generation";
 import { loadArtistRadio } from "@/lib/radio/loadArtistRadio";
 import {
     getCollectionPlaybackGeneration,
@@ -51,6 +55,7 @@ import { ArtistActionBar } from "@/features/artist/components/ArtistActionBar";
 import { ArtistBio } from "@/features/artist/components/ArtistBio";
 import { PopularTracks } from "@/features/artist/components/PopularTracks";
 import { Discography } from "@/features/artist/components/Discography";
+import { StreamingAlbums } from "@/features/artist/components/StreamingAlbums";
 import { AvailableAlbums } from "@/features/artist/components/AvailableAlbums";
 import { SimilarArtists } from "@/features/artist/components/SimilarArtists";
 import { ArtistTrackContinuation } from "@/features/artist/components/ArtistTrackContinuation";
@@ -150,14 +155,17 @@ export default function ArtistPage() {
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack, queue } = useAudioState();
     const orderedIntentRef = useRef<object | null>(null);
+    const albumPlayIntentRef = useRef<object | null>(null);
     const queueRef = useRef(queue);
     useEffect(() => {
         queueRef.current = queue;
     }, [queue]);
     useEffect(() => {
         orderedIntentRef.current = null;
+        albumPlayIntentRef.current = null;
         return () => {
             orderedIntentRef.current = null;
+            albumPlayIntentRef.current = null;
         };
     }, [pathname, activeView]);
     const { isPlaying } = usePlaybackStatus();
@@ -169,6 +177,7 @@ export default function ArtistPage() {
     const {
         artist,
         albums,
+        streamingAlbums = [],
         providerAlbums = [],
         artistProvider = null,
         loading,
@@ -299,6 +308,10 @@ export default function ArtistPage() {
     const ownedAlbums = albums.filter((a) => a.owned);
     const availableAlbums = albums.filter((a) => !a.owned);
     const visibleOwnedAlbums = filterArtistReleases(ownedAlbums, activeView);
+    const visibleStreamingAlbums = filterArtistReleases(
+        streamingAlbums,
+        activeView,
+    );
     const visibleAvailableAlbums = filterArtistReleases(
         availableAlbums,
         activeView,
@@ -316,6 +329,7 @@ export default function ArtistPage() {
         activeView === "singles";
     const hasVisibleReleases =
         visibleOwnedAlbums.length > 0 ||
+        visibleStreamingAlbums.length > 0 ||
         visibleAvailableAlbums.length > 0 ||
         visibleProviderAlbums.length > 0;
 
@@ -361,8 +375,17 @@ export default function ArtistPage() {
 
     // Play album handler
     async function handlePlayAlbum(albumId: string, albumTitle: string) {
+        const intent = {};
+        albumPlayIntentRef.current = intent;
+        const generation = reservePlaybackIntent();
+        const authGeneration = getAuthRuntimeGeneration();
+        const isCurrent = () =>
+            albumPlayIntentRef.current === intent &&
+            getPlaybackIntentGeneration() === generation &&
+            getAuthRuntimeGeneration() === authGeneration;
         try {
             const albumData = await api.getAlbum(albumId);
+            if (!isCurrent()) return;
             if (albumData.tracks && albumData.tracks.length > 0) {
                 const tracksWithAlbum = albumData.tracks.map(
                     (track: Record<string, unknown>) => ({
@@ -384,7 +407,7 @@ export default function ArtistPage() {
                 toast.success(formatArtistAlbumPlaying(albumTitle));
             }
         } catch {
-            toast.error(artistRu.playAlbumFailed);
+            if (isCurrent()) toast.error(artistRu.playAlbumFailed);
         }
     }
 
@@ -926,6 +949,13 @@ export default function ArtistPage() {
                                     ? artistRu.singlesAndEps
                                     : artistRu.discography
                             }
+                        />
+                    )}
+
+                    {showReleases && visibleStreamingAlbums.length > 0 && (
+                        <StreamingAlbums
+                            albums={visibleStreamingAlbums}
+                            onPlayAlbum={handlePlayAlbum}
                         />
                     )}
 

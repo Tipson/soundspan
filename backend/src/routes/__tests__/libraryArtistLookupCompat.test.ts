@@ -207,6 +207,7 @@ function getGetHandler(path: string, stackIndex = 0) {
 
 function createRes() {
     const res: any = {
+        setHeader: jest.fn(),
         statusCode: 200,
         body: undefined as unknown,
         status: jest.fn(function (code: number) {
@@ -307,14 +308,30 @@ function mockStoredArtistCatalog(catalogSyncedAt: Date) {
 
         // Apply the actual Prisma boundary predicates. The public artist read
         // cannot receive CATALOG rows or albums without a visible track.
-        const location = albumRead.where?.location;
-        const albums = artist.albums.filter(
-            (album) =>
+        const matchesAlbum = (album: any, where: any): boolean => {
+            if (where?.OR)
+                return where.OR.some((part: any) => matchesAlbum(album, part));
+            const location = where?.location;
+            return (
                 (typeof location === "string"
                     ? album.location === location
                     : (location?.in?.includes(album.location) ?? true)) &&
-                (!albumRead.where?.tracks?.some ||
-                    album.tracks.some((track) => track.removedAt === null)),
+                (!where?.tracks?.some ||
+                    album.tracks.some(
+                        (track: any) => track.removedAt === null,
+                    )) &&
+                (!where?.tracksYtMusic?.some ||
+                    (album.tracksYtMusic ?? []).some((track: any) =>
+                        track.likedBy?.some(
+                            (like: any) =>
+                                like.userId ===
+                                where.tracksYtMusic.some.likedBy.some.userId,
+                        ),
+                    ))
+            );
+        };
+        const albums = artist.albums.filter((album) =>
+            matchesAlbum(album, albumRead.where),
         );
         if (args.include?.albums) {
             visibleReads.push(albums.map((album) => album.id));

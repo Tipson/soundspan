@@ -7,6 +7,8 @@ import {
     stripAlbumEdition,
 } from "../../utils/artistNormalization";
 import { stripDelimitedSegments } from "../../utils/stripDelimitedSegments";
+import { isValidMbid } from "../../utils/musicIds";
+import { currentRemoteAlbumMatch } from "../../services/remoteAlbumMatchProjection";
 
 type Titled = Readonly<{ title: string }>;
 const FEATURE_SUFFIX = /^(?:feat\.?|ft\.?|featuring)\b/i;
@@ -60,16 +62,57 @@ function normalizeDiscographyAlbumTitle(title: string): string {
     return normalizeAlbumTitle(stripAlbumEdition(title));
 }
 
-/** Removes remote discography rows that match an owned album edition. */
+type DiscographyAlbum = Titled & {
+    rgMbid?: string | null;
+    location?: string;
+    artist?: { name: string; mbid: string | null };
+    matchedRgMbid?: string | null;
+    rgMbidCheckedAt?: Date | null;
+    rgMbidMatchInputHash?: string | null;
+};
+
+function canonicalAlbumIdentity(album: DiscographyAlbum): string | null {
+    if (isValidMbid(album.rgMbid)) return album.rgMbid!.toLowerCase();
+    if (album.location === "REMOTE" && album.rgMbid && album.artist) {
+        return (
+            currentRemoteAlbumMatch({
+                ...album,
+                location: album.location,
+                rgMbid: album.rgMbid,
+                artist: album.artist,
+            })?.toLowerCase() ?? null
+        );
+    }
+    return null;
+}
+
+function supportsLegacyTitleFallback(album: DiscographyAlbum): boolean {
+    return album.location !== "REMOTE" && !album.rgMbid?.startsWith("remote:");
+}
+
+/** Preserve distinct canonical identities; unresolved streaming rows never hide acquisition cards by title. */
 export function filterDistinctDiscographyAlbums<
-    TOwned extends Titled,
-    TRemote extends Titled,
+    TOwned extends DiscographyAlbum,
+    TRemote extends DiscographyAlbum,
 >(ownedAlbums: readonly TOwned[], remoteAlbums: readonly TRemote[]): TRemote[] {
+    const ownedIdentities = new Set(
+        ownedAlbums.map(canonicalAlbumIdentity).filter(Boolean),
+    );
     const ownedTitles = new Set(
-        ownedAlbums.map((album) => normalizeDiscographyAlbumTitle(album.title)),
+        ownedAlbums
+            .filter(
+                (album) =>
+                    !canonicalAlbumIdentity(album) &&
+                    supportsLegacyTitleFallback(album),
+            )
+            .map((album) => normalizeDiscographyAlbumTitle(album.title)),
     );
-    return remoteAlbums.filter(
-        (album) =>
-            !ownedTitles.has(normalizeDiscographyAlbumTitle(album.title)),
-    );
+    return remoteAlbums.filter((album) => {
+        const identity = canonicalAlbumIdentity(album);
+        if (identity) return !ownedIdentities.has(identity);
+        return (
+            !supportsLegacyTitleFallback(album) ||
+            !ownedTitles.has(normalizeDiscographyAlbumTitle(album.title))
+        );
+    });
 }

@@ -54,6 +54,11 @@ import { deleteArtistCatalogEntry } from "../../services/artistCatalogDeletion";
 import { withFederatedTrackPlayback } from "../../services/federatedTrackPayload";
 import { bumpSearchCacheVersion } from "../../services/searchCacheVersion";
 import { readLibraryArtist } from "../../services/libraryArtistReads";
+import { currentRemoteAlbumMatch } from "../../services/remoteAlbumMatchProjection";
+import {
+    formatPlaylistDetailTrack,
+    normalizeYtMusicTrack,
+} from "../../services/unifiedTrackResponse";
 import {
     buildArtistTrackTitleIndex,
     filterDistinctDiscographyAlbums,
@@ -450,6 +455,7 @@ export async function handleGetArtist(
     req: Request<{ id: string }>,
     res: Response,
 ) {
+    res.setHeader("Cache-Control", "private, no-store");
     const idParam = req.params.id;
     const includeDiscography = parseBooleanQueryParam(
         req.query.includeDiscography,
@@ -472,6 +478,7 @@ export async function handleGetArtist(
             requireVisibleAlbum: false,
             albumOrder: "year",
             maxTracksPerAlbum: 10,
+            likedRemoteAlbumsUserId: req.user?.id,
         }),
     );
 
@@ -483,6 +490,28 @@ export async function handleGetArtist(
     // Only fetch from MusicBrainz if the artist hasn't been enriched yet.
     let albumsWithOwnership = [];
     const ownedRgMbids = new Set(artist.ownedAlbums.map((o) => o.rgMbid));
+    const ownerRemoteAlbums = artist.albums.filter(
+        (album) =>
+            album.location === "REMOTE" &&
+            (album.tracksYtMusic?.length ?? 0) > 0,
+    );
+    const streamingAlbums = ownerRemoteAlbums.map((album) => ({
+        id: album.id,
+        rgMbid: album.rgMbid,
+        title: album.title,
+        year: album.year,
+        type: album.primaryType,
+        coverArt: album.coverUrl,
+        artistId: artist.id,
+        owned: false,
+        source: "youtube" as const,
+        streamSource: "youtube" as const,
+        matchedRgMbid: currentRemoteAlbumMatch({ ...album, artist }),
+        trackCount: album._count?.tracksYtMusic ?? album.tracksYtMusic.length,
+        tracks: album.tracksYtMusic.map((track) =>
+            formatPlaylistDetailTrack(normalizeYtMusicTrack(track)),
+        ),
+    }));
 
     // If artist has temp MBID, try to find real MBID by searching MusicBrainz
     let effectiveMbid = artist.mbid;
@@ -548,7 +577,7 @@ export async function handleGetArtist(
                 isLibrarySurfaceAlbumLocation(album.location) &&
                 album.location !== "REMOTE",
         )
-        .map((album) => ({
+        .map(({ tracksYtMusic: _yt, _count: _counts, ...album }) => ({
             ...album,
             tracks: album.tracks.map(({ federationPeer, ...track }) =>
                 withFederatedTrackPlayback(track, federationPeer),
@@ -674,7 +703,13 @@ export async function handleGetArtist(
                 // Merge database albums with MusicBrainz albums
                 // Database albums take precedence (they have actual files!)
                 const mbAlbumsFiltered = filterDistinctDiscographyAlbums(
-                    dbAlbums,
+                    [
+                        ...dbAlbums,
+                        ...ownerRemoteAlbums.map((album) => ({
+                            ...album,
+                            artist,
+                        })),
+                    ],
                     mbAlbums,
                 );
 
@@ -1171,6 +1206,7 @@ export async function handleGetArtist(
         bio: getArtistDisplaySummary(artist),
         genres: getMergedGenres(artist),
         albums: albumsWithOwnership,
+        streamingAlbums,
         topTracks,
         similarArtists,
         discographyComplete,
