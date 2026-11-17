@@ -6,6 +6,7 @@ import 'package:soundspan/core/model/owner_key.dart';
 import 'package:soundspan/downloads/download_worker_bridge.dart';
 import 'package:soundspan/downloads/android_media_probe.dart';
 import 'package:soundspan/downloads/download_worker_entrypoint.dart';
+import 'package:soundspan/downloads/download_network_access.dart';
 
 import 'download_fixture.dart';
 
@@ -102,7 +103,21 @@ void main() {
       'work-id',
     );
     expect(sent!.method, 'schedule');
-    expect(DownloadWorkRequest.decode(sent!.arguments).generation, 9);
+    final envelope = Map<String, Object?>.from(sent!.arguments as Map);
+    expect(envelope.remove('networkConstraint'), 'unmetered');
+    expect(DownloadWorkRequest.decode(envelope).generation, 9);
+    await const DownloadWorkerBridge().schedule(
+      id,
+      fence,
+      9,
+      networkConstraint: DownloadNetworkConstraint.notRoaming,
+    );
+    final once = Map<String, Object?>.from(sent!.arguments as Map);
+    expect(once.remove('networkConstraint'), 'notRoaming');
+    expect(
+      DownloadWorkRequest.decode(once).encode(),
+      DownloadWorkRequest(id, fence, 9).encode(),
+    );
   });
   test(
     'probe rejects malformed, false and zero duration native responses',

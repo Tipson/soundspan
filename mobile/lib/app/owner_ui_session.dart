@@ -7,6 +7,7 @@ import '../core/model/track_ref.dart';
 import '../downloads/download_worker_bridge.dart';
 import '../downloads/download_models.dart';
 import '../downloads/liked_download_automation.dart';
+import '../downloads/reschedule_network_downloads.dart';
 import '../features/account/account_controller.dart';
 import '../features/account/account_repository.dart';
 import '../features/downloads/downloads_controller.dart';
@@ -120,6 +121,29 @@ final class OwnerUiSession {
         networkPolicy: owner.policy,
       ),
     );
+    Future<String> scheduleDownload(
+      String id,
+      SessionFence original,
+      int generation,
+    ) async {
+      await guard();
+      if (original != fence) throw collectionStaleSession;
+      final job = await owner.downloads.status(id, original);
+      if (job == null ||
+          job.generation != generation ||
+          job.originalFence != original) {
+        throw collectionStaleSession;
+      }
+      final constraint = await owner.downloadAccess.constraintFor(job);
+      await guard();
+      return worker.schedule(
+        id,
+        original,
+        generation,
+        networkConstraint: constraint,
+      );
+    }
+
     automation = LikedDownloadAutomation(
       downloads: owner.downloads,
       likes: likesRepository,
@@ -127,7 +151,7 @@ final class OwnerUiSession {
       networkPolicy: owner.policy,
       // Native creation has already canonicalized and opened the private root.
       storageReady: () => isCurrent && owner.downloads.paths.root.existsSync(),
-      schedule: worker.schedule,
+      schedule: scheduleDownload,
       cancelJob: worker.cancelJob,
     );
     lifetime.add(automation.close);
@@ -136,10 +160,20 @@ final class OwnerUiSession {
       fence: fence,
       networkPolicy: owner.policy,
       storageReady: () => isCurrent && owner.downloads.paths.root.existsSync(),
-      schedule: worker.schedule,
+      schedule: scheduleDownload,
       cancelJob: worker.cancelJob,
       requestNotificationPermission: worker.requestNotificationPermission,
       automation: automation,
+      networkAccess: owner.downloadAccess,
+      onNetworkRulesChanged: () async {
+        owner.downloadRulesChanged();
+        await rescheduleNetworkDownloads(
+          repository: owner.downloads,
+          fence: fence,
+          cancel: worker.cancelJob,
+          schedule: scheduleDownload,
+        );
+      },
     );
     lifetime.add(() async {
       await downloads.close();

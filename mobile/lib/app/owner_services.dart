@@ -15,6 +15,8 @@ import '../core/session/session_authority.dart';
 import '../core/storage/owner_store.dart';
 import '../downloads/android_media_probe.dart';
 import '../downloads/download_models.dart';
+import '../downloads/device_network_monitor.dart';
+import '../downloads/download_network_access.dart';
 import '../downloads/download_repository.dart';
 import '../downloads/download_verifier.dart';
 import '../downloads/download_worker_bridge.dart';
@@ -70,6 +72,8 @@ final class NativeOwnerServices implements AppOwnerScope {
   late final FiniteQueueAdmissionCoordinator finiteAdmission;
   late final DartJsonHttpClient _json;
   late final DownloadRepository downloads;
+  late final DeviceNetworkMonitor downloadNetwork;
+  late final DownloadNetworkAccess downloadAccess;
   late final ArtworkRepository artwork;
   late final MediaGateway gateway;
   NextTrackWarmup? _warmup;
@@ -196,6 +200,20 @@ final class NativeOwnerServices implements AppOwnerScope {
       verifier: DownloadVerifier(probe: probe),
       beforeRemove: _beforeRemove,
     );
+    downloadNetwork = DeviceNetworkMonitor();
+    _retire.add(downloadNetwork.close);
+    downloadAccess = DownloadNetworkAccess(
+      repository: downloads,
+      fence: fence,
+      policy: policy,
+      readNetwork: () async {
+        await downloadNetwork.start();
+        return downloadNetwork.value;
+      },
+    );
+    void routeChanged() => _warmup?.cancelNetwork();
+    downloadNetwork.addListener(routeChanged);
+    _retire.add(() async => downloadNetwork.removeListener(routeChanged));
     artwork = ArtworkRepository(
       authority: authority,
       store: store,
@@ -522,8 +540,12 @@ final class NativeOwnerServices implements AppOwnerScope {
       ),
       fetcher: gateway.fetcher,
       requireNetwork: check,
+      revalidateNetwork: () => downloadAccess.requireNetwork(),
     ).warm(entry.track.ref, original, cancellation);
   }
+
+  /// A stricter download preference cancels speculation, never foreground Play.
+  void downloadRulesChanged() => _warmup?.cancelNetwork();
 
   Future<PreparedAudio> _prepare(QueueEntry entry) async {
     final networkRevision = _networkRevision;

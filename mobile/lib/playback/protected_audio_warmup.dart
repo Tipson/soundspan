@@ -10,39 +10,45 @@ final class ProtectedAudioWarmup {
     required this.resolver,
     required this.fetcher,
     required this.requireNetwork,
+    this.revalidateNetwork,
   });
   final PlaybackResolver resolver;
   final ProtectedMediaFetcher fetcher;
   final void Function() requireNetwork;
+  final Future<void> Function()? revalidateNetwork;
   Future<void> warm(
     TrackRef ref,
     SessionFence fence,
     MediaCancellation cancellation,
   ) async {
-    void check() {
+    Future<void> check() async {
+      cancellation.check();
+      requireNetwork();
+      await revalidateNetwork?.call();
       cancellation.check();
       requireNetwork();
     }
 
-    check();
+    await check();
     final media = await resolver.resolve(
       ref,
       ResolvePurpose.preload,
       fence,
       cancellation: cancellation,
     );
-    check();
+    await check();
     final response = await fetcher.open(
       media,
       fence,
       range: ByteRange(start: 0, end: 65535),
       cancellation: cancellation,
+      admitRequest: check,
     );
     try {
-      check();
+      await check();
       var bytes = 0;
       await for (final chunk in response.body) {
-        check();
+        await check();
         bytes += chunk.length;
         // Servers may ignore Range. Never turn prewarming into a full download.
         if (bytes >= 65536) break;

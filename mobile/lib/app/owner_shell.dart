@@ -87,6 +87,22 @@ class OwnerShell extends StatefulWidget {
 class _OwnerShellState extends State<OwnerShell>
     implements OwnerUiPresentation {
   OwnerUiSession get s => widget.session;
+  Future<bool> _confirmDownloadNetworkUse(int count) async {
+    final session = s;
+    if (!mounted || !session.isCurrent || !widget.rootExposure.value) {
+      return false;
+    }
+    final accepted = await DownloadActionsSheet.confirmNetworkUse(
+      context,
+      count,
+    );
+    return accepted &&
+        mounted &&
+        identical(session, s) &&
+        session.isCurrent &&
+        widget.rootExposure.value;
+  }
+
   Future<void> _configureWave() async {
     final session = s, wave = s.wave, tab = s.router.currentTab;
     final initial = wave.selection, revision = wave.selectionRevision;
@@ -133,6 +149,7 @@ class _OwnerShellState extends State<OwnerShell>
   void initState() {
     super.initState();
     s.presentation = this;
+    s.downloads.confirmNetworkUse = _confirmDownloadNetworkUse;
     _visibility = OwnerVisibility(router: s.router, root: widget.rootExposure);
     widget.rootExposure.addListener(_exposure);
     s.tastes.addListener(_tasteChanged);
@@ -192,6 +209,9 @@ class _OwnerShellState extends State<OwnerShell>
   @override
   void dispose() {
     if (identical(s.presentation, this)) s.presentation = null;
+    if (s.downloads.confirmNetworkUse == _confirmDownloadNetworkUse) {
+      s.downloads.confirmNetworkUse = null;
+    }
     _clock?.cancel();
     widget.rootExposure.removeListener(_exposure);
     s.tastes.removeListener(_tasteChanged);

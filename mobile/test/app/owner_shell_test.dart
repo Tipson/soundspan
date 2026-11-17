@@ -399,8 +399,18 @@ void main() {
       await tester.tap(find.text('Офлайн и загрузки'));
       await tester.pumpAndSettle();
       expect(find.byType(OfflineSettingsScreen), findsOneWidget);
-      await tester.ensureVisible(find.text('Управлять загрузками'));
-      await tester.tap(find.text('Управлять загрузками'));
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.text('Управлять загрузками').hitTestable(),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(OfflineSettingsScreen),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.text('Управлять загрузками').hitTestable());
       await tester.pumpAndSettle();
       expect(session.router.currentTab, AppTab.downloads);
       expect(find.byType(DownloadsScreen), findsOneWidget);

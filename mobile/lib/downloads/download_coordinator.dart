@@ -18,12 +18,18 @@ final class DownloadCoordinator {
     required this.resolverForQuality,
     required this.fetcher,
     required this.networkPolicy,
+    this.revalidateNetwork,
   });
   final DownloadRepository repository;
   final PlaybackResolver Function(String) resolverForQuality;
   final ProtectedMediaFetcher fetcher;
   final NetworkPolicy networkPolicy;
+
+  /// Re-read durable rules and active-route facts for this exact claimed job.
+  final Future<void> Function(DeviceDownload claim)? revalidateNetwork;
   final Set<MediaCancellation> _active = {};
+  final Set<MediaCancellation> _networkTransfers = {};
+  final Set<MediaCancellation> _networkDeferrals = {};
   final Set<Future<void>> _pending = {};
   bool _closed = false;
 
@@ -103,10 +109,16 @@ final class DownloadCoordinator {
         }),
       );
     });
+    var networkTransfer = false;
     Future<void> check() async {
       cancel.check();
       await repository.assertClaim(job);
       cancel.check();
+      if (networkTransfer) {
+        networkPolicy.requireNetwork();
+        await revalidateNetwork?.call(job);
+        cancel.check();
+      }
     }
 
     try {
@@ -165,10 +177,16 @@ final class DownloadCoordinator {
         }
       }
       if (!complete) {
+        networkTransfer = true;
+        _networkTransfers.add(cancel);
         networkPolicy.requireNetwork();
         await check();
-        final media = await resolverForQuality(job.quality)
-            .resolve(job.track.ref, ResolvePurpose.download, originalFence);
+        final media = await resolverForQuality(job.quality).resolve(
+          job.track.ref,
+          ResolvePurpose.download,
+          originalFence,
+          cancellation: cancel,
+        );
         await check();
         networkPolicy.requireNetwork();
         ByteRange? range = offset > 0 ? ByteRange(start: offset) : null;
@@ -180,6 +198,7 @@ final class DownloadCoordinator {
             ifRange: range == null ? null : etag,
             expectedTotal: range == null ? null : total,
             cancellation: cancel,
+            admitRequest: check,
           );
         } on AppFailure catch (error) {
           if (range == null || error.code != 'invalid_media') rethrow;
@@ -194,6 +213,7 @@ final class DownloadCoordinator {
             media,
             originalFence,
             cancellation: cancel,
+            admitRequest: check,
           );
         }
         var validated = MediaResponseValidator.validate(
@@ -215,6 +235,7 @@ final class DownloadCoordinator {
             media,
             originalFence,
             cancellation: cancel,
+            admitRequest: check,
           );
           validated = MediaResponseValidator.validate(
             statusCode: response.statusCode,
@@ -263,6 +284,10 @@ final class DownloadCoordinator {
             ),
           );
         }
+        // The complete body and its final checkpoint have arrived. Verifying
+        // these local bytes does not require keeping a network permission.
+        networkTransfer = false;
+        _networkTransfers.remove(cancel);
         await sink.flush();
         await sink.close();
         sink = null;
@@ -324,12 +349,19 @@ final class DownloadCoordinator {
       );
       return DownloadRunResult.ready;
     } catch (error) {
+      final deferred =
+          _networkDeferrals.contains(cancel) &&
+          !_closed &&
+          repository.authority.isCurrent(originalFence);
       final cancelled =
-          cancel.isCancelled ||
+          (!deferred && cancel.isCancelled) ||
           !repository.authority.isCurrent(originalFence) ||
-          (error is AppFailure &&
+          (!deferred &&
+              error is AppFailure &&
               const {'media_cancelled', 'stale_session'}.contains(error.code));
-      final code = error is AppFailure
+      final code = deferred
+          ? 'download_network_restricted'
+          : error is AppFailure
           ? error.code
           : error is FileSystemException
           ? (error.osError?.errorCode == 28
@@ -351,7 +383,9 @@ final class DownloadCoordinator {
       } catch (_) {
         /* Revoked fence/claim: never touch the replacement. */
       }
-      return cancelled
+      return deferred
+          ? DownloadRunResult.retry
+          : cancelled
           ? DownloadRunResult.cancelled
           : (error is FileSystemException ||
                     (error is AppFailure && error.retryable)
@@ -372,7 +406,17 @@ final class DownloadCoordinator {
       } catch (_) {
         /* A failed flush/close was already reported. */
       }
+      _networkTransfers.remove(cancel);
+      _networkDeferrals.remove(cancel);
       _active.remove(cancel);
+    }
+  }
+
+  /// Route/policy changes stop only transfers; local verification may finish.
+  void cancelNetworkTransfers({bool retryWhenAllowed = false}) {
+    for (final cancel in List.of(_networkTransfers)) {
+      if (retryWhenAllowed) _networkDeferrals.add(cancel);
+      cancel.cancel();
     }
   }
 

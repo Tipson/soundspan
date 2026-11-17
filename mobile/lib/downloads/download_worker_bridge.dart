@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 
 import '../core/model/owner_key.dart';
 import '../core/session/session_broker_protocol.dart';
+import 'download_network_access.dart';
 
 final class DownloadWorkRequest {
   DownloadWorkRequest(this.downloadId, this.originalFence, this.generation) {
@@ -41,12 +42,14 @@ final class DownloadWorkerBridge {
   Future<String> schedule(
     String id,
     SessionFence fence,
-    int generation,
-  ) async => BrokerCodec.text(
-    await _channel.invokeMethod<String>(
-      'schedule',
-      DownloadWorkRequest(id, fence, generation).encode(),
-    ),
+    int generation, {
+    DownloadNetworkConstraint networkConstraint =
+        DownloadNetworkConstraint.unmetered,
+  }) async => BrokerCodec.text(
+    await _channel.invokeMethod<String>('schedule', {
+      ...DownloadWorkRequest(id, fence, generation).encode(),
+      'networkConstraint': networkConstraint.name,
+    }),
   );
   Future<void> cancel(OwnerKey owner) => _channel.invokeMethod<void>(
     'cancelOwner',

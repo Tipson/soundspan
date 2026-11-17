@@ -12,7 +12,6 @@ import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -39,11 +38,12 @@ class DownloadWorkerPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Reques
                     val manager = WorkManager.getInstance(context)
                     when (call.method) {
                         "schedule" -> {
-                            val job = DownloadWorkIdentity.parse(call.arguments)
-                            val data = Data.Builder().putAll(job.flat()).build()
+                            val envelope = DownloadWorkRequest.parse(call.arguments)
+                            val job = envelope.identity
+                            val data = Data.Builder().putAll(envelope.flat()).build()
                             val request = OneTimeWorkRequestBuilder<SoundspanDownloadWorker>()
                                 .setInputData(data).addTag(job.ownerTag)
-                                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                                .setConstraints(Constraints.Builder().setRequiredNetworkType(envelope.networkType).build())
                                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
                                 .build()
                             val operation = manager.enqueueUniqueWork(job.uniqueName, ExistingWorkPolicy.KEEP, request)

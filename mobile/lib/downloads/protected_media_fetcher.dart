@@ -38,6 +38,8 @@ final class ProtectedMediaFetcher {
     // Gateway-only replay before exposing headers/prefix bytes. Downloads keep
     // one-shot behavior; auth/renewal/redirect budgets remain operation-wide.
     bool retryTransientBeforeResponse = false,
+    // Download/prewarm admission; auth/renewal/redirect budgets remain shared.
+    Future<void> Function()? admitRequest,
   }) async {
     if (media.fence != fence || !const {'GET', 'HEAD'}.contains(method)) {
       throw invalidMedia;
@@ -98,6 +100,12 @@ final class ProtectedMediaFetcher {
       if (cancelled || !authority.isCurrent(fence)) throw mediaCancelled;
     }
 
+    Future<void> admit() async {
+      check();
+      await admitRequest?.call();
+      check();
+    }
+
     Future<bool> next() async {
       check();
       final result = await iterator!.moveNext().timeout(idleTimeout);
@@ -114,7 +122,7 @@ final class ProtectedMediaFetcher {
       final visited = <Uri>{uri};
       while (true) {
         try {
-          check();
+          await admit();
           RedirectPolicy.validate(uri, media);
           final grant = await authority.grantAccess(
             fence,
@@ -131,7 +139,7 @@ final class ProtectedMediaFetcher {
           // Re-admit after socket establishment; a logout during TLS must not send
           // a credential using a stale proxy-cache observation.
           await authority.assertCurrent(fence);
-          check();
+          await admit();
           request.followRedirects = false;
           request.maxRedirects = 0;
           if (grant.accessToken.isEmpty ||
@@ -144,7 +152,7 @@ final class ProtectedMediaFetcher {
           if (ifRange != null) request.headers.set('if-range', ifRange);
           final response = await request.close().timeout(idleTimeout);
           await authority.assertCurrent(fence);
-          check();
+          await admit();
           if (response.statusCode == 401 && !replayed) {
             replayed = true;
             client.close(force: true);
@@ -264,7 +272,7 @@ final class ProtectedMediaFetcher {
             startsAtZero: validated.actualStart == 0,
           );
           await authority.assertCurrent(fence);
-          check();
+          await admit();
           Stream<List<int>> body() async* {
             var bytes = 0;
             try {

@@ -224,6 +224,23 @@ final class DownloadRepository {
     DownloadState.queued,
     expectedGeneration: expectedGeneration,
   )).job;
+
+  /// A rescheduler may resume only a pause that it actually applied. A rejected
+  /// CAS can return another command's paused generation and grants no ownership.
+  Future<DeviceDownload?> pauseIfCurrent(
+    String id,
+    SessionFence fence, {
+    required int expectedGeneration,
+  }) async {
+    final result = await _command(
+      id,
+      fence,
+      DownloadState.paused,
+      expectedGeneration: expectedGeneration,
+    );
+    return result.applied ? result.job : null;
+  }
+
   Future<DeviceDownload> retry(
     String id,
     SessionFence fence, {

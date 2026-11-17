@@ -10,7 +10,6 @@ import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
-import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.ForegroundInfo
 import androidx.work.WorkManager
@@ -35,7 +34,20 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
     private var progressHidden = false
     private val notificationId = id.hashCode()
     override suspend fun doWork(): Result {
-        val identity = try { DownloadWorkIdentity.fromFlat(inputData.keyValueMap) } catch (_: Exception) { return Result.failure() }
+        val work = try { DownloadWorkRequest.fromFlat(inputData.keyValueMap) } catch (_: Exception) { return Result.failure() }
+        val identity = work.identity
+        if (work.requiresLegacyUpgrade) {
+            // Old queued specs may be CONNECTED. updateWork affects the NEXT run,
+            // so this run must retry before foreground admission or any Dart/HTTP.
+            return try {
+                withContext(Dispatchers.IO) {
+                    WorkManager.getInstance(applicationContext).updateWork(updatedRequest(work, 60_000)).get(10, TimeUnit.SECONDS)
+                }
+                Result.retry()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { Result.retry() }
+        }
         return try {
             // Foreground admission is subject to Android quotas/start limits.
             setForeground(foreground())
@@ -48,10 +60,7 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
                         // Official WorkManager updateWork applies a running
                         // request's new spec to its next retry, retaining UUID,
                         // attempts and the immutable original job identity.
-                        val updated = OneTimeWorkRequestBuilder<SoundspanDownloadWorker>()
-                            .setId(id).setInputData(inputData).addTag(identity.ownerTag)
-                            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, outcome.backoffMillis, TimeUnit.MILLISECONDS).build()
+                        val updated = updatedRequest(work, outcome.backoffMillis)
                         withContext(Dispatchers.IO) { WorkManager.getInstance(applicationContext).updateWork(updated).get(10, TimeUnit.SECONDS) }
                         // Android caps backoff at 5h. Longer server holdoff is
                         // still enforced by T07's durable pre-HTTP admission.
@@ -87,6 +96,12 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
             }
         }
     }
+    private fun updatedRequest(work: DownloadWorkRequest, backoffMillis: Long) =
+        OneTimeWorkRequestBuilder<SoundspanDownloadWorker>()
+            .setId(id).setInputData(Data.Builder().putAll(work.flat()).build()).addTag(work.identity.ownerTag)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(work.networkType).build())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, backoffMillis, TimeUnit.MILLISECONDS).build()
+
     private fun start(identity: DownloadWorkIdentity) {
         val loader = FlutterInjector.instance().flutterLoader()
         loader.startInitialization(applicationContext)

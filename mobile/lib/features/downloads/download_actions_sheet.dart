@@ -6,6 +6,36 @@ import '../../downloads/download_models.dart';
 import 'downloads_controller.dart';
 
 abstract final class DownloadActionsSheet {
+  /// An explicit manual exception applies only to the selected jobs, never to
+  /// the durable network setting or an automatic collection.
+  static Future<bool> confirmNetworkUse(
+    BuildContext context,
+    int count,
+  ) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          scrollable: true,
+          title: const Text('Разрешить расход трафика?'),
+          content: Text(
+            'Выбрано треков: $count. Текущая сеть не подходит под настройку загрузок и может расходовать трафик. Разрешение действует только для выбранных загрузок; настройка сети не изменится.',
+          ),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(minimumSize: const Size(44, 44)),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(minimumSize: const Size(44, 44)),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Скачать выбранное'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
   /// Each callback captures both the exact row generation and its owner.
   static Future<void> show(
     BuildContext context,

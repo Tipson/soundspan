@@ -6,6 +6,9 @@
 
 ## Unreleased
 
+- Apply the same saved network rules to Android manual downloads, liked automation and speculative next-track audio. Distinguish Wi-Fi from unmetered access, restrict roaming independently, and limit manual traffic consent to the selected download generations.
+- Preserve completed files and explicit pauses when network preferences change. Defer interrupted background transfers without reviving stale jobs, and upgrade legacy work constraints before any audio transfer.
+- Keep offline settings reachable above the player and delay their initial state notification until navigation has finished building. Prepare Android release 0.1.13 (16).
 - Prepare Android release 0.1.12 (15) with the bounded playback retry and saved streaming album interfaces.
 - Preserve the typed cause of local audio gateway failures and retry one transient transport failure before playback headers or bytes are committed. Keep the exact recording, queue and session fences; retain one-shot downloads and server retry holdoffs.
 - Show the listener's saved streaming albums separately on artist pages. Preserve the original album and recording identities, retain the section after track pagination, and remove the retired account's data when the session changes.

@@ -16,6 +16,43 @@ import '../support/media_fixtures.dart';
 import '../support/wave_reporting_fixtures.dart';
 
 void main() {
+  test(
+    'restricted speculative admission prevents both resolver and audio HTTP',
+    () async {
+      var requests = 0;
+      final server = await FakeTlsServer.start((request) async {
+        requests++;
+        await sendAudio(request);
+      });
+      addTearDown(server.close);
+      final authority = await mediaAuthority(server.origin);
+      const denied = AppFailure(
+        code: 'download_network_restricted',
+        message: 'wait',
+      );
+      final warmup = ProtectedAudioWarmup(
+        resolver: PlaybackResolver(
+          authority: authority,
+          transport: ControlledTransport(),
+        ),
+        fetcher: ProtectedMediaFetcher(
+          authority: authority,
+          securityContext: server.clientContext,
+        ),
+        requireNetwork: () {},
+        revalidateNetwork: () async => throw denied,
+      );
+      await expectLater(
+        warmup.warm(
+          const YoutubeTrackRef('warmup001aa'),
+          authority.requireFence(),
+          MediaCancellation(),
+        ),
+        throwsA(denied),
+      );
+      expect(requests, 0);
+    },
+  );
   test('cancel aborts a pending native resolver POST and leaves another request usable', () async {
     final started = Completer<void>();
     var resolves = 0;

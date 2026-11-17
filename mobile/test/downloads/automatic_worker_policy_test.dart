@@ -22,7 +22,7 @@ void main() {
 
   for (final row in [
     {'version': 1, 'paused': true},
-    {'version': 2, 'paused': false},
+    {'version': 3, 'paused': false},
     {'version': 1, 'paused': 'false'},
   ]) {
     test(
@@ -156,7 +156,7 @@ void main() {
           h.fence,
           (tx) => tx.read(_controlNamespace, 'control'),
         ),
-        {'version': 1, 'paused': true},
+        {'version': 2, 'paused': true},
       );
       io.fault = null;
       final reopened = h.newRepository();

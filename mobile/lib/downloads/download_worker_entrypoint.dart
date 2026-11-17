@@ -19,38 +19,21 @@ import '../playback/playback_resolver.dart';
 import 'android_media_probe.dart';
 import 'download_coordinator.dart';
 import 'download_models.dart';
+import 'device_network_monitor.dart';
+import 'download_network_access.dart';
+import 'download_network_policy.dart';
 import 'download_repository.dart';
 import 'download_verifier.dart';
 import 'download_worker_bridge.dart';
 import 'private_media_paths.dart';
 import 'protected_media_fetcher.dart';
 
+export 'download_network_policy.dart' show loadDownloadNetworkPolicy;
+
 typedef WorkerNetworkPolicyLoader = Future<NetworkPolicy> Function(
   OwnerStore store,
   SessionFence fence,
 );
-
-/// Same durable flag used by foreground composition. Unknown/corrupt flags fail
-/// closed; an absent preference means the product's default online mode.
-Future<NetworkPolicy> loadDownloadNetworkPolicy(
-  OwnerStore store,
-  SessionFence fence,
-) async {
-  final value = await store.transaction(
-    fence,
-    (tx) => tx.read('settings', 'network'),
-  );
-  if (value == null) return const NetworkPolicy.online();
-  if (value.length != 2 || value['version'] != 1 || value['offline'] is! bool) {
-    throw const AppFailure(
-      code: 'invalid_network_preference',
-      message: 'Настройка сети недоступна',
-    );
-  }
-  return value['offline'] == true
-      ? const NetworkPolicy.offline()
-      : const NetworkPolicy.online();
-}
 
 /// Production calls with defaults. An integration-only entrypoint may supply a
 /// local test CA; neither WorkData nor a platform message can configure trust.
@@ -76,6 +59,8 @@ Future<void> runDownloadWorker({
     StreamSubscription? revocations;
     Timer? progress;
     Future<void>? pendingProgress;
+    DeviceNetworkMonitor? deviceNetwork;
+    VoidCallback? routeChanged;
     try {
       if (stopped) return outcome('cancelled');
       client = BrokerClient(MethodChannelBrokerTransport());
@@ -107,6 +92,14 @@ Future<void> runDownloadWorker({
         client: DartJsonHttpClient(),
         authority: authority,
       );
+      deviceNetwork = DeviceNetworkMonitor();
+      await deviceNetwork.start();
+      final access = DownloadNetworkAccess(
+        repository: repository,
+        fence: request.originalFence,
+        policy: policy,
+        readNetwork: () async => deviceNetwork!.value,
+      );
       coordinator = DownloadCoordinator(
         repository: repository,
         resolverForQuality: (quality) => PlaybackResolver(
@@ -119,7 +112,11 @@ Future<void> runDownloadWorker({
           securityContext: testSecurityContext,
         ),
         networkPolicy: policy,
+        revalidateNetwork: (job) => access.requireNetwork(job: job),
       );
+      routeChanged = () =>
+          coordinator!.cancelNetworkTransfers(retryWhenAllowed: true);
+      deviceNetwork.addListener(routeChanged);
       revocations = authority.changes.listen((_) {
         if (!authority.isCurrent(request.originalFence)) {
           stopped = true;
@@ -188,6 +185,8 @@ Future<void> runDownloadWorker({
       stopped = true;
       progress?.cancel();
       await coordinator?.close();
+      if (routeChanged != null) deviceNetwork?.removeListener(routeChanged);
+      await deviceNetwork?.close();
       await revocations?.cancel();
       await pendingProgress;
       // Drain T07 before releasing its DB handle and the sole broker lease.

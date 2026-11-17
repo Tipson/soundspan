@@ -7,11 +7,16 @@ import '../../core/model/owner_key.dart';
 import '../../core/model/track.dart';
 import '../../core/network/network_policy.dart';
 import '../../downloads/download_models.dart';
+import '../../downloads/download_network_access.dart';
+import '../../downloads/download_network_rules.dart';
 import '../../downloads/download_repository.dart';
 import '../../downloads/liked_download_automation.dart';
+import '../../downloads/stored_download_network_rules.dart';
 import '../library/library_models.dart';
 
 enum DownloadsFilter { all, ready, active, failed }
+
+enum _ManualNetworkChoice { regular, once, waiting, cancelled }
 
 /// UI commands use only DownloadRepository and the existing native work bridge.
 final class DownloadsController extends ChangeNotifier {
@@ -24,6 +29,9 @@ final class DownloadsController extends ChangeNotifier {
     required this.cancelJob,
     this.requestNotificationPermission,
     this.automation,
+    this.networkAccess,
+    this.confirmNetworkUse,
+    this.onNetworkRulesChanged,
   });
   final DownloadRepository repository;
   final SessionFence fence;
@@ -33,6 +41,72 @@ final class DownloadsController extends ChangeNotifier {
   final CancelDeviceDownload cancelJob;
   final Future<bool> Function()? requestNotificationPermission;
   final LikedDownloadAutomation? automation;
+  final DownloadNetworkAccess? networkAccess;
+  Future<bool> Function(int count)? confirmNetworkUse;
+  final Future<void> Function()? onNetworkRulesChanged;
+  DownloadNetworkRules? _networkRules;
+  AppFailure? _networkRulesFailure;
+  bool _networkRulesLoading = false;
+  int _rulesRevision = 0;
+  final _closedSignal = Completer<void>();
+  DownloadNetworkRules? get networkRules => isCurrent ? _networkRules : null;
+  AppFailure? get networkRulesFailure =>
+      isCurrent ? _networkRulesFailure : null;
+  bool get networkRulesLoading => isCurrent && _networkRulesLoading;
+
+  void _checkNetworkAccess(DownloadNetworkAccess access) {
+    if (access.fence != fence) throw collectionStaleSession;
+  }
+
+  /// Unknown future preferences remain untouched until an explicit new choice.
+  Future<void> loadNetworkRules() {
+    final access = networkAccess;
+    if (!isCurrent || access == null || _networkRulesLoading) {
+      return Future.value();
+    }
+    final revision = ++_rulesRevision;
+    _networkRulesLoading = true;
+    _notify();
+    return _track(() async {
+      try {
+        _checkNetworkAccess(access);
+        final rules = await access.rules();
+        await repository.authority.assertCurrent(fence);
+        if (isCurrent && revision == _rulesRevision) {
+          _networkRules = rules;
+          _networkRulesFailure = null;
+        }
+      } catch (error) {
+        if (isCurrent && revision == _rulesRevision) {
+          _networkRules = null;
+          _networkRulesFailure = collectionFailure(error);
+        }
+      } finally {
+        if (revision == _rulesRevision) _networkRulesLoading = false;
+        _notify();
+      }
+    });
+  }
+
+  Future<void> setNetworkRules(DownloadNetworkRules rules) => _act(() async {
+    ++_rulesRevision;
+    _networkRulesLoading = false;
+    try {
+      final access = networkAccess;
+      if (access == null) throw DownloadNetworkAccess.restricted;
+      _checkNetworkAccess(access);
+      await saveDownloadNetworkRules(repository.store, fence, rules);
+      await repository.authority.assertCurrent(fence);
+      if (!isCurrent) return;
+      _networkRules = rules;
+      _networkRulesFailure = null;
+      _notify();
+      await onNetworkRulesChanged?.call();
+      await repository.authority.assertCurrent(fence);
+    } catch (error) {
+      if (isCurrent) _networkRulesFailure = collectionFailure(error);
+    }
+  });
   List<DeviceDownload> _jobs = const [];
   String _query = '';
   DownloadsFilter _filter = DownloadsFilter.all;
@@ -132,6 +206,7 @@ final class DownloadsController extends ChangeNotifier {
     if (!isCurrent || busy) return Future.value();
     busy = true;
     failure = null;
+    notice = null;
     _notify();
     return _track(() async {
       try {
@@ -157,6 +232,53 @@ final class DownloadsController extends ChangeNotifier {
     networkPolicy.requireNetwork();
   }
 
+  Future<_ManualNetworkChoice> _manualNetworkChoice(int count) async {
+    final access = networkAccess;
+    if (access == null) return _ManualNetworkChoice.regular;
+    _checkNetworkAccess(access);
+    try {
+      await access.requireNetwork();
+      return _ManualNetworkChoice.regular;
+    } on AppFailure catch (error) {
+      if (error.code != DownloadNetworkAccess.restricted.code) rethrow;
+    }
+    final rules = await access.rules();
+    final state = await access.readNetwork();
+    await repository.authority.assertCurrent(fence);
+    _requireAdmission();
+    if (rules.allows(state)) return _ManualNetworkChoice.regular;
+    final confirm = confirmNetworkUse;
+    if (!rules.allows(state, oneOff: true) || confirm == null) {
+      return _ManualNetworkChoice.waiting;
+    }
+    final allowed = await Future.any<bool>([
+      confirm(count),
+      _closedSignal.future.then((_) => false),
+    ]);
+    await repository.authority.assertCurrent(fence);
+    if (!isCurrent) throw collectionStaleSession;
+    return allowed ? _ManualNetworkChoice.once : _ManualNetworkChoice.cancelled;
+  }
+
+  Future<void> _admitAndSchedule(
+    DeviceDownload job,
+    _ManualNetworkChoice choice,
+  ) async {
+    if (choice == _ManualNetworkChoice.once) {
+      try {
+        await networkAccess!.allowOnce(job);
+      } on AppFailure catch (error) {
+        if (error.code != DownloadNetworkAccess.restricted.code) rethrow;
+        // The route may change while consent is open. Keep a future-route job,
+        // never turn that answer into permission for unknown/offline/roaming.
+        notice = DownloadNetworkAccess.restricted.message;
+      }
+    } else if (choice == _ManualNetworkChoice.waiting) {
+      notice = DownloadNetworkAccess.restricted.message;
+    }
+    await _schedule(job);
+  }
+
   /// Receives the actual selected, already bounded collection subset. No crawl,
   /// count truncation or permission prompt occurs elsewhere in the feature.
   Future<void> downloadTracks(
@@ -166,15 +288,42 @@ final class DownloadsController extends ChangeNotifier {
     final selected = List<Track>.of(tracks);
     return _act(() async {
       _requireAdmission();
+      final pending = <Track>[];
+      var alreadyReady = 0;
+      if (networkAccess == null) {
+        pending.addAll(selected);
+      } else {
+        final seen = <String>{};
+        for (final track in selected) {
+          if (!track.playable) continue;
+          final id = repository.key(track.ref, quality, fence.owner);
+          if (!seen.add(id)) continue;
+          final existing = await repository.status(id, fence);
+          if (existing?.state == DownloadState.ready) {
+            alreadyReady++;
+          } else {
+            pending.add(track);
+          }
+        }
+      }
+      if (pending.isEmpty) {
+        notice = 'Выбранные записи уже загружены или недоступны.';
+        return;
+      }
+      final choice = await _manualNetworkChoice(pending.length);
+      if (choice == _ManualNetworkChoice.cancelled) {
+        notice = 'Загрузка отменена.';
+        return;
+      }
       final permission = requestNotificationPermission;
       if (permission != null) {
         final allowed = await permission();
         await repository.authority.assertCurrent(fence);
         if (!allowed) notice = 'Доступ к уведомлениям не разрешён. Загрузка может работать в приложении; фоновый запуск зависит от ограничений Android.';
       }
-      var admitted = 0;
+      var admitted = alreadyReady;
       var skipped = 0;
-      for (final track in selected) {
+      for (final track in pending) {
         if (!isCurrent) return;
         if (!track.playable) {
           skipped++;
@@ -201,7 +350,7 @@ final class DownloadsController extends ChangeNotifier {
               expectedGeneration: job.generation,
             );
           }
-          await _schedule(job);
+          await _admitAndSchedule(job, choice);
           admitted++;
         } catch (error) {
           if (!isCurrent) return;
@@ -232,29 +381,33 @@ final class DownloadsController extends ChangeNotifier {
       await cancelJob(job.id, job.originalFence, job.generation);
     }
   });
-  Future<void> resume(DeviceDownload job) => _act(() async {
-    _requireAdmission();
-    final updated = await repository.restartManually(
-      job.id,
-      fence,
-      expectedGeneration: job.generation,
-    );
-    if (updated != null) {
-      await _schedule(updated);
-    }
-  });
-  Future<void> retry(DeviceDownload job) => _act(() async {
-    _requireAdmission();
-    final updated = await repository.restartManually(
-      job.id,
-      fence,
-      expectedGeneration: job.generation,
-      retry: true,
-    );
-    if (updated != null) {
-      await _schedule(updated);
-    }
-  });
+  Future<void> resume(DeviceDownload job) => _restart(job);
+  Future<void> retry(DeviceDownload job) => _restart(job, retry: true);
+  Future<void> _restart(DeviceDownload job, {bool retry = false}) =>
+      _act(() async {
+        _requireAdmission();
+        if (job.state == DownloadState.ready) return;
+        final current = await repository.status(job.id, fence);
+        if (current == null ||
+            current.generation != job.generation ||
+            current.state == DownloadState.ready) {
+          return;
+        }
+        final choice = await _manualNetworkChoice(1);
+        if (choice == _ManualNetworkChoice.cancelled) {
+          notice = 'Загрузка отменена.';
+          return;
+        }
+        final updated = await repository.restartManually(
+          job.id,
+          fence,
+          expectedGeneration: job.generation,
+          retry: retry,
+        );
+        if (updated != null) {
+          await _admitAndSchedule(updated, choice);
+        }
+      });
   Future<void> cancel(DeviceDownload job) => _act(() async {
     final cancelled = await repository.cancel(
       job.id,
@@ -294,6 +447,8 @@ final class DownloadsController extends ChangeNotifier {
 
   Future<void> close() => _closing ??= () async {
     _closed = true;
+    if (!_closedSignal.isCompleted) _closedSignal.complete();
+    ++_rulesRevision;
     _poll?.cancel();
     _poll = null;
     while (_pending.isNotEmpty) {
