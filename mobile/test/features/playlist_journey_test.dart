@@ -793,7 +793,7 @@ void main() {
     },
   );
   test(
-    'library and Youtube exact add payloads, native rejected before any HTTP',
+    'library Youtube and native exact add payloads retain input order',
     () async {
       final a = CollectionAuthority();
       final t = CollectionTransport((r, f) => ApiResponse(200, item(0)));
@@ -834,14 +834,16 @@ void main() {
         title: 'Трек',
         artist: 'Артист',
       );
-      await expectLater(
-        repo.add('p', [
-          const Track(ref: LibraryTrackRef('other'), title: 'A', artist: 'B'),
-          native,
-        ]),
-        throwsA(anything),
-      );
-      expect(t.requests.length, 2);
+      await repo.add('p', [
+        const Track(ref: LibraryTrackRef('other'), title: 'A', artist: 'B'),
+        native,
+      ]);
+      expect(t.requests.length, 4);
+      expect(t.requests[2].body, {'trackId': 'other'});
+      expect(t.requests[3].body, {
+        'musicSourceRecording': (native.ref as NativeTrackRef).recording
+            .toJson(),
+      });
     },
   );
   test('foreign detail rejects mutation without request and direct repository 403 stays 403', () async {

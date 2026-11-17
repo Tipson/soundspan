@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Add exact VK and Yandex recordings to playlists through the existing picker and collection editor, preserving provider identifiers and portable metadata without promoting display fields into identity.
 - Prepare Android release 0.1.11 (14) with artifact names and APK version checks derived from the pinned source version. Preserve explicit verification of older release artifacts through legacy defaults.
 - Find saved albums and artists without waiting for provider search. Keep exact catalog identities and independent page positions; refresh collection results after a detail visit and retry failed refreshes without restoring removed entries.
 - Find saved YouTube, VK and Yandex tracks in global search using their exact playback identities while providers are unavailable. Retry an unavailable personal search page at the same offset, retaining local results without duplicate rows or hidden gaps.

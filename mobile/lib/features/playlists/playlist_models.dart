@@ -154,6 +154,9 @@ Map<String, Object?> playlistAddPayload(Track track) {
   }
   return switch (track.ref) {
     LibraryTrackRef(:final libraryId) => {'trackId': libraryId},
+    NativeTrackRef(:final recording) => {
+      'musicSourceRecording': recording.toJson(),
+    },
     YoutubeTrackRef(:final videoId) => {
       'youtubeVideoId': videoId,
       'title': track.title,
