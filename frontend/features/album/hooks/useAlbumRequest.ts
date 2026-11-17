@@ -7,7 +7,8 @@ import {
     useMyMusicRequests,
     useRequestsGate,
 } from "@/hooks/useMusicRequests";
-import { isSyntheticRgMbid } from "../albumActionVisibility";
+import { resolveAcquisitionMbid } from "../albumActionVisibility";
+import { isRequestableMbid } from "@/lib/musicRequests";
 import type { Album } from "../types";
 import {
     formatReleaseRequestedRu,
@@ -25,9 +26,7 @@ export function useAlbumRequest(album: Album | null | undefined) {
     const myRequests = useMyMusicRequests(requestsEnabled);
     const create = useCreateMusicRequest();
 
-    const candidate = album?.rgMbid || album?.mbid || null;
-    const rgMbid =
-        candidate && !isSyntheticRgMbid(candidate) ? candidate : null;
+    const rgMbid = album ? resolveAcquisitionMbid(album) : null;
     const isRequestedAlbum = Boolean(
         rgMbid && openRequestRgMbids(myRequests.data).has(rgMbid.toLowerCase()),
     );
@@ -37,13 +36,12 @@ export function useAlbumRequest(album: Album | null | undefined) {
         const toastId = `music-request-${rgMbid}`;
         toast.loading(formatRequestingReleaseRu(album.title), { id: toastId });
         try {
+            const artistMbid = album.artist?.mbid;
             await create.mutateAsync({
                 artistName: album.artist?.name || ru.common.unknownArtist,
                 albumTitle: album.title,
                 rgMbid,
-                ...(album.artist?.mbid
-                    ? { artistMbid: album.artist.mbid }
-                    : {}),
+                ...(isRequestableMbid(artistMbid) ? { artistMbid } : {}),
             });
             toast.success(formatReleaseRequestedRu(album.title), {
                 id: toastId,

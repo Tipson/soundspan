@@ -397,37 +397,42 @@ model ArtistCatalogReleaseGroup {
 }
 
 model Album {
-  id                String                   @id @default(cuid())
-  rgMbid            String                   @unique
-  artistId          String
-  title             String
-  year              Int?
-  coverUrl          String?
-  primaryType       String
-  label             String?
-  genres            Json?
-  lastSynced        DateTime                 @default(now())
-  updatedAt         DateTime                 @default(now()) @updatedAt
-  location          AlbumLocation            @default(LIBRARY)
-  searchVector      Unsupported("tsvector")?
-  displayTitle      String?
-  displayYear       Int?
-  hasUserOverrides  Boolean                  @default(false)
-  userCoverUrl      String?
-  userGenres        Json?
-  originalYear      Int?
-  peerId            String?
-  remoteId          String?
-  albumLoudnessLufs Float?
-  albumTruePeakDb   Float?
-  catalogTouchedAt  DateTime?
-  artist            Artist                   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  federationPeer    FederationPeer?          @relation(fields: [peerId], references: [id], onDelete: Cascade)
-  tracks            Track[]
-  tracksTidal       TrackTidal[]
-  tracksYtMusic     TrackYtMusic[]
-  ownedBy           OwnedAlbum[]
-  discoveryRecords  DiscoveryAlbum[]
+  id                   String                   @id @default(cuid())
+  rgMbid               String                   @unique
+  /// Canonical suggestion for a REMOTE placeholder; never replaces rgMbid.
+  matchedRgMbid        String?
+  rgMbidCheckedAt      DateTime?
+  /// Binds cached matching to the current title and artist metadata.
+  rgMbidMatchInputHash String?
+  artistId             String
+  title                String
+  year                 Int?
+  coverUrl             String?
+  primaryType          String
+  label                String?
+  genres               Json?
+  lastSynced           DateTime                 @default(now())
+  updatedAt            DateTime                 @default(now()) @updatedAt
+  location             AlbumLocation            @default(LIBRARY)
+  searchVector         Unsupported("tsvector")?
+  displayTitle         String?
+  displayYear          Int?
+  hasUserOverrides     Boolean                  @default(false)
+  userCoverUrl         String?
+  userGenres           Json?
+  originalYear         Int?
+  peerId               String?
+  remoteId             String?
+  albumLoudnessLufs    Float?
+  albumTruePeakDb      Float?
+  catalogTouchedAt     DateTime?
+  artist               Artist                   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  federationPeer       FederationPeer?          @relation(fields: [peerId], references: [id], onDelete: Cascade)
+  tracks               Track[]
+  tracksTidal          TrackTidal[]
+  tracksYtMusic        TrackYtMusic[]
+  ownedBy              OwnedAlbum[]
+  discoveryRecords     DiscoveryAlbum[]
 
   @@unique([peerId, remoteId])
   @@index([artistId])

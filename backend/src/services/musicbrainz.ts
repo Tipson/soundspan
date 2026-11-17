@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, type AxiosRequestConfig } from "axios";
+import { createHash } from "crypto";
 import { logger } from "../utils/logger";
 import { redisClient } from "../utils/redis";
 import { rateLimiter } from "./rateLimiter";
@@ -230,11 +231,15 @@ class MusicBrainzService {
         fallbackValue?: T,
         backgroundIdentity = false,
         emptyArrayTtlSeconds?: number,
+        validateCached?: (value: unknown) => T,
     ): Promise<T> {
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
-                const data = JSON.parse(cached) as T;
+                const parsed: unknown = JSON.parse(cached);
+                const data = validateCached
+                    ? validateCached(parsed)
+                    : (parsed as T);
                 if (
                     emptyArrayTtlSeconds === undefined ||
                     !Array.isArray(data) ||
@@ -440,6 +445,105 @@ class MusicBrainzService {
             },
             2592000,
             [],
+        );
+    }
+
+    /** Strict, low-priority album identity search; outages never become cached misses. */
+    async searchReleaseGroupsForAlbumIdentity(
+        albumTitle: string,
+        artistName: string,
+    ): Promise<MusicBrainzReleaseGroupSearchResult[]> {
+        const title = albumTitle.trim(),
+            artist = artistName.trim();
+        if (!title || title.length > 500 || !artist || artist.length > 200)
+            throw new RangeError("Invalid album identity search input");
+        const parse = (
+            value: unknown,
+        ): MusicBrainzReleaseGroupSearchResult[] => {
+            const validScore = (score: unknown) => {
+                if (score === undefined) return true;
+                if (typeof score !== "number" && typeof score !== "string")
+                    return false;
+                if (
+                    typeof score === "string" &&
+                    (score.length > 16 || !/^\d+(?:\.\d+)?$/.test(score.trim()))
+                )
+                    return false;
+                const confidence = Number(score);
+                return (
+                    Number.isFinite(confidence) &&
+                    confidence >= 0 &&
+                    confidence <= 100
+                );
+            };
+            const validCredit = (credit: unknown) => {
+                if (!isPlainObject(credit)) return false;
+                const artist = isPlainObject(credit.artist)
+                    ? credit.artist
+                    : null;
+                return (
+                    (credit.name === undefined ||
+                        typeof credit.name === "string") &&
+                    (!artist ||
+                        ((artist.id === undefined || isValidMbid(artist.id)) &&
+                            (artist.name === undefined ||
+                                typeof artist.name === "string"))) &&
+                    Boolean(
+                        typeof credit.name === "string" ||
+                        (artist &&
+                            (typeof artist.name === "string" ||
+                                isValidMbid(artist.id))),
+                    )
+                );
+            };
+            if (
+                !Array.isArray(value) ||
+                value.length > 25 ||
+                value.some(
+                    (row) =>
+                        !hasReleaseGroupIdentity(row) ||
+                        !isValidMbid(row.id) ||
+                        !row.title.trim() ||
+                        row.title.length > 500 ||
+                        !validScore(row.score) ||
+                        typeof row["primary-type"] !== "string" ||
+                        !Array.isArray(row["artist-credit"]) ||
+                        row["artist-credit"].length < 1 ||
+                        row["artist-credit"].length > 20 ||
+                        !row["artist-credit"].every(validCredit) ||
+                        (row["secondary-types"] !== undefined &&
+                            (!Array.isArray(row["secondary-types"]) ||
+                                row["secondary-types"].length > 20 ||
+                                !row["secondary-types"].every(
+                                    (type) => typeof type === "string",
+                                ))),
+                )
+            )
+                throw new TypeError(
+                    "Invalid MusicBrainz album identity response",
+                );
+            return value;
+        };
+        const key = createHash("sha256")
+            .update(JSON.stringify([title, artist]))
+            .digest("hex");
+        return this.cachedRequest(
+            `mb:album-identity:v1:${key}`,
+            async () => {
+                const response = await this.get("/release-group", {
+                    params: {
+                        query: `releasegroup:"${this.escapeLucene(title)}" AND artist:"${this.escapeLucene(artist)}"`,
+                        limit: 25,
+                        fmt: "json",
+                    },
+                });
+                return parse(response.data?.["release-groups"]);
+            },
+            2592000,
+            undefined,
+            true,
+            3600,
+            parse,
         );
     }
 

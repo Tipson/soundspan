@@ -45,6 +45,7 @@ import {
     LIBRARY_SURFACE_ALBUM_LOCATIONS,
     TRACK_SORT_MAP,
     TRACK_VISIBLE_WHERE,
+    LOCAL_AUDIO_ANALYSIS_TRACK_WHERE,
     isLibrarySurfaceAlbumLocation,
     parseLibraryOrigin,
     trackBrowseWhere,
@@ -56,6 +57,7 @@ import {
     libraryDeletionLogger,
 } from "../../utils/libraryDeletion";
 import { bumpSearchCacheVersion } from "../../services/searchCacheVersion";
+import { currentRemoteAlbumMatch } from "../../services/remoteAlbumMatchProjection";
 
 /**
  * Router segment for albums routes registered at this position.
@@ -248,18 +250,28 @@ export async function handleGetAlbums(req: Request, res: Response) {
         // Normalize coverArt field for frontend
         const albums = albumsData
             .filter((album) => isLibrarySurfaceAlbumLocation(album.location))
-            .map(({ federationPeer, ...album }) => ({
-                ...album,
-                source: album.location === "FEDERATED" ? "federated" : "local",
-                peer: federationPeer
-                    ? {
-                          id: federationPeer.id,
-                          name: federationPeer.name,
-                          online: federationPeer.outboundStatus === "ACTIVE",
-                      }
-                    : undefined,
-                coverArt: album.coverUrl,
-            }));
+            .map(
+                ({
+                    federationPeer,
+                    matchedRgMbid: _matched,
+                    rgMbidCheckedAt: _checked,
+                    rgMbidMatchInputHash: _matchHash,
+                    ...album
+                }) => ({
+                    ...album,
+                    source:
+                        album.location === "FEDERATED" ? "federated" : "local",
+                    peer: federationPeer
+                        ? {
+                              id: federationPeer.id,
+                              name: federationPeer.name,
+                              online:
+                                  federationPeer.outboundStatus === "ACTIVE",
+                          }
+                        : undefined,
+                    coverArt: album.coverUrl,
+                }),
+            );
 
         res.json({
             albums,
@@ -541,6 +553,9 @@ function publicAlbumFields(
     if (albumWithTracks) {
         const {
             federationPeer,
+            matchedRgMbid: _matched,
+            rgMbidCheckedAt: _checked,
+            rgMbidMatchInputHash: _matchHash,
             tracks: _tracks,
             tracksTidal: _tracksTidal,
             tracksYtMusic: _tracksYtMusic,
@@ -549,7 +564,13 @@ function publicAlbumFields(
         return { federationPeer, albumFields };
     }
     if (!albumWithoutTracks) return null;
-    const { federationPeer, ...albumFields } = albumWithoutTracks;
+    const {
+        federationPeer,
+        matchedRgMbid: _matched,
+        rgMbidCheckedAt: _checked,
+        rgMbidMatchInputHash: _matchHash,
+        ...albumFields
+    } = albumWithoutTracks;
     return { federationPeer, albumFields };
 }
 
@@ -598,6 +619,17 @@ export async function handleGetAlbum(req: AlbumDetailRequest, res: Response) {
         return sendRouteError(res, 404, "Album not found");
     }
     const { federationPeer, albumFields } = publicFields;
+    const matchedRgMbid = currentRemoteAlbumMatch(album);
+    const heldMatch = matchedRgMbid
+        ? await prisma.album.findFirst({
+              where: {
+                  location: "LIBRARY",
+                  rgMbid: matchedRgMbid,
+                  tracks: { some: LOCAL_AUDIO_ANALYSIS_TRACK_WHERE },
+              },
+              select: { id: true },
+          })
+        : null;
     res.json({
         ...albumFields,
         source: formatAlbumSource(album.location),
@@ -611,6 +643,8 @@ export async function handleGetAlbum(req: AlbumDetailRequest, res: Response) {
         artist: album.artist,
         tracks: formatAlbumTracks(albumWithTracks),
         owned: !!owned,
+        matchedRgMbid,
+        matchedInLibrary: Boolean(heldMatch),
         coverArt: album.coverUrl,
     });
 }

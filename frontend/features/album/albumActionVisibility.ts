@@ -1,4 +1,5 @@
 import type { AlbumSource } from "./types";
+import { isRequestableMbid } from "../../lib/musicRequests";
 
 /** Inputs that determine which album actions are honest and available. */
 export interface AlbumActionVisibilityInput {
@@ -7,6 +8,8 @@ export interface AlbumActionVisibilityInput {
     albumId: string;
     rgMbid?: string;
     mbid?: string;
+    matchedRgMbid?: string | null;
+    matchedInLibrary?: boolean;
     downloadsEnabled: boolean;
     requestsEnabled: boolean;
     hasAddAllToQueue: boolean;
@@ -38,12 +41,16 @@ export function isSyntheticRgMbid(value: string | null | undefined): boolean {
 
 /** Resolves a real release-group identifier suitable for acquisition routes. */
 export function resolveAcquisitionMbid(
-    input: Pick<AlbumActionVisibilityInput, "rgMbid" | "mbid">,
+    input: Pick<
+        AlbumActionVisibilityInput,
+        "rgMbid" | "mbid" | "matchedRgMbid" | "matchedInLibrary"
+    >,
 ): string | null {
-    const candidate = input.rgMbid || input.mbid;
+    if (input.matchedInLibrary) return null;
+    const candidate = input.matchedRgMbid || input.rgMbid || input.mbid;
     // The acquisition flow must resolve synthetic remote IDs canonically before
     // these controls can send them to MusicBrainz or Lidarr.
-    return candidate && !isSyntheticRgMbid(candidate) ? candidate : null;
+    return candidate && isRequestableMbid(candidate) ? candidate : null;
 }
 
 /** Derives every action-bar control from album state and feature policy. */

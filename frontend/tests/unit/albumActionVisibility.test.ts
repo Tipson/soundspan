@@ -3,13 +3,14 @@ import test from "node:test";
 import {
     getAlbumActionVisibility,
     isSyntheticRgMbid,
+    resolveAcquisitionMbid,
 } from "../../features/album/albumActionVisibility";
 
 const baseInput = {
     source: "discovery" as const,
     owned: false,
     albumId: "album-1",
-    rgMbid: "real-release-group",
+    rgMbid: "11111111-1111-4111-8111-111111111111",
     downloadsEnabled: true,
     requestsEnabled: false,
     hasAddAllToQueue: true,
@@ -62,7 +63,28 @@ test("album action visibility permits acquisition for a real remote release grou
     });
 
     assert.equal(visibility.showAcquisition, true);
-    assert.equal(visibility.acquisitionMbid, "real-release-group");
+    assert.equal(visibility.acquisitionMbid, baseInput.rgMbid);
+});
+
+test("remote matched identity is acquisition-only and held matches suppress actions", () => {
+    const album = {
+        rgMbid: "remote:placeholder",
+        matchedRgMbid: baseInput.rgMbid,
+    };
+    assert.equal(resolveAcquisitionMbid(album), baseInput.rgMbid);
+    assert.equal(album.rgMbid, "remote:placeholder");
+    assert.equal(
+        resolveAcquisitionMbid({ ...album, matchedInLibrary: true }),
+        null,
+    );
+    assert.equal(resolveAcquisitionMbid({ rgMbid: "vk:opaque-album" }), null);
+    assert.equal(
+        resolveAcquisitionMbid({
+            rgMbid: "remote:x",
+            matchedRgMbid: "not-a-uuid",
+        }),
+        null,
+    );
 });
 
 test("album action visibility applies ownership, feature, and group policy", () => {

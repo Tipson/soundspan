@@ -19,6 +19,7 @@ jest.mock("../../utils/redis", () => ({
         setEx: jest.fn(),
         del: jest.fn(),
         keys: jest.fn(),
+        ttl: jest.fn().mockResolvedValue(3600),
     },
 }));
 
@@ -74,6 +75,172 @@ describe("musicBrainzService", () => {
             async (_bucket: string, requestFn: () => Promise<unknown>) =>
                 requestFn(),
         );
+    });
+
+    it("keeps identity-search misses short and propagates outages without negative poisoning", async () => {
+        mockHttpGet.mockResolvedValueOnce({ data: { "release-groups": [] } });
+        await expect(
+            musicBrainzService.searchReleaseGroupsForAlbumIdentity(
+                "Album",
+                "Artist",
+            ),
+        ).resolves.toEqual([]);
+        expect(mockRedisSetEx).toHaveBeenLastCalledWith(
+            expect.stringContaining("mb:album-identity:v1:"),
+            3600,
+            "[]",
+        );
+        mockRedisSetEx.mockClear();
+        mockHttpGet.mockRejectedValueOnce({ response: { status: 503 } });
+        await expect(
+            musicBrainzService.searchReleaseGroupsForAlbumIdentity(
+                "Other",
+                "Artist",
+            ),
+        ).rejects.toEqual({ response: { status: 503 } });
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+        expect(mockRateLimiterExecute).toHaveBeenLastCalledWith(
+            "musicbrainz",
+            expect.any(Function),
+            { priority: -1, skipRetry: true },
+        );
+    });
+
+    it("rejects malformed identity search responses and oversized request inputs", async () => {
+        mockHttpGet.mockResolvedValueOnce({ data: {} });
+        await expect(
+            musicBrainzService.searchReleaseGroupsForAlbumIdentity(
+                "Album",
+                "Artist",
+            ),
+        ).rejects.toThrow("Invalid MusicBrainz");
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+        await expect(
+            musicBrainzService.searchReleaseGroupsForAlbumIdentity(
+                "x".repeat(501),
+                "Artist",
+            ),
+        ).rejects.toThrow();
+    });
+    it("does not cache malformed artist credits as a canonical identity candidate", async () => {
+        mockHttpGet.mockResolvedValueOnce({
+            data: {
+                "release-groups": [
+                    {
+                        id: VALID_RELEASE_GROUP_MBID,
+                        title: "Album",
+                        "primary-type": "Album",
+                        "artist-credit": [{ artist: { name: 42 } }],
+                    },
+                ],
+            },
+        });
+        await expect(
+            musicBrainzService.searchReleaseGroupsForAlbumIdentity(
+                "Album",
+                "Artist",
+            ),
+        ).rejects.toThrow("Invalid MusicBrainz");
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        "not-a-number",
+        "",
+        " ",
+        "Infinity",
+        "NaN",
+        null,
+        false,
+        {},
+        Number.NaN,
+        Infinity,
+        -1,
+        101,
+    ])(
+        "rejects malformed identity confidence %j before cache",
+        async (score) => {
+            mockHttpGet.mockResolvedValueOnce({
+                data: {
+                    "release-groups": [
+                        {
+                            id: VALID_RELEASE_GROUP_MBID,
+                            title: "Album",
+                            "primary-type": "Album",
+                            "artist-credit": [
+                                {
+                                    artist: {
+                                        id: VALID_ARTIST_MBID,
+                                        name: "Artist",
+                                    },
+                                },
+                            ],
+                            score,
+                        },
+                    ],
+                },
+            });
+            await expect(
+                musicBrainzService.searchReleaseGroupsForAlbumIdentity(
+                    "Album",
+                    "Artist",
+                ),
+            ).rejects.toThrow("Invalid MusicBrainz");
+            expect(mockRedisSetEx).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([undefined, 0, 100, 90.5, "0", "100", "90.5"])(
+        "accepts supported finite identity confidence %j",
+        async (score) => {
+            const groups = [
+                {
+                    id: VALID_RELEASE_GROUP_MBID,
+                    title: "Album",
+                    "primary-type": "Album",
+                    "artist-credit": [
+                        { artist: { id: VALID_ARTIST_MBID, name: "Artist" } },
+                    ],
+                    score,
+                },
+            ];
+            mockHttpGet.mockResolvedValueOnce({
+                data: { "release-groups": groups },
+            });
+            await expect(
+                musicBrainzService.searchReleaseGroupsForAlbumIdentity(
+                    "Album",
+                    "Artist",
+                ),
+            ).resolves.toEqual(groups);
+        },
+    );
+
+    it("invalidates a legacy malformed confidence cache instead of trusting it as a miss", async () => {
+        mockRedisGet.mockResolvedValueOnce(
+            JSON.stringify([
+                {
+                    id: VALID_RELEASE_GROUP_MBID,
+                    title: "Album",
+                    "primary-type": "Album",
+                    "artist-credit": [
+                        { artist: { id: VALID_ARTIST_MBID, name: "Artist" } },
+                    ],
+                    score: "not-a-number",
+                },
+            ]),
+        );
+        mockHttpGet.mockRejectedValueOnce(
+            new Error("fixture provider unavailable"),
+        );
+        await expect(
+            musicBrainzService.searchReleaseGroupsForAlbumIdentity(
+                "Album",
+                "Artist",
+            ),
+        ).rejects.toThrow("fixture provider unavailable");
+        expect(mockHttpGet).toHaveBeenCalledTimes(1);
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
 
     it("paces every HTTP attempt including fallback searches within one cache lookup", async () => {

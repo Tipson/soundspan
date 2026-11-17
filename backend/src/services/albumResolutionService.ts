@@ -1,10 +1,8 @@
 import { createHash } from "crypto";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
-import {
-    normalizeAlbumTitle,
-    stripAlbumEdition,
-} from "../utils/artistNormalization";
+import { normalizeAlbumTitle } from "../utils/artistNormalization";
+import { remoteAlbumTitleTier } from "./remoteAlbumMbidMatch";
 import type { ExternalTrackAlbumResolution } from "./trackAlbumResolution";
 import { isGenericAlbumTitle } from "./albumTitleGuards";
 import type { MappingProvider } from "./remoteProviders/types";
@@ -99,42 +97,24 @@ async function findExistingAlbum(
         select: { id: true, title: true },
     });
     if (exactMatch) {
-        return { id: exactMatch.id, title: exactMatch.title, created: false };
-    }
-
-    const strippedInput = stripAlbumEdition(title);
-    const normalizedInput = normalizeAlbumTitle(strippedInput);
-    if (normalizedInput && normalizedInput !== normalizeAlbumTitle(title)) {
-        const strippedMatch = await prisma.album.findFirst({
-            where: {
-                artistId,
-                title: { equals: strippedInput, mode: "insensitive" },
-            },
-            select: { id: true, title: true },
+        const identicalTitles = await prisma.album.count({
+            where: { artistId, title: { equals: title, mode: "insensitive" } },
         });
-        if (strippedMatch) {
-            return {
-                id: strippedMatch.id,
-                title: strippedMatch.title,
-                created: false,
-            };
-        }
+        if (identicalTitles !== 1) return null;
+        return { id: exactMatch.id, title: exactMatch.title, created: false };
     }
 
     const candidateAlbums = await prisma.album.findMany({
         where: { artistId },
         select: { id: true, title: true },
-        take: 100,
+        take: 101,
     });
-
-    for (const candidate of candidateAlbums) {
-        const candidateStripped = normalizeAlbumTitle(
-            stripAlbumEdition(candidate.title),
-        );
-        if (candidateStripped === normalizedInput) {
-            return { id: candidate.id, title: candidate.title, created: false };
-        }
-    }
+    if (candidateAlbums.length > 100) return null;
+    const matches = candidateAlbums.filter(
+        (candidate) => remoteAlbumTitleTier(title, candidate.title) !== null,
+    );
+    if (matches.length === 1)
+        return { id: matches[0].id, title: matches[0].title, created: false };
     return null;
 }
 

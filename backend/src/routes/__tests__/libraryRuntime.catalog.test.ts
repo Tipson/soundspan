@@ -1661,6 +1661,179 @@ describe("library catalog list runtime coverage", () => {
         expect(JSON.stringify(res.body)).not.toContain("album list failed");
     });
 
+    it.each([
+        { origin: "LOCAL", filePath: null, removedAt: null, held: false },
+        { origin: "LOCAL", filePath: "", removedAt: null, held: false },
+        {
+            origin: "FEDERATED",
+            filePath: "peer-path",
+            removedAt: null,
+            held: false,
+        },
+        {
+            origin: "LOCAL",
+            filePath: "physical.flac",
+            removedAt: new Date(),
+            held: false,
+        },
+        {
+            origin: "LOCAL",
+            filePath: "physical.flac",
+            removedAt: null,
+            held: true,
+        },
+    ])(
+        "requires a visible local physical track for held match %j",
+        async (fixture) => {
+            const matches = (value: any, filter: any): boolean => {
+                if (
+                    filter !== null &&
+                    typeof filter === "object" &&
+                    !Array.isArray(filter)
+                ) {
+                    return Object.entries(filter).every(
+                        ([key, condition]: [string, any]) => {
+                            if (key === "OR")
+                                return condition.some((part: any) =>
+                                    matches(value, part),
+                                );
+                            if (key === "AND")
+                                return condition.every((part: any) =>
+                                    matches(value, part),
+                                );
+                            if (key === "NOT")
+                                return !matches(value, condition);
+                            if (key === "not")
+                                return !matches(value, condition);
+                            if (key === "in") return condition.includes(value);
+                            return matches(value?.[key], condition);
+                        },
+                    );
+                }
+                return value === filter;
+            };
+            const { albumMatchInputHash } =
+                await import("../../services/remoteAlbumMatchInput");
+            const row = {
+                id: "physical-remote",
+                rgMbid: "remote:physical",
+                title: "Album",
+                location: "REMOTE",
+                artistId: "artist-a",
+                artist: { id: "artist-a", name: "Artist", mbid: null },
+                matchedRgMbid: "11111111-1111-4111-8111-111111111111",
+                rgMbidCheckedAt: new Date(),
+                rgMbidMatchInputHash: "",
+                tracks: [],
+                tracksTidal: [],
+                tracksYtMusic: [],
+            };
+            row.rgMbidMatchInputHash = albumMatchInputHash(row);
+            const track = {
+                ...fixture,
+                dedupOfTrackId: null,
+                album: { location: "LIBRARY" },
+            };
+            mockAlbumFindFirst.mockImplementation(async ({ where }: any) =>
+                where.location === "LIBRARY"
+                    ? matches(track, where.tracks.some)
+                        ? { id: "held-copy" }
+                        : null
+                    : row,
+            );
+            const res = createRes();
+            await albumByIdHandler(
+                {
+                    params: { id: row.id },
+                    query: {},
+                    user: { id: "owner-a" },
+                } as any,
+                res,
+            );
+            expect(res.statusCode).toBe(200);
+            expect(res.body.matchedInLibrary).toBe(fixture.held);
+        },
+    );
+
+    it("keeps matched identity projection behind the existing owner ACL for both detail modes", async () => {
+        const rg = "11111111-1111-4111-8111-111111111111";
+        const { albumMatchInputHash } =
+            await import("../../services/remoteAlbumMatchInput");
+        const row = {
+            id: "private-remote",
+            rgMbid: "remote:private",
+            title: "Album",
+            location: "REMOTE",
+            artistId: "artist-a",
+            artist: { id: "artist-a", name: "Artist", mbid: null },
+            matchedRgMbid: rg,
+            rgMbidCheckedAt: new Date(),
+            rgMbidMatchInputHash: "",
+            tracks: [],
+            tracksTidal: [],
+            tracksYtMusic: [],
+        };
+        row.rgMbidMatchInputHash = albumMatchInputHash(row);
+        mockAlbumFindFirst.mockImplementation(async ({ where }: any) => {
+            if (where.location === "LIBRARY") return { id: "visible-local" };
+            const byIdentity = where.AND[0].OR.some(
+                (identity: any) =>
+                    identity.id === row.id || identity.rgMbid === row.rgMbid,
+            );
+            return byIdentity &&
+                JSON.stringify(where).includes('"userId":"owner-a"')
+                ? row
+                : null;
+        });
+        for (const includeTracks of ["true", "false"]) {
+            const a = createRes();
+            await albumByIdHandler(
+                {
+                    params: { id: row.id },
+                    query: { includeTracks },
+                    user: { id: "owner-a" },
+                } as any,
+                a,
+            );
+            expect(a.statusCode).toBe(200);
+            expect(a.body).toMatchObject({
+                rgMbid: row.rgMbid,
+                matchedRgMbid: rg,
+                matchedInLibrary: true,
+            });
+            expect(a.body).not.toHaveProperty("rgMbidMatchInputHash");
+            expect(a.body).not.toHaveProperty("rgMbidCheckedAt");
+            for (const [userId, albumId] of [
+                ["owner-b", row.id],
+                ["owner-a", rg],
+            ]) {
+                const b = createRes();
+                await albumByIdHandler(
+                    {
+                        params: { id: albumId },
+                        query: { includeTracks },
+                        user: { id: userId },
+                    } as any,
+                    b,
+                );
+                expect(b.statusCode).toBe(404);
+            }
+        }
+        mockAlbumFindFirst.mockImplementation(async ({ where }: any) =>
+            where.location === "LIBRARY" ? null : row,
+        );
+        const only = createRes();
+        await albumByIdHandler(
+            {
+                params: { id: row.id },
+                query: {},
+                user: { id: "owner-a" },
+            } as any,
+            only,
+        );
+        expect(only.body.matchedInLibrary).toBe(false);
+    });
+
     it("handles album lookup by id, includeTracks flag, and ownership", async () => {
         mockAlbumFindFirst
             .mockResolvedValueOnce(null)

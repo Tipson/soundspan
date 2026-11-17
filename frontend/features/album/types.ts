@@ -29,6 +29,8 @@ export interface Album {
     type?: string;
     mbid?: string;
     rgMbid?: string;
+    matchedRgMbid?: string | null;
+    matchedInLibrary?: boolean;
     owned?: boolean;
     tracks?: Track[];
     similarAlbums?: SimilarAlbum[];

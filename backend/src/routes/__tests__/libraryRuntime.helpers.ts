@@ -296,6 +296,7 @@ jest.mock("../../services/musicbrainz", () => ({
 }));
 
 jest.mock("../../utils/musicIds", () => ({
+    ...jest.requireActual("../../utils/musicIds"),
     isRealArtistMbid: (value: unknown) =>
         typeof value === "string" && !value.startsWith("temp-"),
     rgMbidKind: (value: string) =>

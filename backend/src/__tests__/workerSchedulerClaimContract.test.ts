@@ -18,6 +18,17 @@ import {
 } from "../workers/schedulerJobRegistry";
 
 describe("worker scheduler registration contract", () => {
+    it("registers one bounded album identity startup and hourly maintenance schedule", () => {
+        const jobs = buildSchedulerJobs().filter(
+            (job) => job.type === "remote-album-mbid-resolution",
+        );
+        expect(jobs).toHaveLength(2);
+        expect(jobs.map((job) => job.opts.jobId)).toEqual([
+            "scheduler:remote-album-mbid-resolution:startup",
+            "scheduler:remote-album-mbid-resolution:repeat",
+        ]);
+        expect(jobs[1].opts.repeat).toEqual({ every: ONE_HOUR_MS });
+    });
     it("returns stable queue-backed repeat schedules", () => {
         const repeatJobs = buildSchedulerJobs().filter(
             (job) => job.data.mode === "repeat",

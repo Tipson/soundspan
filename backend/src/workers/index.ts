@@ -86,6 +86,7 @@ import { processLoudnessBackfill } from "./processors/loudnessBackfillProcessor"
 import { processTrackRemovalPurge } from "./processors/trackRemovalPurgeProcessor";
 import { processRequestFulfillmentBatch } from "./processors/requestFulfillmentProcessor";
 import { processCatalogRetention } from "./processors/catalogRetentionProcessor";
+import { processRemoteAlbumMbidResolution } from "./processors/remoteAlbumMbidResolutionProcessor";
 import {
     REQUEST_FULFILLMENT_INTERVAL_MS,
     REQUEST_FULFILLMENT_JOB_ID,
@@ -952,6 +953,9 @@ async function processMaintenanceSchedulerJob(
     job: Bull.Job<any>,
 ): Promise<boolean | null> {
     switch (job?.name) {
+        case SCHEDULER_JOB_TYPES.remoteAlbumMbidResolution:
+            await processRemoteAlbumMbidResolution();
+            return true;
         case SCHEDULER_JOB_TYPES.downloadQueueReconcile:
         case "download-queue-reconcile":
             return processDownloadQueueReconcileJob();

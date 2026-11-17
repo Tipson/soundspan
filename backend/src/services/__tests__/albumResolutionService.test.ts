@@ -3,6 +3,7 @@ const mockPrisma = {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
         findMany: jest.fn(),
+        count: jest.fn(),
         createMany: jest.fn(),
         update: jest.fn(),
     },
@@ -38,10 +39,34 @@ import {
 describe("albumResolutionService", () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        Object.values(mockPrisma.album).forEach((mock) => mock.mockReset());
+        mockPrisma.album.findMany.mockResolvedValue([]);
+        mockPrisma.album.count.mockResolvedValue(1);
         mockResolveExternalAlbum.mockResolvedValue({ status: "miss" });
     });
 
     describe("resolveAlbumForRemoteTrack", () => {
+        it("does not choose the first of two exact-title release groups", async () => {
+            mockPrisma.album.findFirst.mockResolvedValueOnce({
+                id: "first-rg",
+                title: "Album",
+            });
+            mockPrisma.album.count.mockResolvedValueOnce(2);
+            mockPrisma.album.createMany.mockResolvedValueOnce({ count: 1 });
+            mockPrisma.album.findUnique.mockResolvedValueOnce({
+                id: "placeholder",
+                title: "Album",
+            });
+            expect(
+                (
+                    await resolveAlbumForRemoteTrack(
+                        "Album",
+                        "artist-1",
+                        "youtube",
+                    )
+                )?.id,
+            ).toBe("placeholder");
+        });
         it("returns null for empty title", async () => {
             const result = await resolveAlbumForRemoteTrack(
                 "",
@@ -50,6 +75,37 @@ describe("albumResolutionService", () => {
             );
             expect(result).toBeNull();
         });
+
+        it.each([
+            ["Album", [{ id: "live", title: "Album (Live)" }]],
+            [
+                "Album (Expanded Edition)",
+                [
+                    { id: "a", title: "Album (Deluxe Edition)" },
+                    { id: "b", title: "Album (Remastered)" },
+                ],
+            ],
+        ])(
+            "keeps unsafe version or ambiguous edition unlinked for %s",
+            async (title, rows) => {
+                mockPrisma.album.findFirst.mockResolvedValue(null);
+                mockPrisma.album.findMany.mockResolvedValue(rows);
+                mockPrisma.album.createMany.mockResolvedValue({ count: 1 });
+                mockPrisma.album.findUnique.mockResolvedValue({
+                    id: "safe-placeholder",
+                    title,
+                });
+                expect(
+                    (
+                        await resolveAlbumForRemoteTrack(
+                            title,
+                            "artist-1",
+                            "youtube",
+                        )
+                    )?.id,
+                ).toBe("safe-placeholder");
+            },
+        );
 
         it("returns null for 'Single'", async () => {
             const result = await resolveAlbumForRemoteTrack(
@@ -233,6 +289,9 @@ describe("albumResolutionService", () => {
                     id: "base-album",
                     title: "Abbey Road",
                 });
+            mockPrisma.album.findMany.mockResolvedValueOnce([
+                { id: "base-album", title: "Abbey Road" },
+            ]);
 
             const result = await resolveAlbumForRemoteTrack(
                 "Single",
