@@ -59,7 +59,17 @@ $sandbox = New-Module -ScriptBlock {
         Record 'signing'
         Invoke-WithEnvironment @{ SOUNDSPAN_STORE_PASSWORD='fixture-only'; SOUNDSPAN_KEYSTORE='fixture-only'; SOUNDSPAN_KEY_ALIAS='fixture-only' } $Action
     }
-    function Test-ReleaseApk { param($Apk, $Tools, $Certificate); Record 'verify-apk'; throw 'FIXTURE_APK_BOUNDARY' }
+    function Assert-NewOutput {
+        param($Path)
+        if ($env:SOUNDSPAN_RELEASE_TEST_CASE -eq 'success' -and [IO.Path]::GetFileName($Path) -notmatch '^soundspan-0\.1\.11\+14-111111111111-\d{8}T\d{9}Z\.(apk|json)$') { throw 'Builder filename does not match the source release version' }
+        release-tools\Assert-NewOutput $Path
+    }
+    function Test-ReleaseApk {
+        param($Apk, $Tools, $Certificate, $ExpectedVersionName, $ExpectedVersionCode)
+        if ($ExpectedVersionName -cne '0.1.11' -or $ExpectedVersionCode -ne 14) { throw 'Builder omitted the source release version at APK verification' }
+        Record 'verify-apk'
+        throw 'FIXTURE_APK_BOUNDARY'
+    }
     Export-ModuleMember -Function @()
 }
 

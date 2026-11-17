@@ -109,11 +109,25 @@ function Invoke-WithSigning([string]$MetadataPath, [scriptblock]$Action) {
     }
 }
 
-function Assert-ApkMetadata([string]$Certificates, [string]$Badging, [string]$ExpectedCertificate, [string[]]$Entries) {
+function ConvertTo-ReleaseVersion([string]$Version) {
+    $match = [regex]::Match($Version, '\A(?<name>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))\+(?<code>[1-9][0-9]*)\z')
+    $code = 0
+    if (-not $match.Success -or -not [int]::TryParse($match.Groups['code'].Value, [ref]$code) -or $code -gt 2100000000) { throw 'Invalid release version: expected major.minor.patch+positive Android versionCode' }
+    return [pscustomobject]@{ versionName=$match.Groups['name'].Value; versionCode=$code }
+}
+
+function Read-PubspecVersion([string]$Pubspec) {
+    $lines = [regex]::Matches($Pubspec, '(?m)^version:[ \t]*([^\r\n]*)\r?$')
+    if ($lines.Count -ne 1) { throw 'Pubspec must contain exactly one top-level release version' }
+    return ConvertTo-ReleaseVersion $lines[0].Groups[1].Value.Trim()
+}
+
+function Assert-ApkMetadata([string]$Certificates, [string]$Badging, [string]$ExpectedCertificate, [string[]]$Entries, [string]$ExpectedVersionName = '0.1.10', [string]$ExpectedVersionCode = '13') {
+    $expectedVersion = ConvertTo-ReleaseVersion "$ExpectedVersionName+$ExpectedVersionCode"
     if ($ExpectedCertificate -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Invalid pinned certificate digest' }
     $digests = [regex]::Matches($Certificates, '(?m)^Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9]{64})\s*$')
     if ($digests.Count -ne 1 -or $digests[0].Groups[1].Value -ne $ExpectedCertificate -or $Certificates -match '(?i)Android Debug') { throw 'APK signer does not match the private release identity' }
-    if ($Badging -notmatch "(?m)^package: name='ru\.agentik007\.soundspan' versionCode='13' versionName='0\.1\.10'" -or $Badging -notmatch "(?m)^sdkVersion:'24'" -or $Badging -notmatch "(?m)^targetSdkVersion:'36'") { throw 'APK identity/version/SDK mismatch' }
+    if ($Badging -notmatch "(?m)^package: name='ru\.agentik007\.soundspan' versionCode='$($expectedVersion.versionCode)' versionName='$([regex]::Escape($expectedVersion.versionName))'" -or $Badging -notmatch "(?m)^sdkVersion:'24'" -or $Badging -notmatch "(?m)^targetSdkVersion:'36'") { throw 'APK identity/version/SDK mismatch' }
     if ($Badging -match '(?i)application-debuggable|application-testOnly|testOnly') { throw 'Debuggable or test-only APK rejected' }
     $allowed = @('android.permission.INTERNET','android.permission.WAKE_LOCK','android.permission.FOREGROUND_SERVICE','android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK','android.permission.FOREGROUND_SERVICE_DATA_SYNC','android.permission.POST_NOTIFICATIONS','android.permission.ACCESS_NETWORK_STATE','android.permission.RECEIVE_BOOT_COMPLETED','ru.agentik007.soundspan.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION')
     foreach ($permission in [regex]::Matches($Badging, "(?m)^uses-permission[^:]*: name='([^']+)'")) {
@@ -208,7 +222,8 @@ function Assert-ApkMediaResources([string]$Resources, [IO.Compression.ZipArchive
     return $verified.ToArray()
 }
 
-function Test-ReleaseApk([string]$Apk, [string]$BuildTools, [string]$ExpectedCertificate) {
+function Test-ReleaseApk([string]$Apk, [string]$BuildTools, [string]$ExpectedCertificate, [string]$ExpectedVersionName = '0.1.10', [string]$ExpectedVersionCode = '13') {
+    $expectedVersion = ConvertTo-ReleaseVersion "$ExpectedVersionName+$ExpectedVersionCode"
     $cert = Invoke-CheckedNative (Join-Path $BuildTools 'apksigner.bat') @('verify','--verbose','--print-certs',$Apk)
     $badging = Invoke-CheckedNative (Join-Path $BuildTools 'aapt.exe') @('dump','badging',$Apk)
     $tree = Invoke-CheckedNative (Join-Path $BuildTools 'aapt.exe') @('dump','xmltree',$Apk,'AndroidManifest.xml')
@@ -216,11 +231,11 @@ function Test-ReleaseApk([string]$Apk, [string]$BuildTools, [string]$ExpectedCer
     Assert-ReleaseManifest $tree
     $zip = [IO.Compression.ZipFile]::OpenRead($Apk)
     try {
-        Assert-ApkMetadata $cert $badging $ExpectedCertificate @($zip.Entries.FullName)
+        Assert-ApkMetadata $cert $badging $ExpectedCertificate @($zip.Entries.FullName) $expectedVersion.versionName $expectedVersion.versionCode
         $nativeAbis = @(Assert-ApkNativeLibraries $badging @($zip.Entries))
         $mediaDrawables = @(Assert-ApkMediaResources $resources @($zip.Entries))
     } finally { $zip.Dispose() }
-    return [ordered]@{ apkSha256=(Get-FileHash -LiteralPath $Apk).Hash; certificateSha256=$ExpectedCertificate; applicationId='ru.agentik007.soundspan'; versionName='0.1.10'; versionCode=13; minSdk=24; targetSdk=36; nativeAbis=$nativeAbis; mediaDrawables=$mediaDrawables; apksigner=$cert; badging=$badging; manifest=$tree }
+    return [ordered]@{ apkSha256=(Get-FileHash -LiteralPath $Apk).Hash; certificateSha256=$ExpectedCertificate; applicationId='ru.agentik007.soundspan'; versionName=$expectedVersion.versionName; versionCode=$expectedVersion.versionCode; minSdk=24; targetSdk=36; nativeAbis=$nativeAbis; mediaDrawables=$mediaDrawables; apksigner=$cert; badging=$badging; manifest=$tree }
 }
 
 Export-ModuleMember -Function *
