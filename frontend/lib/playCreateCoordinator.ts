@@ -43,6 +43,10 @@ export interface PlayCreateTicket {
         input: PlayEngagementInput,
         final: boolean,
     ): Promise<boolean>;
+    /** Observe validated server PATCH acknowledgements, never local checkpoint persistence. */
+    observeEngagementCommits?(
+        listener: (input: PlayEngagementInput) => void,
+    ): () => void;
 }
 
 /** Browser composition supplies clocks, crypto, verified bindings and the existing API boundary. */
@@ -80,6 +84,7 @@ type TicketState = {
     reject(error: Error): void;
     pending: PendingTotals | null;
     writing: Promise<boolean> | null;
+    commitListeners: Set<(input: PlayEngagementInput) => void>;
 };
 type AdmissionIntent = Parameters<typeof admitPlayCreateGrant>[1]["intent"];
 
@@ -279,6 +284,7 @@ export class PlayCreateCoordinator {
             reject,
             pending: null,
             writing: null,
+            commitListeners: new Set(),
         };
         this.tickets.set(key.value, state);
         const capturedKey = key.value;
@@ -305,6 +311,12 @@ export class PlayCreateCoordinator {
             created,
             noteEngagement: (input: PlayEngagementInput, final: boolean) =>
                 this.checkpoint(capturedKey, state, input, final),
+            observeEngagementCommits: (
+                listener: (input: PlayEngagementInput) => void,
+            ) => {
+                state.commitListeners.add(listener);
+                return () => state.commitListeners.delete(listener);
+            },
         });
     }
 
@@ -629,6 +641,16 @@ export class PlayCreateCoordinator {
                         row.key,
                         token,
                     );
+                    if (this.sendCurrent(binding, controller)) {
+                        for (const listener of this.tickets.get(row.key)
+                            ?.commitListeners ?? []) {
+                            try {
+                                listener({ ...reserved.totals! });
+                            } catch {
+                                logger.warn("Play engagement observer failed");
+                            }
+                        }
+                    }
                 }
             } catch (error) {
                 if (!this.sendCurrent(binding, controller)) break;

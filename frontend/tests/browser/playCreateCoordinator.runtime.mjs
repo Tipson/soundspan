@@ -142,6 +142,44 @@ try {
         }
     };
     await check(
+        "commit observers wait for validated server ACK rather than local journal persistence",
+        async (page) => {
+            const before = await page.evaluate(async () => {
+                f.observed = [];
+                f.patchGate = new Promise((resolve) => {
+                    f.releasePatch = resolve;
+                });
+                const ticket = f.coordinator.begin(f.payload());
+                ticket.observeEngagementCommits((input) =>
+                    f.observed.push(input),
+                );
+                await ticket.persisted;
+                await ticket.created;
+                const stored = await ticket.noteEngagement(completed, true);
+                return { stored, observed: f.observed.length };
+            });
+            assert.equal(before.stored, true);
+            assert.equal(before.observed, 0);
+            const after = await page.evaluate(async () => {
+                f.releasePatch();
+                await f.coordinator.flush();
+                return {
+                    observed: f.observed,
+                    patches: f.calls.filter((call) => call.kind === "patch")
+                        .length,
+                };
+            });
+            assert.deepEqual(after.observed, [
+                {
+                    listenedSeconds: 180,
+                    completionRatio: 1,
+                    outcome: "completed",
+                },
+            ]);
+            assert.equal(after.patches, 1);
+        },
+    );
+    await check(
         "begin is synchronous, stores immutable DTO before wire and delivers final before delayed create ACK",
         async (page) => {
             const result = await page.evaluate(async () => {

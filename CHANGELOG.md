@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Reconcile adaptive Wave continuations with confirmed early-skip engagement, including delayed Play creation. Coalesce acknowledgements into one bounded follow-up refresh while preserving current playback and rejecting feedback from retired owners or stations; local journal persistence and playback failures do not trigger a retune.
 - Share an authoritative finite time-of-day mix across Web and Android, with exact ordered membership and honest check/scarcity metadata. Refresh daily and daypart views without replacing playback; distinguish a completed check from a new composition, and detect UTC-day changes independently of local-hour changes on Android.
 - Explain individual recommendation generations in an interactive administrator-only reader: bounded score components, observed source coverage, rejection counters and final positions. Keep diagnostics opt-in, private and independent of ranking decisions; replay frozen synthetic pools through the actual baseline, shadow and active engines without production services.
 - Show original daily and weekly composition dates and explain short or unavailable mixes. Keep snapshot counts separate from current feedback-filtered availability, preserve timestamps on cache reads, and leave playing queues unchanged when cards refresh.

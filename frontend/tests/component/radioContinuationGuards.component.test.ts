@@ -32,6 +32,7 @@ let startManualVibe: (
 mock.module("@/lib/listen-together-session", {
     namedExports: {
         getListenTogetherSessionSnapshot: () => group,
+        isListenTogetherActiveOrPending: () => Boolean(group),
         enqueueLatestListenTogetherHostTrackOperation: () => undefined,
         getListenTogetherOptimisticTrackSelectionPolicy: () => ({
             resetPersistedTrackStartPosition: false,
@@ -88,7 +89,9 @@ mock.module("@/lib/query-events", {
 mock.module("sonner", {
     namedExports: { toast: { success() {}, error() {}, info() {} } },
 });
-mock.module("@/lib/api", { namedExports: { api: {} } });
+mock.module("@/lib/api", {
+    namedExports: { api: { getSessionGeneration: () => 0 } },
+});
 mock.module("@/lib/logger", {
     namedExports: { frontendLogger: { error: () => undefined } },
 });

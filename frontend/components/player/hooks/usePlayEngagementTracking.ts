@@ -16,6 +16,7 @@ import { createPlayJournalDeliveryScope } from "@/lib/playCreateJournalBridge";
 import { resolvePlaybackOccurrenceMediaIdentity } from "@/lib/audio-engine/playbackOccurrence";
 import { isListenTogetherActiveOrPending } from "@/lib/listen-together-session";
 import { createPlayEngagementOccurrenceResolver } from "./playEngagementOccurrence";
+import { captureAdaptiveWaveSkipOwner } from "@/lib/audio/adaptiveWaveFeedback";
 
 const logger = frontendLogger.child("PlayEngagement");
 
@@ -103,6 +104,7 @@ export function usePlayEngagementTracking({
         occurrenceRef.current = occurrence;
         scopeRef.current = scope;
         const tracker = createPlayEngagementTracker({
+            captureSkippedFeedback: captureAdaptiveWaveSkipOwner,
             beginPlay: (input) => {
                 scope.assertCurrent();
                 return occurrence.current().journal ? scope.begin(input) : null;

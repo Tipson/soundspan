@@ -6,6 +6,11 @@ import type {
     PlayRecommendationContext,
     PlayWaveMode,
 } from "@/lib/api/plays";
+import { readPlayEngagementAck } from "@/lib/playCreateWire";
+import type {
+    AdaptiveWaveSkipCapture,
+    AdaptiveWaveSkipReceipt,
+} from "@/lib/audio/adaptiveWaveFeedback";
 
 const MAX_LISTENED_SECONDS = 86_400;
 const MAX_CONTIGUOUS_PROGRESS_DELTA_SECONDS = 10;
@@ -20,11 +25,16 @@ export interface PlayEngagementDelivery {
         input: PlayEngagementInput,
         final: boolean,
     ): Promise<boolean>;
+    /** This optional signal comes only after the durable coordinator receives a real PATCH ACK. */
+    observeEngagementCommits?(
+        listener: (input: PlayEngagementInput) => void,
+    ): () => void;
 }
 
 interface PlayEngagementDependencies {
     /** Null means legacy was selected before a durable run was created. */
     beginPlay?(input: PlayLogInput): PlayEngagementDelivery | null;
+    captureSkippedFeedback?(): AdaptiveWaveSkipCapture | null;
     logPlay(input: PlayLogInput): Promise<PlayLogResponse>;
     updatePlayEngagement(
         playId: string,
@@ -52,6 +62,9 @@ interface ActivePlayEngagement {
     finalSent: boolean;
     delivery: PlayEngagementDelivery | null;
     checkpointSeconds: number;
+    skipCapture: AdaptiveWaveSkipCapture | null;
+    skipReceipt: AdaptiveWaveSkipReceipt | null;
+    unsubscribeCommit: (() => void) | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -141,6 +154,23 @@ export function createPlayEngagementTracker(
     dependencies: PlayEngagementDependencies,
 ) {
     let active: ActivePlayEngagement | null = null;
+    const committed = (
+        session: ActivePlayEngagement,
+        input: PlayEngagementInput,
+    ): void => {
+        const final = session.finalInput;
+        if (
+            !final ||
+            input.outcome !== final.outcome ||
+            input.listenedSeconds < final.listenedSeconds ||
+            input.completionRatio < final.completionRatio
+        )
+            return;
+        session.skipReceipt?.commit();
+        session.skipReceipt = null;
+        session.unsubscribeCommit?.();
+        session.unsubscribeCommit = null;
+    };
 
     const checkpoint = (
         session: ActivePlayEngagement,
@@ -178,13 +208,28 @@ export function createPlayEngagementTracker(
         session.finalSent = true;
         void dependencies
             .updatePlayEngagement(session.playId, session.finalInput)
-            .catch((error) => dependencies.onError?.("finalize", error));
+            .then((response) => {
+                if (!readPlayEngagementAck(response))
+                    throw new Error("Invalid Play engagement acknowledgement");
+                committed(session, session.finalInput!);
+            })
+            .catch((error) => {
+                session.skipReceipt?.abandon();
+                session.skipReceipt = null;
+                dependencies.onError?.("finalize", error);
+            });
     };
 
     const finish = (reason: FinishReason): void => {
         const session = active;
         if (!session || session.finalInput) return;
         session.finalInput = finalEngagement(session, reason);
+        if (session.finalInput.outcome === "skipped")
+            session.skipReceipt = session.skipCapture?.() ?? null;
+        if (!session.skipReceipt) {
+            session.unsubscribeCommit?.();
+            session.unsubscribeCommit = null;
+        }
         active = null;
         sendFinalIfReady(session);
     };
@@ -214,7 +259,14 @@ export function createPlayEngagementTracker(
                 finalSent: false,
                 delivery,
                 checkpointSeconds: 0,
+                skipCapture: dependencies.captureSkippedFeedback?.() ?? null,
+                skipReceipt: null,
+                unsubscribeCommit: null,
             };
+            session.unsubscribeCommit =
+                delivery?.observeEngagementCommits?.((input) =>
+                    committed(session, input),
+                ) ?? null;
             active = session;
             void (delivery?.created ?? dependencies.logPlay(input.play))
                 .then((response) => {
@@ -228,7 +280,13 @@ export function createPlayEngagementTracker(
                     session.playId = playId;
                     sendFinalIfReady(session);
                 })
-                .catch((error) => dependencies.onError?.("create", error));
+                .catch((error) => {
+                    session.skipReceipt?.abandon();
+                    session.skipReceipt = null;
+                    session.unsubscribeCommit?.();
+                    session.unsubscribeCommit = null;
+                    dependencies.onError?.("create", error);
+                });
         },
 
         noteProgress(positionSeconds: number): void {

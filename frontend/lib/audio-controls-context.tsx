@@ -96,6 +96,7 @@ import {
 } from "@/lib/playback-state-cadence";
 import { useVibeModeControls } from "@/lib/audio/useVibeModeControls";
 import { resolveAdaptiveWaveSkip } from "@/lib/audio/adaptiveWaveQueue";
+import { useAdaptiveWaveRetune } from "@/lib/audio/useAdaptiveWaveRetune";
 import { isProviderRadioTrack } from "@/lib/audio/providerRadioContinuation";
 import { applyTrackClick } from "@/lib/audio-engine/playbackOccurrence";
 import { withPlaybackRadioOrigin } from "@/lib/radio/playbackRadioOrigin";
@@ -367,7 +368,6 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     const lastCursorTrackIndexRef = useRef<number | null>(null);
     const lastCursorIsShuffleRef = useRef<boolean | null>(null);
     const adaptiveWaveSkipStreakRef = useRef(0);
-    const adaptiveWaveRefreshTokenRef = useRef<object | null>(null);
     const pendingManualTailAdvanceRef = useRef<{
         token: object;
         trackId: string;
@@ -547,6 +547,24 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         state,
         getActiveListenTogetherSession,
         showQueueMutationToasts: showListenTogetherQueueMutationToasts,
+    });
+    const requestAdaptiveRetune = useAdaptiveWaveRetune({
+        enabled:
+            state.vibeMode &&
+            Boolean(
+                state.currentTrack && isProviderRadioTrack(state.currentTrack),
+            ),
+        station: JSON.stringify([
+            state.waveMode,
+            state.waveMood,
+            state.waveLanguage,
+            normalizePlaybackRadioOrigin(state.currentTrack?.radioOrigin),
+        ]),
+        regenerate: (token) =>
+            startVibeMode({
+                queueStrategy: "replace-upcoming",
+                queueCommitToken: token,
+            }),
     });
 
     const emitListenTogetherHostTrackOperation = useCallback(
@@ -1371,36 +1389,13 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             adaptiveWaveSkipStreakRef.current = adaptiveDecision.nextStreak;
             startQueueItemAtIndex(advance.index, nextItem);
 
-            if (
-                adaptiveDecision.shouldRegenerate &&
-                adaptiveWaveRefreshTokenRef.current === null
-            ) {
-                const refreshToken = {};
-                adaptiveWaveRefreshTokenRef.current = refreshToken;
-                void startVibeMode({
-                    queueStrategy: "replace-upcoming",
-                    queueCommitToken: refreshToken,
-                    onLocalQueueCommit: (commit) => {
-                        if (
-                            commit.token !==
-                                adaptiveWaveRefreshTokenRef.current ||
-                            commit.mutation !== "replace-upcoming"
-                        ) {
-                            return;
-                        }
-                        adaptiveWaveSkipStreakRef.current = 0;
-                    },
-                }).finally(() => {
-                    if (adaptiveWaveRefreshTokenRef.current === refreshToken) {
-                        adaptiveWaveRefreshTokenRef.current = null;
-                    }
-                });
-            }
+            if (adaptiveDecision.shouldRegenerate) requestAdaptiveRetune();
         },
         [
             state,
             startQueueItemAtIndex,
             startVibeMode,
+            requestAdaptiveRetune,
             getActiveListenTogetherSession,
             emitListenTogetherHostTrackOperation,
             applyOptimisticListenTogetherTrackSelection,

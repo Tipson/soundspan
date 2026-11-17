@@ -23,6 +23,9 @@ import {
 import { registerRecommendationFeedbackOwner } from "../../lib/audio/recommendationFeedbackBridge";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Episode } from "../../features/podcast/types";
+import type { PlayEngagementInput, PlayLogInput } from "../../lib/api/plays";
+import { installPlayCreateJournalBridge } from "../../lib/playCreateJournalBridge";
+import { getAuthRuntimeLease } from "../../lib/auth-runtime-generation";
 import { createConsecutiveErrorBreaker } from "../../lib/audio-engine/consecutiveErrorBreaker";
 import {
     consumePlaybackAdvanceOrigin,
@@ -61,6 +64,7 @@ window.confirm = () => true;
 
 const stateHolder: { current: Record<string, unknown> } = { current: {} };
 const playbackHolder: { current: Record<string, unknown> } = { current: {} };
+let apiSessionGeneration = 0;
 const apiCalls: {
     updatePodcastProgress: unknown[][];
     personalizedRequests: string[];
@@ -82,6 +86,17 @@ const personalizedFeed = {
 const personalizedFeedGate: { current: Promise<void> | null } = {
     current: null,
 };
+const personalizedRequestImpl: {
+    current: (() => Promise<unknown>) | null;
+} = { current: null };
+const engagementWriteImpl: {
+    current:
+        | ((playId: string, input: PlayEngagementInput) => Promise<unknown>)
+        | null;
+} = { current: null };
+const playCreateImpl: {
+    current: ((input: PlayLogInput) => Promise<{ id: string }>) | null;
+} = { current: null };
 const listenTogetherSession = {
     current: null as {
         groupId: string;
@@ -112,6 +127,10 @@ const listenTogetherSocketMock = {
 afterEach(() => {
     unregisterFeedback();
     personalizedFeedGate.current = null;
+    personalizedRequestImpl.current = null;
+    engagementWriteImpl.current = null;
+    playCreateImpl.current = null;
+    apiSessionGeneration = 0;
     playbackAdvanceOriginRef.current = null;
     setPlaybackAutoRestartSuppressed(false);
     listenTogetherSession.current = null;
@@ -152,15 +171,28 @@ mock.module("@/lib/audio-playback-context", {
 mock.module("@/lib/api", {
     namedExports: {
         api: {
-            getSessionGeneration: () => 0,
+            getSessionGeneration: () => apiSessionGeneration,
             updatePodcastProgress: (...args: unknown[]) => {
                 apiCalls.updatePodcastProgress.push(args);
                 return Promise.resolve({});
             },
             getPodcast: (id: string) => getPodcastImpl.current(id),
             clearPlaybackState: async () => ({}),
+            logPlay: async (track: PlayLogInput) =>
+                playCreateImpl.current?.(track) ?? {
+                    id: `play-${"youtubeVideoId" in track ? track.youtubeVideoId : "other"}`,
+                },
+            updatePlayEngagement: async (
+                playId: string,
+                input: PlayEngagementInput,
+            ) =>
+                engagementWriteImpl.current?.(playId, input) ?? {
+                    success: true,
+                },
             request: async (path: string) => {
                 apiCalls.personalizedRequests.push(path);
+                if (personalizedRequestImpl.current)
+                    return personalizedRequestImpl.current();
                 if (personalizedFeedGate.current)
                     await personalizedFeedGate.current;
                 return personalizedFeed.current;
@@ -180,6 +212,8 @@ mock.module("@/lib/listen-together-session", {
             resetPersistedTrackStartPosition: false,
         }),
         getListenTogetherSessionSnapshot: () => listenTogetherSession.current,
+        isListenTogetherActiveOrPending: () =>
+            Boolean(listenTogetherSession.current),
     },
 });
 mock.module("sonner", {
@@ -1261,6 +1295,331 @@ test("mixed Wave skips and dislikes refresh only the tail and respect a subseque
     assert.equal(playback.isPlaying, false);
 });
 
+for (const scenario of [
+    "legacy",
+    "legacy POST delayed",
+    "keyed POST delayed",
+    "reverse ACK paused",
+    "ACK during initial GET",
+    "owner replaced",
+    "API owner replaced",
+    "failed PATCH",
+] as const) {
+    test(`adaptive continuation includes the latest committed skip without delaying current playback: ${scenario}`, async (t) => {
+        const { AudioControlsProvider, useAudioControls } =
+            await import("../../lib/audio-controls-context");
+        const { usePlayEngagementTracking } =
+            await import("../../components/player/hooks/usePlayEngagementTracking");
+        const { createRoot } = await import("react-dom/client");
+        const deferred = () => {
+            let release!: () => void;
+            const promise = new Promise<void>((resolve) => {
+                release = resolve;
+            });
+            return { promise, release };
+        };
+        const latestPatch = deferred();
+        const tasteRead = deferred();
+        const created = deferred();
+        const previousPatches = [deferred(), deferred()];
+        const committed = new Map<string, PlayEngagementInput>();
+        const attempted: string[] = [];
+        const readVersions: number[] = [];
+        const keyedObservers = new Map<
+            string,
+            Set<(input: PlayEngagementInput) => void>
+        >();
+        const isPostDelayed = scenario.includes("POST delayed");
+        const create = async (input: PlayLogInput) => {
+            const videoId =
+                "youtubeVideoId" in input ? input.youtubeVideoId : "other";
+            if (isPostDelayed && videoId === "CCCCCCCCCCC")
+                await created.promise;
+            return { id: `play-${videoId}` };
+        };
+        playCreateImpl.current = create;
+        if (scenario === "keyed POST delayed") {
+            const dispose = installPlayCreateJournalBridge({
+                api: {},
+                authLease: getAuthRuntimeLease(),
+                runtime: {
+                    begin(input) {
+                        const result = create(input);
+                        const videoId =
+                            "youtubeVideoId" in input
+                                ? input.youtubeVideoId
+                                : "other";
+                        const listeners = new Set<
+                            (input: PlayEngagementInput) => void
+                        >();
+                        keyedObservers.set(`play-${videoId}`, listeners);
+                        return {
+                            key: `key-${videoId}`,
+                            mode: "keyed" as const,
+                            persisted: Promise.resolve(true),
+                            created: result,
+                            observeEngagementCommits(listener) {
+                                listeners.add(listener);
+                                return () => listeners.delete(listener);
+                            },
+                            async noteEngagement(totals, final) {
+                                const write = engagementWriteImpl.current;
+                                if (final && write)
+                                    void result
+                                        .then(({ id }) => write(id, totals))
+                                        .then(() => {
+                                            for (const listener of listeners)
+                                                listener(totals);
+                                        })
+                                        .catch(() => undefined);
+                                // Local journal persistence is deliberately earlier than server commit.
+                                return true;
+                            },
+                        };
+                    },
+                    async close() {},
+                    suspendForHistoryClear: () => async () => undefined,
+                },
+            });
+            t.after(dispose);
+        }
+        const providerTrack = (videoId: string) => ({
+            ...makeTrack(`yt:${videoId}`, `artist-${videoId}`),
+            duration: 200,
+            streamSource: "youtube" as const,
+            youtubeVideoId: videoId,
+            provider: { source: "youtube" as const, youtubeVideoId: videoId },
+        });
+        const queue = [
+            "AAAAAAAAAAA",
+            "BBBBBBBBBBB",
+            "CCCCCCCCCCC",
+            "DDDDDDDDDDD",
+            "EEEEEEEEEEE",
+        ].map(providerTrack);
+        const state = createDeferredAudioState({
+            queue,
+            currentTrack: queue[0],
+            currentIndex: 0,
+            playbackType: "track",
+            vibeMode: true,
+            vibeQueueIds: queue.map((track) => track.id),
+        });
+        const playback = createPlaybackStub({ currentTime: 5, duration: 200 });
+        playback.isPlaying = true;
+        stateHolder.current = state;
+        playbackHolder.current = playback;
+        apiCalls.personalizedRequests.length = 0;
+        engagementWriteImpl.current = async (playId, input) => {
+            attempted.push(playId);
+            if (
+                scenario === "reverse ACK paused" &&
+                playId !== "play-CCCCCCCCCCC"
+            ) {
+                await previousPatches[playId === "play-AAAAAAAAAAA" ? 0 : 1]
+                    .promise;
+            }
+            if (playId === "play-CCCCCCCCCCC") await latestPatch.promise;
+            if (scenario === "failed PATCH" && playId === "play-CCCCCCCCCCC")
+                throw new Error("controlled PATCH failure");
+            // Only an acknowledged PATCH changes this fake server's persisted taste.
+            committed.set(playId, input);
+            return { success: true };
+        };
+        const freshId = "GGGGGGGGGGG";
+        const staleId = "FFFFFFFFFFF";
+        personalizedRequestImpl.current = async () => {
+            // The read and write are independent upstream operations, ordered by latches.
+            await tasteRead.promise;
+            readVersions.push(committed.size);
+            const videoId =
+                committed.size === 3
+                    ? scenario === "ACK during initial GET" &&
+                      readVersions.length > 1
+                        ? "IIIIIIIIIII"
+                        : freshId
+                    : staleId;
+            return {
+                shelves: {
+                    discovery: [
+                        {
+                            ...providerTrack(videoId),
+                            source: "youtube",
+                            provider: {
+                                tidalTrackId: null,
+                                youtubeVideoId: videoId,
+                            },
+                        },
+                    ],
+                    quickPicks: [],
+                    listenAgain: [],
+                },
+                degraded: false,
+                reason: null,
+                seedCount: 1,
+            };
+        };
+        const controlsRef: {
+            current: ReturnType<typeof useAudioControls> | null;
+        } = { current: null };
+        const engineOccurrenceIsCurrent = () => true;
+        function MountedPlayer() {
+            controlsRef.current = useAudioControls();
+            // Mount the player's actual tracking hook beside its actual control provider.
+            const tracking = usePlayEngagementTracking({
+                currentTrack: state.currentTrack as Track,
+                currentIndex: state.currentIndex as number,
+                localTrackPlaybackOccurrence:
+                    state.localTrackPlaybackOccurrence as number,
+                playbackType: "track",
+                isCurrentEngineOccurrence: engineOccurrenceIsCurrent,
+                vibeMode: true,
+                waveMode: "for-you",
+            });
+            React.useEffect(() => {
+                tracking.noteProgress(0);
+                tracking.noteProgress(5);
+            }, [tracking.noteProgress]);
+            return null;
+        }
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const root = createRoot(container);
+        t.after(async () => {
+            latestPatch.release();
+            tasteRead.release();
+            created.release();
+            for (const gate of previousPatches) gate.release();
+            await React.act(async () => root.unmount());
+            container.remove();
+        });
+        const render = () =>
+            React.act(async () => {
+                root.render(
+                    React.createElement(
+                        AudioControlsProvider,
+                        null,
+                        React.createElement(MountedPlayer),
+                    ),
+                );
+                await flushAsync();
+            });
+        await render();
+        for (let index = 0; index < 3; index++) {
+            playback.currentTime = 5;
+            controlsRef.current!.advanceQueue("manual");
+            state.commit();
+            await render();
+        }
+        assert.deepEqual(
+            attempted,
+            isPostDelayed
+                ? ["play-AAAAAAAAAAA", "play-BBBBBBBBBBB"]
+                : ["play-AAAAAAAAAAA", "play-BBBBBBBBBBB", "play-CCCCCCCCCCC"],
+        );
+        assert.equal(committed.size, scenario === "reverse ACK paused" ? 0 : 2);
+        assert.equal((state.currentTrack as Track).id, queue[3].id);
+        assert.equal(playback.isPlaying, true);
+        // A pending latest taste write must not delay selecting/playing the ready next row.
+        const selected = state.currentTrack;
+        playback.currentTime = 7;
+        if (scenario === "reverse ACK paused") controlsRef.current!.pause();
+        if (scenario === "ACK during initial GET") {
+            await React.act(async () => {
+                latestPatch.release();
+                await flushAsync();
+            });
+            assert.equal(
+                apiCalls.personalizedRequests.length,
+                1,
+                "dirty ACK during the first GET is coalesced",
+            );
+        }
+        await React.act(async () => {
+            tasteRead.release();
+            await flushAsync();
+        });
+        state.commit();
+        await render();
+        assert.equal(
+            apiCalls.personalizedRequests.length,
+            scenario === "ACK during initial GET" ? 2 : 1,
+        );
+        if (scenario === "keyed POST delayed") {
+            for (const listener of keyedObservers.get("play-CCCCCCCCCCC")!) {
+                listener({
+                    outcome: "meaningful",
+                    listenedSeconds: 30,
+                    completionRatio: 0.3,
+                });
+                listener({
+                    outcome: "failed",
+                    listenedSeconds: 5,
+                    completionRatio: 0.025,
+                });
+            }
+            await React.act(flushAsync);
+            assert.equal(
+                apiCalls.personalizedRequests.length,
+                1,
+                "local persistence, checkpoints and errors do not retune",
+            );
+        }
+        if (scenario === "owner replaced") {
+            controlsRef.current!.playTracks([providerTrack("HHHHHHHHHHH")]);
+            state.commit();
+            await render();
+        }
+        if (scenario === "API owner replaced") apiSessionGeneration++;
+        await React.act(async () => {
+            created.release();
+            latestPatch.release();
+            await flushAsync();
+        });
+        if (scenario === "reverse ACK paused") {
+            assert.equal(
+                apiCalls.personalizedRequests.length,
+                1,
+                "latest-first ACK waits for the other final skips",
+            );
+            await React.act(async () => {
+                previousPatches[1].release();
+                await flushAsync();
+            });
+            assert.equal(apiCalls.personalizedRequests.length, 1);
+            await React.act(async () => {
+                previousPatches[0].release();
+                await flushAsync();
+            });
+        }
+        state.commit();
+        await render();
+        if (scenario === "owner replaced") {
+            assert.equal((state.currentTrack as Track).id, "yt:HHHHHHHHHHH");
+            assert.equal(apiCalls.personalizedRequests.length, 1);
+            return;
+        }
+        if (scenario === "API owner replaced") {
+            assert.equal(apiCalls.personalizedRequests.length, 1);
+            assert.equal(state.currentTrack, selected);
+            return;
+        }
+        assert.equal(committed.size, scenario === "failed PATCH" ? 2 : 3);
+        assert.equal(state.currentTrack, selected);
+        assert.equal(playback.currentTime, 7);
+        assert.equal(playback.isPlaying, scenario !== "reverse ACK paused");
+        assert.equal(
+            apiCalls.personalizedRequests.length,
+            scenario === "failed PATCH" ? 1 : 2,
+        );
+        assert.equal(
+            (state.queue as Track[]).at(-1)?.id,
+            `yt:${scenario === "failed PATCH" ? staleId : scenario === "ACK during initial GET" ? "IIIIIIIIIII" : freshId}`,
+            `continuation must include latest committed skip; read persisted versions=${readVersions.join(",")}`,
+        );
+    });
+}
+
 test("provider radio adds rich tracks to a Listen Together queue without local mutation", async () => {
     const currentTrack = {
         ...makeTrack("yt:AAAAAAAAAAA", "provider-artist"),
@@ -2046,4 +2405,195 @@ test("fresh playNow records a replacement while queue navigation does not", asyn
     controls.playNow(makeTrack("fresh", "artist"));
     state.commit();
     assert.ok(getCollectionPlaybackGeneration() > before);
+});
+
+test("adversarial finite six skips during trailing GET preserves latest committed taste", async (t) => {
+    const { AudioControlsProvider, useAudioControls } =
+        await import("../../lib/audio-controls-context");
+    const { usePlayEngagementTracking } =
+        await import("../../components/player/hooks/usePlayEngagementTracking");
+    const { createRoot } = await import("react-dom/client");
+    const deferred = () => {
+        let release!: () => void;
+        const promise = new Promise<void>((r) => {
+            release = r;
+        });
+        return { promise, release };
+    };
+    const thirdWrite = deferred(),
+        firstRead = deferred(),
+        trailingResponse = deferred();
+    const committed = new Map<string, PlayEngagementInput>();
+    const readVersions: number[] = [];
+    const providerTrack = (videoId: string) => ({
+        ...makeTrack(`yt:${videoId}`, `artist-${videoId}`),
+        duration: 200,
+        streamSource: "youtube" as const,
+        youtubeVideoId: videoId,
+        provider: { source: "youtube" as const, youtubeVideoId: videoId },
+    });
+    const queue = [
+        "AAAAAAAAAAA",
+        "BBBBBBBBBBB",
+        "CCCCCCCCCCC",
+        "DDDDDDDDDDD",
+        "EEEEEEEEEEE",
+        "HHHHHHHHHHH",
+        "JJJJJJJJJJJ",
+        "KKKKKKKKKKK",
+    ].map(providerTrack);
+    const state = createDeferredAudioState({
+        queue,
+        currentTrack: queue[0],
+        currentIndex: 0,
+        playbackType: "track",
+        vibeMode: true,
+        vibeQueueIds: queue.map((x) => x.id),
+    });
+    const playback = createPlaybackStub({ currentTime: 5, duration: 200 });
+    playback.isPlaying = true;
+    stateHolder.current = state;
+    playbackHolder.current = playback;
+    apiCalls.personalizedRequests.length = 0;
+    engagementWriteImpl.current = async (id, input) => {
+        if (id === "play-CCCCCCCCCCC") await thirdWrite.promise;
+        committed.set(id, input);
+        return { success: true };
+    };
+    personalizedRequestImpl.current = async () => {
+        await firstRead.promise;
+        const version = committed.size;
+        readVersions.push(version);
+        if (readVersions.length === 2) await trailingResponse.promise;
+        const id =
+            version >= 6
+                ? "ZZZZZZZZZZZ"
+                : version >= 3
+                  ? "GGGGGGGGGGG"
+                  : "FFFFFFFFFFF";
+        return {
+            shelves: {
+                discovery: (readVersions.length === 1
+                    ? [
+                          id,
+                          "LLLLLLLLLLL",
+                          "MMMMMMMMMMM",
+                          "NNNNNNNNNNN",
+                          "OOOOOOOOOOO",
+                      ]
+                    : [id]
+                ).map((videoId) => ({
+                    ...providerTrack(videoId),
+                    source: "youtube",
+                    provider: { tidalTrackId: null, youtubeVideoId: videoId },
+                })),
+                quickPicks: [],
+                listenAgain: [],
+            },
+            degraded: false,
+            reason: null,
+            seedCount: 1,
+        };
+    };
+    const controlsRef: { current: ReturnType<typeof useAudioControls> | null } =
+        { current: null };
+    const engineOccurrenceIsCurrent = () => true;
+    function MountedPlayer() {
+        controlsRef.current = useAudioControls();
+        const tracking = usePlayEngagementTracking({
+            currentTrack: state.currentTrack as Track,
+            currentIndex: state.currentIndex as number,
+            localTrackPlaybackOccurrence:
+                state.localTrackPlaybackOccurrence as number,
+            playbackType: "track",
+            isCurrentEngineOccurrence: engineOccurrenceIsCurrent,
+            vibeMode: true,
+            waveMode: "for-you",
+        });
+        React.useEffect(() => {
+            tracking.noteProgress(0);
+            tracking.noteProgress(5);
+        }, [tracking.noteProgress]);
+        return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        thirdWrite.release();
+        firstRead.release();
+        trailingResponse.release();
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    const render = () =>
+        React.act(async () => {
+            root.render(
+                React.createElement(
+                    AudioControlsProvider,
+                    null,
+                    React.createElement(MountedPlayer),
+                ),
+            );
+            await flushAsync();
+        });
+    await render();
+    for (let n = 0; n < 3; n++) {
+        playback.currentTime = 5;
+        controlsRef.current!.advanceQueue("manual");
+        state.commit();
+        await render();
+    }
+    assert.equal(committed.size, 2);
+    assert.equal(apiCalls.personalizedRequests.length, 1);
+    await React.act(async () => {
+        firstRead.release();
+        await flushAsync();
+    });
+    state.commit();
+    await render();
+    await React.act(async () => {
+        thirdWrite.release();
+        await flushAsync();
+    });
+    assert.deepEqual(readVersions, [2, 3]);
+    assert.equal(apiCalls.personalizedRequests.length, 2);
+    // A second finite triple lands after the trailing read but before its response commits.
+    for (let n = 0; n < 3; n++) {
+        playback.currentTime = 5;
+        controlsRef.current!.advanceQueue("manual");
+        state.commit();
+        await render();
+    }
+    assert.equal(committed.size, 6);
+    const selected = state.currentTrack;
+    playback.currentTime = 9;
+    controlsRef.current!.pause();
+    await React.act(async () => {
+        trailingResponse.release();
+        await flushAsync();
+    });
+    state.commit();
+    await render();
+    await React.act(flushAsync);
+    state.commit();
+    await render();
+    const proof = {
+        committed: committed.size,
+        readVersions,
+        requests: apiCalls.personalizedRequests.length,
+        tail: (state.queue as Track[]).at(-1)?.id,
+        current: (state.currentTrack as Track).id,
+        position: playback.currentTime,
+        isPlaying: playback.isPlaying,
+    };
+    console.log("FINITE_BURST_PROOF " + JSON.stringify(proof));
+    assert.equal(state.currentTrack, selected);
+    assert.equal(playback.currentTime, 9);
+    assert.equal(playback.isPlaying, false);
+    assert.equal(
+        (state.queue as Track[]).at(-1)?.id,
+        "yt:ZZZZZZZZZZZ",
+        "finite second triple must eventually get a fresh continuation after all six server ACKs",
+    );
 });
