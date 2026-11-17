@@ -440,16 +440,21 @@ final class OwnerUiSession {
     if (!isCurrent) return;
     final now = at ?? DateTime.now(), previous = _lastHomeClock;
     _lastHomeClock = now;
-    if (previous != null &&
-        (previous.year != now.year ||
-            previous.month != now.month ||
-            previous.day != now.day ||
-            previous.hour != now.hour ||
-            previous.timeZoneOffset != now.timeZoneOffset)) {
-      observe(home.refresh(request: request(now)));
-    } else {
-      home.request = request(now);
+    if (previous != null) {
+      final previousUtc = previous.toUtc(), nowUtc = now.toUtc();
+      if (previous.year != now.year ||
+          previous.month != now.month ||
+          previous.day != now.day ||
+          previous.hour != now.hour ||
+          previous.timeZoneOffset != now.timeZoneOffset ||
+          previousUtc.year != nowUtc.year ||
+          previousUtc.month != nowUtc.month ||
+          previousUtc.day != nowUtc.day) {
+        observe(home.refresh(request: request(now)));
+        return;
+      }
     }
+    home.request = request(now);
   }
 
   void remember(Iterable<Track> tracks) {

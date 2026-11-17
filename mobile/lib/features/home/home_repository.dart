@@ -94,7 +94,7 @@ final class HomeRepository {
         ),
       ),
       part('daily', _daily),
-      part(
+      part<MusicMix?>(
         'dailyBlend',
         () async => _personalMix(
           await _get('/api/personalized/home', _query(request, 'made-for-you')),
@@ -104,7 +104,7 @@ final class HomeRepository {
           'Знакомая музыка и новые открытия',
         ),
       ),
-      part(
+      part<MusicMix?>(
         'daypart',
         () async => _personalMix(
           await _get(
@@ -145,8 +145,7 @@ final class HomeRepository {
             results[2] != null &&
             (results[2] as MusicMix).tracks.isNotEmpty)
           results[2] as MusicMix,
-        if (results[3] != null && (results[3] as MusicMix).tracks.isNotEmpty)
-          results[3] as MusicMix,
+        if (results[3] != null) results[3] as MusicMix,
         ?weeklyMix,
         ...?legacy,
       ],
@@ -348,14 +347,36 @@ final class HomeRepository {
     );
   }
 
-  MusicMix _personalMix(
+  MusicMix? _personalMix(
     Object? value,
     MusicMixKind kind,
     String id,
     String title,
     String description,
   ) {
-    final feed = _feed(value), seen = <String>{};
+    final dto = _map(value), feed = _feed(dto);
+    final projection = dto['timeOfDayMix'];
+    if (kind == MusicMixKind.daypart && projection is Map) {
+      final projectedTracks = projection['tracks'];
+      if (projectedTracks is List && projectedTracks.length <= 40) {
+        // Keep server occurrence order, including an empty pool. Absent or
+        // malformed optional projections use the shelf recipe below.
+        return MusicMix(
+          id: id,
+          title: title,
+          description: description,
+          kind: kind,
+          tracks: projectedTracks.map(
+            (track) => const HomeTrackMapper().map(_map(track)),
+          ),
+          generationId: feed.generationId,
+          reason: feed.reason,
+          languagePending: feed.languagePending,
+          snapshot: MixSnapshot.tryParse(projection['snapshot']),
+        );
+      }
+    }
+    final seen = <String>{};
     final lanes = kind == MusicMixKind.daypart
         ? [feed.shelves[2], feed.shelves[1], feed.shelves[0]]
         : [feed.shelves[1], feed.shelves[2], feed.shelves[0]];
@@ -377,6 +398,7 @@ final class HomeRepository {
         }
       }
     }
+    if (tracks.isEmpty) return null;
     return MusicMix(
       id: id,
       title: title,

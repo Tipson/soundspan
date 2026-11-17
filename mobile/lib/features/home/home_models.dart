@@ -40,6 +40,8 @@ enum MusicMixKind { daily, dailyBlend, daypart, weekly, legacy }
 final class MixSnapshot {
   MixSnapshot._({
     required this.generatedAt,
+    required this.checkedAt,
+    required this.compositionKey,
     required this.compositionDay,
     required this.weekStart,
     required this.weekEnd,
@@ -50,8 +52,8 @@ final class MixSnapshot {
     required Iterable<String> reasons,
   }) : reasons = List.unmodifiable(reasons);
 
-  final DateTime? generatedAt, weekStart, weekEnd;
-  final String? compositionDay;
+  final DateTime? generatedAt, checkedAt, weekStart, weekEnd;
+  final String? compositionDay, compositionKey;
   final DateTime refreshAfter;
   final int requestedCount, snapshotCount, availableCount;
   final List<String> reasons;
@@ -76,12 +78,17 @@ final class MixSnapshot {
     'декабря',
   ];
 
-  /// Dates are rendered in the same UTC day used by daily composition policy.
-  List<String> get labels => [
-    if (generatedAt case final date?)
-      'Составлен ${date.day} ${_months[date.month - 1]} ${date.year}',
-    for (final reason in reasons) ?_reasonLabels[reason],
-  ];
+  /// Composition dates retain UTC policy; checks use the device's local time.
+  List<String> get labels {
+    final checked = checkedAt?.toLocal();
+    return [
+      if (generatedAt case final date?)
+        'Составлен ${date.day} ${_months[date.month - 1]} ${date.year}',
+      if (checked != null)
+        'Проверено в ${checked.hour.toString().padLeft(2, '0')}:${checked.minute.toString().padLeft(2, '0')}',
+      for (final reason in reasons) ?_reasonLabels[reason],
+    ];
+  }
 
   static MixSnapshot? tryParse(Object? value) {
     if (value is! Map) return null;
@@ -94,8 +101,15 @@ final class MixSnapshot {
     if (reasons is! List || reasons.any((reason) => reason is! String)) {
       return null;
     }
-    for (final field in ['generatedAt', 'weekStart', 'weekEnd']) {
+    for (final field in ['generatedAt', 'checkedAt', 'weekStart', 'weekEnd']) {
       if (value[field] != null && _instant(value[field]) == null) return null;
+    }
+    final key = value['compositionKey'];
+    if (key != null &&
+        (key is! String ||
+            key.length > 128 ||
+            !RegExp(r'^daypart-v1:[a-f0-9]{64}$').hasMatch(key))) {
+      return null;
     }
     final day = value['compositionDay'];
     if (day != null &&
@@ -106,6 +120,8 @@ final class MixSnapshot {
     }
     return MixSnapshot._(
       generatedAt: _instant(value['generatedAt']),
+      checkedAt: _instant(value['checkedAt']),
+      compositionKey: key as String?,
       compositionDay: day as String?,
       weekStart: _instant(value['weekStart']),
       weekEnd: _instant(value['weekEnd']),
