@@ -788,6 +788,8 @@ config:
   recommendations:
     # -- Enable the explicitly requested ordered Wave sequence protocol (app default false).
     waveSequenceEnabled: null
+    # -- Capture bounded private generation diagnostics for the interactive-admin reader (app default false).
+    traceEnabled: null
     # -- Recommendation ranker: baseline, shadow, or active.
     engineMode: null
     # -- Stable percentage of accounts served by Hybrid v2 in active mode (0..100).

@@ -46,6 +46,10 @@ import { WithYouTube } from "./api/youtube";
 import { WithYtMusic } from "./api/ytmusic";
 import { WithMusicSources } from "./api/musicSources";
 import type { ResolvedMediaSource } from "@soundspan/media-metadata-contract";
+import {
+    isRecommendationTraceId,
+    type AdminRecommendationTraceResponse,
+} from "./api/recommendationTrace";
 
 export { vibeErrorMessage } from "./api/vibe";
 
@@ -597,6 +601,31 @@ class ApiClient extends WithMusicSources(
         ),
     ),
 ) {
+    /** Read one private generation with a bounded, explicitly cancelable request. */
+    async getAdminRecommendationTrace(
+        userId: string,
+        generationId: string,
+        signal?: AbortSignal,
+    ): Promise<AdminRecommendationTraceResponse> {
+        if (
+            !isRecommendationTraceId(userId) ||
+            !isRecommendationTraceId(generationId)
+        )
+            throw new TypeError("Invalid recommendation trace identifiers");
+        const query = new URLSearchParams({ userId, generationId });
+        return this.request<AdminRecommendationTraceResponse>(
+            `/admin/recommendation-trace?${query}`,
+            {
+                method: "GET",
+                cache: "no-store",
+                signal,
+                timeoutMs: 10_000,
+                retryOnTimeout: false,
+                silent404: true,
+            },
+        );
+    }
+
     /** Creates a short cookie session limited to the administrator queue panel. */
     async createQueueDashboardSession(
         signal?: AbortSignal,

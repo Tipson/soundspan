@@ -10,6 +10,7 @@
         "setup": "npm --prefix packages/media-metadata-contract install && npm --prefix packages/media-metadata-contract run build && npm --prefix backend install && npm --prefix frontend install",
         "setup:ci": "npm --prefix packages/media-metadata-contract ci && npm --prefix packages/media-metadata-contract run build && npm --prefix backend ci && npm --prefix frontend ci",
         "build:contract": "npm --prefix packages/media-metadata-contract run build",
+        "recommendations:replay": "node backend/node_modules/tsx/dist/cli.mjs backend/src/scripts/recommendationReplay.ts",
         "format": "npm --prefix packages/media-metadata-contract run format && npm --prefix backend run format && npm --prefix frontend run format && backend/node_modules/.bin/prettier --write scripts healthcheck-prod.js docker-bake.json package.json .prettierrc.json",
         "format:check": "node scripts/ci/check-format.mjs",
         "check:format:test": "node --test scripts/ci/__tests__/check-format.test.mjs",

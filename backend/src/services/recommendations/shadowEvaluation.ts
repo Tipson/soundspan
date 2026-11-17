@@ -1,6 +1,5 @@
 import type { Prisma } from "@prisma/client";
 
-import { prisma } from "../../utils/db";
 import { isEarlyRecommendationSkip as isEarlySkip } from "./playbackEvidence";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
@@ -741,8 +740,9 @@ export class RecommendationShadowEvaluationService {
 
 export const recommendationShadowEvaluation =
     new RecommendationShadowEvaluationService({
-        loadGenerations: (since, until) =>
-            prisma.recommendationGeneration.findMany({
+        loadGenerations: async (since, until) => {
+            const { prisma } = await import("../../utils/db");
+            return prisma.recommendationGeneration.findMany({
                 where: {
                     createdAt: { gte: since, lt: until },
                     user: { isTestAccount: false },
@@ -774,8 +774,10 @@ export const recommendationShadowEvaluation =
                         },
                     },
                 },
-            }),
+            });
+        },
         loadDataQuality: async (since, until) => {
+            const { prisma } = await import("../../utils/db");
             const liveCanonicalWhere: Prisma.CanonicalRecordingWhereInput = {
                 mergedIntoId: null,
                 NOT: { identitySource: "identity-merged" },

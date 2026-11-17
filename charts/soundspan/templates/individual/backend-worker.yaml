@@ -116,6 +116,7 @@ spec:
             "DOCS_PUBLIC" true
             "RECOMMENDATION_ENGINE_MODE" true
             "RECOMMENDATION_WAVE_SEQUENCE_ENABLED" true
+            "RECOMMENDATION_TRACE_ENABLED" true
             "RECOMMENDATION_HYBRID_ROLLOUT_PERCENT" true
             "RECOMMENDATION_EXPLORATION_PERCENT" true
             "REMOTE_ANALYSIS_ENABLED" true
@@ -431,6 +432,13 @@ spec:
             {{- else if not (kindIs "invalid" .Values.config.recommendations.waveSequenceEnabled) }}
             - name: RECOMMENDATION_WAVE_SEQUENCE_ENABLED
               value: {{ .Values.config.recommendations.waveSequenceEnabled | quote }}
+            {{- end }}
+            {{- if hasKey $backendWorkerEnv "RECOMMENDATION_TRACE_ENABLED" }}
+            - name: RECOMMENDATION_TRACE_ENABLED
+              value: {{ index $backendWorkerEnv "RECOMMENDATION_TRACE_ENABLED" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.recommendations.traceEnabled) }}
+            - name: RECOMMENDATION_TRACE_ENABLED
+              value: {{ .Values.config.recommendations.traceEnabled | quote }}
             {{- end }}
             {{- if hasKey $backendWorkerEnv "RECOMMENDATION_ENGINE_MODE" }}
             - name: RECOMMENDATION_ENGINE_MODE

@@ -120,6 +120,34 @@ describe("config module", () => {
         }
     }
 
+    it.each([
+        [undefined, false],
+        ["false", false],
+        ["true", true],
+    ] as const)(
+        "keeps recommendation tracing independent and default-off (%s)",
+        async (value, expected) => {
+            const { config } = await loadConfigModule({
+                RECOMMENDATION_TRACE_ENABLED: value,
+                RECOMMENDATION_ENGINE_MODE: "baseline",
+                RECOMMENDATION_WAVE_SEQUENCE_ENABLED: "false",
+            });
+            expect(config.recommendations.traceEnabled).toBe(expected);
+            expect(config.recommendations.mode).toBe("baseline");
+            expect(config.recommendations.waveSequenceEnabled).toBe(false);
+        },
+    );
+
+    it.each(["enabled", "TRUE", " true ", "1"])(
+        "rejects malformed recommendation tracing enablement %s",
+        async (value) => {
+            await expectStartupValidationFailure(
+                { RECOMMENDATION_TRACE_ENABLED: value },
+                "RECOMMENDATION_TRACE_ENABLED",
+            );
+        },
+    );
+
     it("disables ordered Wave by default and accepts only explicit valid opt-in", async () => {
         expect(
             (
@@ -279,6 +307,7 @@ describe("config module", () => {
     it("uses safe hybrid recommendation and remote-analysis defaults", async () => {
         const { config } = await loadConfigModule({
             RECOMMENDATION_ENGINE_MODE: undefined,
+            RECOMMENDATION_TRACE_ENABLED: undefined,
             RECOMMENDATION_WAVE_SEQUENCE_ENABLED: undefined,
             RECOMMENDATION_HYBRID_ROLLOUT_PERCENT: undefined,
             RECOMMENDATION_EXPLORATION_PERCENT: undefined,
@@ -289,6 +318,7 @@ describe("config module", () => {
 
         expect(config.recommendations).toEqual({
             mode: "shadow",
+            traceEnabled: false,
             waveSequenceEnabled: false,
             hybridRolloutPercent: 0,
             explorationRate: 0.1,
@@ -301,6 +331,7 @@ describe("config module", () => {
     it("parses explicit hybrid recommendation controls", async () => {
         const { config } = await loadConfigModule({
             RECOMMENDATION_ENGINE_MODE: "active",
+            RECOMMENDATION_TRACE_ENABLED: "true",
             RECOMMENDATION_WAVE_SEQUENCE_ENABLED: "true",
             RECOMMENDATION_HYBRID_ROLLOUT_PERCENT: "25",
             RECOMMENDATION_EXPLORATION_PERCENT: "15",
@@ -311,6 +342,7 @@ describe("config module", () => {
 
         expect(config.recommendations).toEqual({
             mode: "active",
+            traceEnabled: true,
             waveSequenceEnabled: true,
             hybridRolloutPercent: 25,
             explorationRate: 0.15,

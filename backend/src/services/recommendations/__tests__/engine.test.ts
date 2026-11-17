@@ -75,6 +75,161 @@ describe("unified recommendation engine", () => {
         exclude: [],
     };
 
+    it("records observed native rejection without admitting provider claims or changing the allowed pool", async () => {
+        const deps = { ...dependencies("baseline"), traceEnabled: true };
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [
+                candidate("allowed"),
+                candidate("invalid-native", { source: "vk" }),
+            ],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend(request);
+        expect(result.tracks.map((track) => track.id)).toEqual(["yt:allowed"]);
+        expect(deps.resolveCanonical).toHaveBeenCalledTimes(1);
+        expect(
+            deps.recordGeneration.mock.calls[0][0].context.recommendationTrace,
+        ).toMatchObject({
+            coverage: {
+                loadedCount: 2,
+                sanitizedCount: 1,
+                admittedCount: 1,
+                rankInputCount: 1,
+                loadedSources: { youtube: 1, vk: 1 },
+            },
+            filters: { invalidNative: 1, disliked: 0, feedbackUnavailable: 0 },
+        });
+    });
+
+    it("captures bounded diagnostics in the same final served write without exposing them in the feed", async () => {
+        const deps = {
+            ...dependencies("baseline"),
+            traceEnabled: true,
+            finalizeWaveRecommendations: (
+                rows: readonly ScoredRecommendation[],
+            ) => orderWaveRecommendations(rows),
+        };
+        deps.loadRecentExposures.mockResolvedValue([]);
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [
+                candidate("a1", {
+                    title: "private title",
+                    artist: { id: null, name: "A" },
+                }),
+                candidate("a2", { artist: { id: null, name: "A" } }),
+                candidate("b", { artist: { id: null, name: "B" } }),
+            ],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend(request);
+        expect(deps.recordGeneration).toHaveBeenCalledTimes(1);
+        const written = deps.recordGeneration.mock.calls[0][0];
+        const trace = written.context.recommendationTrace;
+        expect(trace).toMatchObject({
+            version: 1,
+            algorithm: "baseline-v1",
+            mode: "baseline",
+            served: true,
+        });
+        expect(
+            trace.items.map((item: { position: number }) => item.position),
+        ).toEqual([0, 1, 2]);
+        expect(
+            trace.items.map(
+                (item: { rankPosition: number }) => item.rankPosition,
+            ),
+        ).toEqual([0, 2, 1]);
+        expect(trace.spacing).toMatchObject({
+            applied: true,
+            scope: "page",
+            movedOccurrences: 2,
+        });
+        expect(
+            written.recommendations.map(
+                (row: ScoredRecommendation) => row.track.id,
+            ),
+        ).toEqual(result.tracks.map((track) => track.id));
+        expect(
+            trace.items.every(
+                (item: { scoring?: { baseScore: number } }) =>
+                    item.scoring?.baseScore === 1,
+            ),
+        ).toBe(true);
+        const encoded = JSON.stringify(trace);
+        expect(Buffer.byteLength(encoded)).toBeLessThanOrEqual(65_536);
+        expect(encoded).not.toContain("private title");
+        expect(encoded).not.toContain('"embedding":');
+        expect(encoded).not.toContain("alice");
+        expect(result).not.toHaveProperty("recommendationTrace");
+        expect(result.tracks.every((track) => !("scoreTrace" in track))).toBe(
+            true,
+        );
+    });
+
+    it.each(["baseline", "shadow", "active"] as const)(
+        "diagnostics off/on retain %s decisions, assignment and I/O accounting",
+        async (mode) => {
+            const off = dependencies(mode);
+            const on = { ...dependencies(mode), traceEnabled: true };
+            const first = await new RecommendationEngine(off).recommend(
+                request,
+            );
+            const second = await new RecommendationEngine(on).recommend(
+                request,
+            );
+            await Promise.resolve();
+            expect(second).toEqual(first);
+            for (const method of [
+                "loadCandidates",
+                "resolveCanonical",
+                "loadRecentExposures",
+                "loadDislikedCanonicalKeys",
+                "loadTasteContext",
+                "recordGeneration",
+                "scheduleHotSet",
+            ] as const) {
+                expect(on[method]).toHaveBeenCalledTimes(
+                    off[method].mock.calls.length,
+                );
+            }
+            const offWrites = off.recordGeneration.mock.calls.map(
+                ([input]) => input,
+            );
+            const onWrites = on.recordGeneration.mock.calls.map(
+                ([input]) => input,
+            );
+            expect(
+                onWrites.map((input) => ({
+                    algorithm: input.algorithm,
+                    served: input.served,
+                    assignment: input.context.experimentAssignment,
+                    scores: input.recommendations.map(
+                        (row: ScoredRecommendation) => row.score,
+                    ),
+                })),
+            ).toEqual(
+                offWrites.map((input) => ({
+                    algorithm: input.algorithm,
+                    served: input.served,
+                    assignment: input.context.experimentAssignment,
+                    scores: input.recommendations.map(
+                        (row: ScoredRecommendation) => row.score,
+                    ),
+                })),
+            );
+            expect(
+                offWrites.every((input) => !input.context.recommendationTrace),
+            ).toBe(true);
+            expect(
+                onWrites.every(
+                    (input) => input.context.recommendationTrace?.version === 1,
+                ),
+            ).toBe(true);
+        },
+    );
+
     it.each([
         ["baseline", 100],
         ["shadow", 100],
@@ -140,13 +295,14 @@ describe("unified recommendation engine", () => {
             const context: WaveSequenceContextV1 = {
                 version: 1,
                 sequenceId: "5d73c623-d11d-4fda-943e-0e01ce5b3be7",
-                nextPosition: 2,
+                nextPosition: 42,
                 nextSourceCursor: 1,
                 intent: { direction: "for-you", mood: null, language: "any" },
                 tail: [],
             };
             const deps = {
                 ...dependencies(mode),
+                traceEnabled: true,
                 finalizeWaveRecommendations: (
                     rows: readonly ScoredRecommendation[],
                 ) => ({
@@ -170,13 +326,25 @@ describe("unified recommendation engine", () => {
                 expect.objectContaining({ orderedWave: context }),
             );
             expect(result.orderedWave).toEqual(context);
+            const trace = served[0][0].context.recommendationTrace;
+            expect(
+                trace.items.map((item: { position: number }) => item.position),
+            ).toEqual(
+                result.tracks.map(
+                    (_, index) => 42 - result.tracks.length + index,
+                ),
+            );
             expect(
                 served[0][0].recommendations.map(
                     (row: ScoredRecommendation) => row.track,
                 ),
             ).toEqual(result.tracks);
-            for (const [row] of shadow)
+            for (const [row] of shadow) {
                 expect(row.context).not.toHaveProperty("orderedWave");
+                expect(row.context.recommendationTrace.items[0].position).toBe(
+                    0,
+                );
+            }
         },
     );
 

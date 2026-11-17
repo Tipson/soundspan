@@ -530,6 +530,7 @@ const envSchema = z
         RECOMMENDATION_EXPLORATION_PERCENT:
             recommendationExplorationPercentEnvSchema,
         RECOMMENDATION_WAVE_SEQUENCE_ENABLED: booleanEnvSchema,
+        RECOMMENDATION_TRACE_ENABLED: booleanEnvSchema,
         REMOTE_ANALYSIS_ENABLED: booleanEnvSchema,
         FEATURE_AUDIUS: booleanEnvSchema,
         REMOTE_ANALYSIS_DAILY_BUDGET: remoteAnalysisDailyBudgetEnvSchema,
@@ -715,6 +716,10 @@ export const config = {
     vibeProviderUrl: normalizeVibeProviderUrl(process.env.VIBE_PROVIDER_URL),
     vibeEmbedConcurrency: Number(process.env.VIBE_EMBED_CONCURRENCY ?? "1"),
     recommendations: {
+        traceEnabled: parseEnvBool(
+            process.env.RECOMMENDATION_TRACE_ENABLED,
+            false,
+        ),
         waveSequenceEnabled: parseEnvBool(
             process.env.RECOMMENDATION_WAVE_SEQUENCE_ENABLED,
             false,

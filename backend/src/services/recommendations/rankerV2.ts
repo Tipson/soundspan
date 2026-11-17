@@ -13,6 +13,15 @@ import {
     hasNativeRecommendationIdentity,
     readNativeRecommendationRecording,
 } from "./nativeCandidates";
+import {
+    boundedRankTraceNumber,
+    createRankScorePart,
+    type RankScorePartNameV1,
+    type RankScorePartV1,
+    type RankTraceCounter,
+    type RankTraceSummaryV1,
+    type RecommendationScoreTraceV1,
+} from "./scoreTrace";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
@@ -385,54 +394,140 @@ function baseScore(
     latestArtistExposures: ReadonlyMap<string, number>,
     latestCanonicalExposures: ReadonlyMap<string, number>,
     latestAlbumExposures: ReadonlyMap<string, number>,
+    parts?: RankScorePartV1[],
 ): number {
-    let score = candidate.providerPrior + (candidate.accountAffinity ?? 0);
-    score += moodRankingScore(candidate, options.mood);
+    const part = parts
+        ? (
+              name: RankScorePartNameV1,
+              value: number | null | undefined,
+              state: RankScorePartV1["state"] = "known",
+          ) => parts.push(createRankScorePart(name, value, state))
+        : undefined;
+    const providerPrior = candidate.providerPrior;
+    const accountAffinity = candidate.accountAffinity;
+    let score = providerPrior + (accountAffinity ?? 0);
+    part?.("providerPrior", providerPrior);
+    part?.("accountAffinity", accountAffinity);
+    const moodScore = moodRankingScore(candidate, options.mood);
+    score += moodScore;
+    part?.("moodFeatures", moodScore, moodTraceState(candidate, options.mood));
     const vector = candidate.embedding
         ? normalizeVector(candidate.embedding)
         : null;
     if (vector && options.positiveCentroids.length > 0) {
-        score +=
+        const contribution =
             Math.max(
                 ...options.positiveCentroids.map((center) =>
                     cosine(vector, center),
                 ),
             ) * 1.35;
+        score += contribution;
+        part?.(
+            "positiveSimilarity",
+            contribution,
+            measuredTraceState(() =>
+                hasComparableVectors(vector, options.positiveCentroids),
+            ),
+        );
+    } else {
+        part?.(
+            "positiveSimilarity",
+            null,
+            options.positiveCentroids.length > 0 ? "absent" : "unused",
+        );
     }
-    score -= negativeFeedbackPenalty(vector, options);
+    const negativePenalty = negativeFeedbackPenalty(vector, options);
+    score -= negativePenalty;
+    part?.(
+        "negativeFeedback",
+        -negativePenalty,
+        negativeFeedbackTraceState(vector, options),
+    );
     const moodVector = options.moodEmbedding;
     if (vector && moodVector && vector.length === moodVector.length) {
-        score += cosine(vector, moodVector) * 0.9;
+        const contribution = cosine(vector, moodVector) * 0.9;
+        score += contribution;
+        part?.(
+            "moodSimilarity",
+            contribution,
+            measuredTraceState(() =>
+                hasComparableVectors(vector, [moodVector]),
+            ),
+        );
+    } else {
+        part?.("moodSimilarity", null, "absent");
     }
     const sessionPositive = options.sessionPositiveEmbedding;
     if (vector && sessionPositive && vector.length === sessionPositive.length) {
-        score += cosine(vector, sessionPositive) * 1.8;
+        const contribution = cosine(vector, sessionPositive) * 1.8;
+        score += contribution;
+        part?.(
+            "sessionPositive",
+            contribution,
+            measuredTraceState(() =>
+                hasComparableVectors(vector, [sessionPositive]),
+            ),
+        );
+    } else {
+        part?.("sessionPositive", null, "absent");
     }
     if (vector && (options.contextCentroids?.length ?? 0) > 0) {
-        score +=
+        const contribution =
             Math.max(
                 ...options.contextCentroids!.map((center) =>
                     cosine(vector, center),
                 ),
             ) * 0.45;
+        score += contribution;
+        part?.(
+            "contextSimilarity",
+            contribution,
+            measuredTraceState(() =>
+                hasComparableVectors(vector, options.contextCentroids!),
+            ),
+        );
+    } else {
+        part?.(
+            "contextSimilarity",
+            null,
+            (options.contextCentroids?.length ?? 0) > 0 ? "absent" : "unused",
+        );
     }
     const exposureAge = latestExposureAge(
         candidate.canonicalKey,
         latestCanonicalExposures,
         options.now,
     );
+    let recordingPenalty = 0;
     if (exposureAge !== null && exposureAge < SEVEN_DAYS_MS) {
-        score -= 2 * (1 - exposureAge / SEVEN_DAYS_MS);
+        recordingPenalty = 2 * (1 - exposureAge / SEVEN_DAYS_MS);
+        score -= recordingPenalty;
     }
+    part?.(
+        "recentRecording",
+        -recordingPenalty,
+        exposureAge === null || !Number.isFinite(exposureAge)
+            ? "absent"
+            : "known",
+    );
     const artistExposureAge = latestArtistExposureAge(
         candidate.artist.name,
         latestArtistExposures,
         options.now,
     );
+    let artistPenalty = 0;
     if (artistExposureAge !== null && artistExposureAge < ONE_DAY_MS) {
-        score -=
+        artistPenalty =
             MAX_RECENT_ARTIST_PENALTY * (1 - artistExposureAge / ONE_DAY_MS);
+        score -= artistPenalty;
     }
+    part?.(
+        "recentArtist",
+        -artistPenalty,
+        artistExposureAge === null || !Number.isFinite(artistExposureAge)
+            ? "absent"
+            : "known",
+    );
     const albumKey = buildRecommendationAlbumKey(
         candidate.artist.name,
         candidate.album.title,
@@ -441,15 +536,204 @@ function baseScore(
         albumKey === null
             ? null
             : latestExposureAge(albumKey, latestAlbumExposures, options.now);
+    let albumPenalty = 0;
     if (albumExposureAge !== null && albumExposureAge < ONE_DAY_MS) {
-        score -= DIVERSITY_PENALTY * (1 - albumExposureAge / ONE_DAY_MS);
+        albumPenalty = DIVERSITY_PENALTY * (1 - albumExposureAge / ONE_DAY_MS);
+        score -= albumPenalty;
     }
+    part?.(
+        "recentAlbum",
+        -albumPenalty,
+        albumExposureAge === null || !Number.isFinite(albumExposureAge)
+            ? "absent"
+            : "known",
+    );
     const exploration =
         stableUnitInterval(`${options.sessionId}:${candidate.canonicalKey}`) -
         0.5;
-    if (options.direction === "new") score += exploration * 0.7;
-    else if (options.direction === "for-you") score += exploration * 0.04;
+    if (options.direction === "new") {
+        const contribution = exploration * 0.7;
+        score += contribution;
+        part?.("exploration", contribution);
+    } else if (options.direction === "for-you") {
+        const contribution = exploration * 0.04;
+        score += contribution;
+        part?.("exploration", contribution);
+    } else {
+        part?.("exploration", null, "unused");
+    }
     return score;
+}
+
+function measuredTraceState(measured: () => boolean): RankScorePartV1["state"] {
+    // Optional diagnostics must never turn an otherwise usable rank into a failure.
+    try {
+        return measured() ? "known" : "absent";
+    } catch {
+        return "absent";
+    }
+}
+
+function hasComparableVectors(
+    vector: readonly number[] | null,
+    targets: readonly (readonly number[])[],
+): boolean {
+    const measured = (values: readonly number[]) => {
+        let nonzero = false;
+        for (let index = 0; index < values.length; index += 1) {
+            if (!Number.isFinite(values[index])) return false;
+            if (values[index] !== 0) nonzero = true;
+        }
+        return nonzero;
+    };
+    return (
+        vector !== null &&
+        measured(vector) &&
+        targets.length > 0 &&
+        targets.some(
+            (target) => target.length === vector.length && measured(target),
+        )
+    );
+}
+
+/** Availability of the actual scalar mood contribution, shared by both policies. */
+export function moodTraceState(
+    candidate: RecommendationCandidate,
+    mood: RecommendationMood | null,
+): RankScorePartV1["state"] {
+    return measuredTraceState(() => hasMoodMeasurement(candidate, mood));
+}
+
+/** Availability of real negative comparisons; no feedback profile leaves the term unused. */
+export function negativeFeedbackTraceState(
+    vector: readonly number[] | null,
+    options: Pick<
+        RankRecommendationOptions,
+        "negativeCentroids" | "sessionNegativeEmbedding"
+    >,
+): RankScorePartV1["state"] {
+    try {
+        const targets = [
+            ...options.negativeCentroids,
+            ...(options.sessionNegativeEmbedding
+                ? [options.sessionNegativeEmbedding]
+                : []),
+        ];
+        return targets.length === 0
+            ? "unused"
+            : measuredTraceState(() => hasComparableVectors(vector, targets));
+    } catch {
+        return "absent";
+    }
+}
+
+function hasMoodMeasurement(
+    candidate: RecommendationCandidate,
+    mood: RecommendationMood | null,
+): boolean {
+    if (candidate.moodSimilarity !== undefined)
+        return Number.isFinite(candidate.moodSimilarity);
+    if (!mood) return false;
+    if (mood === "favorites")
+        return (
+            candidate.accountAffinity !== undefined &&
+            Number.isFinite(candidate.accountAffinity)
+        );
+    const features = candidate.audioFeatures;
+    if (!features) return false;
+    const energy = features.arousal ?? features.energy;
+    const values =
+        mood === "forgotten"
+            ? [features.valence]
+            : mood === "calm"
+              ? [energy, features.instrumentalness]
+              : mood === "focus"
+                ? [energy, features.instrumentalness, features.danceability]
+                : [energy, features.danceability];
+    return (
+        values.some((value) => value != null) &&
+        values.every((value) => value == null || Number.isFinite(value))
+    );
+}
+
+interface RankTraceCollector {
+    summary: RankTraceSummaryV1;
+    rows: WeakMap<ScoredRecommendation, RecommendationScoreTraceV1>;
+    count(name: RankTraceCounter): void;
+}
+
+function createRankTraceCollector(inputCount: number): RankTraceCollector {
+    const boundedCount = Math.min(1_000_000, inputCount);
+    const counters: RankTraceSummaryV1["counters"] = { input: boundedCount };
+    return {
+        summary: {
+            version: 1,
+            policy: "hybrid-v2",
+            inputCount: boundedCount,
+            counters,
+        },
+        rows: new WeakMap(),
+        count(name) {
+            counters[name] = Math.min(1_000_000, (counters[name] ?? 0) + 1);
+        },
+    };
+}
+
+function scoreRecommendation(
+    track: RecommendationCandidate,
+    options: RankRecommendationOptions,
+    latestArtistExposures: ReadonlyMap<string, number>,
+    latestCanonicalExposures: ReadonlyMap<string, number>,
+    latestAlbumExposures: ReadonlyMap<string, number>,
+    trace?: RankTraceCollector,
+): ScoredRecommendation {
+    const parts: RankScorePartV1[] | undefined = trace ? [] : undefined;
+    const row = {
+        track,
+        score: baseScore(
+            track,
+            options,
+            latestArtistExposures,
+            latestCanonicalExposures,
+            latestAlbumExposures,
+            parts,
+        ),
+    };
+    if (trace && parts)
+        trace.rows.set(row, {
+            version: 1,
+            policy: "hybrid-v2",
+            baseScore: boundedRankTraceNumber(row.score),
+            parts,
+            selection: {
+                method: "mmr",
+                score: null,
+                diversityPenalty: null,
+                cooldown: null,
+            },
+        });
+    return row;
+}
+
+function traceSelection(
+    trace: RankTraceCollector | undefined,
+    row: ScoredRecommendation,
+    method: "mmr" | "exploration",
+    score: number,
+    diversityPenalty: number | null,
+    cooldown: "fresh" | "backfill",
+): void {
+    const scoreTrace = trace?.rows.get(row);
+    if (scoreTrace)
+        scoreTrace.selection = {
+            method,
+            score: boundedRankTraceNumber(score),
+            diversityPenalty:
+                diversityPenalty === null
+                    ? null
+                    : boundedRankTraceNumber(diversityPenalty),
+            cooldown,
+        };
 }
 
 export interface RankRecommendationOptions {
@@ -478,11 +762,40 @@ export function rankRecommendationCandidates(
     candidates: readonly RecommendationCandidate[],
     options: RankRecommendationOptions,
 ): ScoredRecommendation[] {
-    candidates = candidates.filter(
-        (candidate) =>
+    return rankRecommendationCandidatesCore(candidates, options);
+}
+
+/**
+ * Run the same ranker with bounded version 1 diagnostics from its actual arithmetic.
+ * Counters describe guard evaluations and selection events, including repeated passes.
+ */
+export function rankRecommendationCandidatesWithTrace(
+    candidates: readonly RecommendationCandidate[],
+    options: RankRecommendationOptions,
+): { recommendations: ScoredRecommendation[]; summary: RankTraceSummaryV1 } {
+    const trace = createRankTraceCollector(candidates.length);
+    return {
+        recommendations: rankRecommendationCandidatesCore(
+            candidates,
+            options,
+            trace,
+        ),
+        summary: trace.summary,
+    };
+}
+
+function rankRecommendationCandidatesCore(
+    candidates: readonly RecommendationCandidate[],
+    options: RankRecommendationOptions,
+    trace?: RankTraceCollector,
+): ScoredRecommendation[] {
+    candidates = candidates.filter((candidate) => {
+        const valid =
             !hasNativeRecommendationIdentity(candidate) ||
-            readNativeRecommendationRecording(candidate) !== null,
-    );
+            readNativeRecommendationRecording(candidate) !== null;
+        if (!valid) trace?.count("invalidNative");
+        return valid;
+    });
     // These vectors are common to every candidate, including fallback and
     // exploration. Normalize once without mutating the caller's options.
     const preparedOptions: RankRecommendationOptions = {
@@ -509,6 +822,8 @@ export function rankRecommendationCandidates(
         latestCanonicalExposures,
         latestAlbumExposures,
         true,
+        [],
+        trace,
     );
     const shouldBackfillRecent =
         fresh.length === 0 ||
@@ -523,15 +838,20 @@ export function rankRecommendationCandidates(
               latestAlbumExposures,
               false,
               fresh,
+              trace,
           );
-    return applyExplorationQuota(
+    const result = applyExplorationQuota(
         ranked,
         candidates,
         preparedOptions,
         latestArtistExposures,
         latestCanonicalExposures,
         latestAlbumExposures,
+        trace,
     );
+    return trace
+        ? result.map((row) => ({ ...row, scoreTrace: trace.rows.get(row) }))
+        : result;
 }
 
 function isExplorationCandidate(candidate: RecommendationCandidate): boolean {
@@ -548,6 +868,7 @@ function applyExplorationQuota(
     latestArtistExposures: ReadonlyMap<string, number>,
     latestCanonicalExposures: ReadonlyMap<string, number>,
     latestAlbumExposures: ReadonlyMap<string, number>,
+    trace?: RankTraceCollector,
 ): ScoredRecommendation[] {
     const rate = Math.max(0, Math.min(0.3, options.explorationRate ?? 0));
     const target = Math.min(selected.length, Math.round(options.limit * rate));
@@ -560,39 +881,50 @@ function applyExplorationQuota(
     if (count >= target) return selected;
     const explorerByCanonical = new Map<string, RecommendationCandidate>();
     for (const candidate of candidates) {
+        if (!isExplorationCandidate(candidate)) continue;
+        if (selectedIds.has(candidate.canonicalKey)) {
+            trace?.count("duplicateCanonical");
+            continue;
+        }
+        if (options.dislikedCanonicalKeys.has(candidate.canonicalKey)) {
+            trace?.count("disliked");
+            continue;
+        }
         if (
-            !isExplorationCandidate(candidate) ||
-            selectedIds.has(candidate.canonicalKey) ||
-            options.dislikedCanonicalKeys.has(candidate.canonicalKey) ||
             latestExposureAge(
                 candidate.canonicalKey,
                 latestCanonicalExposures,
                 options.now,
             ) !== null
         ) {
+            trace?.count("recentCooldown");
             continue;
         }
         const existing = explorerByCanonical.get(candidate.canonicalKey);
+        if (existing) trace?.count("duplicateCanonical");
         if (!existing || candidate.providerPrior > existing.providerPrior) {
             explorerByCanonical.set(candidate.canonicalKey, candidate);
         }
     }
     const explorers = [...explorerByCanonical.values()]
-        .map((track) => ({
-            track: {
+        .map((track) => {
+            const resultTrack = {
                 ...track,
                 candidateSources: Array.from(
                     new Set([...track.candidateSources, "exploration"]),
                 ),
-            },
-            score: baseScore(
+            };
+            const row = scoreRecommendation(
                 track,
                 options,
                 latestArtistExposures,
                 latestCanonicalExposures,
                 latestAlbumExposures,
-            ),
-        }))
+                trace,
+            );
+            row.track = resultTrack;
+            return row;
+        })
         .sort(
             (left, right) =>
                 right.score - left.score ||
@@ -658,11 +990,16 @@ function applyExplorationQuota(
                       (replacedKeys.lane === explorerKeys.lane ? 1 : 0) +
                       1
                     : 0;
-                if (
-                    projectedArtist > MAX_TRACKS_PER_ARTIST ||
-                    projectedAlbum > MAX_TRACKS_PER_ALBUM ||
-                    (laneLimit !== null && projectedLane > laneLimit)
-                ) {
+                if (projectedArtist > MAX_TRACKS_PER_ARTIST) {
+                    trace?.count("artistCap");
+                    continue;
+                }
+                if (projectedAlbum > MAX_TRACKS_PER_ALBUM) {
+                    trace?.count("albumCap");
+                    continue;
+                }
+                if (laneLimit !== null && projectedLane > laneLimit) {
+                    trace?.count("laneCap");
                     continue;
                 }
                 explorerIndex = candidateIndex;
@@ -673,6 +1010,15 @@ function applyExplorationQuota(
         }
         if (replacementIndex < 0) break;
         const [explorer] = explorers.splice(explorerIndex, 1);
+        traceSelection(
+            trace,
+            explorer,
+            "exploration",
+            explorer.score,
+            null,
+            "fresh",
+        );
+        trace?.count("explorationReplaced");
         adjustCounts(result[replacementIndex].track, -1);
         result[replacementIndex] = explorer;
         adjustCounts(explorer.track, 1);
@@ -689,43 +1035,57 @@ function rankRecommendationCandidatePool(
     latestAlbumExposures: ReadonlyMap<string, number>,
     enforceOneDayCooldown: boolean,
     initialSelections: readonly ScoredRecommendation[] = [],
+    trace?: RankTraceCollector,
 ): ScoredRecommendation[] {
     const selectedCanonicalKeys = new Set(
         initialSelections.map(({ track }) => track.canonicalKey),
     );
     const bestByCanonical = new Map<string, RecommendationCandidate>();
     for (const candidate of candidates) {
-        if (selectedCanonicalKeys.has(candidate.canonicalKey)) continue;
-        if (options.dislikedCanonicalKeys.has(candidate.canonicalKey)) continue;
+        if (selectedCanonicalKeys.has(candidate.canonicalKey)) {
+            trace?.count("duplicateCanonical");
+            continue;
+        }
+        if (options.dislikedCanonicalKeys.has(candidate.canonicalKey)) {
+            trace?.count("disliked");
+            continue;
+        }
         const providerTrackId = hasNativeRecommendationIdentity(candidate)
             ? readNativeRecommendationRecording(candidate)?.id
             : (candidate.provider.youtubeVideoId ??
               candidate.provider.tidalTrackId?.toString() ??
               (candidate.source === "library" ? candidate.id : null));
-        if (!providerTrackId) continue;
+        if (!providerTrackId) {
+            trace?.count("missingIdentity");
+            continue;
+        }
         const age = latestExposureAge(
             candidate.canonicalKey,
             latestCanonicalExposures,
             options.now,
         );
-        if (enforceOneDayCooldown && age !== null && age < ONE_DAY_MS) continue;
+        if (enforceOneDayCooldown && age !== null && age < ONE_DAY_MS) {
+            trace?.count("recentCooldown");
+            continue;
+        }
         const existing = bestByCanonical.get(candidate.canonicalKey);
+        if (existing) trace?.count("duplicateCanonical");
         if (!existing || candidate.providerPrior > existing.providerPrior) {
             bestByCanonical.set(candidate.canonicalKey, candidate);
         }
     }
 
     const scored = [...bestByCanonical.values()]
-        .map((track) => ({
-            track,
-            score: baseScore(
+        .map((track) =>
+            scoreRecommendation(
                 track,
                 options,
                 latestArtistExposures,
                 latestCanonicalExposures,
                 latestAlbumExposures,
+                trace,
             ),
-        }))
+        )
         .sort(
             (left, right) =>
                 right.score - left.score ||
@@ -796,33 +1156,51 @@ function rankRecommendationCandidatePool(
     while (selected.length < options.limit) {
         let bestIndex = -1;
         let bestMmr = Number.NEGATIVE_INFINITY;
+        let bestDiversityPenalty = 0;
         scored.forEach((entry, index) => {
             const identity = prepare(entry.track);
             const artistKey = identity.artist;
             const albumKey = `${artistKey}:${identity.album}`;
             if ((artistCounts.get(artistKey) ?? 0) >= MAX_TRACKS_PER_ARTIST) {
+                trace?.count("artistCap");
                 return;
             }
-            if ((albumCounts.get(albumKey) ?? 0) >= MAX_TRACKS_PER_ALBUM)
+            if ((albumCounts.get(albumKey) ?? 0) >= MAX_TRACKS_PER_ALBUM) {
+                trace?.count("albumCap");
                 return;
+            }
             if (
                 entry.track.lane &&
                 normalizedPerLaneLimit !== null &&
                 (laneCounts.get(entry.track.lane) ?? 0) >=
                     normalizedPerLaneLimit
             ) {
+                trace?.count("laneCap");
                 return;
             }
-            const mmr =
-                entry.score -
+            const diversityPenalty =
                 (redundancy.get(entry.track) ?? 0) * DIVERSITY_PENALTY;
+            const mmr = entry.score - diversityPenalty;
             if (mmr > bestMmr) {
                 bestMmr = mmr;
                 bestIndex = index;
+                bestDiversityPenalty = diversityPenalty;
             }
         });
         if (bestIndex < 0) break;
         const [winner] = scored.splice(bestIndex, 1);
+        const cooldown = enforceOneDayCooldown ? "fresh" : "backfill";
+        traceSelection(
+            trace,
+            winner,
+            "mmr",
+            bestMmr,
+            bestDiversityPenalty,
+            cooldown,
+        );
+        trace?.count(
+            enforceOneDayCooldown ? "freshSelected" : "backfillSelected",
+        );
         selected.push(winner);
         if (selected.length < options.limit) includeSimilarity(winner.track);
         const artistKey = normalizeRecommendationArtistKey(

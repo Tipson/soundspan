@@ -33,6 +33,7 @@ import {
     handlePurgeRemovedStatus,
     handlePurgeRemovedTracksNow,
 } from "./adminLibraryHealthPurge";
+import { handleAdminRecommendationTrace } from "./adminRecommendationTrace";
 
 const router = Router();
 
@@ -306,6 +307,73 @@ router.delete(
 // authenticates every HTML, asset and action request at the final mount.
 router.use("/queues", (_req, _res, next) => next("router"));
 router.use(requireAuth, requireAdmin);
+
+/**
+ * @openapi
+ * /api/admin/recommendation-trace:
+ *   get:
+ *     summary: Read bounded diagnostics for one exact owner's recommendation generation
+ *     description: Requires an interactive administrator session. Does not expose raw generation context or listening history.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           minLength: 1
+ *           maxLength: 128
+ *           pattern: '^[A-Za-z0-9_-]+$'
+ *       - in: query
+ *         name: generationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           minLength: 1
+ *           maxLength: 128
+ *           pattern: '^[A-Za-z0-9_-]+$'
+ *     responses:
+ *       200:
+ *         description: Sanitized version 1 trace and up to 75 scoped exposure references, or available false for legacy or malformed diagnostics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [available, generationId]
+ *               properties:
+ *                 available:
+ *                   type: boolean
+ *                 generationId:
+ *                   type: string
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *                 trace:
+ *                   type: object
+ *                   description: Bounded numerical diagnostics without raw candidate features
+ *                 exposures:
+ *                   type: array
+ *                   maxItems: 75
+ *                   items:
+ *                     type: object
+ *       400:
+ *         description: Exact bounded userId and generationId are required; extra query parameters are rejected
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Interactive administrator session required; API keys are not accepted
+ *       404:
+ *         description: Generation missing or not owned by the exact requested account
+ *       500:
+ *         description: Trace lookup unavailable
+ */
+router.get(
+    "/recommendation-trace",
+    requireInteractiveSession,
+    handleAdminRecommendationTrace,
+);
 
 // Per-model row fetchers for the secrets-status check. Keyed by the same model
 // names as ENCRYPTED_SETTINGS_COLUMNS so the column inventory stays the single

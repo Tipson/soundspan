@@ -10,6 +10,7 @@ test("админка показывает защиту медиатеки без
         "playback-sources",
         "youtube-music-admin",
         "ai-services",
+        "recommendation-trace",
         "cache",
         "queue-dashboard",
         "library-safety",

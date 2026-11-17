@@ -123,6 +123,7 @@ async function loadSimilarCandidates(request: RecommendRequest) {
 }
 
 export const unifiedRecommendationService = new UnifiedRecommendationService({
+    traceEnabled: config.recommendations.traceEnabled,
     waveSequenceEnabled: config.recommendations.waveSequenceEnabled,
     loadWaveSequenceGeneration,
     loadRadioCandidates: loadRadioContinuationCandidates,

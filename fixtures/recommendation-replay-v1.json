@@ -1,0 +1,127 @@
+{
+    "version": 1,
+    "nowISO": "2026-11-15T12:00:00.000Z",
+    "request": {
+        "sessionId": "replay-session-a",
+        "intent": { "surface": "wave", "direction": "for-you", "mood": null },
+        "limit": 6
+    },
+    "candidates": [
+        {
+            "id": "a1",
+            "artist": "A",
+            "album": "A one",
+            "source": "youtube",
+            "providerPrior": 6,
+            "accountAffinity": 0.8,
+            "embedding": [1, 0],
+            "lane": "quickPicks"
+        },
+        {
+            "id": "a2",
+            "artist": "A",
+            "album": "A two",
+            "source": "library",
+            "providerPrior": 5.9,
+            "accountAffinity": 0.8,
+            "embedding": [0.9, 0.1],
+            "lane": "listenAgain"
+        },
+        {
+            "id": "d",
+            "artist": "D",
+            "album": "D one",
+            "source": "youtube",
+            "providerPrior": 5.8,
+            "embedding": [0, 1],
+            "lane": "discovery"
+        },
+        {
+            "id": "b",
+            "artist": "B",
+            "album": "B one",
+            "source": "youtube",
+            "providerPrior": 5.7,
+            "embedding": [0.5, 0.5],
+            "lane": "quickPicks"
+        },
+        {
+            "id": "e",
+            "artist": "E",
+            "album": "E one",
+            "source": "library",
+            "providerPrior": 5.6,
+            "embedding": [0.2, 0.8],
+            "lane": "listenAgain"
+        },
+        {
+            "id": "c",
+            "artist": "C",
+            "album": "C one",
+            "source": "youtube",
+            "providerPrior": 5.5,
+            "embedding": [0.8, 0.2],
+            "lane": "discovery"
+        },
+        {
+            "id": "blocked",
+            "recordingKey": "blocked-song",
+            "artist": "Blocked",
+            "album": "Blocked one",
+            "source": "youtube",
+            "providerPrior": 50,
+            "embedding": [1, 0]
+        },
+        {
+            "id": "blocked-alias",
+            "recordingKey": "blocked-song",
+            "artist": "Blocked",
+            "album": "Blocked alternate",
+            "source": "library",
+            "providerPrior": 49,
+            "embedding": [1, 0]
+        },
+        {
+            "id": "recent",
+            "artist": "Recent",
+            "album": "Recent one",
+            "source": "youtube",
+            "providerPrior": 48,
+            "embedding": [1, 0]
+        },
+        {
+            "id": "unavailable",
+            "artist": "Unavailable",
+            "album": "Unavailable one",
+            "source": "youtube",
+            "providerPrior": 47
+        },
+        {
+            "id": "unknown",
+            "artist": "Unknown artist",
+            "album": "Unknown album",
+            "source": "youtube",
+            "providerPrior": 0.1
+        }
+    ],
+    "signals": {
+        "dislikedCandidateIds": ["blocked"],
+        "unavailableCandidateIds": ["unavailable"],
+        "savedCandidateIds": [],
+        "repeatCandidateIds": [],
+        "hardRepeatCandidateIds": [],
+        "recentExposures": [
+            {
+                "candidateId": "recent",
+                "exposedAtISO": "2026-11-15T11:00:00.000Z"
+            }
+        ]
+    },
+    "taste": {
+        "positiveCentroids": [[1, 0]],
+        "negativeCentroids": [[0, 1]],
+        "sessionPositiveEmbedding": [1, 0]
+    },
+    "config": { "rolloutPercents": [0, 50, 100], "explorationRate": 0 },
+    "observations": []
+}

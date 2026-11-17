@@ -49,6 +49,14 @@ const AIServicesSection = dynamic(
     { loading: renderSectionFallback },
 );
 
+const RecommendationTraceSection = dynamic(
+    () =>
+        import("@/features/settings/components/sections/RecommendationTraceSection").then(
+            (mod) => mod.RecommendationTraceSection,
+        ),
+    { loading: renderSectionFallback },
+);
+
 const CacheSection = dynamic(
     () =>
         import("@/features/settings/components/sections/CacheSection").then(
@@ -249,6 +257,8 @@ export default function AdminPage() {
                         false
                     }
                 />
+
+                <RecommendationTraceSection />
 
                 <CacheSection
                     settings={systemSettings}

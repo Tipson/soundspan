@@ -1,12 +1,25 @@
 import { createHash } from "node:crypto";
 import { logger } from "../../utils/logger";
-import { recordRecommendationGenerationMetrics } from "../../metrics";
 import type { RecommendationGenerationMetricInput } from "../../metrics/recommendationMetrics";
 import {
     moodRankingScore,
     rankRecommendationCandidates,
+    rankRecommendationCandidatesWithTrace,
     recommendationNegativeFeedbackPenalty,
+    moodTraceState,
+    negativeFeedbackTraceState,
+    type RankRecommendationOptions,
 } from "./rankerV2";
+import {
+    createRankScorePart,
+    boundedRankTraceNumber,
+    type RankTraceSummaryV1,
+} from "./scoreTrace";
+import {
+    buildRecommendationGenerationTrace,
+    type GenerationTraceCoverageV1,
+    type GenerationTraceFiltersV1,
+} from "./generationTrace";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
 import type { RadioRequestExecution } from "./radioRequestExecution";
 import type { CurrentDislikeAdmission } from "./featureStore";
@@ -88,6 +101,8 @@ export interface ScheduleRecommendationHotSetInput {
 
 export interface RecommendationEngineDependencies {
     mode: RecommendationEngineMode;
+    /** Optional private diagnostics; omission preserves ordinary generation context. */
+    traceEnabled?: boolean;
     hybridRolloutPercent: number;
     explorationRate: number;
     /** Server-owned Wave ordering before its single served exposure write; absent retains legacy order. */
@@ -180,7 +195,13 @@ export interface RecommendationEngineMetricsRecorder {
 }
 
 const defaultMetricsRecorder: RecommendationEngineMetricsRecorder = {
-    recordGeneration: recordRecommendationGenerationMetrics,
+    recordGeneration(input) {
+        // Offline replay supplies its own recorder and must not initialize the
+        // production registry (whose aggregate module also owns DB metrics).
+        const { recordRecommendationGenerationMetrics } =
+            require("../../metrics") as typeof import("../../metrics");
+        recordRecommendationGenerationMetrics(input);
+    },
 };
 
 interface HybridContext {
@@ -239,6 +260,7 @@ function baselineRank(
     waveMood?: RecommendRequest["intent"]["mood"],
     diversify = false,
     waveTaste?: RecommendationTasteContext,
+    captureTrace = false,
 ): ScoredRecommendation[] {
     const seenCanonical = new Set<string>();
     const recommendations: ScoredRecommendation[] = [];
@@ -251,16 +273,20 @@ function baselineRank(
             ? Math.max(0, Math.floor(perLaneLimit))
             : null;
     const artistCounts = new Map<string, number>();
-    const ordered = candidates.map((candidate, index) => ({
-        candidate,
-        index,
-        score:
-            candidate.providerPrior +
-            (waveMood ? moodRankingScore(candidate, waveMood) : 0) -
-            (waveTaste
-                ? recommendationNegativeFeedbackPenalty(candidate, waveTaste)
-                : 0),
-    }));
+    const ordered = candidates.map((candidate, index) => {
+        const prior = candidate.providerPrior;
+        const mood = waveMood ? moodRankingScore(candidate, waveMood) : 0;
+        const negative = waveTaste
+            ? recommendationNegativeFeedbackPenalty(candidate, waveTaste)
+            : 0;
+        return {
+            candidate,
+            index,
+            score: prior + mood - negative,
+            mood,
+            negative,
+        };
+    });
     if (
         waveMood ||
         (waveTaste?.negativeCentroids.length ?? 0) > 0 ||
@@ -270,7 +296,7 @@ function baselineRank(
             (left, right) =>
                 right.score - left.score || left.index - right.index,
         );
-    for (const { candidate, score } of ordered) {
+    for (const { candidate, score, mood, negative } of ordered) {
         if (
             !hasPlayableIdentity(candidate) ||
             isExcluded(candidate, excludes)
@@ -293,6 +319,44 @@ function baselineRank(
         recommendations.push({
             track: candidate,
             score,
+            ...(captureTrace
+                ? {
+                      scoreTrace: {
+                          version: 1 as const,
+                          policy: "baseline-v1" as const,
+                          baseScore: boundedRankTraceNumber(score),
+                          parts: [
+                              createRankScorePart(
+                                  "providerPrior",
+                                  candidate.providerPrior,
+                              ),
+                              createRankScorePart(
+                                  "moodFeatures",
+                                  mood,
+                                  waveMood
+                                      ? moodTraceState(candidate, waveMood)
+                                      : "unused",
+                              ),
+                              createRankScorePart(
+                                  "negativeFeedback",
+                                  -negative,
+                                  waveTaste
+                                      ? negativeFeedbackTraceState(
+                                            candidate.embedding ?? null,
+                                            waveTaste,
+                                        )
+                                      : "unused",
+                              ),
+                          ],
+                          selection: {
+                              method: "baseline" as const,
+                              score: boundedRankTraceNumber(score),
+                              diversityPenalty: null,
+                              cooldown: null,
+                          },
+                      },
+                  }
+                : {}),
         });
         if (candidate.lane) {
             laneCounts.set(
@@ -344,6 +408,39 @@ export class RecommendationEngine {
             request,
             startedAt,
         );
+        const captureTrace = this.dependencies.traceEnabled === true;
+        const traceCoverage: GenerationTraceCoverageV1 | undefined =
+            captureTrace
+                ? {
+                      loadedCount: loaded.candidates.length,
+                      sanitizedCount: 0,
+                      canonicalIdPresentCount: 0,
+                      embeddingPresentCount: 0,
+                      admittedCount: 0,
+                      rankInputCount: 0,
+                      loadedSources: {
+                          youtube: 0,
+                          tidal: 0,
+                          library: 0,
+                          vk: 0,
+                          yandex: 0,
+                      },
+                  }
+                : undefined;
+        const traceFilters: GenerationTraceFiltersV1 | undefined = captureTrace
+            ? {
+                  invalidNative: 0,
+                  contentExcluded: 0,
+                  moodExcluded: 0,
+                  disliked: 0,
+                  feedbackUnavailable: 0,
+              }
+            : undefined;
+        if (traceCoverage)
+            for (const row of loaded.candidates) {
+                if (Object.hasOwn(traceCoverage.loadedSources, row.source))
+                    traceCoverage.loadedSources[row.source]++;
+            }
         const isWave = request.intent.surface === "wave";
         const degradedSources = [...new Set(loaded.degradedSources)];
         const sourceCandidates = loaded.candidates.flatMap((candidate) => {
@@ -359,10 +456,18 @@ export class RecommendationEngine {
             return [{ ...fresh, lane: candidate.lane ?? fresh.lane }];
         });
         const verifiedKeys = new Map<string, string>();
+        const musicCandidates = isWave
+            ? sourceCandidates.filter(isWaveMusicCandidate)
+            : sourceCandidates;
+        if (traceCoverage && traceFilters) {
+            traceCoverage.sanitizedCount = sourceCandidates.length;
+            traceFilters.invalidNative =
+                loaded.candidates.length - sourceCandidates.length;
+            traceFilters.contentExcluded =
+                sourceCandidates.length - musicCandidates.length;
+        }
         let candidates = await this.resolveCanonicalCandidates(
-            isWave
-                ? sourceCandidates.filter(isWaveMusicCandidate)
-                : sourceCandidates,
+            musicCandidates,
             degradedSources,
             verifiedKeys,
         );
@@ -390,10 +495,25 @@ export class RecommendationEngine {
             : [];
         // Apply eligibility before lane quotas and either ranker, so discovery
         // and familiar insertions cannot reintroduce an incompatible recording.
+        if (traceCoverage) {
+            traceCoverage.canonicalIdPresentCount = candidates.filter((row) =>
+                Boolean(row.canonicalRecordingId),
+            ).length;
+            traceCoverage.embeddingPresentCount = candidates.filter(
+                (row) =>
+                    Array.isArray(row.embedding) &&
+                    row.embedding.length > 0 &&
+                    row.embedding.every(Number.isFinite) &&
+                    row.embedding.some((value) => value !== 0),
+            ).length;
+        }
+        const beforeMood = candidates.length;
         if (isWave)
             candidates = candidates.filter((candidate) =>
                 matchesWaveMood(candidate, request.intent.mood),
             );
+        if (traceFilters)
+            traceFilters.moodExcluded = beforeMood - candidates.length;
         const excludes = new Set(
             (request.exclude ?? [])
                 .map((value) => value.trim())
@@ -406,14 +526,17 @@ export class RecommendationEngine {
             ...pendingMoodCandidates,
         ]);
         const dislikes = sharedContext.dislikedCanonicalKeys;
-        const isDisliked = (candidate: RecommendationCandidate) => {
-            if (sharedContext.admissionUnavailable) return true;
+        const feedbackRejection = (
+            candidate: RecommendationCandidate,
+        ): "disliked" | "feedbackUnavailable" | null => {
+            if (sharedContext.admissionUnavailable)
+                return "feedbackUnavailable";
             if (
                 sharedContext.unavailableCandidateReferences?.has(
                     `${candidate.source}:${candidate.id}`,
                 )
             )
-                return true;
+                return "feedbackUnavailable";
             const verified = (
                 sharedContext.verifiedCanonicalKeys ?? verifiedKeys
             ).get(`${candidate.source}:${candidate.id}`);
@@ -421,9 +544,8 @@ export class RecommendationEngine {
                 verified &&
                 sharedContext.unavailableCanonicalKeys.has(verified)
             )
-                return true;
-            return (
-                (verified !== undefined && dislikes.has(verified)) ||
+                return "feedbackUnavailable";
+            return (verified !== undefined && dislikes.has(verified)) ||
                 [
                     candidate.id,
                     candidate.provider.youtubeVideoId
@@ -434,9 +556,17 @@ export class RecommendationEngine {
                         ? `tidal:${candidate.provider.tidalTrackId}`
                         : "",
                 ].some((key) => key && dislikes.has(key))
-            );
+                ? "disliked"
+                : null;
         };
-        candidates = candidates.filter((candidate) => !isDisliked(candidate));
+        const isDisliked = (candidate: RecommendationCandidate) =>
+            feedbackRejection(candidate) !== null;
+        candidates = candidates.filter((candidate) => {
+            const rejection = feedbackRejection(candidate);
+            if (traceFilters && rejection) traceFilters[rejection]++;
+            return rejection === null;
+        });
+        if (traceCoverage) traceCoverage.admittedCount = candidates.length;
         if (sharedContext) {
             for (const source of sharedContext.degradedSources)
                 appendDegradedSource(degradedSources, source);
@@ -532,7 +662,26 @@ export class RecommendationEngine {
             isWave ? request.intent.mood : undefined,
             isWave,
             sharedContext?.taste,
+            captureTrace,
         );
+        if (traceCoverage)
+            traceCoverage.rankInputCount = candidates.filter(
+                (candidate) => !isExcluded(candidate, excludes),
+            ).length;
+        const traceFor = (
+            ranked: ScoredRecommendation[],
+            mode: RecommendationEngineMode,
+            ranker?: RankTraceSummaryV1,
+        ) =>
+            traceCoverage && traceFilters
+                ? {
+                      ranked,
+                      mode,
+                      coverage: traceCoverage,
+                      filters: traceFilters,
+                      ranker,
+                  }
+                : undefined;
 
         if (this.dependencies.mode === "baseline") {
             const served = this.finalizeWave(request, baseline);
@@ -544,6 +693,7 @@ export class RecommendationEngine {
                 degradedSources,
                 recommendations: served.recommendations,
                 orderedWave: served.orderedWave,
+                trace: traceFor(baseline, "baseline"),
                 startedAt,
             });
             this.scheduleHotSet(
@@ -567,29 +717,51 @@ export class RecommendationEngine {
         for (const source of hybridContext.degradedSources) {
             appendDegradedSource(degradedSources, source);
         }
-        const hybrid = rankRecommendationCandidates(
-            candidates.filter((candidate) => !isExcluded(candidate, excludes)),
-            {
-                now: startedAt,
-                limit,
-                perLaneLimit: request.perLaneLimit,
-                sessionId: request.sessionId,
-                direction: request.intent.direction,
-                mood: request.intent.mood ?? null,
-                // Hard negatives were admitted above with exact/verified edge proof.
-                dislikedCanonicalKeys: new Set(),
-                exposures: hybridContext.exposures,
-                positiveCentroids: hybridContext.taste.positiveCentroids,
-                negativeCentroids: hybridContext.taste.negativeCentroids,
-                sessionPositiveEmbedding:
-                    hybridContext.taste.sessionPositiveEmbedding,
-                sessionNegativeEmbedding:
-                    hybridContext.taste.sessionNegativeEmbedding,
-                contextCentroids: hybridContext.taste.contextCentroids,
-                moodEmbedding: hybridContext.taste.moodEmbedding,
-                explorationRate: this.dependencies.explorationRate,
-            },
+        const hybridCandidates = candidates.filter(
+            (candidate) => !isExcluded(candidate, excludes),
         );
+        const hybridOptions: RankRecommendationOptions = {
+            now: startedAt,
+            limit,
+            perLaneLimit: request.perLaneLimit,
+            sessionId: request.sessionId,
+            direction: request.intent.direction,
+            mood: request.intent.mood ?? null,
+            // Hard negatives were admitted above with exact/verified edge proof.
+            dislikedCanonicalKeys: new Set(),
+            exposures: hybridContext.exposures,
+            positiveCentroids: hybridContext.taste.positiveCentroids,
+            negativeCentroids: hybridContext.taste.negativeCentroids,
+            sessionPositiveEmbedding:
+                hybridContext.taste.sessionPositiveEmbedding,
+            sessionNegativeEmbedding:
+                hybridContext.taste.sessionNegativeEmbedding,
+            contextCentroids: hybridContext.taste.contextCentroids,
+            moodEmbedding: hybridContext.taste.moodEmbedding,
+            explorationRate: this.dependencies.explorationRate,
+        };
+        let hybrid: ScoredRecommendation[];
+        let hybridSummary: RankTraceSummaryV1 | undefined;
+        if (captureTrace) {
+            try {
+                const captured = rankRecommendationCandidatesWithTrace(
+                    hybridCandidates,
+                    hybridOptions,
+                );
+                hybrid = captured.recommendations;
+                hybridSummary = captured.summary;
+            } catch {
+                // A failed optional explainer cannot turn a usable legacy rank into a playback failure.
+                hybrid = rankRecommendationCandidates(
+                    hybridCandidates,
+                    hybridOptions,
+                );
+            }
+        } else
+            hybrid = rankRecommendationCandidates(
+                hybridCandidates,
+                hybridOptions,
+            );
 
         if (this.dependencies.mode === "shadow") {
             const served = this.finalizeWave(request, baseline);
@@ -601,6 +773,7 @@ export class RecommendationEngine {
                 degradedSources,
                 recommendations: served.recommendations,
                 orderedWave: served.orderedWave,
+                trace: traceFor(baseline, "shadow"),
                 startedAt,
             });
             superviseBackground(
@@ -614,6 +787,7 @@ export class RecommendationEngine {
                         served: false,
                         degradedSources,
                         recommendations: hybrid,
+                        trace: traceFor(hybrid, "shadow", hybridSummary),
                         startedAt,
                     }),
             );
@@ -650,6 +824,11 @@ export class RecommendationEngine {
             degradedSources,
             recommendations: servedRecommendations.recommendations,
             orderedWave: servedRecommendations.orderedWave,
+            trace: traceFor(
+                servesHybrid ? hybrid : baseline,
+                "active",
+                servesHybrid ? hybridSummary : undefined,
+            ),
             startedAt,
         });
         if (normalizedRolloutPercent < 100) {
@@ -665,6 +844,11 @@ export class RecommendationEngine {
                         experimentAssignment: "session-switchback-v1",
                         degradedSources,
                         recommendations: servesHybrid ? baseline : hybrid,
+                        trace: traceFor(
+                            servesHybrid ? baseline : hybrid,
+                            "active",
+                            servesHybrid ? undefined : hybridSummary,
+                        ),
                         startedAt,
                     }),
             );
@@ -883,12 +1067,38 @@ export class RecommendationEngine {
         degradedSources: string[];
         recommendations: ScoredRecommendation[];
         orderedWave?: WaveSequenceContextV1;
+        trace?: {
+            mode: RecommendationEngineMode;
+            ranked: readonly ScoredRecommendation[];
+            coverage: GenerationTraceCoverageV1;
+            filters: GenerationTraceFiltersV1;
+            ranker?: RankTraceSummaryV1;
+        };
         startedAt: Date;
     }): Promise<string> {
         const latencyMs = Math.max(
             0,
             this.dependencies.now().getTime() - input.startedAt.getTime(),
         );
+        const recommendationTrace = input.trace
+            ? buildRecommendationGenerationTrace({
+                  ...input.trace,
+                  algorithm: input.algorithm,
+                  served: input.served,
+                  assignment: input.experimentAssignment,
+                  requestedCount: Math.max(0, Math.floor(input.request.limit)),
+                  startPosition:
+                      input.served && input.orderedWave
+                          ? input.orderedWave.nextPosition -
+                            input.recommendations.length
+                          : 0,
+                  finalized: input.recommendations,
+                  spacingApplied:
+                      input.served &&
+                      input.request.intent.surface === "wave" &&
+                      Boolean(this.dependencies.finalizeWaveRecommendations),
+              })
+            : undefined;
         const generationId = await this.dependencies.recordGeneration({
             userId: input.request.userId,
             sessionId: input.request.sessionId,
@@ -908,6 +1118,7 @@ export class RecommendationEngine {
                 ...(input.served && input.orderedWave
                     ? { orderedWave: input.orderedWave }
                     : {}),
+                ...(recommendationTrace ? { recommendationTrace } : {}),
             },
             recommendations: input.recommendations,
         });

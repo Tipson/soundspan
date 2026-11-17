@@ -17,17 +17,36 @@ const mockLoadRadioCandidates = jest.fn();
 const mockLoadVerifiedRepeats = jest.fn();
 const mockLoadWaveSequenceGeneration = jest.fn();
 const mockWarn = jest.fn();
+const mockTraceFlag: { value: boolean | undefined } = { value: undefined };
 let capturedDependencies: Record<string, any>;
 
 jest.mock("../../../config", () => ({
     config: {
         recommendations: {
+            get traceEnabled() {
+                return mockTraceFlag.value;
+            },
             waveSequenceEnabled: false,
             mode: "shadow",
             hybridRolloutPercent: 0,
             explorationRate: 0.1,
         },
     },
+}));
+jest.mock("../../../metrics", () => ({
+    recordRecommendationGenerationMetrics: jest.fn(),
+}));
+jest.mock("../../../utils/db", () => ({
+    prisma: new Proxy(
+        {},
+        {
+            get() {
+                throw new Error(
+                    "Runtime flag test must not query production persistence",
+                );
+            },
+        },
+    ),
 }));
 jest.mock("../../../utils/logger", () => ({
     logger: { child: () => ({ warn: mockWarn }) },
@@ -95,6 +114,7 @@ jest.mock("../recommendationService", () => ({
 
 import { unifiedRecommendationService } from "../recommendationRuntime";
 import type { RecommendRequest } from "../types";
+import type { UnifiedRecommendationDependencies } from "../recommendationService";
 
 function request(overrides: Partial<RecommendRequest> = {}): RecommendRequest {
     return {
@@ -109,6 +129,75 @@ function request(overrides: Partial<RecommendRequest> = {}): RecommendRequest {
 }
 
 describe("recommendation runtime adapters", () => {
+    it.each([undefined, false, true])(
+        "forwards recommendation tracing %s through runtime and the actual facade engine",
+        async (traceEnabled) => {
+            const previous = capturedDependencies;
+            try {
+                mockTraceFlag.value = traceEnabled;
+                jest.isolateModules(() => {
+                    require("../recommendationRuntime");
+                });
+                expect(capturedDependencies.traceEnabled).toBe(traceEnabled);
+                const { UnifiedRecommendationService } = jest.requireActual<
+                    typeof import("../recommendationService")
+                >("../recommendationService");
+                const recordGeneration = jest
+                    .fn()
+                    .mockResolvedValue("trace-generation");
+                const service = new UnifiedRecommendationService({
+                    ...(capturedDependencies as UnifiedRecommendationDependencies),
+                    mode: "baseline",
+                    hybridRolloutPercent: 0,
+                    explorationRate: 0,
+                    loadPersonalizedFeed: async () => ({
+                        shelves: {
+                            listenAgain: [],
+                            quickPicks: [],
+                            discovery: [],
+                        },
+                        degraded: false,
+                        reason: null,
+                        seedCount: 0,
+                        nextCursor: 1,
+                    }),
+                    loadRecentExposures: async () => [],
+                    loadDislikeAdmission: undefined,
+                    loadDislikedCanonicalKeys: async () => new Set(),
+                    loadTasteContext: async () => ({
+                        positiveCentroids: [],
+                        negativeCentroids: [],
+                    }),
+                    loadVerifiedRepeatExclusions: async () => ({
+                        ids: new Set(),
+                        hardIds: new Set(),
+                    }),
+                    recordGeneration,
+                    scheduleHotSet: async () => {},
+                    now: () => new Date("2026-11-17T12:00:00.000Z"),
+                });
+                await service.getPersonalizedFeed({
+                    userId: "user-1",
+                    sessionId: "session-1",
+                    surface: "wave",
+                    direction: "for-you",
+                    mood: null,
+                    limit: 4,
+                    cursor: 0,
+                    excludeVideoIds: [],
+                });
+                expect(recordGeneration).toHaveBeenCalledTimes(1);
+                expect(
+                    recordGeneration.mock.calls[0][0].context
+                        .recommendationTrace !== undefined,
+                ).toBe(traceEnabled === true);
+            } finally {
+                mockTraceFlag.value = undefined;
+                capturedDependencies = previous;
+            }
+        },
+    );
+
     it("binds the default-off sequence capability and its owned generation lookup", async () => {
         const row = { id: "g1", userId: "alice", sessionId: "tab" };
         mockLoadWaveSequenceGeneration.mockResolvedValueOnce(row);

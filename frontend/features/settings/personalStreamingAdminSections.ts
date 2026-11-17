@@ -11,6 +11,7 @@ const PERSONAL_STREAMING_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         label: adminActivityRu.admin.sidebar.youtubeMusic,
     },
     { id: "ai-services", label: adminActivityRu.admin.sidebar.artwork },
+    { id: "recommendation-trace", label: "Диагностика рекомендаций" },
     {
         id: "cache",
         label: adminActivityRu.admin.sidebar.cacheAutomation,

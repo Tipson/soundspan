@@ -1,3 +1,5 @@
+import type { RecommendationScoreTraceV1 } from "./scoreTrace";
+
 export type RecommendationSurface =
     | "wave"
     | "home"
@@ -101,6 +103,8 @@ export interface RecommendRequest {
 export interface ScoredRecommendation {
     track: RecommendationCandidate;
     score: number;
+    /** Bounded numerical diagnostics, present only when explicitly collected. */
+    scoreTrace?: RecommendationScoreTraceV1;
 }
 
 export interface RecommendResult {
