@@ -1215,6 +1215,7 @@ final class QueueCoordinator implements PlaybackController {
         if (!handedToQueue) await resource?.revoke();
         return;
       }
+      final sourceFailure = resource?.failure;
       await resource?.revoke();
       if (!_valid(generation, fence)) return;
       _resource = null;
@@ -1230,7 +1231,7 @@ final class QueueCoordinator implements PlaybackController {
                 )
               : error is AppFailure
               ? error
-              : null,
+              : sourceFailure,
         );
       }
     }
@@ -1403,11 +1404,13 @@ final class QueueCoordinator implements PlaybackController {
     _preparingGeneration = null;
     ++_generation;
     final resource = _resource;
+    final sourceFailure = resource?.failure;
     _resource = null;
     unawaited(engine.stop());
     if (resource != null) unawaited(resource.revoke());
     _failure =
         failure ??
+        sourceFailure ??
         const AppFailure(
           code: 'playback_failed',
           message: 'Не удалось воспроизвести запись',

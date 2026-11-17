@@ -11,9 +11,13 @@ import 'resolved_media.dart';
 
 /// Runtime-only capability for one media target and immutable session fence.
 final class MediaHandle {
-  MediaHandle._(this.uri, this._revoke);
+  MediaHandle._(this.uri, this._revoke, this._readFailure);
   final Uri uri;
   final Future<void> Function() _revoke;
+  final AppFailure? Function() _readFailure;
+
+  /// Terminal cause for this capability, cleared by a successful new response.
+  AppFailure? get failure => _readFailure();
   Future<void> revoke() => _revoke();
   @override
   String toString() => 'MediaHandle(<private>)';
@@ -25,6 +29,7 @@ final class _Entry {
   final SessionFence fence;
   final MediaCancellation cancellation = MediaCancellation();
   final Set<Socket> sockets = {};
+  AppFailure? failure;
 }
 
 /// A bounded IPv4 loopback gateway. Native requests select a random capability;
@@ -67,12 +72,14 @@ final class MediaGateway {
       path =
           '/${base64Url.encode(List.generate(24, (_) => random.nextInt(256)))}/media';
     } while (_entries.containsKey(path));
-    _entries[path] = _Entry(media, fence);
+    final entry = _Entry(media, fence);
+    _entries[path] = entry;
     return MediaHandle._(
       Uri(scheme: 'http', host: '127.0.0.1', port: server.port, path: path),
       () async {
         _revoke(path);
       },
+      () => entry.failure,
     );
   }
 
@@ -181,9 +188,11 @@ final class MediaGateway {
         range: range,
         ifRange: ifRange,
         cancellation: cancellation,
+        retryTransientBeforeResponse: true,
       );
       await authority.assertCurrent(currentEntry.fence);
       cancellation.check();
+      currentEntry.failure = null;
       final chunked =
           !upstream.headers.containsKey('content-length') &&
           request.method != 'HEAD';
@@ -207,6 +216,12 @@ final class MediaGateway {
       if (chunked) socket.add(const [48, 13, 10, 13, 10]);
       await socket.flush().timeout(fetcher.idleTimeout);
     } catch (error) {
+      if (error is AppFailure &&
+          entry != null &&
+          !cancellation.isCancelled &&
+          authority.isCurrent(entry.fence)) {
+        entry.failure = error;
+      }
       final status = error is AppFailure && error.code == 'invalid_media'
           ? 400
           : 502;

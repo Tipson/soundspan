@@ -1,4 +1,5 @@
 import '../core/model/owner_key.dart';
+import '../core/model/app_failure.dart';
 import 'media_gateway.dart';
 import 'playback_resolver.dart';
 import 'resolved_media.dart';
@@ -6,9 +7,17 @@ import 'queue_snapshot.dart';
 
 /// Runtime-only resource. Ready offline files can implement the same seam.
 final class PreparedAudio {
-  const PreparedAudio({required this.uri, required this.revoke});
+  const PreparedAudio({
+    required this.uri,
+    required this.revoke,
+    this.readFailure,
+  });
   final Uri uri;
   final Future<void> Function() revoke;
+
+  /// Safe typed cause from this exact resource; no URI or credentials enter state.
+  final AppFailure? Function()? readFailure;
+  AppFailure? get failure => readFailure?.call();
   @override
   String toString() => 'PreparedAudio(<private>)';
 }
@@ -28,7 +37,11 @@ PrepareAudio protectedAudioPreparation(
     fence,
   );
   final handle = await gateway.open(media, fence);
-  return PreparedAudio(uri: handle.uri, revoke: handle.revoke);
+  return PreparedAudio(
+    uri: handle.uri,
+    revoke: handle.revoke,
+    readFailure: () => handle.failure,
+  );
 };
 
 final class EngineEvent {
