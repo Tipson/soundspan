@@ -495,6 +495,13 @@ router.get<{ nameOrMbid: string }>(
                         catalogReleaseGroups ??
                         (await musicBrainzService.getReleaseGroups(mbid));
 
+                    if (fetchedFromProvider) {
+                        void persistCatalogReleaseGroups({
+                            artistMbid: mbid,
+                            releaseGroups,
+                        }).catch(logCatalogPersistenceError);
+                    }
+
                     // Filter albums - only show studio albums and EPs
                     // Exclude live albums, compilations, soundtracks, remixes, etc.
                     const filteredReleaseGroups = releaseGroups.filter(
@@ -522,13 +529,6 @@ router.get<{ nameOrMbid: string }>(
                             return !hasExcludedType;
                         },
                     );
-
-                    if (fetchedFromProvider) {
-                        void persistCatalogReleaseGroups({
-                            artistMbid: mbid,
-                            releaseGroups: filteredReleaseGroups,
-                        }).catch(logCatalogPersistenceError);
-                    }
 
                     // Resolve covers for the bounded discovery subset.
                     albums = await Promise.all(

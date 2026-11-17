@@ -62,6 +62,7 @@ import {
 import { resolveArtistImage } from "../../services/metadata/artistImageResolver";
 import { isRealArtistMbid } from "../../utils/musicIds";
 import { filterLibraryArtistReleaseGroups } from "../../services/metadata/discographyFiltering";
+import { discographyCacheTtlSeconds } from "../../services/metadata/discographyCachePolicy";
 import {
     logCatalogPersistenceError,
     persistCatalogReleaseGroups,
@@ -590,7 +591,7 @@ export async function handleGetArtist(
                         `[Artist] Using cached discography (${releaseGroups.length} albums)`,
                     );
                 } else {
-                    // The library read intentionally excludes metadata-only albums.
+                    // Snapshot metadata is separate from visibility-filtered library albums.
                     const catalogReleaseGroups =
                         await findFreshCatalogReleaseGroups(
                             effectiveMbid,
@@ -612,7 +613,7 @@ export async function handleGetArtist(
                     }
                     await redisClient.setEx(
                         discoCacheKey,
-                        24 * 60 * 60,
+                        discographyCacheTtlSeconds(releaseGroups.length),
                         JSON.stringify(releaseGroups),
                     );
                 }
@@ -621,19 +622,19 @@ export async function handleGetArtist(
                     `  Got ${releaseGroups.length} discography albums before filtering`,
                 );
 
+                if (fetchedFromProvider) {
+                    void persistCatalogReleaseGroups({
+                        artistId: artist.id,
+                        releaseGroups,
+                    }).catch(logCatalogPersistenceError);
+                }
+
                 const filteredReleaseGroups =
                     filterLibraryArtistReleaseGroups(releaseGroups);
 
                 logger.debug(
                     `  Filtered to ${filteredReleaseGroups.length} studio albums/EPs`,
                 );
-
-                if (fetchedFromProvider) {
-                    void persistCatalogReleaseGroups({
-                        artistId: artist.id,
-                        releaseGroups: filteredReleaseGroups,
-                    }).catch(logCatalogPersistenceError);
-                }
 
                 const mbAlbums = await Promise.all(
                     filteredReleaseGroups.map(async (rg: any) => {

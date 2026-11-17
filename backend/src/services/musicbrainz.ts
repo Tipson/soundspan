@@ -229,11 +229,25 @@ class MusicBrainzService {
         ttlSeconds = 2592000, // 30 days
         fallbackValue?: T,
         backgroundIdentity = false,
+        emptyArrayTtlSeconds?: number,
     ): Promise<T> {
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
-                return JSON.parse(cached) as T;
+                const data = JSON.parse(cached) as T;
+                if (
+                    emptyArrayTtlSeconds === undefined ||
+                    !Array.isArray(data) ||
+                    data.length !== 0
+                ) {
+                    return data;
+                }
+                // Honor bounded negative entries without renewing their TTL.
+                // Legacy long-lived or persistent empties require a new lookup.
+                const remainingTtl = await redisClient.ttl(cacheKey);
+                if (remainingTtl >= 0 && remainingTtl <= emptyArrayTtlSeconds) {
+                    return data;
+                }
             }
         } catch (err) {
             logger.warn("Redis get error:", err);
@@ -281,9 +295,14 @@ class MusicBrainzService {
         }
 
         try {
-            // Use shorter TTL for null results (1 hour) vs successful results (30 days)
-            // This allows retrying failed lookups sooner while still caching successes
-            const actualTtl = data === null ? 3600 : ttlSeconds;
+            let actualTtl = data === null ? 3600 : ttlSeconds;
+            if (
+                emptyArrayTtlSeconds !== undefined &&
+                Array.isArray(data) &&
+                data.length === 0
+            ) {
+                actualTtl = emptyArrayTtlSeconds;
+            }
             await redisClient.setEx(cacheKey, actualTtl, JSON.stringify(data));
         } catch (err) {
             logger.warn("Redis set error:", err);
@@ -467,6 +486,8 @@ class MusicBrainzService {
             },
             2592000,
             [],
+            false,
+            120,
         );
     }
 

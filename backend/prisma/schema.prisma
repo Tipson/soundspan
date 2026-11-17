@@ -362,6 +362,7 @@ model Artist {
   catalogSyncedAt     DateTime?
   peerId              String?
   remoteId            String?
+  catalogReleaseGroups ArtistCatalogReleaseGroup[]
   albums              Album[]
   ownedAlbums         OwnedAlbum[]
   similarFrom         SimilarArtist[]          @relation("FromArtist")
@@ -380,6 +381,19 @@ model Artist {
   @@index([totalTrackCount])
   @@index([remoteTrackCount])
   @@index([updatedAt, id])
+}
+
+model ArtistCatalogReleaseGroup {
+  artistId         String
+  rgMbid           String
+  position         Int
+  title            String
+  firstReleaseDate String?
+  primaryType      String
+  secondaryTypes   String[] @default([])
+  artist           Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@id([artistId, rgMbid])
 }
 
 model Album {

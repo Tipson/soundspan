@@ -181,6 +181,7 @@ import { resolveAlbumCover } from "../../services/metadata/albumCoverResolver";
 import { dataCacheService } from "../../services/dataCache";
 import { musicBrainzService } from "../../services/musicbrainz";
 import { redisClient } from "../../utils/redis";
+import { persistCatalogReleaseGroups } from "../../services/metadata/catalogPersistence";
 
 const mockArtistFindFirst = prisma.artist.findFirst as jest.Mock;
 const mockAlbumUpdateMany = prisma.album.updateMany as jest.Mock;
@@ -239,6 +240,17 @@ function mockStoredArtistCatalog(catalogSyncedAt: Date) {
         ...createMockArtist(),
         peerId: null,
         catalogSyncedAt,
+        catalogReleaseGroups: [
+            {
+                artistId: "artist-1",
+                rgMbid: "rg-catalog-1",
+                title: "Catalog Album",
+                firstReleaseDate: "2012-05-06",
+                primaryType: "Album",
+                secondaryTypes: [],
+                position: 0,
+            },
+        ],
         albums: [
             {
                 id: "owned-album-1",
@@ -283,6 +295,13 @@ function mockStoredArtistCatalog(catalogSyncedAt: Date) {
                 artist.catalogSyncedAt <= where.catalogSyncedAt.gt)
         ) {
             return null;
+        }
+        if (args.select?.catalogReleaseGroups) {
+            metadataReads.push(args);
+            return {
+                id: artist.id,
+                catalogReleaseGroups: artist.catalogReleaseGroups,
+            };
         }
         if (!albumRead) throw new Error("Unexpected artist query projection");
 
@@ -880,6 +899,77 @@ describe("library artist lookup compatibility", () => {
         expect(mockAlbumUpdateMany).not.toHaveBeenCalled();
         expect(res.body.discographyComplete).toBe(true);
     });
+
+    it("persists the complete provider list while hiding Demo releases from the library page", async () => {
+        const groups = [
+            {
+                id: "rg-demo",
+                title: "Demo",
+                "primary-type": "Album",
+                "secondary-types": ["Demo"],
+                "first-release-date": "2024-01-02",
+            },
+            {
+                id: "rg-studio",
+                title: "Studio",
+                "primary-type": "Album",
+                "secondary-types": [],
+                "first-release-date": "2024-03",
+            },
+        ];
+        mockMusicBrainzGetReleaseGroups.mockResolvedValueOnce(groups);
+        const res = createRes();
+        await artistHandler(
+            {
+                params: { id: "artist-1" },
+                query: {
+                    includeDiscography: "true",
+                    includeTopTracks: "false",
+                    includeSimilarArtists: "false",
+                },
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+        expect(
+            res.body.albums.map((album: { id: string }) => album.id),
+        ).toEqual(["rg-studio"]);
+        expect(persistCatalogReleaseGroups).toHaveBeenCalledWith({
+            artistId: "artist-1",
+            releaseGroups: groups,
+        });
+    });
+
+    it.each(["empty", "failed"])(
+        "short-caches a %s provider result without persisting a fresh snapshot",
+        async (result) => {
+            if (result === "failed")
+                mockMusicBrainzGetReleaseGroups.mockRejectedValueOnce(
+                    new Error("provider unavailable"),
+                );
+            const res = createRes();
+            await artistHandler(
+                {
+                    params: { id: "artist-1" },
+                    query: {
+                        includeDiscography: "true",
+                        includeTopTracks: "false",
+                        includeSimilarArtists: "false",
+                    },
+                    user: { id: "user-1" },
+                } as any,
+                res,
+            );
+            expect(redisClient.setEx).toHaveBeenCalledWith(
+                "discography:v2:11111111-1111-4111-8111-111111111111",
+                120,
+                "[]",
+            );
+            if (result === "failed")
+                expect(persistCatalogReleaseGroups).not.toHaveBeenCalled();
+            expect(res.body.discographyComplete).toBe(result === "empty");
+        },
+    );
 
     it("hydrates unmatched Last.fm top tracks and skips cover resolution for unknown albums", async () => {
         mockArtistFindFirst.mockResolvedValueOnce(createMockArtist());

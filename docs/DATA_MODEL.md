@@ -136,10 +136,20 @@ Remote tracks (`TrackTidal`, `TrackYtMusic`) resolve to `Artist`/`Album` entitie
 - Album pages with mixed local/remote content
 - Unified play counts across providers
 
-Metadata-catalog persistence reuses `Artist` and `Album`; it does not introduce
-separate catalog models. Persisted catalog albums use `Album.location=CATALOG`
-and `catalogTouchedAt` for retention paging. `Artist.catalogSyncedAt` records the
-last catalog synchronization.
+`ArtistCatalogReleaseGroup` stores an artist's ordered metadata snapshot,
+independently of the globally unique `Album.rgMbid`. Its composite primary key
+is `(artistId, rgMbid)`; each row retains `position`, `title`, the complete
+`firstReleaseDate`, `primaryType`, and `secondaryTypes`. Shared releases and
+releases with an existing owned album remain in each artist's snapshot.
+Deleting an artist cascades to its snapshot rows.
+
+Snapshot replacement locks the exact artist row and atomically replaces at
+most 100 release groups before updating `Artist.catalogSyncedAt`. Empty or
+failed provider results preserve the previous snapshot and timestamp. Reads
+apply each caller's filters after loading the unfiltered snapshot; zero rows
+are a cache miss. Existing album ownership, overrides and track identities
+remain independent. Skeleton albums use `Album.location=CATALOG` and
+`catalogTouchedAt` for retention paging.
 
 ### Federation
 

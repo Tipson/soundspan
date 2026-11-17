@@ -1,4 +1,6 @@
 const prisma = {
+    $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
     album: {
         createMany: jest.fn(),
         findMany: jest.fn(),
@@ -10,6 +12,11 @@ const prisma = {
         findFirst: jest.fn(),
         update: jest.fn(),
     },
+    artistCatalogReleaseGroup: {
+        createMany: jest.fn(),
+        deleteMany: jest.fn(),
+        findMany: jest.fn(),
+    },
     track: {
         upsert: jest.fn(),
     },
@@ -20,17 +27,20 @@ const config = {
 };
 
 const recordCatalogWrite = jest.fn();
+const mockCatalogWarn = jest.fn();
 
 jest.mock("../../../utils/db", () => ({ prisma }));
 jest.mock("../../../config", () => ({ config }));
 jest.mock("../../../metrics", () => ({ recordCatalogWrite }));
+jest.mock("../../../utils/logger", () => ({
+    logger: { child: jest.fn(() => ({ warn: mockCatalogWarn })) },
+}));
 
 import {
     findFreshCatalogAlbum,
     findFreshCatalogReleaseGroups,
     persistCatalogReleaseGroups,
     persistCatalogTracklist,
-    readFreshCatalogReleaseGroups,
 } from "../catalogPersistence";
 
 const NOW = new Date("2026-08-25T15:00:00.000Z");
@@ -40,6 +50,12 @@ describe("catalog persistence", () => {
         jest.clearAllMocks();
         jest.useFakeTimers().setSystemTime(NOW);
         config.catalogPersistence.enabled = true;
+        prisma.$transaction.mockImplementation((operations) =>
+            typeof operations === "function"
+                ? operations(prisma)
+                : Promise.all(operations),
+        );
+        prisma.$queryRaw.mockResolvedValue([{ id: "artist-1" }]);
         prisma.album.findMany.mockResolvedValue([]);
         prisma.album.findFirst.mockResolvedValue(null);
         prisma.album.createMany.mockResolvedValue({ count: 0 });
@@ -47,11 +63,113 @@ describe("catalog persistence", () => {
         prisma.album.findUnique.mockResolvedValue(null);
         prisma.artist.findFirst.mockResolvedValue(null);
         prisma.artist.update.mockResolvedValue(undefined);
+        prisma.artistCatalogReleaseGroup.createMany.mockResolvedValue({
+            count: 0,
+        });
+        prisma.artistCatalogReleaseGroup.deleteMany.mockResolvedValue({
+            count: 0,
+        });
+        prisma.artistCatalogReleaseGroup.findMany.mockResolvedValue([]);
         prisma.track.upsert.mockResolvedValue(undefined);
     });
 
     afterEach(() => {
         jest.useRealTimers();
+    });
+
+    it("does not replace the previous snapshot or stamp freshness for an empty provider list", async () => {
+        await persistCatalogReleaseGroups({
+            artistId: "artist-1",
+            releaseGroups: [],
+        });
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(
+            prisma.artistCatalogReleaseGroup.deleteMany,
+        ).not.toHaveBeenCalled();
+        expect(prisma.artist.update).not.toHaveBeenCalled();
+    });
+
+    it("bounds the ordered snapshot to the first 100 provider rows", async () => {
+        await persistCatalogReleaseGroups({
+            artistId: "artist-1",
+            releaseGroups: Array.from({ length: 120 }, (_, index) => ({
+                id: `rg-${index}`,
+                title: `Album ${index}`,
+            })),
+        });
+        expect(
+            prisma.artistCatalogReleaseGroup.createMany,
+        ).toHaveBeenCalledTimes(1);
+        const rows =
+            prisma.artistCatalogReleaseGroup.createMany.mock.calls[0][0].data;
+        expect(rows).toHaveLength(100);
+        expect(rows[0]).toMatchObject({ rgMbid: "rg-0", position: 0 });
+        expect(rows[99]).toMatchObject({ rgMbid: "rg-99", position: 99 });
+    });
+
+    it("retains joint and owned releases in the artist snapshot despite global Album collisions", async () => {
+        prisma.album.findMany.mockResolvedValueOnce([
+            {
+                rgMbid: "rg-joint",
+                location: "CATALOG",
+                title: "Other Artist Title",
+                year: 2010,
+                primaryType: "Album",
+            },
+            {
+                rgMbid: "rg-owned",
+                location: "LIBRARY",
+                title: "User Title",
+                year: 2001,
+                primaryType: "Album",
+            },
+        ]);
+        await persistCatalogReleaseGroups({
+            artistId: "artist-joint",
+            releaseGroups: [
+                {
+                    id: "rg-joint",
+                    title: "Joint Release",
+                    "first-release-date": "2010-06-15",
+                    "secondary-types": ["Live"],
+                },
+                {
+                    id: "rg-owned",
+                    title: "Provider Title",
+                    "first-release-date": "2001-08",
+                },
+            ],
+        });
+        expect(prisma.album.createMany).not.toHaveBeenCalled();
+        expect(prisma.album.updateMany).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ rgMbid: "rg-owned" }),
+            }),
+        );
+        expect(
+            prisma.artistCatalogReleaseGroup.createMany,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: [
+                    expect.objectContaining({
+                        artistId: "artist-joint",
+                        rgMbid: "rg-joint",
+                        title: "Joint Release",
+                        position: 0,
+                        firstReleaseDate: "2010-06-15",
+                        secondaryTypes: ["Live"],
+                    }),
+                    expect.objectContaining({
+                        artistId: "artist-joint",
+                        rgMbid: "rg-owned",
+                        title: "Provider Title",
+                        position: 1,
+                        firstReleaseDate: "2001-08",
+                        secondaryTypes: [],
+                    }),
+                ],
+            }),
+        );
     });
 
     it("creates CATALOG skeletons for unowned release groups", async () => {
@@ -63,6 +181,7 @@ describe("catalog persistence", () => {
                     title: "First Album",
                     "first-release-date": "2001-02-03",
                     "primary-type": "Album",
+                    "secondary-types": ["Demo"],
                 },
                 {
                     id: "rg-2",
@@ -99,7 +218,192 @@ describe("catalog persistence", () => {
             where: { id: "artist-1" },
             data: { catalogSyncedAt: NOW },
         });
+        expect(
+            prisma.artistCatalogReleaseGroup.deleteMany,
+        ).toHaveBeenCalledWith({ where: { artistId: "artist-1" } });
+        expect(
+            prisma.artistCatalogReleaseGroup.createMany,
+        ).toHaveBeenCalledWith({
+            data: [
+                {
+                    artistId: "artist-1",
+                    firstReleaseDate: "2001-02-03",
+                    position: 0,
+                    primaryType: "Album",
+                    rgMbid: "rg-1",
+                    secondaryTypes: ["Demo"],
+                    title: "First Album",
+                },
+                {
+                    artistId: "artist-1",
+                    firstReleaseDate: null,
+                    position: 1,
+                    primaryType: "EP",
+                    rgMbid: "rg-2",
+                    secondaryTypes: [],
+                    title: "Second EP",
+                },
+            ],
+            skipDuplicates: true,
+        });
+        expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+        expect(
+            prisma.artistCatalogReleaseGroup.deleteMany.mock
+                .invocationCallOrder[0],
+        ).toBeLessThan(
+            prisma.artistCatalogReleaseGroup.createMany.mock
+                .invocationCallOrder[0],
+        );
+        expect(
+            prisma.artistCatalogReleaseGroup.createMany.mock
+                .invocationCallOrder[0],
+        ).toBeLessThan(prisma.artist.update.mock.invocationCallOrder[0]);
         expect(recordCatalogWrite).toHaveBeenCalledWith("release_group");
+    });
+
+    it("writes nothing when release-group normalization is empty", async () => {
+        await persistCatalogReleaseGroups({
+            artistId: "artist-1",
+            releaseGroups: [
+                { id: "", title: "Missing ID" },
+                { id: "rg-missing-title", title: "   " },
+            ],
+        });
+
+        expect(prisma.album.findMany).not.toHaveBeenCalled();
+        expect(prisma.album.createMany).not.toHaveBeenCalled();
+        expect(
+            prisma.artistCatalogReleaseGroup.deleteMany,
+        ).not.toHaveBeenCalled();
+        expect(
+            prisma.artistCatalogReleaseGroup.createMany,
+        ).not.toHaveBeenCalled();
+        expect(prisma.artist.update).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(recordCatalogWrite).not.toHaveBeenCalled();
+    });
+
+    it("bounds and de-duplicates normalized secondary types", async () => {
+        const secondaryTypes = [
+            " Demo ",
+            "Demo",
+            "",
+            42,
+            "x".repeat(65),
+            ...Array.from({ length: 20 }, (_, index) => `Type ${index}`),
+        ];
+
+        await persistCatalogReleaseGroups({
+            artistId: "artist-1",
+            releaseGroups: [
+                {
+                    id: "rg-bounded",
+                    title: "Bounded Album",
+                    "secondary-types": secondaryTypes,
+                },
+            ],
+        });
+
+        expect(
+            prisma.artistCatalogReleaseGroup.createMany,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: [
+                    expect.objectContaining({
+                        secondaryTypes: [
+                            "Demo",
+                            ...Array.from(
+                                { length: 15 },
+                                (_, index) => `Type ${index}`,
+                            ),
+                        ],
+                    }),
+                ],
+            }),
+        );
+    });
+
+    it("ignores secondary types beyond the bounded input window", async () => {
+        await persistCatalogReleaseGroups({
+            artistId: "artist-1",
+            releaseGroups: [
+                {
+                    id: "rg-input-bounded",
+                    title: "Input Bounded Album",
+                    "secondary-types": [
+                        ...Array.from({ length: 64 }, () => null),
+                        "Demo",
+                    ],
+                },
+            ],
+        });
+
+        expect(
+            prisma.artistCatalogReleaseGroup.createMany,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: [
+                    expect.objectContaining({
+                        secondaryTypes: [],
+                    }),
+                ],
+            }),
+        );
+    });
+
+    it("stores invalid full dates as null while preserving the skeleton year", async () => {
+        await persistCatalogReleaseGroups({
+            artistId: "artist-1",
+            releaseGroups: [
+                {
+                    id: "rg-invalid-date",
+                    title: "Invalid Date Album",
+                    "first-release-date": "2024-not-a-date",
+                },
+            ],
+        });
+
+        expect(prisma.album.createMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: [expect.objectContaining({ year: 2024 })],
+            }),
+        );
+        expect(
+            prisma.artistCatalogReleaseGroup.createMany,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: [expect.objectContaining({ firstReleaseDate: null })],
+            }),
+        );
+    });
+
+    it("keeps the last duplicate release group without changing its position", async () => {
+        await persistCatalogReleaseGroups({
+            artistId: "artist-1",
+            releaseGroups: [
+                { id: "rg-duplicate", title: "Old Title" },
+                { id: "rg-second", title: "Second Album" },
+                { id: "rg-duplicate", title: "Replacement Title" },
+            ],
+        });
+
+        expect(
+            prisma.artistCatalogReleaseGroup.createMany,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: [
+                    expect.objectContaining({
+                        position: 0,
+                        rgMbid: "rg-duplicate",
+                        title: "Replacement Title",
+                    }),
+                    expect.objectContaining({
+                        position: 1,
+                        rgMbid: "rg-second",
+                    }),
+                ],
+            }),
+        );
     });
 
     it("uses an existing local artist for discovery views without creating artists", async () => {
@@ -286,18 +590,27 @@ describe("catalog persistence", () => {
         expect(recordCatalogWrite).toHaveBeenCalledWith("tracklist");
     });
 
-    it("reads fresh persisted release groups and touches their catalog rows", async () => {
+    it("reads a fresh discovery catalog in persisted position order", async () => {
         prisma.artist.findFirst.mockResolvedValueOnce({
             id: "artist-catalog",
             catalogSyncedAt: new Date("2026-08-24T15:00:00.000Z"),
-            albums: [
+            albums: [],
+            catalogReleaseGroups: [
                 {
-                    id: "album-catalog",
                     rgMbid: "rg-catalog",
                     title: "Catalog Album",
-                    year: 2016,
+                    firstReleaseDate: "2016-04-03",
                     primaryType: "Album",
-                    location: "CATALOG",
+                    secondaryTypes: ["Demo"],
+                    position: 0,
+                },
+                {
+                    rgMbid: "rg-catalog-ep",
+                    title: "Catalog EP",
+                    firstReleaseDate: null,
+                    primaryType: "EP",
+                    secondaryTypes: [],
+                    position: 1,
                 },
             ],
         });
@@ -308,34 +621,76 @@ describe("catalog persistence", () => {
             {
                 id: "rg-catalog",
                 title: "Catalog Album",
-                "first-release-date": "2016",
+                "first-release-date": "2016-04-03",
                 "primary-type": "Album",
+                "secondary-types": ["Demo"],
+            },
+            {
+                id: "rg-catalog-ep",
+                title: "Catalog EP",
+                "first-release-date": "",
+                "primary-type": "EP",
                 "secondary-types": [],
             },
         ]);
-        expect(prisma.artist.findFirst).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: expect.objectContaining({
-                    mbid: "artist-mbid",
-                    catalogSyncedAt: {
-                        gt: new Date("2026-08-18T15:00:00.000Z"),
+        expect(prisma.artist.findFirst).toHaveBeenCalledWith({
+            where: {
+                mbid: "artist-mbid",
+                peerId: null,
+                catalogSyncedAt: {
+                    gt: new Date("2026-08-18T15:00:00.000Z"),
+                },
+            },
+            select: {
+                id: true,
+                catalogReleaseGroups: {
+                    orderBy: [{ position: "asc" }, { rgMbid: "asc" }],
+                    select: {
+                        firstReleaseDate: true,
+                        position: true,
+                        primaryType: true,
+                        rgMbid: true,
+                        secondaryTypes: true,
+                        title: true,
                     },
-                }),
-            }),
-        );
+                },
+            },
+        });
         await Promise.resolve();
         expect(prisma.album.updateMany).toHaveBeenCalledWith({
-            where: { artistId: "artist-catalog", location: "CATALOG" },
+            where: {
+                rgMbid: { in: ["rg-catalog", "rg-catalog-ep"] },
+                location: "CATALOG",
+            },
             data: { catalogTouchedAt: NOW },
         });
     });
 
-    it("treats a missing or stale catalog sync as a provider miss", async () => {
+    it("treats missing, empty, and failed discovery catalogs as provider misses", async () => {
         prisma.artist.findFirst.mockResolvedValueOnce(null);
-
         await expect(
             findFreshCatalogReleaseGroups("artist-stale"),
         ).resolves.toBeNull();
+
+        prisma.artist.findFirst.mockResolvedValueOnce({
+            id: "artist-empty",
+            catalogSyncedAt: NOW,
+            albums: [],
+            catalogReleaseGroups: [],
+        });
+        await expect(
+            findFreshCatalogReleaseGroups("artist-empty"),
+        ).resolves.toBeNull();
+
+        const error = new Error("catalog unavailable");
+        prisma.artist.findFirst.mockRejectedValueOnce(error);
+        await expect(
+            findFreshCatalogReleaseGroups("artist-error"),
+        ).resolves.toBeNull();
+
+        expect(mockCatalogWarn).toHaveBeenCalledWith("Catalog read failed", {
+            error,
+        });
         expect(prisma.album.updateMany).not.toHaveBeenCalled();
     });
 
@@ -345,7 +700,16 @@ describe("catalog persistence", () => {
             mbid: "resolved-mbid",
             peerId: null,
             catalogSyncedAt: NOW,
-            albums: [],
+            catalogReleaseGroups: [
+                {
+                    rgMbid: "rg-other-owner",
+                    title: "Other Artist Catalog",
+                    firstReleaseDate: "2024-01-02",
+                    primaryType: "Album",
+                    secondaryTypes: [],
+                    position: 0,
+                },
+            ],
         };
         prisma.artist.findFirst.mockImplementation(async ({ where }) => {
             const matches =
@@ -359,47 +723,6 @@ describe("catalog persistence", () => {
         await expect(
             findFreshCatalogReleaseGroups("resolved-mbid", "artist-requested"),
         ).resolves.toBeNull();
-        expect(prisma.album.updateMany).not.toHaveBeenCalled();
-    });
-
-    it("retains a complete empty catalog as a fresh negative cache", async () => {
-        await persistCatalogReleaseGroups({
-            artistId: "artist-empty",
-            releaseGroups: [],
-        });
-        expect(prisma.artist.update).toHaveBeenCalledWith({
-            where: { id: "artist-empty" },
-            data: { catalogSyncedAt: NOW },
-        });
-        prisma.artist.findFirst.mockResolvedValueOnce({
-            id: "artist-empty",
-            catalogSyncedAt: NOW,
-            albums: [],
-        });
-
-        await expect(
-            findFreshCatalogReleaseGroups("empty-mbid", "artist-empty"),
-        ).resolves.toEqual([]);
-        expect(prisma.album.createMany).not.toHaveBeenCalled();
-    });
-
-    it("treats a catalog sync exactly seven days old as stale", () => {
-        const groups = readFreshCatalogReleaseGroups({
-            artistId: "artist-boundary",
-            catalogSyncedAt: new Date(NOW.getTime() - 7 * 24 * 60 * 60 * 1000),
-            albums: [
-                {
-                    id: "album-boundary",
-                    rgMbid: "rg-boundary",
-                    title: "Boundary Album",
-                    year: 2000,
-                    primaryType: "Album",
-                    location: "CATALOG",
-                },
-            ],
-        });
-
-        expect(groups).toBeNull();
         expect(prisma.album.updateMany).not.toHaveBeenCalled();
     });
 

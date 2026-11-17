@@ -6,9 +6,24 @@ import { logger } from "../../utils/logger";
 import { recordCatalogWrite } from "../../metrics";
 
 const MAX_RELEASE_GROUPS_PER_SYNC = 100;
+const MAX_SECONDARY_TYPE_INPUTS = 64;
+const MAX_SECONDARY_TYPES = 16;
+const MAX_SECONDARY_TYPE_LENGTH = 64;
 const MAX_TRACKS_PER_SYNC = 500;
 const CATALOG_READ_FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
 const catalogPersistenceLogger = logger.child("CatalogPersistence");
+const CATALOG_RELEASE_GROUP_ORDER_BY = [
+    { position: "asc" },
+    { rgMbid: "asc" },
+] satisfies Prisma.ArtistCatalogReleaseGroupOrderByWithRelationInput[];
+const CATALOG_RELEASE_GROUP_SELECT = {
+    firstReleaseDate: true,
+    position: true,
+    primaryType: true,
+    rgMbid: true,
+    secondaryTypes: true,
+    title: true,
+} satisfies Prisma.ArtistCatalogReleaseGroupSelect;
 
 /** Logs a rejected fire-and-forget catalog write without affecting its request. */
 export function logCatalogPersistenceError(error: unknown): void {
@@ -21,6 +36,7 @@ export interface CatalogReleaseGroupInput {
     title?: unknown;
     "first-release-date"?: unknown;
     "primary-type"?: unknown;
+    "secondary-types"?: unknown;
 }
 
 /** Artist identity and fetched release groups eligible for write-through. */
@@ -46,10 +62,12 @@ export interface PersistCatalogTracklistInput {
 }
 
 interface NormalizedReleaseGroup {
+    firstReleaseDate: string | null;
+    primaryType: string;
     rgMbid: string;
+    secondaryTypes: string[];
     title: string;
     year: number | null;
-    primaryType: string;
 }
 
 interface ExistingAlbum {
@@ -66,23 +84,6 @@ interface NormalizedTrack {
     trackNo: number;
     discNo: number;
     duration: number;
-}
-
-/** Persisted album fields needed to reconstruct a release-group response. */
-export interface CatalogReleaseGroupAlbum {
-    id: string;
-    rgMbid: string;
-    title: string;
-    year: number | null;
-    primaryType: string;
-    location: AlbumLocation;
-}
-
-/** Local artist catalog snapshot already loaded by the library route. */
-export interface ReadFreshCatalogReleaseGroupsInput {
-    artistId: string;
-    catalogSyncedAt: Date | null;
-    albums: readonly CatalogReleaseGroupAlbum[];
 }
 
 /** Fresh persisted album and skeleton tracks used by discovery reads. */
@@ -107,20 +108,17 @@ function isCatalogPersistenceEnabled(): boolean {
     return config.catalogPersistence.enabled;
 }
 
-function isFresh(timestamp: Date | null, now: Date): boolean {
-    return (
-        timestamp !== null &&
-        timestamp.getTime() > now.getTime() - CATALOG_READ_FRESHNESS_MS
-    );
-}
-
-function releaseGroupFromCatalogAlbum(album: CatalogReleaseGroupAlbum) {
+function releaseGroupFromCatalogRow(
+    row: Prisma.ArtistCatalogReleaseGroupGetPayload<{
+        select: typeof CATALOG_RELEASE_GROUP_SELECT;
+    }>,
+) {
     return {
-        id: album.rgMbid,
-        title: album.title,
-        "first-release-date": album.year === null ? "" : String(album.year),
-        "primary-type": album.primaryType,
-        "secondary-types": [] as string[],
+        id: row.rgMbid,
+        title: row.title,
+        "first-release-date": row.firstReleaseDate ?? "",
+        "primary-type": row.primaryType,
+        "secondary-types": row.secondaryTypes,
     };
 }
 
@@ -133,19 +131,14 @@ function touchCatalogWhere(where: Prisma.AlbumWhereInput): void {
         .catch(logCatalogPersistenceError);
 }
 
-/** Reconstructs fresh release groups from catalog rows already loaded by a route. */
-export function readFreshCatalogReleaseGroups(
-    input: ReadFreshCatalogReleaseGroupsInput,
-): ReturnType<typeof releaseGroupFromCatalogAlbum>[] | null {
-    if (
-        !isCatalogPersistenceEnabled() ||
-        !isFresh(input.catalogSyncedAt, new Date())
-    ) {
-        return null;
-    }
-    const albums = input.albums.filter((album) => album.location === "CATALOG");
-    touchCatalogWhere({ artistId: input.artistId });
-    return albums.map(releaseGroupFromCatalogAlbum);
+function readCatalogReleaseGroupRows(
+    rows: readonly Prisma.ArtistCatalogReleaseGroupGetPayload<{
+        select: typeof CATALOG_RELEASE_GROUP_SELECT;
+    }>[],
+): ReturnType<typeof releaseGroupFromCatalogRow>[] | null {
+    if (rows.length === 0) return null;
+    touchCatalogWhere({ rgMbid: { in: rows.map((row) => row.rgMbid) } });
+    return rows.map(releaseGroupFromCatalogRow);
 }
 
 /** Loads fresh catalog metadata, optionally fenced to the requested local artist. */
@@ -154,38 +147,30 @@ export async function findFreshCatalogReleaseGroups(
     artistId?: string,
 ) {
     if (!isCatalogPersistenceEnabled()) return null;
-    const artist = await prisma.artist.findFirst({
-        where: {
-            ...(artistId === undefined ? {} : { id: artistId }),
-            mbid: artistMbid,
-            peerId: null,
-            catalogSyncedAt: {
-                gt: new Date(Date.now() - CATALOG_READ_FRESHNESS_MS),
-            },
-        },
-        select: {
-            id: true,
-            catalogSyncedAt: true,
-            albums: {
-                where: { location: "CATALOG" },
-                orderBy: [{ year: "desc" }, { id: "asc" }],
-                select: {
-                    id: true,
-                    rgMbid: true,
-                    title: true,
-                    year: true,
-                    primaryType: true,
-                    location: true,
+    try {
+        const artist = await prisma.artist.findFirst({
+            where: {
+                ...(artistId === undefined ? {} : { id: artistId }),
+                mbid: artistMbid,
+                peerId: null,
+                catalogSyncedAt: {
+                    gt: new Date(Date.now() - CATALOG_READ_FRESHNESS_MS),
                 },
             },
-        },
-    });
-    if (!artist) return null;
-    return readFreshCatalogReleaseGroups({
-        artistId: artist.id,
-        catalogSyncedAt: artist.catalogSyncedAt,
-        albums: artist.albums,
-    });
+            select: {
+                id: true,
+                catalogReleaseGroups: {
+                    orderBy: CATALOG_RELEASE_GROUP_ORDER_BY,
+                    select: CATALOG_RELEASE_GROUP_SELECT,
+                },
+            },
+        });
+        if (!artist) return null;
+        return readCatalogReleaseGroupRows(artist.catalogReleaseGroups);
+    } catch (error) {
+        catalogPersistenceLogger.warn("Catalog read failed", { error });
+        return null;
+    }
 }
 
 /** Loads a fresh catalog album with at least one persisted skeleton track. */
@@ -235,6 +220,35 @@ function normalizedYear(value: unknown): number | null {
     return Number.isSafeInteger(year) ? year : null;
 }
 
+function normalizeFirstReleaseDate(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const date = value.trim();
+    return /^\d{4}(-\d{2}(-\d{2})?)?$/.test(date) ? date : null;
+}
+
+function normalizeSecondaryTypes(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    const normalized: string[] = [];
+    const seen = new Set<string>();
+    const limit = Math.min(value.length, MAX_SECONDARY_TYPE_INPUTS);
+    for (let index = 0; index < limit; index += 1) {
+        const entry = value[index];
+        if (typeof entry !== "string") continue;
+        const secondaryType = entry.trim();
+        if (
+            !secondaryType ||
+            secondaryType.length > MAX_SECONDARY_TYPE_LENGTH ||
+            seen.has(secondaryType)
+        ) {
+            continue;
+        }
+        normalized.push(secondaryType);
+        seen.add(secondaryType);
+        if (normalized.length === MAX_SECONDARY_TYPES) break;
+    }
+    return normalized;
+}
+
 function normalizeReleaseGroup(
     input: CatalogReleaseGroupInput,
 ): NormalizedReleaseGroup | null {
@@ -247,10 +261,14 @@ function normalizeReleaseGroup(
             ? input["primary-type"].trim()
             : "Album";
     return {
+        firstReleaseDate: normalizeFirstReleaseDate(
+            input["first-release-date"],
+        ),
+        primaryType,
         rgMbid,
+        secondaryTypes: normalizeSecondaryTypes(input["secondary-types"]),
         title,
         year: normalizedYear(input["first-release-date"]),
-        primaryType,
     };
 }
 
@@ -334,37 +352,68 @@ async function createCatalogAlbums(
     await prisma.album.createMany({ data, skipDuplicates: true });
 }
 
-/** Persists bounded catalog album skeletons without changing existing content rows. */
+function catalogReleaseGroupRows(
+    artistId: string,
+    groups: readonly NormalizedReleaseGroup[],
+) {
+    return groups.map((group, position) => ({
+        artistId,
+        firstReleaseDate: group.firstReleaseDate,
+        position,
+        primaryType: group.primaryType,
+        rgMbid: group.rgMbid,
+        secondaryTypes: group.secondaryTypes,
+        title: group.title,
+    }));
+}
+
+async function replaceArtistCatalogReleaseGroups(
+    artistId: string,
+    groups: readonly NormalizedReleaseGroup[],
+): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+        // Serialize replacements before deleting: disjoint concurrent inserts
+        // must never combine two different snapshots for the same artist.
+        await tx.$queryRaw`SELECT "id" FROM "Artist" WHERE "id" = ${artistId} FOR UPDATE`;
+        await tx.artistCatalogReleaseGroup.deleteMany({ where: { artistId } });
+        await tx.artistCatalogReleaseGroup.createMany({
+            data: catalogReleaseGroupRows(artistId, groups),
+            skipDuplicates: true,
+        });
+        await tx.artist.update({
+            where: { id: artistId },
+            data: { catalogSyncedAt: new Date() },
+        });
+    });
+}
+
+/** Replaces an artist's release-group list and creates CATALOG skeletons without changing existing album rows. */
 export async function persistCatalogReleaseGroups(
     input: PersistCatalogReleaseGroupsInput,
 ): Promise<void> {
     if (!isCatalogPersistenceEnabled()) return;
+    const groups = normalizeReleaseGroups(input.releaseGroups);
+    if (groups.length === 0) return;
     const artistId = await resolveArtistId(input);
     if (!artistId) return;
-    const groups = normalizeReleaseGroups(input.releaseGroups);
-    const existing = groups.length
-        ? await prisma.album.findMany({
-              where: { rgMbid: { in: groups.map((group) => group.rgMbid) } },
-              select: {
-                  rgMbid: true,
-                  location: true,
-                  title: true,
-                  year: true,
-                  primaryType: true,
-              },
-          })
-        : [];
+    const existing = await prisma.album.findMany({
+        where: { rgMbid: { in: groups.map((group) => group.rgMbid) } },
+        select: {
+            rgMbid: true,
+            location: true,
+            title: true,
+            year: true,
+            primaryType: true,
+        },
+    });
     const existingByMbid = new Map(
         existing.map((album) => [album.rgMbid, album]),
     );
     const now = new Date();
     await refreshCatalogAlbums(groups, existingByMbid, now);
     await createCatalogAlbums(artistId, groups, existingByMbid, now);
-    await prisma.artist.update({
-        where: { id: artistId },
-        data: { catalogSyncedAt: now },
-    });
-    if (groups.length > 0) recordCatalogWrite("release_group");
+    await replaceArtistCatalogReleaseGroups(artistId, groups);
+    recordCatalogWrite("release_group");
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number): number {

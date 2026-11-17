@@ -952,6 +952,7 @@ describe("library catalog list runtime coverage", () => {
             releaseGroups: [
                 expect.objectContaining({ id: "rg-db-same" }),
                 expect.objectContaining({ id: "rg-new-1" }),
+                expect.objectContaining({ id: "rg-live-1" }),
             ],
         });
         expect(mockRedisSetEx).toHaveBeenCalledWith(

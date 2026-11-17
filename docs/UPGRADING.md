@@ -53,6 +53,16 @@ Anything not listed: drop-in.
 
 ## Unreleased
 
+**Artist catalog metadata:** migration
+`20261117093000_artist_catalog_release_groups` adds ordered per-artist
+release-group snapshots and clears legacy `Artist.catalogSyncedAt` values,
+because the previous album-backed cache cannot reconstruct complete lists.
+The next artist view refills metadata from MusicBrainz. Owned albums, user
+overrides and tracks are preserved. Apply migrations before running the
+matching backend. A rollback backend can ignore the additional table;
+retain the table when rolling back, and keep legacy and `discography:v2:`
+Redis namespaces separate.
+
 **Heads-up, no action needed:** the scheduled Audiobookshelf sync (every few
 minutes) now also removes audiobooks that were deleted in Audiobookshelf,
 including their cached covers and listening progress. Before this change, that
