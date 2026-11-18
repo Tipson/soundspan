@@ -75,6 +75,7 @@ not a router; it pins one representation for each YouTube playback attempt.
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
 | `backend/src/routes/admin.ts`              | `/api/admin`                                                                                          |
 | `backend/src/routes/adminLibraryHealthPurge.ts` | Library-health purge handler; not a router                                                       |
+| `backend/src/routes/adminRecommendationTrace.ts` | `/api/admin/recommendation-trace` (read-only exact-account diagnostics; interactive-admin handler) |
 | `backend/src/routes/analysis.ts`           | `/api/analysis`                                                                                       |
 | `backend/src/routes/apiKeys.ts`            | `/api/api-keys`                                                                                       |
 | `backend/src/routes/artistRouteName.ts`    | Shared artist route-name helper; not a router                                                         |
