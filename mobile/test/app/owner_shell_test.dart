@@ -20,6 +20,7 @@ import 'package:soundspan/features/search/search_screen.dart';
 import 'package:soundspan/features/library/library_screen.dart';
 import 'package:soundspan/features/library/library_models.dart';
 import 'package:soundspan/features/downloads/downloads_screen.dart';
+import 'package:soundspan/features/downloads/offline_mix_screen.dart';
 import 'package:soundspan/features/settings/settings_screen.dart';
 import 'package:soundspan/features/shares/share_sheet.dart';
 import 'package:soundspan/features/inbox/inbox_screen.dart';
@@ -372,6 +373,21 @@ void main() {
       expect(find.byType(HistoryScreen), findsOneWidget);
       final searchDepth = session.router.stackDepth(AppTab.search);
       expect(searchDepth, 2);
+      session.router.selectTab(AppTab.downloads);
+      await tester.pumpAndSettle();
+      final retainedDownloadsRoute = session.router.push<void>(
+        const AppDestination(AppRouteKind.offlineMix),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(OfflineMixScreen), findsOneWidget);
+      expect(session.router.stackDepth(AppTab.downloads), 2);
+      // Ordinary tab switching keeps the nested location. The explicit
+      // Manage downloads action below must instead request the tab's root.
+      session.router.selectTab(AppTab.home);
+      await tester.pumpAndSettle();
+      session.router.selectTab(AppTab.downloads);
+      await tester.pumpAndSettle();
+      expect(find.byType(OfflineMixScreen), findsOneWidget);
       session.router.selectTab(AppTab.home);
       await tester.pumpAndSettle();
       final playback = native.playback as CollectionPlayback;
@@ -414,6 +430,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(session.router.currentTab, AppTab.downloads);
       expect(find.byType(DownloadsScreen), findsOneWidget);
+      expect(find.byType(OfflineMixScreen), findsNothing);
+      expect(session.router.stackDepth(AppTab.downloads), 1);
+      await retainedDownloadsRoute;
       expect(find.byType(SettingsScreen), findsNothing);
       expect(find.byType(OfflineSettingsScreen), findsNothing);
       expect(visibility.value, isTrue);

@@ -893,6 +893,10 @@ class _OwnerShellState extends State<OwnerShell>
                 }
                 final root = Navigator.of(context, rootNavigator: true);
                 s.router.selectTab(AppTab.downloads);
+                s.router
+                    .navigatorKey(AppTab.downloads)
+                    .currentState
+                    ?.popUntil((route) => route.isFirst);
                 root.popUntil((route) => route.isFirst);
               },
             ),

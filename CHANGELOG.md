@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Open the Downloads list from offline settings while preserving normal nested tab navigation and the current playback queue.
 - Keep useful search results and successful page windows while retrying failed sources. Recover the exact failed window, preserve source identities and cursors, and reject late results after query, category, membership or account changes.
 - Honor manual download promotion even when a captured daily batch reaches native scheduling late. Count fresh automatic bytes after a completed explicit deletion and allow the recording to be saved in a mix again. Prepare Android release 0.1.18 (21).
 - Refresh the saved offline mix daily after explicit opt-in, while charging on unmetered access. Keep its exact source and quality, preserve the last complete mix on errors, and retire scheduled work when its account or policy changes.
