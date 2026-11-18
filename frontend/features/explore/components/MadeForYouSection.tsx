@@ -18,7 +18,6 @@ import { PersonalizedMixCard } from "@/features/home/components/PersonalizedMixC
 import type { Mix, PersonalizedHomeFeed } from "@/features/home/types";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
 import { pluralRu } from "@/lib/i18n/ru";
-import { MixSnapshotCaption } from "@/features/home/components/MixSnapshotCaption";
 
 interface MadeForYouSectionProps {
     discoverWeekly: DiscoverWeeklySummary | null;
@@ -100,10 +99,6 @@ export function MadeForYouSection({
                     ) : undefined
                 }
             />
-            <p className="-mt-2 mb-4 max-w-2xl text-sm leading-6 text-content-muted">
-                Разные способы начать слушать — только готовые подборки, которые
-                можно включить сразу.
-            </p>
             <HorizontalCarousel aria-label="Для вас">
                 {personalizedShelves.map((shelf, index) => (
                     <CarouselItem key={shelf.key}>
@@ -133,9 +128,6 @@ export function MadeForYouSection({
                                 />
                             }
                             index={personalizedShelves.length}
-                        />
-                        <MixSnapshotCaption
-                            snapshot={playableDiscoverWeekly.snapshot}
                         />
                     </CarouselItem>
                 )}

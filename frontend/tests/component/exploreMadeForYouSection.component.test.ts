@@ -8,6 +8,37 @@ import type {
 } from "../../features/home/types";
 
 const featuresState = { autoPlaylists: true };
+
+test("Explore keeps playable collections free of composition diagnostics", async () => {
+    const { MadeForYouSection } =
+        await import("../../features/explore/components/MadeForYouSection");
+    const html = renderToStaticMarkup(
+        React.createElement(MadeForYouSection, {
+            discoverWeekly: {
+                weekStart: "2026-11-16",
+                weekEnd: "2026-11-23",
+                totalCount: 40,
+                coverUrl: null,
+                snapshot: {
+                    generatedAt: "2026-11-16T00:00:00Z",
+                    refreshAfter: "2026-11-23T00:00:00Z",
+                    requestedCount: 40,
+                    snapshotCount: 40,
+                    availableCount: 40,
+                    reasons: ["feedback_filtered"],
+                },
+            },
+            mixes: [],
+            isRefreshingMixes: false,
+            handleRefreshMixes: async () => {},
+        }),
+    );
+    assert.match(html, /Открытия недели/);
+    assert.doesNotMatch(
+        html,
+        /Состав от|Проверено в|С учётом ваших оценок|Разные способы начать слушать/,
+    );
+});
 const Icon = () => React.createElement("i");
 
 mock.module("@/lib/features-context", {

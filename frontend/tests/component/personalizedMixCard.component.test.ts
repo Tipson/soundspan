@@ -78,7 +78,7 @@ beforeEach(() => {
     document.body.innerHTML = "";
 });
 
-test("snapshot refresh keeps its real date and does not replace a playing mix", async () => {
+test("snapshot refresh stays quiet and does not replace a playing mix", async () => {
     const { PersonalizedMixCard } =
         await import("../../features/home/components/PersonalizedMixCard");
     const container = document.createElement("div");
@@ -108,12 +108,9 @@ test("snapshot refresh keeps its real date and does not replace a playing mix", 
     await act(async () =>
         root.render(React.createElement(PersonalizedMixCard, props)),
     );
-    assert.equal(
-        container.querySelector("time")?.getAttribute("datetime"),
-        snapshot.generatedAt,
-    );
+    assert.equal(container.querySelector("time"), null);
     assert.match(container.textContent ?? "", /2 трека/);
-    assert.match(container.textContent ?? "", /меньше подходящих треков/i);
+    assert.doesNotMatch(container.textContent ?? "", /меньше подходящих треков/i);
     assert.equal(calls.length, 0);
     await act(async () => container.querySelector("button")?.click());
     assert.equal(calls.length, 1);
@@ -136,10 +133,7 @@ test("snapshot refresh keeps its real date and does not replace a playing mix", 
         (calls[0][0] as Array<{ id: string }>).map((t) => t.id),
         ["yt:first", "yt:second"],
     );
-    assert.equal(
-        container.querySelector("time")?.getAttribute("datetime"),
-        "2026-11-02T08:00:00.000Z",
-    );
+    assert.equal(container.querySelector("time"), null);
     await act(async () =>
         root.render(
             React.createElement(PersonalizedMixCard, {
@@ -176,6 +170,10 @@ test("personalized mix card renders real shelf artwork and starts its complete q
                 tracks,
                 tone: "blue",
                 index: 2,
+                snapshot: {
+                    generatedAt: "2026-11-16T00:00:00Z",
+                    reasons: ["feedback_filtered", "provider_degraded"],
+                },
             }),
         );
     });
@@ -186,6 +184,10 @@ test("personalized mix card renders real shelf artwork and starts its complete q
     );
     assert.match(container.textContent ?? "", /Fresh finds/);
     assert.match(container.textContent ?? "", /2 трека/);
+    assert.doesNotMatch(
+        container.textContent ?? "",
+        /Состав от|Проверено в|С учётом ваших оценок|Часть музыки временно недоступна/,
+    );
     assert.equal(
         container.querySelector("button")?.getAttribute("data-tv-card-index"),
         "2",

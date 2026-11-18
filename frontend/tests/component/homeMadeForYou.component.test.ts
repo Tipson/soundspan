@@ -129,7 +129,7 @@ const timeFeed: PersonalizedHomeFeed = {
     },
 };
 
-test("empty directions explain scarcity without a playable placeholder", async () => {
+test("empty directions do not add a diagnostic shelf or playable placeholder", async () => {
     const { HomeMadeForYou } =
         await import("../../features/home/components/HomeMadeForYou");
     const html = renderToStaticMarkup(
@@ -155,13 +155,10 @@ test("empty directions explain scarcity without a playable placeholder", async (
             handleRefreshMixes: async () => {},
         }),
     );
-    assert.match(html, /Ваш рок/);
-    assert.match(html, /меньше подходящих треков/i);
-    assert.doesNotMatch(html, /data-home-made-card/);
-    assert.doesNotMatch(html, /<time/);
+    assert.equal(html, "");
 });
 
-test("weekly card shows the saved snapshot date rather than claiming a refresh", async () => {
+test("weekly card remains visible without composition details", async () => {
     const { HomeMadeForYou } =
         await import("../../features/home/components/HomeMadeForYou");
     const html = renderToStaticMarkup(
@@ -187,8 +184,8 @@ test("weekly card shows the saved snapshot date rather than claiming a refresh",
             handleRefreshMixes: async () => {},
         }),
     );
-    assert.match(html, /dateTime="2026-11-02T08:00:00.000Z"/i);
-    assert.match(html, /меньше подходящих треков/i);
+    assert.match(html, /Открытия недели/);
+    assert.doesNotMatch(html, /<time|меньше подходящих треков/i);
 });
 
 test("real style mixes replace reordered daily copies and keep the time mix", async () => {
@@ -538,7 +535,7 @@ test("daypart uses the authoritative finite view and retains its exact membershi
     assert.equal(mixes[0]?.snapshot, snapshot);
 });
 
-test("an empty authoritative daypart explains scarcity instead of replaying a stale legacy shelf", async () => {
+test("an empty authoritative daypart stays out of the shelf without replaying a stale legacy shelf", async () => {
     const { HomeMadeForYou, timeOfDayMixForHour } =
         await import("../../features/home/components/HomeMadeForYou");
     const snapshot = {
@@ -564,9 +561,47 @@ test("an empty authoritative daypart explains scarcity instead of replaying a st
             handleRefreshMixes: async () => {},
         }),
     );
-    assert.match(html, /Ваше утро/);
-    assert.match(html, /временно недоступна/);
-    assert.doesNotMatch(html, /data-mix=/);
+    assert.equal(html, "");
+});
+
+test("playable mixes stay visible without composition diagnostics or unavailable-direction lists", async () => {
+    const { HomeMadeForYou } =
+        await import("../../features/home/components/HomeMadeForYou");
+    const snapshot = {
+        generatedAt: "2026-11-16T00:00:00Z",
+        refreshAfter: "2026-11-23T00:00:00Z",
+        requestedCount: 40,
+        snapshotCount: 40,
+        availableCount: 40,
+        reasons: ["feedback_filtered" as const],
+    };
+    const html = renderToStaticMarkup(
+        React.createElement(HomeMadeForYou, {
+            discoverWeekly: {
+                weekStart: "2026-11-16",
+                weekEnd: "2026-11-23",
+                totalCount: 40,
+                coverUrl: null,
+                snapshot,
+            },
+            mixes: [],
+            personalizedFeed: null,
+            dailyMixStatuses: [
+                {
+                    key: "missing",
+                    title: "Unavailable direction",
+                    snapshot: { ...snapshot, reasons: ["provider_degraded"] },
+                },
+            ],
+            isRefreshingMixes: false,
+            handleRefreshMixes: async () => {},
+        }),
+    );
+    assert.match(html, /Открытия недели/);
+    assert.doesNotMatch(
+        html,
+        /Состав от|Проверено в|С учётом ваших оценок|Unavailable direction|Часть музыки временно недоступна/,
+    );
 });
 
 test("Home Made For You hides the whole shelf when nothing is playable", async () => {

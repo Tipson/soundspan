@@ -401,6 +401,9 @@ const flushAsync = async () => {
     await new Promise((resolve) => setImmediate(resolve));
 };
 
+const currentTrackId = (state: DeferredAudioState) =>
+    (state.currentTrack as Track | null)?.id;
+
 test("clearing a personal Wave then starting its cached prefix advances beyond the cleared recording", async (t) => {
     const tracks = [
         makeTrack("wave-a", "a"),
@@ -463,7 +466,7 @@ test("clearing a personal Wave then starting its cached prefix advances beyond t
         state.commit();
     });
     await render();
-    assert.equal((state.currentTrack as Track).id, "wave-b");
+    assert.equal(currentTrackId(state), "wave-b");
     assert.equal(state.currentIndex, 1);
     assert.deepEqual(
         (state.queue as Track[]).map((row) => row.id),
@@ -607,7 +610,7 @@ test("cleared Wave ordered tail retains the opaque continuation and its exact hi
             orderedWave: { page: seed, owner },
         });
     await fixture.flush();
-    assert.equal((fixture.state.currentTrack as Track).id, "wave-fresh");
+    assert.equal(currentTrackId(fixture.state), "wave-fresh");
     assert.equal(fixture.state.currentIndex, 3);
     const checkpoint = orderedWaveQueueCheckpoints.capture(
         fixture.state.queue as Track[],
@@ -630,7 +633,7 @@ test("cleared Wave tail requests continuation before playing a fresh recording",
     fixture.controls().playTracks(fixture.tracks, 0, true);
     assert.equal(fixture.state.currentTrack, null);
     await fixture.flush();
-    assert.equal((fixture.state.currentTrack as Track).id, "wave-fresh");
+    assert.equal(currentTrackId(fixture.state), "wave-fresh");
     assert.equal(apiCalls.personalizedRequests.length, 1);
     const path = new URL(
         apiCalls.personalizedRequests[0],
@@ -735,7 +738,7 @@ test("cleared Wave continuation waits for admission and skips denied candidates"
     assert.equal(fixture.state.currentTrack, null);
     release();
     await fixture.flush();
-    assert.equal((fixture.state.currentTrack as Track).id, "wave-c");
+    assert.equal(currentTrackId(fixture.state), "wave-c");
     assert.equal(fixture.state.localTrackPlaybackOccurrence, 1);
 });
 

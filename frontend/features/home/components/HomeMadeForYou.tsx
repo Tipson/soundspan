@@ -21,8 +21,7 @@ import { SectionHeader } from "./SectionHeader";
 import { StaticPlaylistCard } from "./StaticPlaylistCard";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 import { recommendationTrackKey } from "../recommendationIdentity";
-import { mixSnapshotDetails, type MixSnapshot } from "../mixSnapshot";
-import { MixSnapshotCaption } from "./MixSnapshotCaption";
+import type { MixSnapshot } from "../mixSnapshot";
 
 const MAX_PERSONAL_MIX_TRACKS = 40;
 const MAX_HOME_MADE_CARDS = 5;
@@ -238,7 +237,6 @@ export function HomeMadeForYou({
     timeOfDayFeed = null,
     timeOfDayMix = null,
     dailyStyleMixes = [],
-    dailyMixStatuses = [],
     isRefreshingMixes,
     handleRefreshMixes,
 }: HomeMadeForYouProps) {
@@ -258,25 +256,7 @@ export function HomeMadeForYou({
         (playableDiscoverWeekly ? 1 : 0) +
         playableMixes.length;
 
-    const authoritativeTimeMix = finiteTimeOfDayMix(timeOfDayFeed ?? null);
-    const unavailableDirections = [
-        ...dailyMixStatuses.filter(
-            (status) =>
-                !dailyStyleMixes?.some(
-                    (mix) => mix.key === status.key && mix.tracks.length > 0,
-                ),
-        ),
-        ...(timeOfDayMix && authoritativeTimeMix?.tracks.length === 0
-            ? [
-                  {
-                      key: `time-${timeOfDayMix.key}`,
-                      title: timeOfDayMix.title,
-                      snapshot: authoritativeTimeMix.snapshot,
-                  },
-              ]
-            : []),
-    ];
-    if (availableCount === 0 && unavailableDirections.length === 0) return null;
+    if (availableCount === 0) return null;
 
     const weeklyOffset = playableDiscoverWeekly ? 1 : 0;
     const hasHiddenMixes = availableCount > MAX_HOME_MADE_CARDS;
@@ -347,9 +327,6 @@ export function HomeMadeForYou({
                                 />
                             }
                         />
-                        <MixSnapshotCaption
-                            snapshot={playableDiscoverWeekly.snapshot}
-                        />
                     </div>
                 )}
 
@@ -381,18 +358,6 @@ export function HomeMadeForYou({
                     </div>
                 ))}
             </div>
-            {unavailableDirections.length > 0 && (
-                <ul className="mt-3 space-y-1 text-xs leading-5 text-content-muted">
-                    {unavailableDirections.map((status) => (
-                        <li key={status.key}>
-                            «{status.title}»:{" "}
-                            {mixSnapshotDetails(status.snapshot).detail ??
-                                "Пока нет доступной подборки"}
-                            .
-                        </li>
-                    ))}
-                </ul>
-            )}
         </section>
     );
 }

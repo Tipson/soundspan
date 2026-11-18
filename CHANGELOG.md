@@ -9,6 +9,8 @@
 
 ## Unreleased
 
+- Simplify personal mix cards and shelves by removing composition diagnostics and empty direction notices while keeping playback, refresh and useful failure actions.
+
 - Continue a cleared personal Wave beyond its previous recording, retaining server order and bounded fresh continuation at the end of a page. Preserve explicit playlist, pause and account intent.
 
 - Bound public search cache entries by their UTF-8 byte size, preserving live results when cached metadata is oversized or malformed.
