@@ -308,6 +308,13 @@ class _QueueScreenState extends State<QueueScreen> {
                                                                   const Text(
                                                                     'Сейчас играет',
                                                                   ),
+                                                                if (entry
+                                                                        .smartShuffle
+                                                                        ?.injected ==
+                                                                    true)
+                                                                  const Text(
+                                                                    'Находка',
+                                                                  ),
                                                                 Text(
                                                                   entry
                                                                       .track

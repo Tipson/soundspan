@@ -10,6 +10,7 @@ import '../likes/likes_models.dart';
 import 'playlist_controller.dart';
 import 'playlist_editor_sheet.dart';
 import 'playlist_models.dart';
+import 'playlist_smart_shuffle.dart';
 
 typedef PlaylistTracksAction = FutureOr<void> Function(List<Track> tracks);
 
@@ -25,6 +26,7 @@ class PlaylistDetailScreen extends StatefulWidget {
     this.onDownload,
     this.onShare,
     this.onRadio,
+    this.smartShuffle,
     this.autoLoad = true,
   });
   final PlaylistController controller;
@@ -36,6 +38,7 @@ class PlaylistDetailScreen extends StatefulWidget {
   final FutureOr<void> Function(PlaylistSummary playlist)? onShare;
   final FutureOr<void> Function(String playlistId)? onRadio;
   final bool autoLoad;
+  final PlaylistSmartShuffle? smartShuffle;
   @override
   State<PlaylistDetailScreen> createState() => _PlaylistDetailScreenState();
 }
@@ -59,7 +62,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   void didUpdateWidget(PlaylistDetailScreen old) {
     super.didUpdateWidget(old);
     if (old.controller != widget.controller ||
-        old.playlistId != widget.playlistId) {
+        old.playlistId != widget.playlistId ||
+        old.smartShuffle != widget.smartShuffle) {
+      old.smartShuffle?.cancel();
       _failure = null;
       _playing = false;
       _load();
@@ -84,6 +89,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     bool shuffle = false,
   }) async {
     if (_playing || c != widget.controller || !c.isCurrent) return;
+    widget.smartShuffle?.cancel();
     final items =
         c.state.detail?.items.where((e) => e.track.playable).toList() ?? [];
     final index = selected == null
@@ -205,6 +211,50 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         onSelected: () => run(c.refresh),
       ),
       if (d.playlist.isOwner) ...[
+        MusicAction(
+          id: 'smart-shuffle',
+          label: widget.smartShuffle?.busy == true
+              ? 'Отменить подготовку находок'
+              : widget.smartShuffle?.active == true
+              ? 'Выключить находки'
+              : 'С находками',
+          icon: Icons.auto_awesome,
+          disabledReason: widget.smartShuffle == null
+              ? 'Подготовка находок недоступна.'
+              : stateSmartBlocked(c),
+          onSelected:
+              widget.smartShuffle == null || stateSmartBlocked(c) != null
+              ? null
+              : () => run(() async {
+                  final smart = widget.smartShuffle!;
+                  await smart.toggle(
+                    presented: () =>
+                        mounted &&
+                        widget.controller == c &&
+                        widget.smartShuffle == smart &&
+                        (ModalRoute.of(context)?.isCurrent ?? true),
+                  );
+                  if (mounted && c.isCurrent && smart.canUndo) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Будущие находки выключены'),
+                        action: SnackBarAction(
+                          label: 'Отменить',
+                          onPressed: () => unawaited(
+                            smart.undo(
+                              presented: () =>
+                                  mounted &&
+                                  widget.controller == c &&
+                                  widget.smartShuffle == smart &&
+                                  (ModalRoute.of(context)?.isCurrent ?? true),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                }),
+        ),
         MusicAction(
           id: 'edit',
           label: 'Название и доступ',
@@ -528,8 +578,22 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     ),
   );
   @override
+  void dispose() {
+    widget.smartShuffle?.cancel();
+    super.dispose();
+  }
+
+  String? stateSmartBlocked(PlaylistController c) =>
+      c.state.busy || c.state.uncertain
+      ? 'Сначала завершите изменение плейлиста.'
+      : null;
+
+  @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: widget.controller,
+    animation: Listenable.merge([
+      widget.controller,
+      if (widget.smartShuffle != null) widget.smartShuffle!,
+    ]),
     builder: (context, _) {
       final c = widget.controller;
       final state = c.state;
@@ -560,6 +624,17 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
             const MusicStatus(message: 'Плейлист удалён.')
           else ...[
             if (_failure != null) MusicStatus(message: _failure!, error: true),
+            if (widget.smartShuffle?.busy == true)
+              const MusicStatus(
+                message: 'Готовим находки. Очередь пока не изменена.',
+              ),
+            if (widget.smartShuffle?.notice != null)
+              MusicStatus(message: widget.smartShuffle!.notice!),
+            if (widget.smartShuffle?.failure != null)
+              MusicStatus(
+                message: widget.smartShuffle!.failure!.message,
+                error: true,
+              ),
             if (state.uncertain) ...[
               MusicStatus(
                 message:

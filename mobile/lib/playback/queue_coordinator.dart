@@ -12,6 +12,7 @@ import 'native_loudness_controller.dart';
 import 'finite_queue_admission_coordinator.dart';
 import 'finite_queue_admission_api.dart';
 import 'recommendation_queue_policy.dart';
+import 'finite_smart_shuffle.dart';
 
 typedef _AdmissionChoice = ({
   String? next,
@@ -289,6 +290,10 @@ final class QueueCoordinator implements PlaybackController {
   @override
   Future<void> dispatch(PlaybackCommand command) async {
     if (_disposed) throw StateError('Playback disposed');
+    if (command is ReplaceQueue &&
+        command.preparationCurrent?.call() == false) {
+      return;
+    }
     if ((command is ReplaceQueue &&
             command.automaticRecommendation &&
             command.expectedLineage == null) ||
@@ -334,6 +339,7 @@ final class QueueCoordinator implements PlaybackController {
       _recommendationIntents[command.ref.identityKey] = recommendationIntent;
     }
     int? replacementIntent;
+    var deferredReplacement = false;
     Stopwatch? replacementClock;
     if (command is RestoreQueue) {
       if (!_matchesLineage(command.fence, command.expectedLineage)) return;
@@ -356,11 +362,19 @@ final class QueueCoordinator implements PlaybackController {
           !command.entries.any((e) => e.entryId == command.initialEntryId)) {
         throw ArgumentError('Unknown initial occurrence');
       }
-      replacementIntent = ++_replacementIntent;
-      _naturalContinuation = null;
-      if (!command.automaticRecommendation) {
-        finiteAdmission?.invalidateQueue(orderChanged: true);
-        _pendingManualReplacementIntent = replacementIntent;
+      deferredReplacement = command.preparationCurrent != null;
+      if (deferredReplacement) {
+        // A prepared queue is still only a proposal while owner admission is
+        // pending. Reserving here would revoke the current source even if the
+        // proposal is cancelled or superseded before attachment.
+        replacementIntent = _replacementIntent;
+      } else {
+        replacementIntent = ++_replacementIntent;
+        _naturalContinuation = null;
+        if (!command.automaticRecommendation) {
+          finiteAdmission?.invalidateQueue(orderChanged: true);
+          _pendingManualReplacementIntent = replacementIntent;
+        }
       }
       replacementClock = Stopwatch()..start();
     }
@@ -400,6 +414,94 @@ final class QueueCoordinator implements PlaybackController {
       await _clear();
     }
     switch (command) {
+      case EditSmartShuffle():
+        bool current() =>
+            _matchesLineage(command.fence, command.expectedLineage) &&
+            _generation == command.expectedGeneration &&
+            _current == command.expectedCurrentEntryId;
+        if (!current()) return;
+        try {
+          await authority.assertCurrent(command.fence);
+        } catch (_) {
+          return;
+        }
+        if (!current()) return;
+        final before = snapshot;
+        final meta = before.entries.where(
+          (entry) => entry.smartShuffle?.sessionId == command.sessionId,
+        );
+        if (meta.isEmpty) return;
+        final restore = command.restoreEntries;
+        List<QueueEntry> next;
+        List<String> order;
+        if (restore == null) {
+          next = disableFiniteSmartShuffle(before, command.sessionId);
+          final ids = next.map((entry) => entry.entryId).toSet();
+          order = _order.where(ids.contains).toList();
+        } else {
+          if (command.admissionCurrent?.call() != true ||
+              command.restoreOrder == null) {
+            return;
+          }
+          _validate(restore);
+          final ids = restore.map((entry) => entry.entryId).toSet();
+          final requested = command.restoreOrder!;
+          if (ids.length != requested.length ||
+              requested.toSet().length != ids.length ||
+              !ids.containsAll(requested)) {
+            return;
+          }
+          final currentIndex = _order.indexOf(_current ?? '');
+          if (currentIndex < 0 || requested.length <= currentIndex) return;
+          for (var i = 0; i <= currentIndex; i++) {
+            if (requested[i] != _order[i]) return;
+          }
+          final byId = {for (final entry in restore) entry.entryId: entry};
+          if (_entries.any((entry) => !byId.containsKey(entry.entryId))) return;
+          if (_entries.any(
+            (entry) =>
+                !identical(entry.track, byId[entry.entryId]!.track) ||
+                !identical(entry.context, byId[entry.entryId]!.context),
+          )) {
+            return;
+          }
+          // An undo may restore only this session's removed injected future.
+          final oldIds = _entries.map((entry) => entry.entryId).toSet();
+          if (restore.any(
+            (entry) =>
+                !oldIds.contains(entry.entryId) &&
+                (entry.smartShuffle?.sessionId != command.sessionId ||
+                    entry.smartShuffle?.injected != true),
+          )) {
+            return;
+          }
+          next = restore;
+          order = List.of(requested);
+        }
+        _entries = List.of(next);
+        _order = order;
+        ++_queueEpoch;
+        ++_queueBoundary;
+        // Snapshot lineage cancels pending edits; do not revoke the current
+        // source's finite admission permit merely to prune future metadata.
+        _naturalContinuation = null;
+        _publish();
+        if (before.processing == PlaybackProcessing.completed &&
+            before.playingIntent &&
+            !before.focusSuspended) {
+          // The old completed advance captured the replaced lineage. Resume
+          // that same natural intent under the new queue; Pause/new Play still
+          // win through the existing advance, owner and intent revisions.
+          final advancing = _advance(completion: true);
+          final generation = _generation;
+          unawaited(
+            advancing.catchError((Object error) {
+              if (_valid(generation, command.fence)) {
+                _fail(failure: error is AppFailure ? error : null);
+              }
+            }),
+          );
+        }
       case RestoreQueue():
         try {
           await authority.assertCurrent(command.fence);
@@ -484,7 +586,8 @@ final class QueueCoordinator implements PlaybackController {
           if (error is TimeoutException) {
             // This intent has finished admission. Its own manual marker must
             // not make a still-current fenced timeout look superseded.
-            if (_pendingManualReplacementIntent == replacementIntent) {
+            if (!deferredReplacement &&
+                _pendingManualReplacementIntent == replacementIntent) {
               _pendingManualReplacementIntent = null;
             }
             if (_disposed ||
@@ -507,12 +610,14 @@ final class QueueCoordinator implements PlaybackController {
           if (command.automaticRecommendation) return;
           rethrow;
         } finally {
-          if (_pendingManualReplacementIntent == replacementIntent) {
+          if (!deferredReplacement &&
+              _pendingManualReplacementIntent == replacementIntent) {
             _pendingManualReplacementIntent = null;
           }
         }
         if (_disposed ||
             _replacementIntent != replacementIntent ||
+            command.preparationCurrent?.call() == false ||
             !authority.isCurrent(fence) ||
             (command.expectedLineage != null &&
                 !_matchesLineage(
@@ -552,6 +657,7 @@ final class QueueCoordinator implements PlaybackController {
           );
           if (_disposed ||
               _replacementIntent != replacementIntent ||
+              command.preparationCurrent?.call() == false ||
               !authority.isCurrent(fence) ||
               !_matchesLineage(fence, command.expectedLineage!)) {
             return;
@@ -563,6 +669,20 @@ final class QueueCoordinator implements PlaybackController {
           }
           automaticInitial = choice.next;
           replacementPermit = choice.permitted;
+        }
+        if (deferredReplacement) {
+          // No await separates the last permission check, our reservation and
+          // attachment. Explicit Pause/order/preference/owner changes remain
+          // visible to the preparation permission until this exact boundary.
+          if (_replacementIntent != replacementIntent ||
+              command.preparationCurrent?.call() != true) {
+            return;
+          }
+          replacementIntent = ++_replacementIntent;
+          _naturalContinuation = null;
+          if (!command.automaticRecommendation) {
+            finiteAdmission?.invalidateQueue(orderChanged: true);
+          }
         }
         if (!command.automaticRecommendation) {
           _recommendationExclusions.clear();

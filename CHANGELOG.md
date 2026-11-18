@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Offer opt-in playlist playback with finite discoveries between the listener's own occurrences. Preserve exact duplicates, owner-bound cold queue metadata, current playback and history when future discoveries are disabled or safely restored.
+
 - Honor server-directed search retry delays across failed-source retry, paging and same-query submission, retaining available results and owner isolation. Prepare Android release 0.1.23 (26).
 - Preserve the current download generation and verified checkpoint when WorkManager interrupts unfinished work, keeping explicit cancellation and owner/policy changes authoritative. Prepare Android release 0.1.22 (25).
 - Reschedule safe offline composition reads after gateway 502/504 through the existing background retry policy, preserving the last complete mix and mutation replay rules. Prepare Android release 0.1.21 (24).

@@ -15,6 +15,7 @@ final class ReplaceQueue extends PlaybackCommand {
     this.orderedRecommendation = false,
     this.initialEntryId,
     this.play = true,
+    this.preparationCurrent,
   }) : entries = List.unmodifiable(entries);
   final List<QueueEntry> entries;
   final SessionFence fence;
@@ -25,6 +26,10 @@ final class ReplaceQueue extends PlaybackCommand {
   final bool orderedRecommendation;
   final String? initialEntryId;
   final bool play;
+
+  /// Optional runtime owner/source/mutation permission for a prepared snapshot.
+  /// It is consumed only before queue attachment, never persisted as a grant.
+  final bool Function()? preparationCurrent;
 }
 
 final class Enqueue extends PlaybackCommand {
@@ -62,6 +67,27 @@ final class SetRecommendationExclusion extends PlaybackCommand {
   final String recommendationScope;
   final String? advanceEntryId;
   final int? advanceGeneration;
+}
+
+/// Metadata-only finite-session edit; current audio and history stay in place.
+final class EditSmartShuffle extends PlaybackCommand {
+  const EditSmartShuffle({
+    required this.fence,
+    required this.expectedLineage,
+    required this.expectedGeneration,
+    required this.expectedCurrentEntryId,
+    required this.sessionId,
+    this.restoreEntries,
+    this.restoreOrder,
+    this.admissionCurrent,
+  });
+  final SessionFence fence;
+  final int expectedLineage, expectedGeneration;
+  final String? expectedCurrentEntryId;
+  final String sessionId;
+  final List<QueueEntry>? restoreEntries;
+  final List<String>? restoreOrder;
+  final bool Function()? admissionCurrent;
 }
 
 /// Hydrates durable metadata only. Audio starts only after an explicit Resume.

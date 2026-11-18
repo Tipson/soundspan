@@ -123,7 +123,11 @@ class RadioRepository extends ExtrasRepository {
     RadioSeed seed, {
     int? cursor,
     bool Function()? current,
+    int limit = 25,
   }) async {
+    if (limit < 1 || limit > 50) {
+      throw ArgumentError('Invalid finite radio limit');
+    }
     String type, value = seed.value;
     switch (seed.kind) {
       case RadioSeedKind.track:
@@ -155,7 +159,7 @@ class RadioRepository extends ExtrasRepository {
         query: {
           'type': type,
           'value': value,
-          'limit': '25',
+          'limit': '$limit',
           if (!local && cursor != null) 'cursor': '$cursor',
         },
         current: current,

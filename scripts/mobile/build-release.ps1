@@ -28,7 +28,7 @@ if ($version.flutterVersion -ne '3.47.7' -or $version.dartSdkVersion -ne '3.13.5
 $lock = Join-Path $source 'mobile/pubspec.lock'
 if ((Get-FileHash $lock).Hash -ne '01A909137D3B91DF57DAEC2581772AE2D745CE76DA6736BA00562CA870FDEA32') { throw 'Pinned pub lock mismatch' }
 $pinnedInputs = @{
-    'mobile/pubspec.yaml' = 'C0241808CC217A0501FDE5F1A4F8465C73AF5AAEFD9C00C8B4255E780EE951C0'
+    'mobile/pubspec.yaml' = '1D433C8117B367C29E8B28E6F66C500E2569A9B9F21A521A6BA4E10F95F0C70B'
     'mobile/android/settings.gradle.kts' = 'AF7626661E1DE91F28892C8EBF0139F75C5042F078ED132121F68C99365D8A10'
     'mobile/android/gradle/wrapper/gradle-wrapper.properties' = 'B690D26223576FE4E63889FAD9A00DF81945CB870B9476CC5A563152A1A88A74'
 }

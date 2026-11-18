@@ -614,6 +614,7 @@ final class MemoryOwnerStore implements OwnerStore {
   SessionFence active;
   final records = <OwnerKey, Map<String, Object?>>{};
   final policies = <OwnerKey, Map<String, Object?>>{};
+  final smart = <OwnerKey, Map<String, Object?>>{};
   Completer<void>? _pause;
   Completer<void>? entered;
   Object? failure;
@@ -648,7 +649,12 @@ final class MemoryOwnerStore implements OwnerStore {
       final fail = failure;
       failure = null;
       if (fail != null) throw fail;
-      final transaction = _MemoryTransaction(records, policies, fence.owner);
+      final transaction = _MemoryTransaction(
+        records,
+        policies,
+        smart,
+        fence.owner,
+      );
       transaction.readFailure = readFailure;
       readFailure = null;
       return await operation(transaction);
@@ -659,14 +665,17 @@ final class MemoryOwnerStore implements OwnerStore {
 }
 
 final class _MemoryTransaction implements OwnerTransaction {
-  _MemoryTransaction(this.rows, this.policies, this.owner);
+  _MemoryTransaction(this.rows, this.policies, this.smart, this.owner);
   final Map<OwnerKey, Map<String, Object?>> rows;
   final Map<OwnerKey, Map<String, Object?>> policies;
+  final Map<OwnerKey, Map<String, Object?>> smart;
   final OwnerKey owner;
   Object? readFailure;
   void _scope(String namespace, String key) {
     if (namespace != 'queue' ||
-        (key != 'snapshot' && key != 'recommendation-policy')) {
+        (key != 'snapshot' &&
+            key != 'recommendation-policy' &&
+            key != 'smart-shuffle-v1')) {
       throw StateError('wrong durable namespace');
     }
   }
@@ -675,7 +684,11 @@ final class _MemoryTransaction implements OwnerTransaction {
   Future<Map<String, Object?>?> read(String namespace, String key) async {
     _scope(namespace, key);
     if (readFailure != null) throw readFailure!;
-    return (key == 'snapshot' ? rows : policies)[owner];
+    return (key == 'snapshot'
+        ? rows
+        : key == 'smart-shuffle-v1'
+        ? smart
+        : policies)[owner];
   }
 
   @override
@@ -685,7 +698,11 @@ final class _MemoryTransaction implements OwnerTransaction {
     Map<String, Object?> value,
   ) async {
     _scope(namespace, key);
-    (key == 'snapshot' ? rows : policies)[owner] = OwnerRecord(
+    (key == 'snapshot'
+        ? rows
+        : key == 'smart-shuffle-v1'
+        ? smart
+        : policies)[owner] = OwnerRecord(
       key: key,
       value: value,
     ).value;
@@ -694,7 +711,12 @@ final class _MemoryTransaction implements OwnerTransaction {
   @override
   Future<void> remove(String namespace, String key) async {
     _scope(namespace, key);
-    (key == 'snapshot' ? rows : policies).remove(owner);
+    (key == 'snapshot'
+            ? rows
+            : key == 'smart-shuffle-v1'
+            ? smart
+            : policies)
+        .remove(owner);
   }
 
   @override

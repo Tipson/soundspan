@@ -15,12 +15,14 @@ final class OwnerPlaybackActions {
     required this.playback,
     required this.isCurrent,
     required this.prefetch,
+    this.beforeIntent,
   });
   final SessionAuthority authority;
   final SessionFence fence;
   final PlaybackController playback;
   final bool Function() isCurrent;
   final Future<void> Function(Iterable<Track>) prefetch;
+  final void Function()? beforeIntent;
   Future<void> guard() async {
     if (!isCurrent()) throw collectionStaleSession;
     try {
@@ -46,6 +48,8 @@ final class OwnerPlaybackActions {
 
   Future<void> play(CollectionPlaybackRequest request) async {
     if (request.fence != fence) throw collectionStaleSession;
+    if (!isCurrent()) throw collectionStaleSession;
+    beforeIntent?.call();
     final lineage = playback.snapshot.lineage;
     await guard();
     _prefetch(request.tracks.skip(request.startIndex).take(6));
@@ -72,6 +76,8 @@ final class OwnerPlaybackActions {
 
   Future<void> enqueue(List<Track> tracks, SessionFence original) async {
     if (original != fence) throw collectionStaleSession;
+    if (!isCurrent()) throw collectionStaleSession;
+    beforeIntent?.call();
     final lineage = playback.snapshot.lineage;
     await guard();
     _prefetch(tracks.take(6));

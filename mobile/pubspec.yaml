@@ -1,7 +1,7 @@
 name: soundspan
 description: "Музыкальное приложение Soundspan"
 publish_to: 'none'
-version: 0.1.23+26
+version: 0.1.24+27
 
 environment:
   sdk: ^3.13.5

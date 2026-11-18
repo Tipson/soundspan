@@ -729,6 +729,8 @@ class _OwnerShellState extends State<OwnerShell>
           // Loading emits synchronously: admit it before the listening parent
           // mounts the detail screen, rather than from that child's initState.
           unawaited(c.open(destination.id!));
+          final smart = s.newSmartShuffle(c);
+          retire(smart.dispose);
           return ListenableBuilder(
             listenable: c,
             builder: (_, _) => PlaylistDetailScreen(
@@ -736,6 +738,7 @@ class _OwnerShellState extends State<OwnerShell>
               playlistId: destination.id,
               autoLoad: false,
               preferences: s.preferences,
+              smartShuffle: smart,
               onPlay: _play,
               onEnqueue: _enqueue,
               onDownload: (tracks) => _download(tracks, sourceContext: context),

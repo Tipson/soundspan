@@ -34,6 +34,8 @@ import '../features/likes/preference_controller.dart';
 import '../features/player/player_controller.dart';
 import '../features/playlists/playlist_controller.dart';
 import '../features/playlists/playlist_repository.dart';
+import '../features/playlists/playlist_smart_shuffle.dart';
+import '../features/radio/radio_repository.dart';
 import '../features/search/search_controller.dart';
 import '../features/search/search_repository.dart';
 import '../features/settings/settings_controller.dart';
@@ -63,11 +65,21 @@ final class OwnerUiSession {
     DownloadWorkerBridge worker = const DownloadWorkerBridge(),
   }) {
     lifetime.add(router.dispose);
+    lifetime.add(() {
+      for (final smart in _smartPreparations.toList()) {
+        smart.dispose();
+      }
+    });
     playbackActions = OwnerPlaybackActions(
       authority: owner.authority,
       fence: fence,
       playback: owner.playback,
       isCurrent: () => isCurrent,
+      beforeIntent: () {
+        for (final smart in _smartPreparations.toList()) {
+          smart.cancel();
+        }
+      },
       prefetch: (tracks) async {
         final window = tracks.take(6).toList();
         remember(window);
@@ -385,6 +397,7 @@ final class OwnerUiSession {
   late final AccountController account;
   late final PlayerController player;
   final _pending = <Future<void>>{};
+  final _smartPreparations = <PlaylistSmartShuffle>{};
   final _known = <String, Track>{};
   final _queueOriginal = <String, Track>{};
   String? _artworkSelection;
@@ -455,6 +468,24 @@ final class OwnerUiSession {
       networkPolicy: owner.policy,
     ),
   );
+  PlaylistSmartShuffle newSmartShuffle(PlaylistController playlist) {
+    late final PlaylistSmartShuffle smart;
+    smart = PlaylistSmartShuffle(
+      playlist: playlist,
+      playback: owner.playback,
+      admission: owner.finiteAdmission,
+      radio: RadioRepository(
+        transport: owner.transport,
+        authority: owner.authority,
+        fence: fence,
+        networkPolicy: owner.policy,
+      ),
+      onClosed: () => _smartPreparations.remove(smart),
+    );
+    _smartPreparations.add(smart);
+    return smart;
+  }
+
   void start() {
     if (_started || !isCurrent) return;
     _started = true;

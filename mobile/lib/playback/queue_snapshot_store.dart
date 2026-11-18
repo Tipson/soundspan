@@ -5,6 +5,7 @@ import '../core/storage/music_codec.dart';
 import '../core/storage/owner_store.dart';
 import 'queue_snapshot.dart';
 import 'recommendation_queue_policy.dart';
+import 'smart_shuffle_checkpoint.dart';
 
 /// One service-owned writer, called directly by the ordered snapshot observer.
 /// Captures JSON before the first await and serializes save/load/clear in call
@@ -22,11 +23,13 @@ final class QueueSnapshotStore {
   static const _namespace = 'queue';
   static const _key = 'snapshot';
   static const _policyKey = 'recommendation-policy';
+  static const _smartKey = 'smart-shuffle-v1';
 
   /// Checkpoints portable metadata only. Failure never claims a durable save.
   Future<void> save(QueueSnapshot snapshot, SessionFence fence) {
     final Map<String, Object?> payload;
     final Map<String, Object?>? policy;
+    final Map<String, Object?>? smart;
     try {
       if (snapshot.fence != null && snapshot.fence != fence) {
         throw ArgumentError('Queue snapshot belongs to another session');
@@ -48,6 +51,10 @@ final class QueueSnapshotStore {
       };
       _decode(payload, fence);
       policy = RecommendationQueuePolicy.encode(snapshot);
+      smart = SmartShuffleCheckpoint.encode(
+        snapshot.entries,
+        snapshot.effectiveOrder,
+      );
     } catch (error, stack) {
       return Future<void>.error(error, stack);
     }
@@ -58,6 +65,11 @@ final class QueueSnapshotStore {
           await tx.remove(_namespace, _policyKey);
         } else {
           await tx.write(_namespace, _policyKey, policy);
+        }
+        if (smart == null) {
+          await tx.remove(_namespace, _smartKey);
+        } else {
+          await tx.write(_namespace, _smartKey, smart);
         }
       }),
     );
@@ -80,6 +92,7 @@ final class QueueSnapshotStore {
       }
       if (payload == null) return null;
       Object? policy;
+      Object? smart;
       try {
         policy = await tx.read(_namespace, _policyKey);
       } on FormatException {
@@ -88,7 +101,14 @@ final class QueueSnapshotStore {
         policy = const {'invalid': true};
       }
       try {
-        return _decode(payload, fence, policy);
+        smart = await tx.read(_namespace, _smartKey);
+      } on FormatException {
+        smart = const {'invalid': true};
+      } on ArgumentError {
+        smart = const {'invalid': true};
+      }
+      try {
+        return _decode(payload, fence, policy, smart);
       } on FormatException {
         return null;
       }
@@ -99,6 +119,7 @@ final class QueueSnapshotStore {
     () => _owners.transaction(fence, (tx) async {
       await tx.remove(_namespace, _key);
       await tx.remove(_namespace, _policyKey);
+      await tx.remove(_namespace, _smartKey);
     }),
   );
 
@@ -114,6 +135,7 @@ final class QueueSnapshotStore {
     Map<String, Object?> row,
     SessionFence fence, [
     Object? policyRow,
+    Object? smartRow,
   ]) {
     const keys = {
       'version',
@@ -142,7 +164,7 @@ final class QueueSnapshotStore {
     }
     // Bound leaves before JSON encoding so oversized scalar/nesting input
     // cannot cause an unbounded serialization here.
-    final entries = rawEntries.map(MusicCodec.decodeQueueEntry).toList();
+    var entries = rawEntries.map(MusicCodec.decodeQueueEntry).toList();
     final ids = entries.map((entry) => entry.entryId).toSet();
     if (ids.length != entries.length ||
         rawOrder.length != ids.length ||
@@ -178,6 +200,11 @@ final class QueueSnapshotStore {
     };
     if (utf8.encode(jsonEncode(row)).length > maxPayloadBytes) _invalid();
     final policy = RecommendationQueuePolicy.decode(policyRow, entries);
+    entries = SmartShuffleCheckpoint.restore(
+      smartRow,
+      entries,
+      rawOrder.cast<String>(),
+    );
     return QueueSnapshot(
       entries: entries,
       effectiveOrder: rawOrder.cast<String>(),

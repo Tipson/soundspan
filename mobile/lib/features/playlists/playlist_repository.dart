@@ -68,11 +68,40 @@ final class PlaylistRepository {
     final dto = collectionObject(
       await _request(_path(id), query: {'limit': '100', 'cursor': ?cursor}),
     );
+    return _decodePage(id, dto);
+  }
+
+  /// One bounded server snapshot; never stitches a changing playlist's pages.
+  Future<PlaylistDetail> snapshot(String id) async {
+    final page = _decodePage(
+      id,
+      collectionObject(await _request(_path(id))),
+      full: true,
+    );
+    return PlaylistDetail(
+      playlist: page.playlist,
+      items: page.items,
+      total: page.total,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
+    );
+  }
+
+  PlaylistPage _decodePage(
+    String id,
+    Map<String, Object?> dto, {
+    bool full = false,
+  }) {
     final playlist = PlaylistSummary.fromJson(dto);
     if (playlist.id != id) {
       throw collectionFailure(StateError('playlist identity'));
     }
-    final pagination = collectionObject(dto['pagination']);
+    if (full && (dto['truncated'] != false || dto['pagination'] != null)) {
+      throw collectionFailure(StateError('incomplete playlist snapshot'));
+    }
+    final pagination = full
+        ? <String, Object?>{'hasMore': false, 'nextCursor': null}
+        : collectionObject(dto['pagination']);
     if (pagination['hasMore'] is! bool) {
       throw collectionFailure(StateError('pagination'));
     }
@@ -112,8 +141,9 @@ final class PlaylistRepository {
       );
     }).toList();
     final total = collectionCount(dto['totalItemCount']);
-    if (items.length > 100 ||
+    if (items.length > (full ? 5000 : 100) ||
         items.length > total ||
+        (full && items.length != total) ||
         (hasMore && items.isEmpty)) {
       throw collectionFailure(StateError('item count'));
     }
