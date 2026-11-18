@@ -30,6 +30,7 @@ import 'offline_mix_repository.dart';
 import 'offline_mix_quota.dart';
 import 'download_verifier.dart';
 import 'download_worker_bridge.dart';
+import 'download_work_diagnostic.dart';
 import 'private_media_paths.dart';
 import 'offline_mix_daily_factory.dart';
 import 'offline_mix_refresh_admission.dart';
@@ -53,10 +54,16 @@ Future<void> runDownloadWorker({
   DownloadCoordinator? coordinator;
   bool stopped = false;
   bool started = false;
+  var phase = DownloadWorkerPhase.attach;
   Future<Map<String, Object?>>? running;
-  Map<String, Object?> outcome(String state, [int delay = 0]) => {
+  Map<String, Object?> outcome(
+    String state, [
+    int delay = 0,
+    Map<String, Object?>? diagnostic,
+  ]) => {
     'outcome': state,
     'retryAfterMillis': delay,
+    'diagnostic': diagnostic ?? DownloadWorkDiagnostic.capture(phase: phase),
   };
 
   Future<Map<String, Object?>> execute(Object? arguments) async {
@@ -77,6 +84,7 @@ Future<void> runDownloadWorker({
     VoidCallback? routeChanged;
     try {
       if (stopped) return outcome('cancelled');
+      phase = DownloadWorkerPhase.attach;
       client = BrokerClient(MethodChannelBrokerTransport());
       final authority = await NativeSessionAuthorityProxy.attach(
         client,
@@ -85,9 +93,12 @@ Future<void> runDownloadWorker({
       );
       if (stopped) return outcome('cancelled');
       await authority.assertCurrent(originalFence);
+      phase = DownloadWorkerPhase.storage;
       sessions = await SqliteSessionStore.open();
       final owners = SqliteOwnerStore(sessions);
+      phase = DownloadWorkerPhase.network;
       final policy = await loadNetworkPolicy(owners, originalFence);
+      phase = DownloadWorkerPhase.storage;
       final support = await getApplicationSupportDirectory();
       final canonicalSupport = await support.resolveSymbolicLinks();
       final paths = await PrivateMediaPaths.create(
@@ -107,6 +118,7 @@ Future<void> runDownloadWorker({
         client: DartJsonHttpClient(networkPolicy: policy),
         authority: authority,
       );
+      phase = DownloadWorkerPhase.network;
       deviceNetwork = DeviceNetworkMonitor();
       await deviceNetwork.start();
       final access = DownloadNetworkAccess(
@@ -153,10 +165,16 @@ Future<void> runDownloadWorker({
         ),
         networkPolicy: policy,
         revalidateNetwork: (job) async {
+          phase = DownloadWorkerPhase.network;
           await access.requireNetwork(job: job);
           await daily.requireFile(job);
+          phase = DownloadWorkerPhase.file;
         },
-        beforeWrite: const DeviceStorageGuard().requireSpace,
+        beforeWrite: (bytes) async {
+          phase = DownloadWorkerPhase.storage;
+          await const DeviceStorageGuard().requireSpace(bytes);
+          phase = DownloadWorkerPhase.file;
+        },
         reserveWrite: quota.reserveWrite,
         onWriterDrained: quota.writerDrained,
       );
@@ -179,9 +197,38 @@ Future<void> runDownloadWorker({
         return outcome('cancelled');
       }
       if (refreshRequest != null) {
+        phase = DownloadWorkerPhase.refresh;
         await daily.run(refreshRequest.revision);
-        return outcome('ready');
+        final diagnostic = await DownloadWorkDiagnostic.inspect(
+          phase: DownloadWorkerPhase.refresh,
+          read: () async {
+            final status = DownloadWorkDiagnostic.safeState(
+              await daily.readStatus(),
+            );
+            final pending = (await mixes.read()).pending;
+            if (pending != null) {
+              for (final item in pending.items.take(1000)) {
+                final job = await repository.status(
+                  item.downloadId,
+                  originalFence,
+                );
+                if (job != null &&
+                    job.generation == item.downloadGeneration &&
+                    job.originalFence.epoch == item.downloadEpoch &&
+                    job.state != DownloadState.ready) {
+                  return (
+                    code: job.errorCode,
+                    state: '$status/${job.state.name}',
+                  );
+                }
+              }
+            }
+            return (code: null, state: status);
+          },
+        );
+        return outcome('ready', 0, diagnostic);
       }
+      phase = DownloadWorkerPhase.file;
       final fileRequest = request!;
       if (fileRequest.refreshRevision != null) {
         final job = await repository.status(
@@ -231,10 +278,12 @@ Future<void> runDownloadWorker({
         originalFence,
         fileRequest.generation,
       );
+      Map<String, Object?>? manifestIssue;
       if (result == DownloadRunResult.ready) {
         // Manifest failure retains the last complete mix and the verified file.
         // It must not turn a completed transfer into a new download attempt.
         try {
+          phase = DownloadWorkerPhase.manifest;
           final pending = (await mixes.read()).pending;
           if (pending != null) {
             final ticket = await owners.transaction(
@@ -251,16 +300,19 @@ Future<void> runDownloadWorker({
               await mixes.commit(pending.generation);
             }
           }
-        } catch (_) {
+        } catch (error) {
+          manifestIssue = DownloadWorkDiagnostic.capture(
+            phase: DownloadWorkerPhase.manifest,
+            error: error,
+          );
           // The retained pending intent is retried by the owner's UI/recovery.
         }
       }
       var delay = 0;
+      DeviceDownload? latest;
       if (result == DownloadRunResult.retry) {
-        final latest = await repository.status(
-          fileRequest.downloadId,
-          originalFence,
-        );
+        phase = DownloadWorkerPhase.file;
+        latest = await repository.status(fileRequest.downloadId, originalFence);
         if (latest != null &&
             latest.originalFence == originalFence &&
             latest.generation == fileRequest.generation) {
@@ -269,15 +321,37 @@ Future<void> runDownloadWorker({
           delay = remaining > 0 ? remaining : 0;
         }
       }
-      return outcome(result.name, delay);
+      final diagnostic = await DownloadWorkDiagnostic.inspect(
+        phase: phase,
+        read: () async {
+          final job = result == DownloadRunResult.retry
+              ? latest
+              : await repository.status(fileRequest.downloadId, originalFence);
+          return job != null &&
+                  job.originalFence == originalFence &&
+                  job.generation == fileRequest.generation
+              ? (
+                  code: manifestIssue?['code'] as String? ?? job.errorCode,
+                  state: job.state.name,
+                )
+              : (code: manifestIssue?['code'] as String?, state: null);
+        },
+      );
+      return outcome(result.name, delay, diagnostic);
     } on AppFailure catch (error) {
       return outcome(
         error.retryable ? 'retry' : 'cancelled',
         error.retryAfter?.inMilliseconds ?? 0,
+        DownloadWorkDiagnostic.capture(phase: phase, error: error),
       );
-    } catch (_) {
-      return outcome('failed');
+    } catch (error) {
+      return outcome(
+        'failed',
+        0,
+        DownloadWorkDiagnostic.capture(phase: phase, error: error),
+      );
     } finally {
+      phase = DownloadWorkerPhase.drain;
       stopped = true;
       progress?.cancel();
       await coordinator?.close();
@@ -299,7 +373,13 @@ Future<void> runDownloadWorker({
       case 'run':
         if (started) throw StateError('Worker already started');
         started = true;
-        return await (running = execute(call.arguments));
+        return await (running = execute(call.arguments).catchError(
+          (Object error) => outcome(
+            'failed',
+            0,
+            DownloadWorkDiagnostic.capture(phase: phase, error: error),
+          ),
+        ));
       case 'cancel':
         stopped = true;
         await coordinator?.close();
