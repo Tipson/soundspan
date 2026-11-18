@@ -32,7 +32,7 @@ const ENV_CATEGORIES = {
     Audiobookshelf: ["AUDIOBOOKSHELF_URL", "AUDIOBOOKSHELF_API_KEY"],
     Audius: ["FEATURE_AUDIUS"],
     "Play Accounting": ["PLAY_CREATION_MODE", "PLAY_CREATION_COHORT_USER_IDS"],
-    "Docker Paths": ["MUSIC_PATH", "DOWNLOAD_PATH"],
+    "Docker Paths": ["MUSIC_PATH", "DOWNLOAD_PATH", "MOBILE_RELEASE_ROOT"],
     "Recommendations & Remote Analysis": [
         "RECOMMENDATION_ENGINE_MODE",
         "RECOMMENDATION_WAVE_SEQUENCE_ENABLED",

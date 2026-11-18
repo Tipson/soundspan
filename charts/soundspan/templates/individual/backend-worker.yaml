@@ -115,6 +115,7 @@ spec:
             "LOG_LEVEL" true
             "DOCS_PUBLIC" true
             "PLAY_CREATION_MODE" true
+            "MOBILE_RELEASE_ROOT" true
             "PLAY_CREATION_COHORT_USER_IDS" true
             "RECOMMENDATION_ENGINE_MODE" true
             "RECOMMENDATION_WAVE_SEQUENCE_ENABLED" true
@@ -441,6 +442,15 @@ spec:
             {{- else if not (kindIs "invalid" .Values.config.recommendations.traceEnabled) }}
             - name: RECOMMENDATION_TRACE_ENABLED
               value: {{ .Values.config.recommendations.traceEnabled | quote }}
+            {{- end }}
+            {{- if hasKey $backendWorkerEnv "MOBILE_RELEASE_ROOT" }}
+            {{- if not (kindIs "invalid" (index $backendWorkerEnv "MOBILE_RELEASE_ROOT")) }}
+            - name: MOBILE_RELEASE_ROOT
+              value: {{ index $backendWorkerEnv "MOBILE_RELEASE_ROOT" | quote }}
+            {{- end }}
+            {{- else if not (kindIs "invalid" .Values.config.mobileReleaseRoot) }}
+            - name: MOBILE_RELEASE_ROOT
+              value: {{ .Values.config.mobileReleaseRoot | quote }}
             {{- end }}
             {{- if hasKey $backendWorkerEnv "PLAY_CREATION_MODE" }}
             - name: PLAY_CREATION_MODE

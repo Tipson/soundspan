@@ -9,6 +9,8 @@
 
 ## Unreleased
 
+- Provide authenticated, non-cached Android update metadata from an optional read-only operator release tree, requiring a bound verification receipt and immutable same-origin APK paths. Keep upload and publication outside the application.
+
 - Gate keyed Play creation by an explicit bounded account cohort. Keep accepted receipt recovery available in replay-only mode, recheck admission after metadata preparation, and preserve legacy playback while activation defaults off.
 - Honor server-directed search wait times even when an error body is interrupted. Retire stale personal search responses after preference, saved-music and import changes while preserving available results and independent provider caches.
 - Preview finite smart shuffle from your playlist actions: keep every original occurrence in order, add admitted discoveries between tracks, and turn off future discoveries without interrupting playback or editing the saved playlist.

@@ -689,6 +689,8 @@ export const config = {
         30_000,
     ),
     nodeEnv: process.env.NODE_ENV || "development",
+    // Operator-owned metadata/APKs, mounted read-only. Unset means no release.
+    mobileReleaseRoot: process.env.MOBILE_RELEASE_ROOT?.trim() || undefined,
     // Jest worker detection for code that must skip live connections in tests.
     underJest: process.env.JEST_WORKER_ID !== undefined,
     get appVersion(): string {

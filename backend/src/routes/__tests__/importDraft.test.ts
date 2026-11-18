@@ -41,6 +41,7 @@ jest.mock(
 );
 
 import router from "../playlistImport";
+import { logger } from "../../utils/logger";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
 const app = createRouteTestApp("/api/import", router);
 
@@ -93,4 +94,34 @@ describe("owner import draft routes", () => {
         expect(result.status).toBe(400);
         expect(mockConfirmDraft).not.toHaveBeenCalled();
     });
+
+    it.each(["Error", "unknown"])(
+        "keeps unexpected %s failures generic in both HTTP and bounded logs",
+        async (classification) => {
+            const sensitive =
+                "sensitive-provider-token-and-private-upload-content";
+            const failure =
+                classification === "Error"
+                    ? Object.assign(new Error(sensitive), { name: sensitive })
+                    : { name: sensitive, message: sensitive };
+            mockCreateDraft.mockRejectedValueOnce(failure);
+            const result = await request(app)
+                .post("/api/import/drafts")
+                .set("x-test-owner", "owner-a")
+                .send({ format: "text", content: "Artist - Song" });
+            expect(result.status).toBe(500);
+            expect(result.body).toEqual({ error: "import_draft_failed" });
+            expect(logger.error).toHaveBeenCalledTimes(1);
+            expect(logger.error).toHaveBeenCalledWith(
+                "Import draft operation failed",
+                { errorType: classification },
+            );
+            expect(
+                JSON.stringify([
+                    result.body,
+                    (logger.error as jest.Mock).mock.calls,
+                ]),
+            ).not.toContain(sensitive);
+        },
+    );
 });

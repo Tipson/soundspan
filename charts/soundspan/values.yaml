@@ -691,6 +691,9 @@ metrics:
 # -- Common environment variables applied to backend (both modes)
 config:
   nodeEnv: production
+  # -- Optional absolute read-only operator release root. Null omits the env var.
+  #    Requires an operator-managed read-only mount; no release PVC is created.
+  mobileReleaseRoot: null
   # Can be overridden by setting LOG_LEVEL in a workload-specific env map
   # (for example aio.env, backend.env, or backendWorker.env).
   logLevel: warn

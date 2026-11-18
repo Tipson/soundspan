@@ -5,8 +5,70 @@ import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { config } from "../config";
 import { playAccounting } from "../services/playAccounting";
+import { readMobileRelease } from "../services/mobileReleases";
+import { sendRouteError } from "../utils/routeErrorResponse";
 
 const router = Router();
+const log = logger.child("SystemMobileRelease");
+
+/**
+ * @openapi
+ * /api/system/mobile-release/manifest:
+ *   get:
+ *     summary: Read the current verified operator-published Android release metadata
+ *     tags: [System]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: channel
+ *         required: true
+ *         schema: { type: string, enum: [stable, test] }
+ *     responses:
+ *       200:
+ *         description: Exact native updater v1 manifest. APK bytes are served separately at the immutable same-origin apkPath.
+ *       204:
+ *         description: No release is published for this channel.
+ *       400:
+ *         description: Invalid or ambiguous channel query.
+ *       401:
+ *         description: Not authenticated.
+ *       503:
+ *         description: Authentication or release verification metadata is unavailable.
+ */
+router.get(
+    "/mobile-release/manifest",
+    (_req, res, next) => {
+        res.setHeader("Cache-Control", "private, no-store");
+        next();
+    },
+    requireAuth,
+    async (req, res) => {
+        const query = new URL(req.originalUrl, "http://localhost").searchParams;
+        const channel = query.get("channel");
+        if (query.size !== 1 || (channel !== "stable" && channel !== "test")) {
+            return sendRouteError(res, 400, "Invalid mobile release channel", {
+                code: "INVALID_MOBILE_RELEASE_CHANNEL",
+            });
+        }
+        try {
+            const manifest = await readMobileRelease(
+                config.mobileReleaseRoot,
+                channel,
+            );
+            if (!manifest) return res.status(204).end();
+            // Avoid Express's automatic ETag/304 shortcut: this is a fresh admission check.
+            res.status(200)
+                .type("application/json")
+                .end(JSON.stringify(manifest));
+        } catch {
+            log.warn("Operator mobile release metadata is unavailable");
+            return sendRouteError(res, 503, "Mobile release unavailable", {
+                code: "MOBILE_RELEASE_UNAVAILABLE",
+            });
+        }
+    },
+);
 
 /**
  * @openapi

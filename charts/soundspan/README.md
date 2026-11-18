@@ -575,6 +575,14 @@ Notes:
 
 ### Environment Variable Precedence and Overrides
 
+`config.mobileReleaseRoot` defaults to `null`, omitting `MOBILE_RELEASE_ROOT`
+from API, worker and AIO workloads. Set an absolute in-container path to an
+operator-managed read-only release tree to enable release metadata. The
+workload-specific `backend.env`, `backendWorker.env` and `aio.env` maps take
+precedence; an explicit null override omits the variable. The chart does not
+create release storage or configure edge APK delivery. The worker never reads
+or publishes releases. See [Mobile updates](../../docs/MOBILE_UPDATES.md).
+
 Service `*.env` maps support pass-through overrides, including keys that the
 chart also sets by default. The reserved
 `vibeProviderDclap.env.DCLAP_HTTP_PORT` key is the exception; use

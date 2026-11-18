@@ -4,6 +4,7 @@ jest.mock("../../middleware/auth", () => ({
 
 jest.mock("../../utils/logger", () => ({
     logger: {
+        child: jest.fn(() => ({ warn: jest.fn() })),
         debug: jest.fn(),
         info: jest.fn(),
         warn: jest.fn(),

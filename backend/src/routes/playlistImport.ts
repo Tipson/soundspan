@@ -44,7 +44,7 @@ function draftRoute(
             if (error instanceof ImportDraftError)
                 return sendRouteError(res, error.status, error.code);
             log.error("Import draft operation failed", {
-                errorType: error instanceof Error ? error.name : "unknown",
+                errorType: error instanceof Error ? "Error" : "unknown",
             });
             return sendInternalRouteError(res, "import_draft_failed");
         }
