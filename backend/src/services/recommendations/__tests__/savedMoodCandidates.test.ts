@@ -180,7 +180,9 @@ test("unverified metadata alone cannot exclude a saved mood recording", async ()
     const { service, loadDislikedCanonicalKeys } = setup();
     loadDislikedCanonicalKeys.mockResolvedValue(new Set([saved.canonicalKey]));
     const feed = await service.getPersonalizedFeed(request);
-    expect(feed.shelves.quickPicks.map((track) => track.id)).toEqual([saved.id]);
+    expect(feed.shelves.quickPicks.map((track) => track.id)).toEqual([
+        saved.id,
+    ]);
 });
 test("the saved mood reserve cannot bypass current queue exclusions", async () => {
     const { service } = setup();

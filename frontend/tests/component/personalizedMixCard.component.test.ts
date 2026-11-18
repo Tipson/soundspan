@@ -110,7 +110,10 @@ test("snapshot refresh stays quiet and does not replace a playing mix", async ()
     );
     assert.equal(container.querySelector("time"), null);
     assert.match(container.textContent ?? "", /2 трека/);
-    assert.doesNotMatch(container.textContent ?? "", /меньше подходящих треков/i);
+    assert.doesNotMatch(
+        container.textContent ?? "",
+        /меньше подходящих треков/i,
+    );
     assert.equal(calls.length, 0);
     await act(async () => container.querySelector("button")?.click());
     assert.equal(calls.length, 1);

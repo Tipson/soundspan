@@ -25,13 +25,9 @@ jest.mock("../../services/personalDailyMixes", () => ({
 jest.mock("../../services/recommendations/exposureStore", () => ({
     recommendationExposureStore: {},
 }));
-jest.mock(
-    "../../services/recommendations/finiteQueueAdmission",
-    () => ({
-        readmitRecommendationQueue: (...args: unknown[]) =>
-            mockReadmit(...args),
-    }),
-);
+jest.mock("../../services/recommendations/finiteQueueAdmission", () => ({
+    readmitRecommendationQueue: (...args: unknown[]) => mockReadmit(...args),
+}));
 jest.mock("../../utils/logger", () => {
     const logger = {
         debug: jest.fn(),

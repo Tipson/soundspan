@@ -604,11 +604,9 @@ test("cleared Wave ordered tail retains the opaque continuation and its exact hi
         ),
     );
     personalizedFeed.current = { ...restartFeed([]), orderedWave: next };
-    fixture
-        .controls()
-        .playTracks(fixture.tracks, 0, true, {
-            orderedWave: { page: seed, owner },
-        });
+    fixture.controls().playTracks(fixture.tracks, 0, true, {
+        orderedWave: { page: seed, owner },
+    });
     await fixture.flush();
     assert.equal(currentTrackId(fixture.state), "wave-fresh");
     assert.equal(fixture.state.currentIndex, 3);
