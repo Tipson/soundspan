@@ -8,6 +8,129 @@ import { queryKeys, useDiscoverSearchQuery } from "../../hooks/useQueries";
 import { useSearchData } from "../../features/search/hooks/useSearchData";
 import { api } from "../../lib/api";
 
+test("an empty partial retry retains exact-query matches until a complete response replaces them", async () => {
+    const client = new QueryClient({
+        defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    });
+    const query = "Exact current query";
+    const key = queryKeys.discoverSearch(query, "music", 20, "tracks");
+    const retained = [
+        {
+            type: "track",
+            name: "Retained recording",
+            youtubeVideoId: "abcdefghijk",
+        },
+    ];
+    client.setQueryData(key, {
+        results: retained,
+        aliasInfo: null,
+        partialFailure: true,
+    });
+    let value!: ReturnType<typeof useDiscoverSearchQuery>;
+    function Probe() {
+        value = useDiscoverSearchQuery(query, "music", 20, "tracks");
+        return null;
+    }
+    const render = () =>
+        renderToStaticMarkup(
+            React.createElement(
+                QueryClientProvider,
+                { client },
+                React.createElement(Probe),
+            ),
+        );
+    const original = api.discoverSearch;
+    let partial = true;
+    api.discoverSearch = async (text, type, limit, _signal, scope) => {
+        assert.equal(text, query);
+        assert.equal(type, "music");
+        assert.equal(limit, 20);
+        assert.equal(scope, "tracks");
+        return { results: [], aliasInfo: null, partialFailure: partial };
+    };
+    try {
+        render();
+        await value.refetch({ cancelRefetch: false });
+        render();
+        assert.deepEqual(
+            value.data?.results,
+            retained,
+            "A provider partial-empty response must retain previously useful exact-query matches",
+        );
+        assert.equal(value.data?.partialFailure, true);
+        assert.equal(value.isStale, true);
+        partial = false;
+        await value.refetch({ cancelRefetch: false });
+        render();
+        assert.deepEqual(
+            value.data?.results,
+            [],
+            "A complete authoritative empty response must clear obsolete matches",
+        );
+        assert.equal(value.data?.partialFailure, false);
+    } finally {
+        api.discoverSearch = original;
+        client.clear();
+    }
+});
+
+for (const mismatch of ["query", "scope"] as const) {
+    test(`empty partial discovery cannot reuse another ${mismatch} cache`, async () => {
+        const client = new QueryClient({
+            defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+        });
+        client.setQueryData(
+            queryKeys.discoverSearch(
+                mismatch === "query" ? "Other query" : "Current query",
+                "music",
+                20,
+                mismatch === "scope" ? "artists" : "tracks",
+            ),
+            {
+                results: [
+                    {
+                        type: "track",
+                        name: "Unrelated",
+                        youtubeVideoId: "abcdefghijk",
+                    },
+                ],
+                aliasInfo: null,
+            },
+        );
+        const original = api.discoverSearch;
+        api.discoverSearch = async () => ({
+            results: [],
+            aliasInfo: null,
+            partialFailure: true,
+        });
+        let value!: ReturnType<typeof useDiscoverSearchQuery>;
+        function Probe() {
+            value = useDiscoverSearchQuery(
+                "Current query",
+                "music",
+                20,
+                "tracks",
+            );
+            return null;
+        }
+        try {
+            renderToStaticMarkup(
+                React.createElement(
+                    QueryClientProvider,
+                    { client },
+                    React.createElement(Probe),
+                ),
+            );
+            const result = await value.refetch({ cancelRefetch: false });
+            assert.deepEqual(result.data?.results, []);
+            assert.equal(result.data?.partialFailure, true);
+        } finally {
+            api.discoverSearch = original;
+            client.clear();
+        }
+    });
+}
+
 test("partial discovery is stale immediately while complete discovery keeps its normal cache", () => {
     for (const partialFailure of [true, false]) {
         const client = new QueryClient();

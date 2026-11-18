@@ -18,6 +18,8 @@ identity play directly; only metadata-only rows use provider fuzzy matching.
 An incomplete discovery response retains its successful matches, exposes a
 partial-catalogue notice and an explicit repeat action, and remains stale in
 the client cache. Successful complete discovery keeps its normal cache window.
+Empty partial replies retain useful matches only for the exact query, type,
+limit and scope. A complete empty reply clears those matches.
 The repeat action refreshes only unavailable sources. Overlapping retries share
 the in-flight personal search read and preserve healthy catalog results.
 Persisted YouTube, VK and Yandex favorites appear in an owner-scoped

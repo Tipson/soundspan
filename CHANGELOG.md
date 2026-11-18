@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Retain exact-query discovery matches when a provider returns an empty partial response. Keep the retry notice and stale cache policy; allow a complete empty response to clear obsolete matches.
 - Retry only unavailable search sources while preserving healthy catalog results. Surface complete private-library failures alongside partial favorite failures, and share overlapping personal-search retries through the existing query request instead of cancelling and starting another read.
 - Import bounded text lists and Spotify JSON exports through a private draft preview. Choose playlists, liked tracks, saved albums/artists and exact negatives independently; retain duplicate and unresolved positions, recover the same server job and keep legacy clients compatible. Hide the entry on unsupported servers.
 - Fail closed when a legacy AIO database cannot be baselined, and clear stale schema readiness before migration startup.

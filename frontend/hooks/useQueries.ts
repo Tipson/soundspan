@@ -657,8 +657,23 @@ export function useDiscoverSearchQuery(
 ) {
     return useQuery({
         queryKey: queryKeys.discoverSearch(query, type, limit, scope),
-        queryFn: ({ signal }) =>
-            api.discoverSearch(query, type, limit, signal, scope),
+        queryFn: async ({ signal, client, queryKey }) => {
+            const result = await api.discoverSearch(
+                query,
+                type,
+                limit,
+                signal,
+                scope,
+            );
+            if (!result.partialFailure || result.results.length > 0)
+                return result;
+            const previous = client.getQueryData<typeof result>(queryKey);
+            // A failed provider read is not an authoritative empty catalogue.
+            // Reuse only this exact query/type/limit/scope, keeping it stale.
+            return previous?.results.length
+                ? { ...result, results: previous.results }
+                : result;
+        },
         enabled: query.length >= 2,
         placeholderData: (previousData, previousQuery) =>
             preserveDiscoverPrefixData(
