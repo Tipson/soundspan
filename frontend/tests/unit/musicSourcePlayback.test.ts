@@ -33,7 +33,9 @@ for (const provider of ["vk", "yandex"] as const) {
         );
         assert.equal(isRemoteTrack(track), true);
         assert.equal(isPlaybackOnlyTrack(track), true);
-        assert.throws(() => toAddToPlaylistRef(track));
+        assert.deepEqual(toAddToPlaylistRef(track), {
+            musicSourceRecording: recording,
+        });
         assert.equal(
             normalizeActionableAudioTrack({
                 ...track,

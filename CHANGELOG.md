@@ -9,6 +9,7 @@
 
 ## Unreleased
 
+- Import bounded text lists and Spotify JSON exports through a private draft preview. Choose playlists, liked tracks, saved albums/artists and exact negatives independently; retain duplicate and unresolved positions, recover the same server job and keep legacy clients compatible. Hide the entry on unsupported servers.
 - Fail closed when a legacy AIO database cannot be baselined, and clear stale schema readiness before migration startup.
 - Show owner-liked YouTube albums separately in artist discographies without claiming local ownership. Match duplicate release groups by canonical identity while preserving distinct editions and exact playback links.
 - Resolve streaming album acquisition through confident MusicBrainz matches while preserving original playback identities. Reject ambiguous editions and incompatible musical versions, and avoid repeated acquisition when a visible library copy exists.

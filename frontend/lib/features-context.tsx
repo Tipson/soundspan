@@ -17,6 +17,7 @@ import { frontendLogger as sharedFrontendLogger } from "./logger";
 import type { VibeSystemStatus } from "./api/settings";
 
 interface FeaturesState {
+    importDrafts: boolean;
     musicCNN: boolean;
     vibeEmbeddings: boolean;
     audioAnalysis: boolean;
@@ -35,6 +36,7 @@ interface FeaturesState {
 // server-side, so they default true here to avoid hiding sections while the
 // first features fetch is in flight.
 const defaultState: FeaturesState = {
+    importDrafts: false,
     musicCNN: false,
     vibeEmbeddings: false,
     audioAnalysis: true,
@@ -83,6 +85,7 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
             ]);
             if (!isCurrent()) return;
             setState({
+                importDrafts: features.importDrafts?.version === 1,
                 accountId: userId,
                 musicCNN: features.musicCNN,
                 vibeEmbeddings: features.vibeEmbeddings,
@@ -106,6 +109,7 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
                 prev.loading || prev.accountId !== userId
                     ? {
                           accountId: userId,
+                          importDrafts: false,
                           musicCNN: false,
                           vibeEmbeddings: false,
                           audioAnalysis: true,
@@ -118,7 +122,7 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
                           showVersion: false,
                           loading: false,
                       }
-                    : prev,
+                    : { ...prev, importDrafts: false },
             );
         }
     }, [userId]);

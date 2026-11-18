@@ -41,7 +41,9 @@ for (const provider of ["youtube", "vk", "yandex"] as const) {
                       isrc: "USABC1234567",
                   });
         if (provider !== "youtube")
-            assert.throws(() => toAddToPlaylistRef(track));
+            assert.deepEqual(toAddToPlaylistRef(track), {
+                musicSourceRecording: track.musicSourceRecording,
+            });
         const log = mock.method(api, "logPlay", async () => ({
             id: "owned-play",
         }));

@@ -24,9 +24,11 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { formatTime } from "@/utils/formatTime";
 import { queryKeys } from "@/lib/queryKeys";
+import { useFeatures } from "@/lib/features-context";
+import { ImportDraftFlow } from "@/components/activity/ImportDraftFlow";
 
 type ImportStep = "input" | "preview" | "executing" | "complete";
-type ImportMode = "url" | "file";
+type ImportMode = "url" | "file" | "draft";
 
 function tryParsePlaylistUrl(rawInput: string): URL | null {
     const trimmed = rawInput.trim();
@@ -211,6 +213,8 @@ function ImportPageContent() {
     const searchParams = useSearchParams();
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { importDrafts: fileDraftsEnabled } = useFeatures();
+    const requestedDraftId = searchParams.get("draft");
     const hasAutoSubmitted = useRef(false);
     const jobSubmissionInFlightRef = useRef(false);
 
@@ -230,6 +234,12 @@ function ImportPageContent() {
     const [m3uContent, setM3uContent] = useState("");
     const [m3uPlaylistName, setM3uPlaylistName] = useState("");
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (fileDraftsEnabled && requestedDraftId) setImportMode("draft");
+        else if (!fileDraftsEnabled)
+            setImportMode((current) => (current === "draft" ? "url" : current));
+    }, [fileDraftsEnabled, requestedDraftId]);
 
     const handleM3uFileSelect = useCallback(
         (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -441,7 +451,39 @@ function ImportPageContent() {
                                 <FileUp className="w-4 h-4" />
                                 {ru.import.fileMode}
                             </button>
+                            {fileDraftsEnabled && (
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={importMode === "draft"}
+                                    onClick={() => setImportMode("draft")}
+                                    className={
+                                        "flex min-h-11 flex-1 items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light " +
+                                        (importMode === "draft"
+                                            ? "bg-surface-hover text-content"
+                                            : "text-content-muted hover:bg-surface-elevated")
+                                    }
+                                >
+                                    Текст / Spotify
+                                </button>
+                            )}
                         </div>
+
+                        {importMode === "draft" && fileDraftsEnabled && (
+                            <ImportDraftFlow
+                                initialDraftId={requestedDraftId}
+                                onDraftCreated={(id) =>
+                                    router.replace(
+                                        "/import?draft=" +
+                                            encodeURIComponent(id),
+                                        { scroll: false },
+                                    )
+                                }
+                                onReset={() =>
+                                    router.replace("/import", { scroll: false })
+                                }
+                            />
+                        )}
 
                         {importMode === "url" && (
                             <>

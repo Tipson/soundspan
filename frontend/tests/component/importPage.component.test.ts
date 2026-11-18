@@ -24,6 +24,11 @@ let invalidatedQueries: unknown[] = [];
 let holdBackgroundJobSubmission = false;
 let releaseBackgroundJobSubmission: (() => void) | null = null;
 let searchParamsValue = "";
+let fileDraftsEnabled = false;
+
+mock.module("@/lib/features-context", {
+    namedExports: { useFeatures: () => ({ importDrafts: fileDraftsEnabled }) },
+});
 
 const previewResponse = {
     playlistName: "Test Playlist",
@@ -130,6 +135,7 @@ beforeEach(() => {
     holdBackgroundJobSubmission = false;
     releaseBackgroundJobSubmission = null;
     searchParamsValue = "";
+    fileDraftsEnabled = false;
     executeCalls.length = 0;
     previewCalls.length = 0;
     m3uPreviewCalls.length = 0;
@@ -222,6 +228,18 @@ test("explains Spotify import boundaries and names the back button", async () =>
     );
 
     await unmount();
+});
+
+test("offers text/Spotify export only when the server advertises the draft protocol", async () => {
+    fileDraftsEnabled = true;
+    const { container, unmount } = await mountImportPage();
+    try {
+        const button = findButton(container, "Текст / Spotify");
+        assert.equal(button.getAttribute("role"), "tab");
+        assert.equal(container.querySelectorAll('[role="tab"]').length, 3);
+    } finally {
+        await unmount();
+    }
 });
 
 test("imports a public Spotify playlist link without an OAuth connection", async () => {

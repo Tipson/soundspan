@@ -801,6 +801,9 @@ describe("import job store", () => {
                 userId: "user-1",
                 status: {
                     in: [
+                        "draft",
+                        "previewing",
+                        "awaiting_confirmation",
                         "pending",
                         "resolving",
                         "creating_playlist",
@@ -997,6 +1000,9 @@ describe("import job store", () => {
                 normalizedSource: "spotify:37i9dQZF1DX4JAvHpjipBk",
                 status: {
                     in: [
+                        "draft",
+                        "previewing",
+                        "awaiting_confirmation",
                         "pending",
                         "resolving",
                         "creating_playlist",
@@ -1041,12 +1047,79 @@ describe("import job store", () => {
         const jobs = await importJobStore.listJobsForUser("user-1");
 
         expect(prisma.importJob.findMany).toHaveBeenCalledWith({
-            where: { userId: "user-1" },
+            where: {
+                userId: "user-1",
+                draftData: { equals: expect.anything() },
+            },
             orderBy: { updatedAt: "desc" },
             take: 25,
         });
         expect(jobs).toHaveLength(1);
         expect(jobs[0]?.normalizedSource).toBe("deezer:123");
+    });
+
+    it("filters draft SQL rows before the legacy limit and includes them only by explicit opt-in", async () => {
+        const { prisma } = setupImportJobStoreMocks();
+        const { Prisma } = require("@prisma/client");
+        const { importJobStore } = require("../importJobStore");
+        const make = (
+            id: string,
+            userId: string,
+            draft: boolean,
+            time: number,
+        ) => ({
+            id,
+            userId,
+            sourceType: draft ? "file-text" : "spotify",
+            sourceId: id,
+            sourceUrl: "file:fixture",
+            normalizedSource: `fixture:${id}`,
+            playlistName: id,
+            status: draft ? "draft" : "completed",
+            progress: 0,
+            summary: null,
+            resolvedTracks: null,
+            createdPlaylistId: null,
+            error: null,
+            draftData: draft ? { version: 1 } : null,
+            draftRevision: draft ? 1 : 0,
+            createdAt: new Date(time),
+            updatedAt: new Date(time),
+        });
+        const rows = [
+            ...Array.from({ length: 30 }, (_, i) =>
+                make(`draft-${i}`, "user-1", true, 1000 + i),
+            ),
+            ...Array.from({ length: 26 }, (_, i) =>
+                make(`legacy-${i}`, "user-1", false, i),
+            ),
+            make("foreign", "other", false, 2000),
+        ];
+        prisma.importJob.findMany.mockImplementation(
+            async ({ where, take }: any) =>
+                rows
+                    .filter(
+                        (row) =>
+                            row.userId === where.userId &&
+                            (where.draftData?.equals === Prisma.DbNull
+                                ? row.draftData === null
+                                : true),
+                    )
+                    .sort(
+                        (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+                    )
+                    .slice(0, take),
+        );
+        const legacy = await importJobStore.listJobsForUser("user-1");
+        expect(legacy).toHaveLength(25);
+        expect(legacy[0].id).toBe("legacy-25");
+        expect(legacy.every((row: any) => row.draftRevision === 0)).toBe(true);
+        const modern = await importJobStore.listJobsForUser("user-1", 25, {
+            includeDrafts: true,
+        });
+        expect(modern).toHaveLength(25);
+        expect(modern[0].id).toBe("draft-29");
+        expect(modern.some((row: any) => row.userId === "other")).toBe(false);
     });
 
     it("reopens an owned failed import when its visible playlist has unresolved positions", async () => {

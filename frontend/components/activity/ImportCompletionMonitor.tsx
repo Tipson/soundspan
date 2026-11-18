@@ -5,11 +5,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api, type ImportJobStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { queryKeys } from "@/lib/queryKeys";
+import { useFeatures } from "@/lib/features-context";
 
 const IMPORT_JOB_POLL_INTERVAL_MS = 3000;
 const IMPORT_JOB_BOOTSTRAP_MAX_RETRIES = 3;
 const CANCELLED_JOB_CONFIRMATION_MAX_POLLS = 10;
 const ACTIVE_IMPORT_JOB_STATUSES = new Set<ImportJobStatus>([
+    "previewing",
     "pending",
     "resolving",
     "creating_playlist",
@@ -24,6 +26,11 @@ function isActiveImportJobStatus(status: ImportJobStatus): boolean {
  * Keeps durable import completions connected to browser caches and playlist UI.
  */
 export function ImportCompletionMonitor() {
+    const { importDrafts: fileDraftsEnabled } = useFeatures();
+    const draftProtocolRef = useRef(fileDraftsEnabled);
+    useEffect(() => {
+        draftProtocolRef.current = fileDraftsEnabled;
+    }, [fileDraftsEnabled]);
     const { isAuthenticated, isLoading, user } = useAuth();
     const queryClient = useQueryClient();
     const queryClientRef = useRef(queryClient);
@@ -68,13 +75,22 @@ export function ImportCompletionMonitor() {
         shouldPollRef.current = true;
     }, []);
 
-    const publishCompletion = useCallback(() => {
+    const publishCompletion = useCallback((includesDraft = false) => {
         void queryClientRef.current.invalidateQueries({
             queryKey: queryKeys.playlists(),
         });
         void queryClientRef.current.invalidateQueries({
             queryKey: queryKeys.personalizedHomeAll(),
         });
+        if (includesDraft) {
+            for (const queryKey of [
+                queryKeys.likedPlaylistAll(),
+                queryKeys.savedMusicAll(),
+                queryKeys.savedMusicSearchAll(),
+                queryKeys.mixes(),
+            ])
+                void queryClientRef.current.invalidateQueries({ queryKey });
+        }
         window.dispatchEvent(new CustomEvent("playlist-created"));
         window.dispatchEvent(new CustomEvent("notifications-changed"));
         window.dispatchEvent(new CustomEvent("import-jobs-changed"));
@@ -97,6 +113,7 @@ export function ImportCompletionMonitor() {
             );
             const observedJobIds = new Set<string>();
             let sawCompletion = false;
+            let sawDraftCompletion = false;
             for (const job of jobs) {
                 observedJobIds.add(job.id);
                 const previousStatus = previousStatuses.get(job.id);
@@ -117,6 +134,7 @@ export function ImportCompletionMonitor() {
                 );
                 if (completedBecameVisible || playlistBecameVisible) {
                     sawCompletion = true;
+                    if ((job.draftRevision ?? 0) > 0) sawDraftCompletion = true;
                 }
                 if (createdPlaylistId) {
                     knownCreatedPlaylistIds.set(job.id, createdPlaylistId);
@@ -182,7 +200,7 @@ export function ImportCompletionMonitor() {
                 hasActiveJobsRef.current ||
                 submittedJobIds.size > 0 ||
                 cancelledJobConfirmationPolls.size > 0;
-            if (sawCompletion) publishCompletion();
+            if (sawCompletion) publishCompletion(sawDraftCompletion);
         },
         [publishCompletion, resetBootstrapRetry],
     );
@@ -215,7 +233,9 @@ export function ImportCompletionMonitor() {
                         ReturnType<typeof api.listImportJobs>
                     > | null = null;
                     try {
-                        data = await api.listImportJobs();
+                        data = draftProtocolRef.current
+                            ? await api.listImportJobs({ includeDrafts: true })
+                            : await api.listImportJobs();
                     } catch {
                         if (
                             activeLifecycleRef.current === lifecycle &&
@@ -277,7 +297,7 @@ export function ImportCompletionMonitor() {
                 refreshPendingRef.current = false;
             }
         };
-    }, [enabled, loadJobs, resetBootstrapRetry, user?.id]);
+    }, [enabled, loadJobs, resetBootstrapRetry, user?.id, fileDraftsEnabled]);
 
     useEffect(() => {
         const handleJobsChanged = (event: Event) => {

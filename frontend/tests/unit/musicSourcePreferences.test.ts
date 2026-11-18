@@ -94,7 +94,9 @@ for (const [provider, nativeId] of [
         assert.equal(normalizeActionableAudioTrack(track)?.id, row.id);
         assert.deepEqual(toLikedTrackActionTarget(row), track);
         assert.equal(isPlaybackOnlyTrack(track), true);
-        assert.throws(() => toAddToPlaylistRef(track));
+        assert.deepEqual(toAddToPlaylistRef(track), {
+            musicSourceRecording: row.musicSourceRecording,
+        });
     });
     test(`${provider} preference identity does not become an incidental YouTube or TIDAL ID`, () => {
         assert.equal(

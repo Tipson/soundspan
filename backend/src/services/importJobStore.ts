@@ -10,6 +10,9 @@ import {
  * Lifecycle statuses used by generic import jobs.
  */
 export type ImportJobLifecycleStatus =
+    | "draft"
+    | "previewing"
+    | "awaiting_confirmation"
     | "pending"
     | "resolving"
     | "creating_playlist"
@@ -45,6 +48,10 @@ export interface StoredImportJob {
     progress: number;
     summary: ImportJobSummary;
     resolvedTracks: Prisma.JsonValue | null;
+    draftData?: Prisma.JsonValue | null;
+    draftRevision?: number;
+    confirmedSnapshot?: Prisma.JsonValue | null;
+    draftResult?: Prisma.JsonValue | null;
     createdPlaylistId: string | null;
     resolutionStartedAt: Date | null;
     resolutionProcessed: number;
@@ -69,6 +76,8 @@ export interface CreateImportJobInput {
     progress?: number;
     summary: ImportJobSummary;
     resolvedTracks?: Prisma.InputJsonValue;
+    draftData?: Prisma.InputJsonValue;
+    draftRevision?: number;
 }
 
 /**
@@ -110,6 +119,9 @@ export type RequestImportJobRetryResult =
     | { outcome: "conflict"; job: StoredImportJob };
 
 const ACTIVE_IMPORT_JOB_STATUSES: ImportJobLifecycleStatus[] = [
+    "draft",
+    "previewing",
+    "awaiting_confirmation",
     "pending",
     "resolving",
     "creating_playlist",
@@ -265,6 +277,12 @@ class ImportJobStore {
                 summary: toImportSummaryJson(input.summary),
                 ...(input.resolvedTracks !== undefined
                     ? { resolvedTracks: input.resolvedTracks }
+                    : {}),
+                ...(input.draftData !== undefined
+                    ? {
+                          draftData: input.draftData,
+                          draftRevision: input.draftRevision ?? 1,
+                      }
                     : {}),
                 createdPlaylistId: null,
                 error: null,
@@ -424,6 +442,13 @@ class ImportJobStore {
                                 ...(input.resolvedTracks !== undefined
                                     ? {
                                           resolvedTracks: input.resolvedTracks,
+                                      }
+                                    : {}),
+                                ...(input.draftData !== undefined
+                                    ? {
+                                          draftData: input.draftData,
+                                          draftRevision:
+                                              input.draftRevision ?? 1,
                                       }
                                     : {}),
                                 createdPlaylistId: null,
@@ -660,14 +685,20 @@ class ImportJobStore {
     }
 
     /**
-     * Lists generic import jobs for a user, newest first.
+     * Lists owner jobs, keeping draft-only statuses out of legacy clients before paging.
      */
     async listJobsForUser(
         userId: string,
         limit = 25,
+        options: { includeDrafts?: boolean } = {},
     ): Promise<StoredImportJob[]> {
         const jobs = await prisma.importJob.findMany({
-            where: { userId },
+            where: {
+                userId,
+                ...(options.includeDrafts === true
+                    ? {}
+                    : { draftData: { equals: Prisma.DbNull } }),
+            },
             orderBy: { updatedAt: "desc" },
             take: limit,
         });

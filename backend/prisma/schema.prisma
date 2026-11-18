@@ -975,6 +975,13 @@ model ImportJob {
   progress              Int       @default(0)
   summary               Json
   resolvedTracks        Json?
+  /// Owner-only normalized upload and its revision-bound matching preview.
+  draftData             Json?
+  draftRevision         Int       @default(0)
+  /// Immutable explicit category selection and server matching identities.
+  confirmedSnapshot     Json?
+  /// Committed effect IDs and durable postcommit private-cache invalidation.
+  draftResult           Json?
   createdPlaylistId     String?
   resolutionStartedAt   DateTime?
   resolutionProcessed   Int       @default(0)

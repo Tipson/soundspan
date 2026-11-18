@@ -48,6 +48,7 @@ const mockDeezerService = {
 };
 
 const mockYtMusicService = {
+    getSong: jest.fn(),
     findMatchesForAlbum: jest.fn(),
     getBrowsePlaylist: jest.fn(),
     restoreOAuthWithCredentials: jest.fn(),
@@ -90,6 +91,70 @@ import {
     playlistImportService,
     type PlaylistImportProgressEvent,
 } from "../playlistImportService";
+import { parseImportDraftUpload } from "../importDraftParser";
+
+describe("read-only uploaded draft matching", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockPrisma.track.findMany.mockResolvedValue([]);
+        mockYtMusicService.findMatchesForAlbum.mockResolvedValue([
+            { videoId: "draft_video", title: "Provider title", duration: 100 },
+        ]);
+        mockYtMusicService.getSong.mockResolvedValue({
+            videoId: "draft_video",
+            title: "Provider title",
+            artist: "Provider artist",
+            duration: 100,
+        });
+    });
+    it("returns provider-verified preview metadata without namespace or collection writes", async () => {
+        const draft = parseImportDraftUpload({
+            format: "text",
+            content: "Untrusted artist - Input title",
+        });
+        const rows = await playlistImportService.matchDraftTracks(
+            draft.entries,
+        );
+        expect(rows).toEqual([
+            expect.objectContaining({
+                source: "youtube",
+                videoId: "draft_video",
+                title: "Provider title",
+                artist: "Provider artist",
+                confidence: 85,
+            }),
+        ]);
+        expect(
+            mockTrackMappingService.upsertTrackYtMusic,
+        ).not.toHaveBeenCalled();
+        expect(mockPrisma.trackYtMusic.upsert).not.toHaveBeenCalled();
+        expect(mockPrisma.playlist.create).not.toHaveBeenCalled();
+    });
+    it("does not fuzzy-rematch a missing explicit local reference", async () => {
+        const draft = parseImportDraftUpload({
+            format: "text",
+            content: "library:missing\tArtist\tTitle",
+        });
+        expect(
+            await playlistImportService.matchDraftTracks(draft.entries),
+        ).toEqual([{ source: "unresolved", confidence: 0 }]);
+        expect(mockYtMusicService.findMatchesForAlbum).not.toHaveBeenCalled();
+    });
+    it("rejects a mismatching provider song identity and retains its original position", async () => {
+        mockYtMusicService.getSong.mockResolvedValue({
+            videoId: "different",
+            title: "Other",
+            artist: "Artist",
+        });
+        const draft = parseImportDraftUpload({
+            format: "text",
+            content: "Artist - Title",
+        });
+        expect(
+            await playlistImportService.matchDraftTracks(draft.entries),
+        ).toEqual([{ source: "unresolved", confidence: 0 }]);
+    });
+});
 
 describe("PlaylistImportService", () => {
     beforeEach(() => {

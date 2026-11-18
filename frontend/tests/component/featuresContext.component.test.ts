@@ -13,7 +13,10 @@ const apiState = {
     uiSettingsCalls: 0,
     pendingFeatures: null as Promise<void> | null,
     federation: true,
+    importDrafts: undefined as unknown,
+    failFeatures: false,
 };
+let observedDraftCapability = false;
 const authState = {
     isAuthenticated: true,
     isLoading: false,
@@ -27,7 +30,10 @@ const apiExports = {
     api: {
         getFeatures: async () => {
             apiState.featuresCalls += 1;
+            if (apiState.failFeatures)
+                throw Error("fixture capabilities unavailable");
             const federation = apiState.federation;
+            const importDrafts = apiState.importDrafts;
             if (apiState.pendingFeatures) await apiState.pendingFeatures;
             return {
                 musicCNN: false,
@@ -36,6 +42,7 @@ const apiExports = {
                 discovery: true,
                 autoPlaylists: true,
                 federation,
+                importDrafts,
                 vibe: {
                     provider: {
                         configured: true,
@@ -72,6 +79,9 @@ beforeEach(() => {
     apiState.uiSettingsCalls = 0;
     apiState.pendingFeatures = null;
     apiState.federation = true;
+    apiState.importDrafts = undefined;
+    apiState.failFeatures = false;
+    observedDraftCapability = false;
     authState.isAuthenticated = true;
     authState.isLoading = false;
     authState.user = { id: "alice" };
@@ -108,7 +118,8 @@ async function mountProvider() {
     const root = createRoot(container);
 
     function Consumer() {
-        const { loading, federation } = useFeatures();
+        const { loading, federation, importDrafts } = useFeatures();
+        observedDraftCapability = importDrafts;
         return React.createElement(
             "span",
             null,
@@ -165,6 +176,39 @@ test("refreshes exactly once when a hidden tab becomes visible", async (t) => {
 
     assert.equal(apiState.featuresCalls, 2);
     assert.equal(apiState.uiSettingsCalls, 2);
+});
+
+test("draft entry is hidden for legacy, malformed and unknown capabilities and shown only for version1", async () => {
+    for (const [raw, expected] of [
+        [undefined, false],
+        [null, false],
+        [{ version: "1" }, false],
+        [{ version: 2 }, false],
+        [{ version: 1 }, true],
+    ] as const) {
+        apiState.importDrafts = raw;
+        const h = await mountProvider();
+        try {
+            assert.equal(observedDraftCapability, expected);
+        } finally {
+            await h.unmount();
+        }
+    }
+});
+
+test("a failed capability refresh retires the draft entry without carrying support across uncertainty", async () => {
+    apiState.importDrafts = { version: 1 };
+    const h = await mountProvider();
+    try {
+        assert.equal(observedDraftCapability, true);
+        apiState.failFeatures = true;
+        await changeVisibility("hidden");
+        await dispatchTabReturn();
+        await flushMicrotasks();
+        assert.equal(observedDraftCapability, false);
+    } finally {
+        await h.unmount();
+    }
 });
 
 test("does not refresh on the interval while hidden", async (t) => {

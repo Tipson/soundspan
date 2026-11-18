@@ -233,7 +233,7 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
     },
 });
 
-test("service catalog menu downloads an exact recording and does not offer unsupported playlist writes", async () => {
+test("service catalog menu downloads an exact recording and offers its supported playlist write", async () => {
     const { createRoot } = await import("react-dom/client");
     const { TrackOverflowMenu } =
         await import("../../components/ui/TrackOverflowMenu");
@@ -268,7 +268,7 @@ test("service catalog menu downloads an exact recording and does not offer unsup
             ),
         ];
         assert.ok(
-            !buttons.some(
+            buttons.some(
                 (button) => button.textContent === ru.trackMenu.addPlaylist,
             ),
         );

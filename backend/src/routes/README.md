@@ -141,6 +141,42 @@ not a router; it pins one representation for each YouTube playback attempt.
 | `backend/src/routes/youtubeMusicStreamProxyErrors.ts` | Typed YouTube Music stream-proxy error responses; not a router                         |
 | `backend/src/routes/youtubeMusicUnavailableRecovery.ts` | Unavailable-track recovery sub-router under `/api/ytmusic`                              |
 
+### File Import Drafts
+
+`/api/import/drafts` stores owner-only text or Spotify JSON exports on the existing
+`ImportJob` journal. Uploads are bounded to 512 KiB of decoded UTF-8, 1,000 entries
+and 100 playlist groups; excessive input is rejected without truncation. Text
+accepts `Artist - Title`, tab-separated artist/title, or an exact `yt:`/`library:`
+reference followed by artist and title. Spotify exports keep playlists, saved
+tracks, albums, artists and banned-track intent as separate categories.
+
+Create and edit have no collection effects. Preview performs read-only matching
+and returns per-entry confidence and unresolved reasons. Confirmation requires
+the current draft revision, preview revision, server mapping digest and an
+explicit category selection; client-supplied matching IDs are rejected. Editing
+retires previous matching authority. The confirmed snapshot is immutable, and
+duplicate worker deliveries return the same committed effect IDs.
+
+Playlist occurrences, repeated recordings and unresolved positions retain their
+original order. Album/artist saves preserve exact provider identities. Likes and
+dislikes are independent opt-ins; an unresolved Spotify recording does not become
+a fuzzy negative. Existing opposite manual preferences are retained as conflicts.
+Result counters describe processed selected occurrences; the immutable snapshot
+retains every source position even when a preference or saved identity is a set.
+Imports do not submit listening events, start downloads or promote canonical
+identity. Collection effects, completion and the existing import notification
+commit together. Private mix-cache invalidation runs after commit and is retried
+from the journal; mix responses also readmit current owner negatives before serving
+cached composition. URL, M3U and Yandex imports retain their existing paths.
+
+`GET /api/import/jobs` excludes file drafts in its database predicate before the
+history limit, preserving legacy clients' strict job-status contract. Draft-aware
+clients opt in with `includeDrafts=1` and use the separate draft DTO. The optional
+`/api/system/features` capability `importDrafts: { version: 1 }` admits the file
+entry; absent or unknown versions keep it hidden. A rollback must retain this
+read-compatible history behavior while file drafts exist; replacing the API with
+an unpatched older image does not provide that guarantee.
+
 ### Library Submodules
 
 `backend/src/routes/library.ts` is a compatibility re-export of

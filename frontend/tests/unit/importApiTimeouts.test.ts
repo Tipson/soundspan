@@ -47,3 +47,41 @@ test("previewPlaylistImport uses the extended import-preview timeout", async () 
     assert.equal(client.calls[0].endpoint, "/import/preview");
     assert.equal(client.calls[0].timeoutMs, IMPORT_PREVIEW_TIMEOUT_MS);
 });
+
+test("file draft API keeps revision/digest confirmation on the existing authenticated boundary", async () => {
+    const calls: Array<{ endpoint: string; options: RequestInit }> = [];
+    class DraftCore extends ApiClientCore {
+        override async request<T>(
+            endpoint: string,
+            options: RequestInit = {},
+        ): Promise<T> {
+            calls.push({ endpoint, options });
+            return { job: { id: "draft-1" } } as T;
+        }
+    }
+    const client = new (WithImports(DraftCore))();
+    const upload = { format: "text" as const, content: "Artist - Song" };
+    await client.createImportDraft(upload);
+    await client.getImportDraft("draft/id");
+    await client.updateImportDraft("draft/id", { ...upload, revision: 2 });
+    await client.previewImportDraft("draft/id", 3);
+    const confirmation = {
+        revision: 3,
+        previewRevision: 4,
+        mappingDigest: "a".repeat(64),
+        categories: ["playlists" as const],
+    };
+    await client.confirmImportDraft("draft/id", confirmation);
+    assert.deepEqual(
+        calls.map((call) => call.endpoint),
+        [
+            "/import/drafts",
+            "/import/drafts/draft%2Fid",
+            "/import/drafts/draft%2Fid",
+            "/import/drafts/draft%2Fid/preview",
+            "/import/drafts/draft%2Fid/confirm",
+        ],
+    );
+    assert.equal(calls[2].options.method, "PUT");
+    assert.deepEqual(JSON.parse(calls[4].options.body as string), confirmation);
+});

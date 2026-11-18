@@ -10,6 +10,11 @@ GlobalRegistrator.register();
 
 let jobsResponse: Array<Record<string, unknown>> = [];
 let listCalls = 0;
+let draftsCapable = false;
+const listOptions: unknown[] = [];
+mock.module("@/lib/features-context", {
+    namedExports: { useFeatures: () => ({ importDrafts: draftsCapable }) },
+});
 let retryCalls: string[] = [];
 let cancelCalls = 0;
 let pushedRoutes: string[] = [];
@@ -20,7 +25,8 @@ let retryImportJobImpl = async (_jobId: string) => ({ job: jobsResponse[0] });
 mock.module("@/lib/api", {
     namedExports: {
         api: {
-            listImportJobs: async () => {
+            listImportJobs: async (options?: unknown) => {
+                listOptions.push(options);
                 listCalls += 1;
                 return listImportJobsImpl();
             },
@@ -69,6 +75,8 @@ after(() => {
 beforeEach(() => {
     jobsResponse = [];
     listCalls = 0;
+    draftsCapable = false;
+    listOptions.length = 0;
     retryCalls = [];
     cancelCalls = 0;
     pushedRoutes = [];
@@ -76,6 +84,44 @@ beforeEach(() => {
     cancelImportJobImpl = async () => ({});
     retryImportJobImpl = async (_jobId: string) => ({ job: jobsResponse[0] });
     document.body.replaceChildren();
+});
+
+test("draft-aware activity opts in and resumes a retained preview instead of legacy retry", async () => {
+    draftsCapable = true;
+    jobsResponse = [
+        {
+            id: "draft-file",
+            sourceType: "file-text",
+            draftRevision: 1,
+            status: "awaiting_confirmation",
+            playlistName: "Retained file",
+            createdAt: "2026-11-18T00:00:00.000Z",
+            summary: { total: 1, unresolved: 1 },
+        },
+    ];
+    const { ImportsTab } = await import("../../components/activity/ImportsTab");
+    const { createRoot } = await import("react-dom/client");
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+        await React.act(async () =>
+            root.render(React.createElement(ImportsTab)),
+        );
+        await flushAsync();
+        assert.deepEqual(listOptions[0], { includeDrafts: true });
+        assert.match(host.textContent!, /Нужно подтверждение/);
+        const resume = [...host.querySelectorAll("button")].find((b) =>
+            b.textContent?.includes("Продолжить импорт"),
+        );
+        assert.ok(resume);
+        await React.act(async () => resume.click());
+        assert.deepEqual(pushedRoutes, ["/import?draft=draft-file"]);
+        assert.deepEqual(retryCalls, []);
+    } finally {
+        await React.act(async () => root.unmount());
+        host.remove();
+    }
 });
 
 test("shows the playlist immediately while unresolved tracks continue in the background", async () => {

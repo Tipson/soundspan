@@ -16,6 +16,7 @@ import {
 import { SpotifyPlaylistPaginationError } from "./spotifyPlaylistPagination";
 import { YandexPlaylistImportError } from "./yandexPlaylistImport";
 import { backgroundPlaylistImport } from "./backgroundPlaylistImport";
+import type { ImportDraftFence } from "./importDraftService";
 
 const log = logger.child("GenericImportJobRunner");
 const RUN_JOB_NAME = "generic-import-run";
@@ -24,6 +25,7 @@ const RECOVERY_BATCH_SIZE = 100;
 const RECOVERY_INTERVAL_MS = 60_000;
 const SAFE_FAILURE_MESSAGE = "Generic import job failed";
 const ACTIVE_IMPORT_JOB_STATUSES = [
+    "previewing",
     "pending",
     "resolving",
     "creating_playlist",
@@ -107,9 +109,11 @@ const IMPORT_SNAPSHOT_SOURCES = new Set([
 interface RunJobOptions {
     retryFailures?: boolean;
     finalAttempt?: boolean;
+    draftFence?: ImportDraftFence;
 }
 
 class ImportJobCancelledError extends Error {}
+class ImportDraftExecutionRetryError extends Error {}
 class ImportJobTerminalError extends Error {}
 class ImportJobSupersededError extends Error {}
 
@@ -331,15 +335,21 @@ export class GenericImportJobRunner {
     /**
      * Supervises durable queue insertion for an API-created import job.
      */
-    enqueue(jobId: string, resolutionAttempt = 0): void {
-        void this.enqueuePersistedJob(jobId, resolutionAttempt).catch(
-            (error) => {
-                log.error("Failed to enqueue persisted import job", {
-                    jobId,
-                    error,
-                });
-            },
-        );
+    enqueue(
+        jobId: string,
+        resolutionAttempt = 0,
+        draftFence?: ImportDraftFence,
+    ): void {
+        void this.enqueuePersistedJob(
+            jobId,
+            resolutionAttempt,
+            draftFence,
+        ).catch((error) => {
+            log.error("Failed to enqueue persisted import job", {
+                jobId,
+                error,
+            });
+        });
     }
 
     /**
@@ -374,9 +384,20 @@ export class GenericImportJobRunner {
      */
     async recoverActiveJobs(): Promise<number> {
         const jobs = await prisma.importJob.findMany({
-            where: { status: { in: [...ACTIVE_IMPORT_JOB_STATUSES] } },
+            where: {
+                OR: [
+                    { status: { in: [...ACTIVE_IMPORT_JOB_STATUSES] } },
+                    {
+                        status: "completed",
+                        draftResult: {
+                            path: ["invalidationPending"],
+                            equals: true,
+                        },
+                    },
+                ],
+            },
             orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
-            select: { id: true, resolutionAttempt: true },
+            select: { id: true, resolutionAttempt: true, draftRevision: true },
             take: RECOVERY_BATCH_SIZE,
         });
 
@@ -388,7 +409,17 @@ export class GenericImportJobRunner {
         ) {
             const job = jobs[index];
             if (job) {
-                await this.enqueuePersistedJob(job.id, job.resolutionAttempt);
+                await this.enqueuePersistedJob(
+                    job.id,
+                    job.resolutionAttempt,
+                    job.draftRevision > 0
+                        ? {
+                              version: 1,
+                              revision: job.draftRevision,
+                              attempt: job.resolutionAttempt,
+                          }
+                        : undefined,
+                );
                 recoveredCount += 1;
             }
         }
@@ -406,8 +437,13 @@ export class GenericImportJobRunner {
      */
     async runJob(jobId: string, options: RunJobOptions = {}): Promise<void> {
         try {
-            await this.executeJob(jobId);
+            await this.executeJob(jobId, options);
         } catch (error) {
+            if (error instanceof ImportDraftExecutionRetryError) {
+                if (options.retryFailures)
+                    throw new Error("Import draft execution failed");
+                return;
+            }
             if (error instanceof ImportJobCancelledError) {
                 await this.finishCancellation(jobId);
                 return;
@@ -433,8 +469,18 @@ export class GenericImportJobRunner {
     /**
      * Marks a persisted job failed when Bull exhausts lease or processor recovery.
      */
-    async finalizeQueueFailure(jobId: string, error: unknown): Promise<void> {
-        if (await this.reconcileCommittedPlaylist(jobId)) {
+    async finalizeQueueFailure(
+        jobId: string,
+        error: unknown,
+        draftFence?: ImportDraftFence,
+    ): Promise<void> {
+        const current = await importJobStore.getJob(jobId);
+        if (current?.draftData) {
+            const { importDraftService } = await import("./importDraftService");
+            await importDraftService.finalizeQueueFailure(jobId, draftFence);
+            return;
+        }
+        if (await this.reconcileCommittedPlaylist(jobId, current)) {
             log.warn("Reconciled committed import after queue failure", {
                 jobId,
                 error,
@@ -453,14 +499,16 @@ export class GenericImportJobRunner {
     private async enqueuePersistedJob(
         jobId: string,
         resolutionAttempt = 0,
+        draftFence?: ImportDraftFence,
     ): Promise<void> {
         if (!jobId.trim()) {
             throw new Error("Generic import job id is required");
         }
-        const queueJobId =
-            resolutionAttempt > 1
-                ? `${jobId}:resolution:${resolutionAttempt}`
-                : jobId;
+        const queueJobId = draftFence
+            ? `${jobId}:draft:${draftFence.revision}:${draftFence.attempt}`
+            : resolutionAttempt > 1
+              ? `${jobId}:resolution:${resolutionAttempt}`
+              : jobId;
         const existingJob = await genericImportQueue.getJob(queueJobId);
         if (existingJob) {
             const state = await existingJob.getState();
@@ -468,19 +516,32 @@ export class GenericImportJobRunner {
                 await this.finalizeQueueFailure(
                     jobId,
                     new Error(`Queue job is terminal in state ${state}`),
+                    draftFence,
                 );
             }
             return;
         }
         await genericImportQueue.add(
             RUN_JOB_NAME,
-            { jobId },
+            { jobId, ...(draftFence ? { draftFence } : {}) },
             { jobId: queueJobId },
         );
     }
 
-    private async executeJob(jobId: string): Promise<void> {
+    private async executeJob(
+        jobId: string,
+        options: RunJobOptions = {},
+    ): Promise<void> {
         const initialJob = await importJobStore.getJob(jobId);
+        if (initialJob?.draftData) {
+            const { importDraftService } = await import("./importDraftService");
+            try {
+                await importDraftService.runJob(jobId, options);
+            } catch {
+                throw new ImportDraftExecutionRetryError();
+            }
+            return;
+        }
         if (!initialJob || isTerminalStatus(initialJob.status)) {
             return;
         }
@@ -803,8 +864,14 @@ export class GenericImportJobRunner {
         return nonRetryable ? false : failed;
     }
 
-    private async reconcileCommittedPlaylist(jobId: string): Promise<boolean> {
-        const job = await importJobStore.getJob(jobId);
+    private async reconcileCommittedPlaylist(
+        jobId: string,
+        knownJob?: StoredImportJob | null,
+    ): Promise<boolean> {
+        const job =
+            knownJob === undefined
+                ? await importJobStore.getJob(jobId)
+                : knownJob;
         if (!job) {
             return false;
         }

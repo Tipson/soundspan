@@ -106,6 +106,7 @@ describe("system routes runtime", () => {
             autoPlaylists: true,
             loudnessTargetLufs: -18,
             audius: false,
+            importDrafts: { version: 1 },
             playCreation: expect.objectContaining({
                 version: 1,
                 ownerHistoryEpoch: 0,
@@ -113,6 +114,17 @@ describe("system routes runtime", () => {
                 replaySupported: false,
             }),
         });
+    });
+
+    it("advertises revision-bound file drafts through the private existing feature response", async () => {
+        mockGetFeatures.mockResolvedValue({ importDrafts: { version: 999 } });
+        const res = createRes();
+        await getFeatures({ user: { id: "u1" } } as any, res);
+        expect(res.body.importDrafts).toEqual({ version: 1 });
+        expect(res.setHeader).toHaveBeenCalledWith(
+            "Cache-Control",
+            "private, no-store",
+        );
     });
 
     it("returns cached vibe provider and migration state", async () => {

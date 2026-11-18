@@ -11,6 +11,11 @@ GlobalRegistrator.register();
 
 let jobsResponse: Array<Record<string, unknown>> = [];
 let listCalls = 0;
+let draftsCapable = false;
+const listOptions: unknown[] = [];
+mock.module("@/lib/features-context", {
+    namedExports: { useFeatures: () => ({ importDrafts: draftsCapable }) },
+});
 let listImportJobsImpl = async () => ({ jobs: jobsResponse });
 let invalidatedQueries: unknown[] = [];
 let invalidatedClientLabels: string[] = [];
@@ -18,7 +23,8 @@ let invalidatedClientLabels: string[] = [];
 mock.module("@/lib/api", {
     namedExports: {
         api: {
-            listImportJobs: async () => {
+            listImportJobs: async (options?: unknown) => {
+                listOptions.push(options);
                 listCalls += 1;
                 return listImportJobsImpl();
             },
@@ -47,6 +53,8 @@ after(() => {
 beforeEach(() => {
     jobsResponse = [];
     listCalls = 0;
+    draftsCapable = false;
+    listOptions.length = 0;
     listImportJobsImpl = async () => ({ jobs: jobsResponse });
     invalidatedQueries = [];
     invalidatedClientLabels = [];
@@ -55,6 +63,47 @@ beforeEach(() => {
         value: true,
     });
     document.body.replaceChildren();
+});
+
+test("draft completion refreshes owner likes/saved/mixes through explicit modern list opt-in", async () => {
+    draftsCapable = true;
+    jobsResponse = [
+        {
+            ...importJob("file-like", "pending"),
+            sourceType: "file-text",
+            draftRevision: 1,
+            createdPlaylistId: null,
+        },
+    ];
+    const monitor = await mountMonitor();
+    try {
+        assert.deepEqual(listOptions[0], { includeDrafts: true });
+        jobsResponse = [{ ...jobsResponse[0], status: "completed" }];
+        document.dispatchEvent(new Event("visibilitychange"));
+        await flushAsync();
+        assert.ok(
+            invalidatedQueries.some(
+                (x: any) =>
+                    JSON.stringify(x.queryKey) ===
+                    JSON.stringify(["library", "liked-playlist"]),
+            ),
+        );
+        assert.ok(
+            invalidatedQueries.some(
+                (x: any) =>
+                    JSON.stringify(x.queryKey) ===
+                    JSON.stringify(["library", "saved"]),
+            ),
+        );
+        assert.ok(
+            invalidatedQueries.some(
+                (x: any) =>
+                    JSON.stringify(x.queryKey) === JSON.stringify(["mixes"]),
+            ),
+        );
+    } finally {
+        await monitor.unmount();
+    }
 });
 
 function importJob(id: string, status: string): Record<string, unknown> {

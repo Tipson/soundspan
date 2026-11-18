@@ -253,6 +253,9 @@ export interface RadioPlaylistMutationResponse {
 
 /** Lifecycle states returned by generic playlist import jobs. */
 export type ImportJobStatus =
+    | "draft"
+    | "previewing"
+    | "awaiting_confirmation"
     | "pending"
     | "resolving"
     | "creating_playlist"
@@ -281,7 +284,18 @@ export interface ImportJob {
     error: string | null;
     createdAt: string;
     updatedAt: string;
+    draftRevision?: number;
 }
+
+export type {
+    ImportDraftCategory,
+    ImportDraftConfirmation,
+    ImportDraftEntry,
+    ImportDraftJob,
+    ImportDraftPreview,
+    ImportDraftResult,
+    ImportDraftUpload,
+} from "./api/importDrafts";
 
 export interface LibraryHealthRecord {
     id: string;

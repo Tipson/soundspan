@@ -11,6 +11,7 @@ import {
     ArrowRight,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useFeatures } from "@/lib/features-context";
 import {
     adminActivityRu,
     localizeImportJobMessage,
@@ -20,6 +21,13 @@ const STATUS_CONFIG: Record<
     string,
     { icon: React.ElementType; color: string; label: string }
 > = {
+    draft: { icon: Clock, color: "text-content-muted", label: "Черновик" },
+    previewing: { icon: Loader2, color: "text-brand", label: "Сопоставление" },
+    awaiting_confirmation: {
+        icon: Clock,
+        color: "text-content-muted",
+        label: "Нужно подтверждение",
+    },
     pending: {
         icon: Clock,
         color: "text-gray-400",
@@ -61,6 +69,7 @@ function JobStatusBadge({ status }: { status: string }) {
     const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
     const Icon = config.icon;
     const isAnimated =
+        status === "previewing" ||
         status === "resolving" ||
         status === "creating_playlist" ||
         status === "cancelling";
@@ -82,6 +91,11 @@ function JobStatusBadge({ status }: { status: string }) {
  */
 export function ImportsTab() {
     const router = useRouter();
+    const { importDrafts: fileDraftsEnabled } = useFeatures();
+    const draftProtocolRef = useRef(fileDraftsEnabled);
+    useEffect(() => {
+        draftProtocolRef.current = fileDraftsEnabled;
+    }, [fileDraftsEnabled]);
     const [jobs, setJobs] = useState<ImportJob[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -118,7 +132,9 @@ export function ImportsTab() {
                         ReturnType<typeof api.listImportJobs>
                     > | null = null;
                     try {
-                        data = await api.listImportJobs();
+                        data = draftProtocolRef.current
+                            ? await api.listImportJobs({ includeDrafts: true })
+                            : await api.listImportJobs();
                     } catch {
                         // Preserve the last successful snapshot and report failure
                         // only after any queued newer refresh has settled.
@@ -158,7 +174,7 @@ export function ImportsTab() {
             refreshPendingRef.current = false;
             loadGenerationRef.current += 1;
         };
-    }, [loadJobs]);
+    }, [loadJobs, fileDraftsEnabled]);
 
     useEffect(() => {
         const handleJobsChanged = () => {
@@ -176,6 +192,7 @@ export function ImportsTab() {
     useEffect(() => {
         const hasActive = jobs.some(
             (j) =>
+                j.status === "previewing" ||
                 j.status === "pending" ||
                 j.status === "resolving" ||
                 j.status === "creating_playlist" ||
@@ -284,7 +301,9 @@ export function ImportsTab() {
                 </div>
             )}
             {jobs.map((job) => {
+                const isFileDraft = (job.draftRevision ?? 0) > 0;
                 const isActive =
+                    job.status === "previewing" ||
                     job.status === "pending" ||
                     job.status === "resolving" ||
                     job.status === "creating_playlist" ||
@@ -357,7 +376,11 @@ export function ImportsTab() {
                             )}
 
                         <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                            {isActive && (
+                            {(isActive ||
+                                (isFileDraft &&
+                                    ["draft", "awaiting_confirmation"].includes(
+                                        job.status,
+                                    ))) && (
                                 <button
                                     type="button"
                                     onClick={() => void handleCancel(job.id)}
@@ -365,6 +388,22 @@ export function ImportsTab() {
                                     className="inline-flex min-h-11 max-w-full items-center rounded-md px-1 text-left text-xs text-red-400/70 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current disabled:opacity-50"
                                 >
                                     {adminActivityRu.activity.imports.cancel}
+                                </button>
+                            )}
+                            {isFileDraft && fileDraftsEnabled && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        router.push(
+                                            "/import?draft=" +
+                                                encodeURIComponent(job.id),
+                                        )
+                                    }
+                                    className="inline-flex min-h-11 items-center px-1 text-left text-xs text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                                >
+                                    {job.status === "completed"
+                                        ? "Результат импорта"
+                                        : "Продолжить импорт"}
                                 </button>
                             )}
                             {createdPlaylistId && (
@@ -384,9 +423,10 @@ export function ImportsTab() {
                                     <ArrowRight className="w-3 h-3" />
                                 </button>
                             )}
-                            {(job.status === "completed" ||
-                                job.status === "cancelled" ||
-                                job.status === "failed") &&
+                            {!isFileDraft &&
+                                (job.status === "completed" ||
+                                    job.status === "cancelled" ||
+                                    job.status === "failed") &&
                                 job.summary?.unresolved > 0 && (
                                     <button
                                         type="button"

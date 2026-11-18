@@ -65,6 +65,7 @@ import router from "../playlistImport";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
 
 const app = createRouteTestApp("/api/import", router);
+app.set("query parser", "extended");
 
 const mockLoggerWarn = logger.warn as jest.Mock;
 const mockLoggerError = logger.error as jest.Mock;
@@ -273,6 +274,28 @@ describe("playlistImport route core coverage", () => {
     });
 
     describe("GET /api/import/jobs", () => {
+        it("requires explicit scalar draft opt-in without accepting an owner override", async () => {
+            mockListJobsForUser.mockResolvedValue([]);
+            const res = await request(app)
+                .get("/api/import/jobs?includeDrafts=1&userId=other")
+                .set(AUTH_HEADER, AUTH_VALUE);
+            expect(res.status).toBe(200);
+            expect(mockListJobsForUser).toHaveBeenCalledWith("user-1", 25, {
+                includeDrafts: true,
+            });
+        });
+        it.each([
+            "includeDrafts=unexpected",
+            "includeDrafts=1&includeDrafts=1",
+            "includeDrafts[x]=1",
+        ])("rejects malformed draft opt-in %s", async (query) => {
+            mockListJobsForUser.mockResolvedValue([]);
+            const res = await request(app)
+                .get(`/api/import/jobs?${query}`)
+                .set(AUTH_HEADER, AUTH_VALUE);
+            expect(res.status).toBe(400);
+            expect(mockListJobsForUser).not.toHaveBeenCalled();
+        });
         it("lists the current user's jobs", async () => {
             const jobs = [
                 { id: "job-1", userId: "user-1", status: "completed" },

@@ -4,10 +4,49 @@ import type {
     PlaylistImportPreviewResponse,
 } from "../api";
 import { IMPORT_PREVIEW_TIMEOUT_MS, type ApiClientConstructor } from "./core";
+import type {
+    ImportDraftConfirmation,
+    ImportDraftJob,
+    ImportDraftUpload,
+} from "./importDrafts";
 
 /** Add imports-domain operations to an API client base class. */
 export function WithImports<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class ImportsApi extends Base {
+        async createImportDraft(input: ImportDraftUpload) {
+            return this.post<{ job: ImportDraftJob }>("/import/drafts", input);
+        }
+
+        async getImportDraft(id: string) {
+            return this.request<{ job: ImportDraftJob }>(
+                "/import/drafts/" + encodeURIComponent(id),
+            );
+        }
+
+        async updateImportDraft(
+            id: string,
+            input: ImportDraftUpload & { revision: number },
+        ) {
+            return this.request<{ job: ImportDraftJob }>(
+                "/import/drafts/" + encodeURIComponent(id),
+                { method: "PUT", body: JSON.stringify(input) },
+            );
+        }
+
+        async previewImportDraft(id: string, revision: number) {
+            return this.post<{ job: ImportDraftJob }>(
+                "/import/drafts/" + encodeURIComponent(id) + "/preview",
+                { revision },
+            );
+        }
+
+        async confirmImportDraft(id: string, input: ImportDraftConfirmation) {
+            return this.post<{ job: ImportDraftJob }>(
+                "/import/drafts/" + encodeURIComponent(id) + "/confirm",
+                input,
+            );
+        }
+
         async previewPlaylistImport(
             url: string,
         ): Promise<PlaylistImportPreviewResponse> {
@@ -46,8 +85,12 @@ export function WithImports<TBase extends ApiClientConstructor>(Base: TBase) {
             });
         }
 
-        async listImportJobs() {
-            return this.request<{ jobs: ImportJob[] }>("/import/jobs");
+        async listImportJobs(options?: { includeDrafts?: boolean }) {
+            return this.request<{ jobs: ImportJob[] }>(
+                options?.includeDrafts
+                    ? "/import/jobs?includeDrafts=1"
+                    : "/import/jobs",
+            );
         }
 
         async getImportJob(jobId: string) {

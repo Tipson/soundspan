@@ -19,6 +19,37 @@ const getRequestUserId = (req: any): string | null => {
     return req.user?.id || null;
 };
 
+/** Cached composition is stable; current private negatives are readmitted at serving time. */
+async function currentMixes<
+    T extends { trackIds: string[]; trackCount: number },
+>(userId: string, mixes: T[]): Promise<T[]> {
+    const ids = [...new Set(mixes.flatMap((mix) => mix.trackIds))];
+    if (ids.length === 0) return mixes;
+    const [
+        { filterCurrentDislikedCandidates },
+        { providerTrackIdentityToCandidate },
+    ] = await Promise.all([
+        import("../services/recommendations/featureStore"),
+        import("../services/recommendations/canonicalIdentity"),
+    ]);
+    const admitted = await filterCurrentDislikedCandidates(
+        userId,
+        ids.map((id) =>
+            providerTrackIdentityToCandidate({
+                source: "library",
+                providerTrackId: id,
+                title: "",
+                artist: "",
+            }),
+        ),
+    );
+    const allowed = new Set(admitted.map((candidate) => candidate.id));
+    return mixes.map((mix) => {
+        const trackIds = mix.trackIds.filter((id) => allowed.has(id));
+        return { ...mix, trackIds, trackCount: trackIds.length };
+    });
+}
+
 /**
  * @openapi
  * /api/mixes:
@@ -81,7 +112,7 @@ router.get("/", async (req, res) => {
         const cached = await redisClient.get(cacheKey);
 
         if (cached) {
-            return res.json(JSON.parse(cached));
+            return res.json(await currentMixes(userId, JSON.parse(cached)));
         }
 
         // Generate all mixes
@@ -91,7 +122,7 @@ router.get("/", async (req, res) => {
         // Cache for 1 hour
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(mixes));
 
-        res.json(mixes);
+        res.json(await currentMixes(userId, mixes));
     } catch (error) {
         logger.error("Get mixes error:", error);
         res.status(500).json({ error: "Failed to get mixes" });
@@ -776,7 +807,10 @@ router.post("/refresh", async (req, res) => {
         // Cache for 1 hour
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(mixes));
 
-        res.json({ message: "Mixes refreshed", mixes });
+        res.json({
+            message: "Mixes refreshed",
+            mixes: await currentMixes(userId, mixes),
+        });
     } catch (error) {
         logger.error("Refresh mixes error:", error);
         res.status(500).json({ error: "Failed to refresh mixes" });
@@ -857,7 +891,10 @@ router.post("/:id/save", async (req, res) => {
             await redisClient.setEx(cacheKey, 3600, JSON.stringify(mixes));
         }
 
-        const mix = mixes.find((m: any) => m.id === mixId);
+        const storedMix = mixes.find((m: any) => m.id === mixId);
+        const mix = storedMix
+            ? (await currentMixes(userId, [storedMix]))[0]
+            : undefined;
 
         if (!mix) {
             return res.status(404).json({ error: "Mix not found" });
@@ -999,7 +1036,10 @@ router.get("/:id", async (req, res) => {
         }
 
         // Find the specific mix
-        const mix = mixes.find((m: any) => m.id === mixId);
+        const storedMix = mixes.find((m: any) => m.id === mixId);
+        const mix = storedMix
+            ? (await currentMixes(userId, [storedMix]))[0]
+            : undefined;
 
         if (!mix) {
             return res.status(404).json({ error: "Mix not found" });

@@ -59,6 +59,18 @@ const redisClient = {
 jest.mock("../../utils/redis", () => ({
     redisClient,
 }));
+const mockReadmitMixCandidates = jest.fn(
+    async (_userId: string, candidates: any[]) => candidates,
+);
+jest.mock("../../services/recommendations/featureStore", () => ({
+    filterCurrentDislikedCandidates: mockReadmitMixCandidates,
+}));
+jest.mock("../../services/recommendations/canonicalIdentity", () => ({
+    providerTrackIdentityToCandidate: (input: any) => ({
+        id: input.providerTrackId,
+        source: input.source,
+    }),
+}));
 
 import router from "../mixes";
 
@@ -104,6 +116,9 @@ describe("mixes route runtime", () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockReadmitMixCandidates.mockImplementation(
+            async (_userId: string, candidates: any[]) => candidates,
+        );
 
         redisClient.get.mockResolvedValue(null);
         redisClient.setEx.mockResolvedValue("OK");
@@ -155,6 +170,60 @@ describe("mixes route runtime", () => {
             name: "Mix One",
         });
         prisma.playlistItem.createMany.mockResolvedValue({ count: 2 });
+    });
+    it("readmits an old in-flight cache fill after an imported negative without losing order or metadata", async () => {
+        let release!: (mixes: any[]) => void;
+        let entered!: () => void;
+        const started = new Promise<void>((resolve) => (entered = resolve));
+        const denied = new Set<string>();
+        mockReadmitMixCandidates.mockImplementation(
+            async (owner, candidates) => {
+                expect(owner).toBe("u1");
+                return candidates.filter(
+                    (candidate) => !denied.has(candidate.id),
+                );
+            },
+        );
+        let cached: string | null = null;
+        redisClient.get.mockImplementation(async () => cached);
+        redisClient.setEx.mockImplementation(async (_key, _ttl, value) => {
+            cached = value;
+            return "OK";
+        });
+        programmaticPlaylistService.generateAllMixes.mockImplementationOnce(
+            () => {
+                entered();
+                return new Promise((resolve) => (release = resolve));
+            },
+        );
+        const firstRes = createRes();
+        const first = getMixes({ user: { id: "u1" } } as any, firstRes);
+        await started;
+        // The SQL import's exact negative commits while an older generation is still computing.
+        denied.add("t-1");
+        cached = null;
+        release([
+            {
+                id: "stable",
+                name: "Original",
+                trackIds: ["t-2", "t-1", "t-2"],
+                trackCount: 3,
+                generatedAt: "original-stamp",
+            },
+        ]);
+        await first;
+        const after = createRes();
+        await getMixes({ user: { id: "u1" } } as any, after);
+        expect(firstRes.body).toEqual([
+            {
+                id: "stable",
+                name: "Original",
+                trackIds: ["t-2", "t-2"],
+                trackCount: 2,
+                generatedAt: "original-stamp",
+            },
+        ]);
+        expect(after.body).toEqual(firstRes.body);
     });
 
     it("returns mixes from cache and falls back to generation", async () => {

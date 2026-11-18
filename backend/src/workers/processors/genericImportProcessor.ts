@@ -7,6 +7,14 @@ const RECOVERY_JOB_NAME = "generic-import-recover";
 const runPayloadSchema = z
     .object({
         jobId: z.string().trim().min(1).max(128),
+        draftFence: z
+            .object({
+                version: z.literal(1),
+                revision: z.number().int().min(1).max(2_147_483_646),
+                attempt: z.number().int().min(1).max(2_147_483_646),
+            })
+            .strict()
+            .optional(),
     })
     .strict();
 const recoveryPayloadSchema = z
@@ -31,6 +39,9 @@ async function processRunJob(job: Job<unknown>): Promise<void> {
     await genericImportJobRunner.runJob(parsed.data.jobId, {
         retryFailures: true,
         finalAttempt: isFinalAttempt(job),
+        ...(parsed.data.draftFence
+            ? { draftFence: parsed.data.draftFence }
+            : {}),
     });
 }
 
@@ -71,5 +82,15 @@ export async function finalizeGenericImportQueueFailure(
     if (!parsed.success || (await job.getState()) !== "failed") {
         return;
     }
-    await genericImportJobRunner.finalizeQueueFailure(parsed.data.jobId, error);
+    if (parsed.data.draftFence)
+        await genericImportJobRunner.finalizeQueueFailure(
+            parsed.data.jobId,
+            error,
+            parsed.data.draftFence,
+        );
+    else
+        await genericImportJobRunner.finalizeQueueFailure(
+            parsed.data.jobId,
+            error,
+        );
 }

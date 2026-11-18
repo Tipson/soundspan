@@ -144,6 +144,7 @@ describe("system routes integration", () => {
             federation: true,
             loudnessTargetLufs: -18,
             audius: true,
+            importDrafts: { version: 1 },
             playCreation: expect.objectContaining({
                 version: 1,
                 ownerHistoryEpoch: 0,

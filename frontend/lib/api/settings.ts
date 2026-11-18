@@ -27,6 +27,8 @@ export interface VibeSystemStatus {
 
 /** Feature flags and typed vibe status returned by the backend. */
 export interface SystemFeatures {
+    /** Owner draft protocol; legacy servers omit it. */
+    importDrafts?: { version: 1 };
     /** Explicitly enabled server order for personal Wave; omitted by legacy servers. */
     orderedWave?: { version: 1 };
     musicCNN: boolean;

@@ -5,10 +5,213 @@ import { playlistImportService } from "../services/playlistImportService";
 import { importJobStore } from "../services/importJobStore";
 import { genericImportJobRunner } from "../services/genericImportJobRunner";
 import { logger } from "../utils/logger";
-import { sendInternalRouteError } from "../utils/routeErrorResponse";
+import {
+    sendInternalRouteError,
+    sendRouteError,
+} from "../utils/routeErrorResponse";
+import { ImportDraftError } from "../services/importDraftParser";
 
 const router = Router();
 const log = logger.child("PlaylistImportRoute");
+
+const draftUploadSchema = z.object({
+    format: z.enum(["text", "spotify-json"]),
+    content: z.string(),
+    name: z.string().trim().min(1).max(200).optional(),
+    textCategory: z.enum(["playlists", "likes", "dislikes"]).optional(),
+});
+const draftRevisionSchema = z.number().int().min(1).max(2_147_483_646);
+const draftConfirmSchema = z
+    .object({
+        revision: draftRevisionSchema,
+        previewRevision: draftRevisionSchema,
+        mappingDigest: z.string().regex(/^[a-f0-9]{64}$/),
+        categories: z
+            .array(
+                z.enum(["playlists", "likes", "albums", "artists", "dislikes"]),
+            )
+            .min(1)
+            .max(5),
+    })
+    .strict();
+function draftRoute(
+    operation: (req: Request, res: Response) => Promise<unknown>,
+) {
+    return async (req: Request, res: Response) => {
+        try {
+            await operation(req, res);
+        } catch (error) {
+            if (error instanceof ImportDraftError)
+                return sendRouteError(res, error.status, error.code);
+            log.error("Import draft operation failed", {
+                errorType: error instanceof Error ? error.name : "unknown",
+            });
+            return sendInternalRouteError(res, "import_draft_failed");
+        }
+    };
+}
+function draftId(req: Request): string {
+    const id = req.params.draftId;
+    if (typeof id !== "string" || id.length < 1 || id.length > 128)
+        throw new ImportDraftError("import_draft_not_found", 404);
+    return id;
+}
+router.use("/drafts", (_req, res, next) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    next();
+});
+
+/**
+ * @openapi
+ * /api/import/drafts:
+ *   post:
+ *     summary: Store a bounded owner-only text or Spotify JSON export draft without importing effects
+ *     tags: [Import]
+ *     responses:
+ *       201: { description: Normalized draft with server sourceHash and revision }
+ *       400: { description: Malformed or unsupported export }
+ *       401: { description: Authentication required }
+ *       413: { description: File exceeds explicit byte or entry bounds }
+ */
+router.post(
+    "/drafts",
+    requireAuth,
+    draftRoute(async (req, res) => {
+        const parsed = draftUploadSchema.safeParse(req.body);
+        if (!parsed.success) throw new ImportDraftError("import_file_invalid");
+        const { importDraftService } =
+            await import("../services/importDraftService");
+        res.status(201).json({
+            job: await importDraftService.create(req.user!.id, parsed.data),
+        });
+    }),
+);
+/**
+ * @openapi
+ * /api/import/drafts/{draftId}:
+ *   get:
+ *     summary: Read the current user's import draft, matching confidence and retained unresolved positions
+ *     tags: [Import]
+ *     responses:
+ *       200: { description: Owner-only draft and committed effect receipt }
+ *       401: { description: Authentication required }
+ *       403: { description: Draft belongs to another user }
+ *       404: { description: Draft not found }
+ *   put:
+ *     summary: Replace an unconfirmed draft at an expected revision and retire old matching authority
+ *     tags: [Import]
+ *     responses:
+ *       200: { description: New revision requiring another preview }
+ *       400: { description: Invalid input }
+ *       401: { description: Authentication required }
+ *       403: { description: Draft belongs to another user }
+ *       409: { description: Stale revision or immutable confirmed draft }
+ */
+router.get(
+    "/drafts/:draftId",
+    requireAuth,
+    draftRoute(async (req, res) => {
+        const { importDraftService } =
+            await import("../services/importDraftService");
+        res.json({
+            job: await importDraftService.get(req.user!.id, draftId(req)),
+        });
+    }),
+);
+router.put(
+    "/drafts/:draftId",
+    requireAuth,
+    draftRoute(async (req, res) => {
+        const parsed = draftUploadSchema
+            .extend({ revision: draftRevisionSchema })
+            .safeParse(req.body);
+        if (!parsed.success) throw new ImportDraftError("import_file_invalid");
+        const { revision, ...upload } = parsed.data;
+        const { importDraftService } =
+            await import("../services/importDraftService");
+        res.json({
+            job: await importDraftService.update(
+                req.user!.id,
+                draftId(req),
+                revision,
+                upload,
+            ),
+        });
+    }),
+);
+/**
+ * @openapi
+ * /api/import/drafts/{draftId}/preview:
+ *   post:
+ *     summary: Queue read-only matching for the exact stored draft revision
+ *     tags: [Import]
+ *     responses:
+ *       202: { description: Preview job queued on the existing durable import runner }
+ *       400: { description: Revision required }
+ *       401: { description: Authentication required }
+ *       403: { description: Draft belongs to another user }
+ *       409: { description: Draft revision changed }
+ */
+router.post(
+    "/drafts/:draftId/preview",
+    requireAuth,
+    draftRoute(async (req, res) => {
+        const parsed = z
+            .object({ revision: draftRevisionSchema })
+            .strict()
+            .safeParse(req.body);
+        if (!parsed.success) throw new ImportDraftError("import_file_invalid");
+        const { importDraftService } =
+            await import("../services/importDraftService");
+        const job = await importDraftService.requestPreview(
+            req.user!.id,
+            draftId(req),
+            parsed.data.revision,
+        );
+        genericImportJobRunner.enqueue(job.id, job.resolutionAttempt, {
+            version: 1,
+            revision: job.draftRevision,
+            attempt: job.resolutionAttempt,
+        });
+        res.status(202).json({ job });
+    }),
+);
+/**
+ * @openapi
+ * /api/import/drafts/{draftId}/confirm:
+ *   post:
+ *     summary: Confirm explicit categories against a server-stored matching digest, idempotently
+ *     tags: [Import]
+ *     responses:
+ *       202: { description: Immutable confirmed snapshot queued; no client matching IDs are accepted }
+ *       400: { description: Explicit category selection and preview token required }
+ *       401: { description: Authentication required }
+ *       403: { description: Draft belongs to another user }
+ *       409: { description: Stale draft or preview revision }
+ */
+router.post(
+    "/drafts/:draftId/confirm",
+    requireAuth,
+    draftRoute(async (req, res) => {
+        const parsed = draftConfirmSchema.safeParse(req.body);
+        if (!parsed.success)
+            throw new ImportDraftError("import_selection_invalid");
+        const { importDraftService } =
+            await import("../services/importDraftService");
+        const job = await importDraftService.confirm(
+            req.user!.id,
+            draftId(req),
+            parsed.data,
+        );
+        if (job.status !== "completed")
+            genericImportJobRunner.enqueue(job.id, job.resolutionAttempt, {
+                version: 1,
+                revision: job.draftRevision,
+                attempt: job.resolutionAttempt,
+            });
+        res.status(job.status === "completed" ? 200 : 202).json({ job });
+    }),
+);
 
 const urlSchema = z.object({
     url: z.string().url(),
@@ -167,14 +370,30 @@ router.post("/jobs", requireAuth, async (req: Request, res: Response) => {
  * /api/import/jobs:
  *   get:
  *     summary: List generic import jobs for the current user
+ *     description: Legacy statuses only by default; draft-aware clients explicitly opt in before database paging.
  *     tags: [Import]
+ *     parameters:
+ *       - in: query
+ *         name: includeDrafts
+ *         schema: { type: string, enum: ['0', '1'] }
  *     responses:
  *       200:
  *         description: User-scoped import jobs
  */
 router.get("/jobs", requireAuth, async (req: Request, res: Response) => {
     try {
-        const jobs = await importJobStore.listJobsForUser(req.user!.id);
+        const query = z
+            .object({ includeDrafts: z.enum(["0", "1"]).optional() })
+            .safeParse(req.query);
+        if (!query.success)
+            return sendRouteError(res, 400, "import_list_options_invalid");
+        const jobs =
+            query.data.includeDrafts === "1"
+                ? await importJobStore.listJobsForUser(req.user!.id, 25, {
+                      includeDrafts: true,
+                  })
+                : await importJobStore.listJobsForUser(req.user!.id);
+        res.setHeader("Cache-Control", "private, no-store");
         res.json({ jobs });
     } catch (err) {
         logger.error("[Import] Job list failed:", err);
@@ -314,6 +533,18 @@ router.post(
                 });
             }
 
+            const cancelledJob = cancellation.job;
+            if (cancelledJob?.draftData) {
+                genericImportJobRunner.enqueue(
+                    cancelledJob.id,
+                    cancelledJob.resolutionAttempt,
+                    {
+                        version: 1,
+                        revision: cancelledJob.draftRevision!,
+                        attempt: cancelledJob.resolutionAttempt,
+                    },
+                );
+            }
             res.json({ job: cancellation.job });
         } catch (err) {
             logger.error("[Import] Job cancel failed:", err);

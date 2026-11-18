@@ -24,6 +24,13 @@ const router = Router();
  *             schema:
  *               type: object
  *               properties:
+ *                 importDrafts:
+ *                   type: object
+ *                   additionalProperties: false
+ *                   required: [version]
+ *                   description: Revision-bound text and Spotify export drafts; absent on servers without this protocol.
+ *                   properties:
+ *                     version: { type: integer, enum: [1] }
  *                 orderedWave:
  *                   type: object
  *                   additionalProperties: false
@@ -79,6 +86,7 @@ router.get("/features", requireAuth, async (req, res) => {
         res.json({
             ...features,
             playCreation,
+            importDrafts: { version: 1 },
             ...(config.recommendations.waveSequenceEnabled
                 ? { orderedWave: { version: 1 } }
                 : {}),

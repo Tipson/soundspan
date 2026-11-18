@@ -16,6 +16,46 @@ import {
 } from "../genericImportProcessor";
 
 describe("generic import queue processor", () => {
+    it("forwards an exact draft generation fence to execution and queue finalization", async () => {
+        const draftFence = { version: 1, revision: 2, attempt: 4 };
+        const job = {
+            name: "generic-import-run",
+            data: { jobId: "draft-id", draftFence },
+            attemptsMade: 0,
+            opts: { attempts: 3 },
+            progress: jest.fn().mockResolvedValue(undefined),
+            getState: jest.fn().mockResolvedValue("failed"),
+        } as any;
+        await processGenericImport(job);
+        expect(mockRunJob).toHaveBeenCalledWith("draft-id", {
+            retryFailures: true,
+            finalAttempt: false,
+            draftFence,
+        });
+        const error = new Error("fixture");
+        await finalizeGenericImportQueueFailure(job, error);
+        expect(mockFinalizeQueueFailure).toHaveBeenCalledWith(
+            "draft-id",
+            error,
+            draftFence,
+        );
+    });
+    it.each([
+        { version: 2, revision: 1, attempt: 1 },
+        { version: 1, revision: 1 },
+        { version: 1, revision: -1, attempt: 1 },
+    ])("rejects partial or unknown draft protocols", async (draftFence) => {
+        const job = {
+            name: "generic-import-run",
+            data: { jobId: "draft-id", draftFence },
+            opts: {},
+            attemptsMade: 0,
+            progress: jest.fn(),
+        } as any;
+        await expect(processGenericImport(job)).rejects.toThrow(
+            "Invalid generic import queue payload",
+        );
+    });
     beforeEach(() => {
         jest.clearAllMocks();
         mockRunJob.mockResolvedValue(undefined);

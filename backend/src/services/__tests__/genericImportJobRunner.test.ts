@@ -227,17 +227,29 @@ describe("generic import job runner", () => {
 
         expect(mockFindMany).toHaveBeenCalledWith({
             where: {
-                status: {
-                    in: [
-                        "pending",
-                        "resolving",
-                        "creating_playlist",
-                        "cancelling",
-                    ],
-                },
+                OR: [
+                    {
+                        status: {
+                            in: [
+                                "previewing",
+                                "pending",
+                                "resolving",
+                                "creating_playlist",
+                                "cancelling",
+                            ],
+                        },
+                    },
+                    {
+                        status: "completed",
+                        draftResult: {
+                            path: ["invalidationPending"],
+                            equals: true,
+                        },
+                    },
+                ],
             },
             orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
-            select: { id: true, resolutionAttempt: true },
+            select: { id: true, resolutionAttempt: true, draftRevision: true },
             take: 100,
         });
         expect(mockQueueAdd).toHaveBeenCalledTimes(4);

@@ -9,6 +9,8 @@
 import type { ResolvedMediaSource } from "@soundspan/media-metadata-contract";
 import { prisma } from "../utils/db";
 import { TRACK_VISIBLE_WHERE } from "../utils/librarySorting";
+import type { ImportDraftEntry } from "./importDraftParser";
+import type { ImportDraftMatch } from "./importDraftSnapshot";
 import { logger } from "../utils/logger";
 import { decrypt } from "../utils/encryption";
 import { getSystemSettings } from "../utils/systemSettings";
@@ -191,6 +193,158 @@ type ProviderMatchInput = {
 type IndexedImportTrack = { index: number; track: ImportTrackMeta };
 
 class PlaylistImportService {
+    /** Match an untrusted upload without writing provider namespaces or account data. */
+    async matchDraftTracks(
+        entries: ImportDraftEntry[],
+        options: { check?: () => Promise<void> } = {},
+    ): Promise<ImportDraftMatch[]> {
+        const check = options.check ?? (async () => {});
+        await check();
+        const candidates = (await this.getLocalLibraryCandidates()).filter(
+            (track) => track.filePath !== "",
+        );
+        await check();
+        const result: ImportDraftMatch[] = entries.map(() => ({
+            source: "unresolved",
+            confidence: 0,
+        }));
+        const pending: Array<{ index: number; entry: ImportDraftEntry }> = [];
+        const metadata = new Map<string, Promise<ImportDraftMatch | null>>();
+        let unavailable = false;
+        const song = (
+            videoId: string,
+            confidence: number,
+        ): Promise<ImportDraftMatch | null> => {
+            let cached = metadata.get(videoId);
+            if (!cached) {
+                cached = (async () => {
+                    await check();
+                    let found;
+                    try {
+                        found = await ytMusicService.getSong(
+                            "__public__",
+                            videoId,
+                        );
+                    } catch {
+                        await check();
+                        return null;
+                    }
+                    await check();
+                    if (
+                        found.videoId !== videoId ||
+                        typeof found.title !== "string" ||
+                        !found.title.trim() ||
+                        found.title.length > 300 ||
+                        typeof found.artist !== "string" ||
+                        !found.artist.trim() ||
+                        found.artist.length > 300 ||
+                        (found.album !== undefined &&
+                            (typeof found.album !== "string" ||
+                                found.album.length > 300)) ||
+                        (found.duration !== undefined &&
+                            (!Number.isFinite(found.duration) ||
+                                found.duration < 0 ||
+                                found.duration > 86400))
+                    )
+                        return null;
+                    return {
+                        source: "youtube",
+                        videoId,
+                        confidence: 100,
+                        title: found.title,
+                        artist: found.artist,
+                        album: found.album ?? "",
+                        duration: Math.floor(found.duration ?? 0),
+                    };
+                })();
+                metadata.set(videoId, cached);
+            }
+            return cached.then((match) =>
+                match ? { ...match, confidence } : null,
+            );
+        };
+        for (const [index, entry] of entries.entries()) {
+            if (entry.sourceRef?.source === "library") {
+                const exact = candidates.find(
+                    (candidate) => candidate.id === entry.sourceRef!.entityId,
+                );
+                if (exact)
+                    result[index] = {
+                        source: "local",
+                        trackId: exact.id,
+                        confidence: 100,
+                    };
+            } else if (entry.sourceRef?.source === "youtube")
+                pending.push({ index, entry });
+            else if (entry.artist) {
+                const matched = matchTrackAgainstLibrary(
+                    {
+                        artist: entry.artist,
+                        title: entry.title,
+                        ...(entry.album ? { album: entry.album } : {}),
+                    },
+                    candidates,
+                );
+                if (matched && matched.matchConfidence >= 70)
+                    result[index] = {
+                        source: "local",
+                        trackId: matched.trackId,
+                        confidence: matched.matchConfidence,
+                    };
+                else pending.push({ index, entry });
+            }
+        }
+        await mapWithConcurrency(
+            chunkArray(pending, MATCH_BATCH_SIZE),
+            MATCH_BATCH_CONCURRENCY,
+            async (batch) => {
+                await check();
+                if (unavailable) return;
+                const fuzzy = batch.filter(
+                    (item) => item.entry.sourceRef?.source !== "youtube",
+                );
+                let matches: Array<{
+                    videoId: string;
+                    title: string;
+                    duration: number;
+                } | null> = [];
+                if (fuzzy.length) {
+                    try {
+                        matches = await ytMusicService.findMatchesForAlbum(
+                            "__public__",
+                            fuzzy.map(({ entry }) => ({
+                                artist: entry.artist,
+                                title: entry.title,
+                                ...(entry.album
+                                    ? { albumTitle: entry.album }
+                                    : {}),
+                            })),
+                        );
+                    } catch {
+                        unavailable = true;
+                    }
+                    await check();
+                }
+                const byIndex = new Map(
+                    fuzzy.map((item, index) => [item.index, matches[index]]),
+                );
+                await mapWithConcurrency(batch, 4, async (item) => {
+                    const exact =
+                        item.entry.sourceRef?.source === "youtube"
+                            ? item.entry.sourceRef.entityId
+                            : null;
+                    const videoId = exact ?? byIndex.get(item.index)?.videoId;
+                    if (!videoId || !/^[A-Za-z0-9_-]{1,64}$/.test(videoId))
+                        return;
+                    const matched = await song(videoId, exact ? 100 : 85);
+                    if (matched) result[item.index] = matched;
+                });
+            },
+        );
+        await check();
+        return result;
+    }
+
     /**
      * Parse a playlist URL and detect the source type.
      */
