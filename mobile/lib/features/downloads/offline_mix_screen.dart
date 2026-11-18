@@ -134,10 +134,6 @@ class _OfflineMixScreenState extends State<OfflineMixScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Сохранённый состав. Воспроизведение использует файлы на этом устройстве.',
-                            ),
                             const SizedBox(height: 20),
                             if (MediaQuery.textScalerOf(context).scale(16) >=
                                 24) ...[

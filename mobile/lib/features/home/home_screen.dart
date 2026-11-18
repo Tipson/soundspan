@@ -10,7 +10,6 @@ import '../../design_system/design_system.dart';
 import '../library/library_models.dart';
 import 'home_controller.dart';
 import 'home_models.dart';
-import 'mix_snapshot.dart';
 
 /// Editorial home. Route callbacks open screens without changing playback.
 class HomeScreen extends StatefulWidget {
@@ -349,7 +348,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       style: Theme.of(context).textTheme.labelSmall
                           ?.copyWith(color: MusicColors.textMuted),
                     ),
-                    MixSnapshotDetails(snapshot: mix.snapshot),
                   ],
                 ),
               ),
@@ -365,12 +363,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     animation: widget.controller,
     builder: (context, _) {
       final state = widget.controller.state, feed = state.feed;
-      final daily = feed.mixes
-          .where((m) => m.kind == MusicMixKind.daily)
-          .toList();
-      final legacy = feed.mixes
-          .where((m) => m.kind == MusicMixKind.legacy)
-          .toList();
+      final mixes = feed.mixes.where((mix) => mix.trackCount > 0).toList();
+      final daily = mixes.where((m) => m.kind == MusicMixKind.daily).toList();
+      final legacy = mixes.where((m) => m.kind == MusicMixKind.legacy).toList();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _scheduleVisible();
       });
@@ -397,23 +392,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             message: state.failure!.message,
             onRetry: widget.controller.refresh,
           ),
-        if (feed.languagePending)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: MusicStatus(
-              message:
-                  'Уточняем язык песен. Подборки появятся после обработки.',
-            ),
-          ),
-        if (feed.degraded)
+        if (feed.degraded && mixes.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const MusicStatus(
-                  message: 'Часть музыки временно недоступна. Доступные подборки остаются ниже.',
-                ),
+                const MusicStatus(message: 'Не удалось загрузить подборки.'),
                 TextButton(
                   onPressed: widget.controller.retryFailed,
                   child: const Text('Повторить загрузку подборок'),
@@ -441,40 +426,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: () => _run(widget.onOpenDownloads!),
             ),
           ),
-        if (daily.isNotEmpty || feed.mixStatuses.isNotEmpty)
-          _heading(context, 'Миксы для вас'),
+        if (daily.isNotEmpty) _heading(context, 'Миксы для вас'),
         if (daily.isNotEmpty)
           _MixShelf(
             mixes: daily,
             onOpen: (mix) => _run(() => widget.onOpenMix(mix)),
           ),
-        for (final status in feed.mixStatuses)
-          Padding(
-            key: ValueKey('empty-mix-${status.id}'),
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  status.title,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Text(
-                  'Пока нет готовой подборки',
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: MusicColors.textSecondary),
-                ),
-                MixSnapshotDetails(snapshot: status.snapshot),
-              ],
-            ),
-          ),
-        for (final mix in feed.mixes.where(
+        for (final mix in mixes.where(
           (m) =>
               m.kind == MusicMixKind.dailyBlend ||
               m.kind == MusicMixKind.daypart,
         ))
           _featuredMix(context, mix),
-        for (final mix in feed.mixes.where(
+        for (final mix in mixes.where(
           (m) => m.kind == MusicMixKind.weekly,
         )) ...[
           _heading(context, 'Свежий взгляд на музыку'),
@@ -639,7 +603,6 @@ class _MixShelf extends StatelessWidget {
                     artwork: mixes[i].cover,
                     onOpen: () => onOpen(mixes[i]),
                   ),
-                  MixSnapshotDetails(snapshot: mixes[i].snapshot),
                 ],
               ),
             ),

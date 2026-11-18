@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soundspan/core/model/app_failure.dart';
 import 'package:soundspan/core/model/play_context.dart';
@@ -61,7 +60,10 @@ ApiResponse snapshotResponse(ApiRequest request) {
       ],
     });
   }
-  return ApiResponse(200, waveFeed([]));
+  return ApiResponse(200, {
+    ...waveFeed([]),
+    'languageStatus': {'pending': true},
+  });
 }
 
 ApiResponse homeResponse(ApiRequest request) => switch (request.path) {
@@ -231,7 +233,7 @@ void main() {
 
   for (final scale in [2.0, 3.0]) {
     testWidgets(
-      'snapshot date and full reasons fit at 320dp scale $scale without autoplay',
+      'mix cards stay usable without diagnostic metadata at 320dp scale $scale',
       (tester) async {
         tester.view.physicalSize = const Size(320, 760);
         tester.view.devicePixelRatio = 1;
@@ -275,35 +277,14 @@ void main() {
           400,
           scrollable: find.byType(Scrollable).first,
         );
-        expect(find.text('Составлен 16 ноября 2026'), findsWidgets);
-        final firstCard = find
-            .ancestor(
-              of: find.widgetWithText(MusicCard, 'Микс rock'),
-              matching: find.byType(Column),
-            )
-            .first;
         for (final label in [
           'Составлен 16 ноября 2026',
           'Часть музыки временно недоступна',
           'С учётом ваших оценок',
           'Пока меньше подходящих треков',
+          'Уточняем язык песен. Подборки появятся после обработки.',
         ]) {
-          final reason = find.descendant(
-            of: firstCard,
-            matching: find.text(label),
-          );
-          final paragraph = tester.renderObject<RenderParagraph>(reason);
-          final full = TextPainter(
-            text: paragraph.text,
-            textDirection: paragraph.textDirection,
-            textScaler: paragraph.textScaler,
-          )..layout(maxWidth: paragraph.size.width);
-          expect(paragraph.size.height, greaterThanOrEqualTo(full.height));
-          full.dispose();
-          expect(
-            tester.getBottomLeft(reason).dy,
-            lessThanOrEqualTo(tester.getBottomLeft(firstCard).dy),
-          );
+          expect(find.text(label), findsNothing);
         }
         await tester.ensureVisible(find.text('Микс rock'));
         await tester.pumpAndSettle();
@@ -332,11 +313,8 @@ void main() {
         expect(controller.state.feed.mixStatuses.map((status) => status.id), [
           'empty',
         ]);
-        await tester.scrollUntilVisible(
-          find.byKey(const ValueKey('empty-mix-empty')),
-          400,
-          scrollable: find.byType(Scrollable).first,
-        );
+        expect(controller.state.feed.degraded, isTrue);
+        expect(find.byKey(const ValueKey('empty-mix-empty')), findsNothing);
         expect(
           find.widgetWithText(MusicCard, 'Микс без записей'),
           findsNothing,
@@ -348,7 +326,13 @@ void main() {
           ),
           findsNothing,
         );
-        expect(find.text('Пока нет готовой подборки'), findsOneWidget);
+        expect(find.text('Микс без записей'), findsNothing);
+        expect(find.text('Пока нет готовой подборки'), findsNothing);
+        expect(
+          find.textContaining('Часть музыки временно недоступна'),
+          findsNothing,
+        );
+        expect(find.text('Повторить загрузку подборок'), findsNothing);
         await tester.pumpWidget(
           MaterialApp(
             theme: SoundspanTheme.dark(),
@@ -365,15 +349,74 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('Составлен 16 ноября 2026'), findsOneWidget);
-        expect(find.text('С учётом ваших оценок'), findsOneWidget);
+        expect(find.text('Составлен 16 ноября 2026'), findsNothing);
+        expect(find.text('С учётом ваших оценок'), findsNothing);
+        expect(find.text('1 трек · доступно: 1'), findsOneWidget);
         expect(plays, 0);
+        await tester.ensureVisible(find.text('Слушать'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Слушать'));
+        await tester.pump();
+        expect(plays, 1);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
         controller.dispose();
       },
     );
   }
+
+  testWidgets('empty degraded Home offers a short retry and recovers cards', (
+    tester,
+  ) async {
+    var unavailable = true;
+    final controller = HomeController(
+      repository: repo(
+        CollectionAuthority(),
+        CollectionTransport((r, _) {
+          if (unavailable && r.path == '/api/personalized/daily-mixes') {
+            return const ApiResponse(503, null);
+          }
+          return snapshotResponse(r);
+        }),
+      ),
+      request: request(),
+    );
+    try {
+      await controller.refresh();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SoundspanTheme.dark(),
+          home: HomeScreen(
+            controller: controller,
+            autoLoad: false,
+            onOpenWave: () {},
+            onOpenMix: (_) {},
+            onPlay: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.state.feed.degraded, isTrue);
+      expect(find.text('Не удалось загрузить подборки.'), findsOneWidget);
+      expect(find.textContaining('Уточняем язык песен.'), findsNothing);
+      expect(find.text('Повторить загрузку подборок'), findsOneWidget);
+      unavailable = false;
+      await tester.tap(find.text('Повторить загрузку подборок'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Микс rock'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.widgetWithText(MusicCard, 'Микс rock'), findsOneWidget);
+      expect(find.text('Не удалось загрузить подборки.'), findsNothing);
+      expect(find.text('Повторить загрузку подборок'), findsNothing);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    }
+  });
 
   test('visibility revoked during authoritative guard neither reports nor consumes dedup', () async {
     final authority = _GrantedHomeAuthority();

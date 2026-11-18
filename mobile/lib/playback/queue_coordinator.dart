@@ -646,8 +646,23 @@ final class QueueCoordinator implements PlaybackController {
         String? automaticInitial;
         bool Function()? replacementPermit;
         if (command.automaticRecommendation && finiteAdmission != null) {
-          final candidates = List<QueueEntry>.of(incoming);
-          if (_shuffle && !command.orderedRecommendation) {
+          // Admission chooses the first permitted occurrence at or after the
+          // requested start. Earlier rows remain queue history, not fallback
+          // candidates, even when the requested row was locally excluded.
+          final initial = command.initialEntryId;
+          final suffixIds = initial == null
+              ? null
+              : command.entries
+                    .skipWhile((entry) => entry.entryId != initial)
+                    .map((entry) => entry.entryId)
+                    .toSet();
+          final candidates = incoming
+              .where(
+                (entry) =>
+                    suffixIds == null || suffixIds.contains(entry.entryId),
+              )
+              .toList();
+          if (_shuffle && !command.orderedRecommendation && initial == null) {
             candidates.shuffle(_random);
           }
           final choice = await _admitAutomatic(

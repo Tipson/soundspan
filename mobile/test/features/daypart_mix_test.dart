@@ -130,7 +130,7 @@ void main() {
     },
   );
 
-  testWidgets('Home shows authoritative empty daypart count and reason', (
+  testWidgets('Home hides empty daypart cards and diagnostic status rows', (
     tester,
   ) async {
     final authority = CollectionAuthority();
@@ -177,15 +177,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.text('Пока меньше подходящих треков'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.text('Ваше утро'), findsOneWidget);
-      expect(find.text('0 треков'), findsOneWidget);
-      expect(find.text('Пока меньше подходящих треков'), findsOneWidget);
-      expect(find.textContaining('Проверено в '), findsOneWidget);
+      expect(controller.state.feed.mixes.single.trackCount, 0);
+      expect(find.text('Ваше утро'), findsNothing);
+      expect(find.text('0 треков'), findsNothing);
+      expect(find.text('Пока меньше подходящих треков'), findsNothing);
+      expect(find.textContaining('Проверено в '), findsNothing);
       expect(plays, 0);
       expect(tester.takeException(), isNull);
     } finally {

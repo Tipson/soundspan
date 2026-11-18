@@ -20,6 +20,152 @@ import '../support/auth_fakes.dart' show ScriptedJsonClient;
 import '../support/wave_reporting_fixtures.dart';
 
 void main() {
+  for (final scenario in ['ordered', 'tail', 'single', 'direction', 'manual']) {
+    test('Clear Wave restart preserves $scenario semantics', () async {
+      final authority = await mediaAuthority(Uri.parse('https://report.test'));
+      final fence = authority.requireFence();
+      final ids = scenario == 'single'
+          ? ['AAAAAAAAAA1']
+          : [
+              'AAAAAAAAAA1',
+              'BBBBBBBBBB1',
+              'CCCCCCCCCC1',
+              'DDDDDDDDDD1',
+              'EEEEEEEEEE1',
+            ];
+      var reads = 0;
+      final transport = ControlledTransport()
+        ..respond = (_) async {
+          reads++;
+          if (scenario != 'ordered') return ApiResponse(200, waveFeed(ids));
+          return ApiResponse(200, {
+            'generationId': 'restart-$reads',
+            'orderedWave': {
+              'version': 1,
+              'sequenceId': '5d73c623-d11d-4fda-943e-0e01ce5b3be7',
+              'startPosition': 0,
+              'nextCursor': 'next',
+              'items': [
+                for (final (index, id) in ids.indexed)
+                  {'position': index, 'track': waveDto(id)},
+              ],
+              'tail': [
+                for (final (index, id) in ids.indexed.skip(3))
+                  {'source': 'youtube', 'id': id, 'position': index},
+              ],
+            },
+          });
+        };
+      final engine = ReportingEngine();
+      final queue = QueueCoordinator(
+        authority: authority,
+        engine: engine,
+        prepare: (_, _) async => PreparedAudio(
+          uri: Uri.parse('http://127.0.0.1/synthetic'),
+          revoke: () async {},
+        ),
+      );
+      final wave = WaveContinuation(
+        controller: queue,
+        repository: RecommendationRepository(
+          transport: transport,
+          orderedWaveCapability: (_, _) async => scenario == 'ordered',
+        ),
+        authority: authority,
+      );
+      addTearDown(() async {
+        await wave.dispose();
+        await queue.dispose();
+      });
+      await wave.start(const WaveSelection(), fence);
+      await settle();
+      if (scenario == 'tail') {
+        await queue.dispatch(PlayEntry(queue.snapshot.entries.last.entryId));
+        await settle();
+      }
+      await queue.dispatch(const Clear());
+      await settle();
+      if (scenario == 'manual') {
+        await queue.dispatch(
+          ReplaceQueue(
+            queue.createEntries([
+              waveTrack('manual'),
+            ], const PlayContext(surface: PlaySurface.library)),
+            fence: fence,
+          ),
+        );
+        await queue.dispatch(const Clear());
+        await settle();
+      }
+      final selection = scenario == 'direction'
+          ? const WaveSelection(mode: WaveMode.newMusic)
+          : const WaveSelection();
+      await wave.start(selection, fence);
+      await settle();
+      expect(
+        queue.snapshot.currentEntry!.track.ref.identityKey,
+        'yt:${scenario == 'ordered' ? ids[1] : ids[0]}',
+      );
+      expect(
+        reads,
+        2,
+        reason: 'freshStart performs a bounded real request, including a single-recording catalogue',
+      );
+      if (scenario == 'ordered') {
+        expect(
+          queue.snapshot.entries.map((entry) => entry.track.ref.identityKey),
+          ids.map((id) => 'yt:$id'),
+        );
+      }
+    });
+  }
+
+  test(
+    'Clear then fresh Wave does not replay its cleared first recording',
+    () async {
+      final authority = await mediaAuthority(Uri.parse('https://report.test'));
+      final fence = authority.requireFence();
+      final transport = ControlledTransport()
+        ..respond = (_) async =>
+            ApiResponse(200, waveFeed(['a', 'b', 'c', 'd', 'e']));
+      final engine = ReportingEngine();
+      final prepared = <String>[];
+      final queue = QueueCoordinator(
+        authority: authority,
+        engine: engine,
+        prepare: (entry, _) async {
+          prepared.add(entry.track.ref.identityKey);
+          return PreparedAudio(
+            uri: Uri.parse('http://127.0.0.1/synthetic'),
+            revoke: () async {},
+          );
+        },
+      );
+      final wave = WaveContinuation(
+        controller: queue,
+        repository: RecommendationRepository(transport: transport),
+        authority: authority,
+      );
+      addTearDown(() async {
+        await wave.dispose();
+        await queue.dispose();
+      });
+      await wave.start(const WaveSelection(), fence);
+      await settle();
+      expect(queue.snapshot.currentEntry!.track.ref.identityKey, 'yt:a');
+      await queue.dispatch(const Clear());
+      await settle();
+      expect(queue.snapshot.entries, isEmpty);
+      expect(prepared, [
+        'yt:a',
+      ], reason: 'Clear never records another playback');
+      await wave.start(const WaveSelection(), fence);
+      await settle();
+      expect(queue.snapshot.currentEntry!.track.ref.identityKey, 'yt:b');
+      expect(prepared, ['yt:a', 'yt:b']);
+    },
+  );
+
   test(
     'Wave explains an API deadline without replacing the current queue',
     () async {

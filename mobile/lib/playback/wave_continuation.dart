@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/model/app_failure.dart';
 import '../core/model/owner_key.dart';
+import '../core/model/track_ref.dart';
 import '../core/session/session_authority.dart';
 import '../features/recommendations/recommendation_repository.dart';
 import 'playback_controller.dart';
@@ -68,6 +69,14 @@ final class WaveContinuation {
   bool _needsReplacement = false;
   OrderedWavePage? _ordered;
   _OrderedQueueCheckpoint? _orderedCheckpoint;
+  TrackRef? _lastWaveRecording;
+  ({
+    SessionFence fence,
+    WaveSelection selection,
+    TrackRef recording,
+    int lineage,
+  })?
+  _clearedWave;
   int _sequenceResets = 0;
   bool _forceCapabilities = false;
   void _publish(WaveState value) {
@@ -97,6 +106,15 @@ final class WaveContinuation {
         code: 'session_revoked',
         message: 'Сессия завершена',
       );
+    }
+    final cleared = _clearedWave;
+    final current = controller.snapshot;
+    if (cleared != null &&
+        (cleared.fence != fence ||
+            cleared.selection != selection ||
+            current.entries.isNotEmpty ||
+            current.lineage != cleared.lineage)) {
+      _clearedWave = null;
     }
     ++_revision;
     _fence = fence;
@@ -148,6 +166,8 @@ final class WaveContinuation {
     _fence = null;
     _lineage = null;
     _session = null;
+    _lastWaveRecording = null;
+    _clearedWave = null;
     _ordered = null;
     _orderedCheckpoint = null;
     _forceCapabilities = false;
@@ -173,6 +193,26 @@ final class WaveContinuation {
     if (snapshot.lineage != current.lineage ||
         snapshot.fence != current.fence) {
       return;
+    }
+    if (snapshot.entries.isEmpty &&
+        snapshot.fence == null &&
+        snapshot.lineage == (_lineage ?? -2) + 1 &&
+        _lastWaveRecording != null &&
+        authority.isCurrent(_fence!)) {
+      final cleared = (
+        fence: _fence!,
+        selection: _state.selection,
+        recording: _lastWaveRecording!,
+        lineage: snapshot.lineage,
+      );
+      detach();
+      _clearedWave = cleared;
+      return;
+    }
+    if (snapshot.fence == _fence &&
+        snapshot.lineage == _lineage &&
+        snapshot.currentEntry?.context.surface == PlaySurface.wave) {
+      _lastWaveRecording = snapshot.currentEntry!.track.ref;
     }
     if (_orderedCheckpoint != null &&
         (current.fence != _fence ||
@@ -219,6 +259,7 @@ final class WaveContinuation {
     final selection = _state.selection;
     final cursor = _state.cursor;
     final replace = _needsReplacement;
+    final restart = replace ? _clearedWave : null;
     final requestedQueue = _OrderedQueueCheckpoint(
       controller.snapshot,
       finiteAdmission,
@@ -229,7 +270,12 @@ final class WaveContinuation {
     try {
       final before = controller.snapshot;
       final excluded = replace
-          ? [if (before.currentEntry != null) before.currentEntry!.track.ref]
+          ? [
+              if (before.currentEntry != null)
+                before.currentEntry!.track.ref
+              else if (restart != null)
+                restart.recording,
+            ]
           : before.entries.map((e) => e.track.ref).toList();
       final page = await repository.wave(
         selection,
@@ -295,6 +341,20 @@ final class WaveContinuation {
         return;
       }
       final entries = controller.createEntries(tracks, context);
+      String? initialEntryId;
+      if (restart != null) {
+        final previous = entries.indexWhere(
+          (entry) => entry.track.ref == restart.recording,
+        );
+        if (previous >= 0 && previous + 1 < entries.length) {
+          initialEntryId = entries[previous + 1].entryId;
+        } else {
+          initialEntryId = entries
+              .where((entry) => entry.track.ref != restart.recording)
+              .firstOrNull
+              ?.entryId;
+        }
+      }
       _applying = revision;
       if (replace) {
         _pendingReplacementEntries = entries.map((e) => e.entryId).toSet();
@@ -306,6 +366,12 @@ final class WaveContinuation {
             expectedLineage: lineage,
             automaticRecommendation: true,
             orderedRecommendation: page.orderedWave != null,
+            initialEntryId: initialEntryId,
+            preparationCurrent: restart == null
+                ? null
+                : () =>
+                      _valid(revision, lineage, fence) &&
+                      requestedQueue.mutationsCurrent(finiteAdmission),
           ),
         );
       } else {
@@ -368,6 +434,8 @@ final class WaveContinuation {
         return;
       }
       _emptyPages = 0;
+      _clearedWave = null;
+      _lastWaveRecording = applied.currentEntry?.track.ref;
       _lineage = applied.lineage;
       _needsReplacement = false;
       _ordered = page.orderedWave;

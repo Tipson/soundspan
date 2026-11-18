@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Continue personal Wave beyond the cleared recording, including production track admission, while preserving queue order and explicit playback intent. Remove composition diagnostics and empty mix notices from music screens. Prepare Android release 0.1.27 (30).
+
 - Provide an explicit Android update screen with owner-bound release checks, bounded APK downloads and package/signature verification before the system installer. Keep cancelled, unavailable or denied updates separate from music playback and saved data.
 - Keep playlist-discovery Undo beside its status message while it remains valid, preserving bottom navigation hit targets and removing stale actions after queue, route or account changes.
 - Offer opt-in playlist playback with finite discoveries between the listener's own occurrences. Preserve exact duplicates, owner-bound cold queue metadata, current playback and history when future discoveries are disabled or safely restored.
