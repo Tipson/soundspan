@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soundspan/playback/playback_controller.dart';
 import 'package:soundspan/playback/playback_engine.dart';
 import 'package:soundspan/playback/queue_coordinator.dart';
+
 import '../support/collection_fixtures.dart';
 import 'queue_coordinator_test.dart' show FakeEngine, entry;
 
@@ -22,16 +23,31 @@ void main() {
     final engine = OnceFailedStop();
     var released = 0;
     final queue = QueueCoordinator(
-      authority: CollectionAuthority(), engine: engine,
-      prepare: (_, _) async => PreparedAudio(uri: Uri.file('D:/CodexData/temp/owned-synthetic-reader.wav'), revoke: () async { released++; }),
+      authority: CollectionAuthority(),
+      engine: engine,
+      prepare: (_, _) async => PreparedAudio(
+        uri: Uri.file('D:/CodexData/temp/owned-synthetic-reader.wav'),
+        revoke: () async {
+          released++;
+        },
+      ),
     );
     try {
       await queue.dispatch(ReplaceQueue([entry('a')], fence: collectionFence));
       engine.failNext = true;
-      try { await queue.dispatch(const Clear()); } catch (_) { /* First stop intentionally failed. */ }
+      try {
+        await queue.dispatch(const Clear());
+      } catch (_) {
+        /* First stop intentionally failed. */
+      }
       expect(released, 0, reason: 'A failed stop cannot release the pin');
       await queue.dispatch(const Clear());
-      expect(released, 1, reason: 'The next successful global stop must drain the retained resource');
+      expect(
+        released,
+        1,
+        reason:
+            'The next successful global stop must drain the retained resource',
+      );
     } finally {
       await queue.dispose();
     }
