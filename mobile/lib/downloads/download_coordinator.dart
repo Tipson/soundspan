@@ -51,6 +51,7 @@ final class DownloadCoordinator {
   final Set<MediaCancellation> _networkDeferrals = {};
   final Set<Future<void>> _pending = {};
   bool _closed = false;
+  bool _retryOnClose = false;
 
   /// Foreground and headless workers call this same transfer pipeline. No
   /// credential or resolved URL is persisted in the job or checkpoint.
@@ -108,7 +109,10 @@ final class DownloadCoordinator {
     final job = claimed;
     final cancel = MediaCancellation();
     _active.add(cancel);
-    if (_closed) cancel.cancel();
+    if (_closed) {
+      if (_retryOnClose) _networkDeferrals.add(cancel);
+      cancel.cancel();
+    }
     ProtectedMediaResponse? response;
     RandomAccessFile? sink;
     Future<void>? heartbeat;
@@ -417,11 +421,10 @@ final class DownloadCoordinator {
       } catch (_) {
         // Optional evidence cannot replace the original transfer outcome.
       }
-      final deferred =
+      var deferred =
           _networkDeferrals.contains(cancel) &&
-          !_closed &&
           repository.authority.isCurrent(originalFence);
-      final cancelled =
+      var cancelled =
           (!deferred && cancel.isCancelled) ||
           !repository.authority.isCurrent(originalFence) ||
           (!deferred &&
@@ -448,8 +451,18 @@ final class DownloadCoordinator {
               ? repository.now + error.retryAfter!.inMilliseconds
               : null,
         );
-      } catch (_) {
+      } catch (writeError) {
         /* Revoked fence/claim: never touch the replacement. */
+        if (deferred &&
+            writeError is AppFailure &&
+            const {
+              'media_cancelled',
+              'stale_session',
+              'session_revoked',
+            }.contains(writeError.code)) {
+          deferred = false;
+          cancelled = true;
+        }
       }
       return deferred
           ? DownloadRunResult.retry
@@ -499,9 +512,19 @@ final class DownloadCoordinator {
     }
   }
 
-  Future<void> close() async {
+  /// Only a known scheduler constraint stop retains same-generation retry.
+  /// Explicit/unknown cancellation overrides an earlier route deferral.
+  Future<void> close({bool retryWhenAllowed = false}) async {
+    // A claim can still be awaiting its owner transaction. Preserve the stop
+    // intent for it, while an explicit cancellation can never be upgraded.
+    _retryOnClose = retryWhenAllowed && (!_closed || _retryOnClose);
     _closed = true;
     for (final cancel in List.of(_active)) {
+      if (_retryOnClose) {
+        _networkDeferrals.add(cancel);
+      } else {
+        _networkDeferrals.remove(cancel);
+      }
       cancel.cancel();
     }
     await Future.wait(List.of(_pending));

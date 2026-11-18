@@ -43,6 +43,14 @@ typedef WorkerNetworkPolicyLoader = Future<NetworkPolicy> Function(
   SessionFence fence,
 );
 
+/// Runtime drain signal only; unknown/legacy messages retain explicit-cancel
+/// semantics. It never changes durable owner, job or WorkData identity.
+bool retryDownloadWorkerStop(Object? arguments) =>
+    arguments is Map &&
+    arguments.length == 1 &&
+    arguments['retryWhenAllowed'] is bool &&
+    arguments['retryWhenAllowed'] == true;
+
 /// Production calls with defaults. An integration-only entrypoint may supply a
 /// local test CA; neither WorkData nor a platform message can configure trust.
 Future<void> runDownloadWorker({
@@ -390,7 +398,9 @@ Future<void> runDownloadWorker({
         ));
       case 'cancel':
         stopped = true;
-        await coordinator?.close();
+        await coordinator?.close(
+          retryWhenAllowed: retryDownloadWorkerStop(call.arguments),
+        );
         await running;
         return null;
       default:

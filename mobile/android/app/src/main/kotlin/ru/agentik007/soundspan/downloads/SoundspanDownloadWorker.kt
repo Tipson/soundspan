@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -14,6 +15,7 @@ import androidx.work.Constraints
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.ForegroundInfo
 import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import androidx.work.WorkerParameters
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
@@ -115,13 +117,25 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
                 // If the engine is unresponsive, bounded destruction is crash
                 // recovery, never a successful ready acknowledgement.
                 if (engine != null && !done.isCompleted) {
+                    val drainDeadline = SystemClock.elapsedRealtime() + 60_000
                     val drained = CompletableDeferred<Unit>()
-                    channel?.invokeMethod("cancel", null, object : MethodChannel.Result {
+                    // WorkManager2.12 serializes this public query behind its
+                    // cancel transaction (CANCELLED is written before stop).
+                    val state = if (isStopped) withContext(Dispatchers.IO) {
+                        try { WorkManager.getInstance(applicationContext).getWorkInfoById(id).get(2, TimeUnit.SECONDS)?.state }
+                        catch (_: Exception) { null } // Unknown is never retry authority.
+                    } else null
+                    val reason = if (Build.VERSION.SDK_INT >= 31) stopReason else WorkInfo.STOP_REASON_UNKNOWN
+                    val retry = retryableDownloadStop(Build.VERSION.SDK_INT, reason, isStopped, state)
+                    // The runtime signal carries no identity or new WorkData.
+                    // Missing/finished state and explicit cancellation fail closed.
+                    channel?.invokeMethod("cancel", if (retry) mapOf("retryWhenAllowed" to true) else null, object : MethodChannel.Result {
                         override fun success(value: Any?) { drained.complete(Unit) }
                         override fun error(code: String, message: String?, details: Any?) { drained.complete(Unit) }
                         override fun notImplemented() { drained.complete(Unit) }
                     })
-                    withTimeoutOrNull(60_000) { drained.await() }
+                    val remainingDrain = drainDeadline - SystemClock.elapsedRealtime()
+                    if (remainingDrain > 0) withTimeoutOrNull(remainingDrain) { drained.await() }
                 }
                 channel?.setMethodCallHandler(null)
                 engine?.destroy()
@@ -205,4 +219,14 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
             .build()
         return if (Build.VERSION.SDK_INT >= 29) ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else ForegroundInfo(notificationId, notification)
     }
+}
+
+/** Finished/cancelled work always wins. On pre31, a stopped unfinished spec is
+ * still owned by the scheduler; newer APIs additionally require a known cause. */
+internal fun retryableDownloadStop(apiLevel: Int, reason: Int,
+    stopped: Boolean, state: WorkInfo.State?): Boolean {
+    if (!stopped || (state != WorkInfo.State.RUNNING && state != WorkInfo.State.ENQUEUED)) return false
+    if (reason == WorkInfo.STOP_REASON_CANCELLED_BY_APP || reason == WorkInfo.STOP_REASON_USER) return false
+    return apiLevel < 31 || reason == WorkInfo.STOP_REASON_CONSTRAINT_CHARGING ||
+        reason == WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY
 }
