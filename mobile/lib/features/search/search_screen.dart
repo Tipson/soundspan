@@ -250,8 +250,11 @@ class _SearchScreenState extends State<SearchScreen> {
                         MusicButton(
                           label: 'Повторить поиск',
                           icon: Icons.refresh,
-                          busy: state.refreshingSaved,
-                          onPressed: state.loading || state.refreshingSaved
+                          busy: state.refreshingSaved || state.retrying,
+                          onPressed:
+                              state.loading ||
+                                  state.refreshingSaved ||
+                                  state.retrying
                               ? null
                               : () =>
                                     state.failure == null &&
@@ -260,7 +263,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                           (key) => key.startsWith('saved:'),
                                         )
                                     ? owner.retrySaved()
-                                    : owner.submit(state.query),
+                                    : owner.retry(),
                         ),
                       if (state.refreshingSaved)
                         const Padding(
@@ -364,7 +367,9 @@ class _SearchScreenState extends State<SearchScreen> {
                             label: 'Показать ещё',
                             busy: state.loadingMore,
                             onPressed:
-                                state.loadingMore || state.refreshingSaved
+                                state.loadingMore ||
+                                    state.refreshingSaved ||
+                                    state.retrying
                                 ? null
                                 : owner.loadMore,
                           ),

@@ -9,6 +9,7 @@ import '../downloads/download_models.dart';
 import '../downloads/liked_download_automation.dart';
 import '../downloads/offline_mix_quota.dart';
 import '../downloads/reschedule_network_downloads.dart';
+import '../downloads/schedule_current_download.dart';
 import '../features/account/account_controller.dart';
 import '../features/account/account_repository.dart';
 import '../features/downloads/downloads_controller.dart';
@@ -136,19 +137,14 @@ final class OwnerUiSession {
     ) async {
       await guard();
       if (original != fence) throw collectionStaleSession;
-      final job = await owner.downloads.status(id, original);
-      if (job == null ||
-          job.generation != generation ||
-          job.originalFence != original) {
-        throw collectionStaleSession;
-      }
-      final constraint = await owner.downloadAccess.constraintFor(job);
-      await guard();
-      return worker.schedule(
-        id,
-        original,
-        generation,
-        networkConstraint: constraint,
+      return scheduleCurrentDownload(
+        repository: owner.downloads,
+        access: owner.downloadAccess,
+        worker: worker,
+        id: id,
+        fence: original,
+        generation: generation,
+        guard: guard,
       );
     }
 
@@ -191,6 +187,7 @@ final class OwnerUiSession {
     offlineMix = OfflineMixController(
       repository: owner.offlineMix,
       downloads: downloads,
+      dailyRefresh: owner.dailyRefresh,
     );
     lifetime.add(() async {
       await offlineMix.close();
@@ -462,6 +459,7 @@ final class OwnerUiSession {
     if (_started || !isCurrent) return;
     _started = true;
     observe(offlineMix.refresh());
+    observe(owner.dailyRefresh.ensureScheduled());
     observe(settings.load());
     observe(tastes.load());
     observe(owner.capabilities.refresh());

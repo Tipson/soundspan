@@ -22,6 +22,7 @@ internal object NativeEnginePlugins {
 
     /** Private download isolate retains its explicit role-specific allowlist. */
     fun installWorker(engine: FlutterEngine) {
+        engine.plugins.add(DownloadWorkerPlugin())
         if (!engine.plugins.has(DownloadNetworkStatePlugin::class.java)) engine.plugins.add(DownloadNetworkStatePlugin())
         engine.plugins.add(com.tekartik.sqflite.SqflitePlugin())
         engine.plugins.add(com.github.dart_lang.jni.JniPlugin())

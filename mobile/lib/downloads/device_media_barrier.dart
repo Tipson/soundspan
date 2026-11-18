@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 
 import '../core/storage/owner_store.dart';
 import 'download_checkpoint.dart';
+import 'device_process_scope.dart';
 
 /// A playback reservation, not an upstream capability or an open Dart file.
 /// The queue releases it only after the native decoder has stopped.
@@ -33,7 +34,8 @@ final class DeviceFileRemoval {
 }
 
 /// Exact-file metadata under the existing owner transaction. No timer expires
-/// readers: an abandoned or unproven decoder remains conservatively protected.
+/// readers: only another known single-process instance proves an old decoder
+/// has died. Legacy, unknown and same-process readers remain protected.
 abstract final class DeviceMediaBarrier {
   static const namespace = 'deviceMediaReaders.v1';
   static String fileKey(DownloadCheckpoint file) =>
@@ -52,6 +54,33 @@ abstract final class DeviceMediaBarrier {
   static bool _opaque(Object? value) =>
       value is String && RegExp(r'^[a-f0-9]{48}$').hasMatch(value);
 
+  static String? _readerProcess(Object? value) {
+    if (value is! Map ||
+        value.length != 3 ||
+        value['version'] is! int ||
+        value['version'] != 1 ||
+        value['epoch'] is! int ||
+        (value['epoch'] as int) < 0) {
+      return null;
+    }
+    return DeviceProcessScope.fromNative(value['processInstance'])
+        .processInstance;
+  }
+
+  static Map<String, Object?> _reclaim(
+    Map<String, Object?> row,
+    DeviceProcessScope scope,
+  ) {
+    final current = scope.processInstance;
+    if (current == null || row['state'] != 'available') return row;
+    final readers = Map<String, Object?>.from(row['readers'] as Map)
+      ..removeWhere((_, value) {
+        final process = _readerProcess(value);
+        return process != null && process != current;
+      });
+    return {...row, 'readers': readers};
+  }
+
   static Map<String, Object?> _decode(
     Map<String, Object?> raw,
     String id,
@@ -66,7 +95,9 @@ abstract final class DeviceMediaBarrier {
         readers is! Map ||
         readers.length > 64 ||
         readers.entries.any(
-          (e) => !_opaque(e.key) || e.value is! int || (e.value as int) < 0,
+          (e) =>
+              !_opaque(e.key) ||
+              !(e.value is Map || (e.value is int && (e.value as int) >= 0)),
         ) ||
         (raw['state'] == 'available'
             ? raw['removal'] != null
@@ -111,13 +142,17 @@ abstract final class DeviceMediaBarrier {
     OwnerTransaction tx,
     String id,
     DownloadCheckpoint file,
-    int epoch,
-  ) async {
-    final row = await _read(tx, id, file);
+    int epoch, {
+    DeviceProcessScope processScope = const DeviceProcessScope.unknown(),
+  }) async {
+    final row = _reclaim(await _read(tx, id, file), processScope);
     final readers = Map<String, Object?>.from(row['readers'] as Map);
     if (row['state'] != 'available' || readers.length >= 64) return null;
     final nonce = _nonce();
-    readers[nonce] = epoch;
+    final process = processScope.processInstance;
+    readers[nonce] = process == null
+        ? epoch
+        : {'version': 1, 'epoch': epoch, 'processInstance': process};
     await tx.write(namespace, key(id, file), {...row, 'readers': readers});
     return nonce;
   }
@@ -144,11 +179,12 @@ abstract final class DeviceMediaBarrier {
   static Future<List<DeviceFileRemoval>?> reserve(
     OwnerTransaction tx,
     String id,
-    Iterable<DownloadCheckpoint> files,
-  ) async {
+    Iterable<DownloadCheckpoint> files, {
+    DeviceProcessScope processScope = const DeviceProcessScope.unknown(),
+  }) async {
     final rows = <String, Map<String, Object?>>{};
     for (final file in files) {
-      final row = await _read(tx, id, file);
+      final row = _reclaim(await _read(tx, id, file), processScope);
       if ((row['readers'] as Map).isNotEmpty) return null;
       rows[key(id, file)] = row;
     }

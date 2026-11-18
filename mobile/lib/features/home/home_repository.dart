@@ -17,11 +17,13 @@ final class HomeRepository {
     required this.authority,
     required this.fence,
     this.networkPolicy = const NetworkPolicy.online(),
+    this.admitRequest,
   });
   final ApiTransport transport;
   final SessionAuthority authority;
   final SessionFence fence;
   final NetworkPolicy networkPolicy;
+  final Future<void> Function()? admitRequest;
   bool _revoked = false;
   bool get isCurrent {
     if (!authority.isCurrent(fence)) _revoked = true;
@@ -41,6 +43,8 @@ final class HomeRepository {
   ]) async {
     networkPolicy.requireNetwork();
     await _guard();
+    await admitRequest?.call();
+    await _guard();
     final response = await transport.send(
       ApiRequest(
         origin: fence.owner.serverOrigin,
@@ -51,6 +55,7 @@ final class HomeRepository {
       fence: fence,
     );
     await _guard();
+    await admitRequest?.call();
     response.requireSuccess();
     return response.data;
   }
@@ -158,6 +163,61 @@ final class HomeRepository {
   }
 
   Future<List<MusicMix>> dailyMixes() async => (await _daily()).mixes;
+
+  /// Reload one exact saved composition; legacy summaries always fetch detail.
+  /// This never substitutes a different daily key or a fallback shelf mix.
+  Future<MusicMix?> currentMix(String identity) async {
+    final split = identity.indexOf(':');
+    if (split < 1) throw _shape;
+    final kind = identity.substring(0, split),
+        id = identity.substring(split + 1);
+    final request = HomeRequest.at(
+      DateTime.now(),
+      autoPlaylists: true,
+      discovery: true,
+    );
+    MusicMix? selected;
+    switch (kind) {
+      case 'daily':
+        final matches = (await dailyMixes()).where((m) => m.id == id).toList();
+        if (matches.length > 1) throw _shape;
+        selected = matches.singleOrNull;
+      case 'weekly':
+        selected = await weekly();
+      case 'legacy':
+        final matches = (await legacyMixes()).where((m) => m.id == id).toList();
+        if (matches.length > 1) throw _shape;
+        if (matches.isNotEmpty) selected = await detail(matches.single);
+      case 'dailyBlend':
+        selected = _personalMix(
+          await _get('/api/personalized/home', _query(request, 'made-for-you')),
+          MusicMixKind.dailyBlend,
+          'daily-blend',
+          'Микс дня',
+          'Знакомая музыка и новые открытия',
+        );
+      case 'daypart':
+        selected = _personalMix(
+          await _get(
+            '/api/personalized/home',
+            _query(request, 'made-for-you', daypart: true),
+          ),
+          MusicMixKind.daypart,
+          'time-${request.localHour < 6
+              ? 'night'
+              : request.localHour < 12
+              ? 'morning'
+              : request.localHour < 18
+              ? 'daytime'
+              : 'evening'}',
+          daypartTitle(request.localHour),
+          'Музыка для вашего времени дня',
+        );
+      default:
+        throw _shape;
+    }
+    return selected?.identity == identity ? selected : null;
+  }
 
   Future<({List<MusicMix> mixes, List<HomeMixStatus> statuses})>
   _daily() async {

@@ -6,6 +6,10 @@
 
 ## Unreleased
 
+- Keep useful search results and successful page windows while retrying failed sources. Recover the exact failed window, preserve source identities and cursors, and reject late results after query, category, membership or account changes.
+- Honor manual download promotion even when a captured daily batch reaches native scheduling late. Count fresh automatic bytes after a completed explicit deletion and allow the recording to be saved in a mix again. Prepare Android release 0.1.18 (21).
+- Refresh the saved offline mix daily after explicit opt-in, while charging on unmetered access. Keep its exact source and quality, preserve the last complete mix on errors, and retire scheduled work when its account or policy changes.
+- Reclaim abandoned file-reader pins only after a different known Android process instance; keep same-process, legacy and unknown readers protected.
 - Reserve device files through native playback teardown and guard rotating offline mixes with an owner-scoped storage budget. Keep current and previous manifests, protect individual saves and favorites, recover admitted removals, and expose the budget in offline settings.
 - Check application-private free space before bounded audio writes and recovery copies. Preserve a storage reserve, pause automatic downloads through the existing storage-error policy, and keep previously saved media intact when capacity is unavailable.
 - Import a bounded text list or Spotify JSON export through an explicit draft preview. Choose playlist, liked, saved album/artist and exact negative categories independently; keep unresolved positions and recover the same server job after an ambiguous response. Hide the new entry on servers without a fresh compatible capability and retain existing URL/M3U import flows. Prepare Android release 0.1.17 (20).

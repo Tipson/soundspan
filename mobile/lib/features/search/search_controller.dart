@@ -19,13 +19,14 @@ final class SearchState {
     this.loading = false,
     this.loadingMore = false,
     this.refreshingSaved = false,
+    this.retrying = false,
     this.failure,
     this.stale = false,
   }) : page = page ?? SearchPage();
   final String query;
   final SearchKind kind;
   final SearchPage page;
-  final bool loading, loadingMore, refreshingSaved, stale;
+  final bool loading, loadingMore, refreshingSaved, retrying, stale;
   final AppFailure? failure;
 }
 
@@ -111,6 +112,7 @@ final class SearchController extends ChangeNotifier {
     if (!isCurrent ||
         _state.loading ||
         _state.loadingMore ||
+        _state.retrying ||
         _state.refreshingSaved ||
         !_state.page.hasMore) {
       return;
@@ -144,6 +146,52 @@ final class SearchController extends ChangeNotifier {
           kind: before.kind,
           page: before.page,
           failure: collectionFailure(e),
+        );
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Retry failed sources of this exact query without clearing useful siblings.
+  Future<void> retry() async {
+    _timer?.cancel();
+    if (!isCurrent ||
+        _state.loading ||
+        _state.loadingMore ||
+        _state.refreshingSaved ||
+        _state.retrying ||
+        _state.query.trim().isEmpty) {
+      return;
+    }
+    final before = _state, revision = ++_revision;
+    _state = SearchState(
+      query: before.query,
+      kind: before.kind,
+      page: before.page,
+      retrying: true,
+    );
+    notifyListeners();
+    try {
+      final page = await repository.retry(
+        before.query,
+        before.kind,
+        before.page,
+      );
+      if (isCurrent && revision == _revision) {
+        _state = SearchState(
+          query: before.query,
+          kind: before.kind,
+          page: page,
+        );
+        notifyListeners();
+      }
+    } catch (error) {
+      if (isCurrent && revision == _revision) {
+        _state = SearchState(
+          query: before.query,
+          kind: before.kind,
+          page: before.page,
+          failure: collectionFailure(error),
         );
         notifyListeners();
       }

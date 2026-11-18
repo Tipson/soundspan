@@ -16,9 +16,12 @@ import '../core/storage/owner_store.dart';
 import '../downloads/android_media_probe.dart';
 import '../downloads/download_models.dart';
 import '../downloads/device_network_monitor.dart';
+import '../downloads/device_process_scope.dart';
 import '../downloads/download_network_access.dart';
 import '../downloads/download_repository.dart';
 import '../downloads/offline_mix_repository.dart';
+import '../downloads/offline_mix_daily_refresh.dart';
+import '../downloads/offline_mix_daily_factory.dart';
 import '../downloads/download_verifier.dart';
 import '../downloads/download_worker_bridge.dart';
 import '../downloads/private_media_paths.dart';
@@ -74,6 +77,7 @@ final class NativeOwnerServices implements AppOwnerScope {
   late final DartJsonHttpClient _json;
   late final DownloadRepository downloads;
   late final OfflineMixRepository offlineMix;
+  late final OfflineMixDailyRefresh dailyRefresh;
   late final DeviceNetworkMonitor downloadNetwork;
   late final DownloadNetworkAccess downloadAccess;
   late final ArtworkRepository artwork;
@@ -112,6 +116,7 @@ final class NativeOwnerServices implements AppOwnerScope {
     Future<void> Function(SessionFence)? cancelDownloads,
     MediaProbe mediaProbe = const AndroidMediaProbe(),
     SecurityContext? securityContext,
+    DeviceProcessScope? processScope,
   }) async {
     final owner = NativeOwnerServices._(
       authority: authority,
@@ -124,7 +129,9 @@ final class NativeOwnerServices implements AppOwnerScope {
           (f) => const DownloadWorkerBridge().cancel(f.owner),
     );
     try {
-      await owner._initialize(mediaProbe, securityContext);
+      await owner._guard();
+      final scope = processScope ?? await DeviceProcessScope.read();
+      await owner._initialize(mediaProbe, securityContext, scope);
       return owner;
     } catch (_) {
       await owner.close();
@@ -139,7 +146,11 @@ final class NativeOwnerServices implements AppOwnerScope {
     if (!_current) throw _stale;
   }
 
-  Future<void> _initialize(MediaProbe probe, SecurityContext? tls) async {
+  Future<void> _initialize(
+    MediaProbe probe,
+    SecurityContext? tls,
+    DeviceProcessScope processScope,
+  ) async {
     await _guard();
     policy = await StoredNetworkPolicy.restore(
       store: store,
@@ -203,6 +214,7 @@ final class NativeOwnerServices implements AppOwnerScope {
       verifier: DownloadVerifier(probe: probe),
       beforeRemove: _beforeRemove,
       afterRemove: _afterRemove,
+      processScope: processScope,
     );
     offlineMix = OfflineMixRepository(downloads: downloads, fence: fence);
     downloadNetwork = DeviceNetworkMonitor();
@@ -217,6 +229,16 @@ final class NativeOwnerServices implements AppOwnerScope {
       },
     );
     void routeChanged() => _warmup?.cancelNetwork();
+    dailyRefresh = createOfflineMixDailyRefresh(
+      downloads: downloads,
+      mixes: offlineMix,
+      transport: transport,
+      authority: authority,
+      networkPolicy: policy,
+      monitor: downloadNetwork,
+      access: downloadAccess,
+      guard: _guard,
+    );
     downloadNetwork.addListener(routeChanged);
     _retire.add(() async => downloadNetwork.removeListener(routeChanged));
     artwork = ArtworkRepository(

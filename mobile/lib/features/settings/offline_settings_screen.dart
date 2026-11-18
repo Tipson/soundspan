@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/network/stored_network_policy.dart';
 import '../../downloads/download_network_rules.dart';
 import '../downloads/downloads_controller.dart';
+import '../downloads/offline_mix_controller.dart';
 import '../downloads/storage_status_card.dart';
 import 'settings_screen.dart';
 
@@ -14,10 +15,12 @@ class OfflineSettingsScreen extends StatefulWidget {
     required this.policy,
     required this.downloads,
     required this.onDownloads,
+    this.offlineMix,
   });
   final StoredNetworkPolicy policy;
   final DownloadsController downloads;
   final VoidCallback onDownloads;
+  final OfflineMixController? offlineMix;
   @override
   State<OfflineSettingsScreen> createState() => _OfflineSettingsScreenState();
 }
@@ -34,17 +37,22 @@ class _OfflineSettingsScreenState extends State<OfflineSettingsScreen> {
   @override
   void didUpdateWidget(OfflineSettingsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.downloads != downloads) {
+    if (oldWidget.downloads != downloads ||
+        oldWidget.offlineMix != widget.offlineMix) {
       _loadDownloadPreferencesAfterBuild();
     }
   }
 
   void _loadDownloadPreferencesAfterBuild() {
     final controller = downloads;
+    final mix = widget.offlineMix;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && identical(controller, downloads) && controller.isCurrent) {
         unawaited(controller.loadNetworkRules());
         unawaited(controller.loadQuota());
+        if (identical(mix, widget.offlineMix)) {
+          unawaited(mix?.loadDailySettings());
+        }
       }
     });
   }
@@ -199,9 +207,60 @@ class _OfflineSettingsScreenState extends State<OfflineSettingsScreen> {
     ];
   }
 
+  List<Widget> _dailySettings() {
+    final mix = widget.offlineMix;
+    if (mix == null || mix.dailyRefresh == null) return const [];
+    final enabled =
+        mix.isCurrent &&
+        !mix.busy &&
+        !mix.dailyBusy &&
+        (mix.dailyFailure == null || mix.dailyState.enabled);
+    return [
+      const Divider(height: 32),
+      SwitchListTile(
+        key: const ValueKey('offline-mix-daily-refresh'),
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Ежедневно обновлять офлайн-микс'),
+        subtitle: Text(
+          mix.state.active == null
+              ? 'Сначала сохраните подборку для офлайна.'
+              : mix.dailyState.enabled &&
+                    (mix.dailyState.sourceIdentity !=
+                            mix.state.active!.sourceIdentity ||
+                        mix.dailyState.quality != mix.state.active!.quality)
+              ? 'Сохранённая подборка изменилась. Выключите и снова включите обновление, чтобы выбрать её.'
+              : 'Источник: ${mix.state.active!.title}. На зарядке и в сети без тарификации; текущая и предыдущая версии сохраняются.',
+        ),
+        value: mix.dailyState.enabled,
+        onChanged: enabled && mix.state.active != null
+            ? mix.setDailyEnabled
+            : null,
+      ),
+      Text(mix.dailyStatus),
+      if (mix.dailyFailure case final error?) ...[
+        SettingsFailure(error.message),
+        TextButton(
+          onPressed: mix.isCurrent && !mix.dailyBusy
+              ? mix.loadDailySettings
+              : null,
+          child: const Text('Прочитать настройку снова'),
+        ),
+      ],
+      if (mix.dailyState.enabled)
+        TextButton(
+          onPressed: enabled ? mix.retryDailyRefresh : null,
+          child: const Text('Повторить на зарядке и без тарификации'),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([policy, downloads]),
+    listenable: Listenable.merge([
+      policy,
+      downloads,
+      if (widget.offlineMix != null) widget.offlineMix!,
+    ]),
     builder: (context, _) => Scaffold(
       appBar: AppBar(title: const Text('Офлайн и загрузки')),
       body: SafeArea(
@@ -253,6 +312,7 @@ class _OfflineSettingsScreenState extends State<OfflineSettingsScreen> {
             if (downloads.failure != null)
               SettingsFailure(downloads.failure!.message),
             ..._quotaSettings(),
+            ..._dailySettings(),
             const SizedBox(height: 20),
             OutlinedButton.icon(
               onPressed: widget.onDownloads,

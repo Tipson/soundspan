@@ -19,6 +19,15 @@ final class SearchRepository extends CatalogRepository {
     String query,
     SearchKind kind, {
     SearchPage? previous,
+  }) => _search(query, kind, previous: previous);
+
+  Future<SearchPage> _search(
+    String query,
+    SearchKind kind, {
+    SearchPage? previous,
+    Set<String>? onlyParts,
+    int? discoveryRefreshLimit,
+    int? recoveryOffset,
   }) async {
     networkPolicy.requireNetwork();
     await guard();
@@ -30,10 +39,12 @@ final class SearchRepository extends CatalogRepository {
         message: 'Введите не более 500 символов.',
       );
     }
-    final offset = previous?.localOffset ?? 0,
-        limit = (previous?.discoveryLimit ?? 0) + 50;
+    final offset = recoveryOffset ?? previous?.localOffset ?? 0,
+        limit = discoveryRefreshLimit ?? (previous?.discoveryLimit ?? 0) + 50;
     final failures = <String, AppFailure>{...?previous?.failures};
-    final saved = _searchSaved(q, kind, previous: previous);
+    final saved = onlyParts == null
+        ? _searchSaved(q, kind, previous: previous)
+        : Future<SearchPage>.value(SearchPage());
     Future<Map<String, Object?>?> part(
       String key,
       Future<Object?> Function() action,
@@ -50,7 +61,7 @@ final class SearchRepository extends CatalogRepository {
     }
 
     Future<Object?> localPage() async {
-      if (kind != SearchKind.all || previous == null) {
+      if (kind != SearchKind.all || offset == 0) {
         return get('/api/search', {
           'q': q,
           'type': kind.name,
@@ -87,12 +98,18 @@ final class SearchRepository extends CatalogRepository {
       };
     }
 
+    final localRequested =
+        (previous == null || previous.localHasMore) &&
+        (onlyParts == null ||
+            onlyParts.contains('library') ||
+            onlyParts.contains('liked'));
     final results = await Future.wait<Object?>([
-      if (previous == null || previous.localHasMore)
+      if (localRequested)
         part('library', localPage)
       else
         Future<Map<String, Object?>?>.value(null),
-      if (previous == null || previous.discoveryHasMore)
+      if ((previous == null || previous.discoveryHasMore) &&
+          (onlyParts == null || onlyParts.contains('discovery')))
         part(
           'discovery',
           () => get('/api/search/discover', {
@@ -105,6 +122,7 @@ final class SearchRepository extends CatalogRepository {
       else
         Future<Map<String, Object?>?>.value(null),
       if (previous == null &&
+          (onlyParts == null || onlyParts.contains('native')) &&
           q.length <= 200 &&
           (kind == SearchKind.all || kind == SearchKind.tracks))
         part('native', () => get('/api/music-sources/catalog', {'query': q}))
@@ -125,11 +143,36 @@ final class SearchRepository extends CatalogRepository {
           ...artists,
           ...albums,
         }.map((e) => e.ref.identityKey).toSet();
-    void addTrack(Track t) {
+    final partTracks = <String, List<Track>>{
+      for (final entry
+          in previous?.parts.entries ?? <MapEntry<String, SearchResultPart>>[])
+        entry.key: List.of(entry.value.tracks),
+    };
+    final partArtists = <String, List<CatalogEntity>>{
+      for (final entry
+          in previous?.parts.entries ?? <MapEntry<String, SearchResultPart>>[])
+        entry.key: List.of(entry.value.artists),
+    };
+    final partAlbums = <String, List<CatalogEntity>>{
+      for (final entry
+          in previous?.parts.entries ?? <MapEntry<String, SearchResultPart>>[])
+        entry.key: List.of(entry.value.albums),
+    };
+    void addTrack(Track t, String part) {
+      final rows = partTracks.putIfAbsent(part, () => []);
+      if (!rows.any((row) => row.ref.identityKey == t.ref.identityKey)) {
+        rows.add(t);
+      }
       if (trackIds.add(t.ref.identityKey)) tracks.add(t);
     }
 
-    void addEntity(CatalogEntity e) {
+    void addEntity(CatalogEntity e, String part) {
+      final rows =
+          (e.ref.kind == CatalogEntityKind.artist ? partArtists : partAlbums)
+              .putIfAbsent(part, () => []);
+      if (!rows.any((row) => row.ref.identityKey == e.ref.identityKey)) {
+        rows.add(e);
+      }
       if (entityIds.add(e.ref.identityKey)) {
         (e.ref.kind == CatalogEntityKind.artist ? artists : albums).add(e);
       }
@@ -172,7 +215,7 @@ final class SearchRepository extends CatalogRepository {
                   partial = true;
                   continue;
                 }
-                addTrack(track);
+                addTrack(track, 'liked');
               } on AppFailure {
                 partial = true;
               }
@@ -192,16 +235,21 @@ final class SearchRepository extends CatalogRepository {
         }
       }
       for (final row in listOrEmpty(local['tracks'])) {
-        addTrack(const LibrarySearchAdapter().map(collectionObject(row)));
+        addTrack(
+          const LibrarySearchAdapter().map(collectionObject(row)),
+          'library',
+        );
       }
       for (final row in listOrEmpty(local['artists'])) {
         addEntity(
           entityFromLibrary(collectionObject(row), CatalogEntityKind.artist),
+          'library',
         );
       }
       for (final row in listOrEmpty(local['albums'])) {
         addEntity(
           entityFromLibrary(collectionObject(row), CatalogEntityKind.album),
+          'library',
         );
       }
     }
@@ -210,7 +258,7 @@ final class SearchRepository extends CatalogRepository {
         final row = collectionObject(raw);
         switch (row['type']) {
           case 'track':
-            addTrack(const SearchTrackMapper().mapDiscovery(row));
+            addTrack(const SearchTrackMapper().mapDiscovery(row), 'discovery');
           case 'music':
           case 'artist':
           case 'album':
@@ -240,6 +288,7 @@ final class SearchRepository extends CatalogRepository {
                 ),
                 year: row['year']?.toString(),
               ),
+              'discovery',
             );
         }
       }
@@ -253,7 +302,10 @@ final class SearchRepository extends CatalogRepository {
     }
     if (native != null) {
       for (final raw in listOrEmpty(native['tracks'])) {
-        addTrack(const SearchTrackMapper().mapCatalog(collectionObject(raw)));
+        addTrack(
+          const SearchTrackMapper().mapCatalog(collectionObject(raw)),
+          'native',
+        );
       }
       for (final provider in listOrEmpty(native['unavailable'])) {
         failures['native:$provider'] = AppFailure(
@@ -272,7 +324,33 @@ final class SearchRepository extends CatalogRepository {
           ].reduce((a, b) => a > b ? a : b)
         : listOrEmpty(local[kind.name]).length;
     final pageInfo = objectOrEmpty(discovery?['pageInfo']);
+    final localFailed =
+        _partFailed('library', failures) || _partFailed('liked', failures);
+    final recovery = localRequested
+        ? localFailed
+              ? previous?.localRecovery?.offset == offset
+                    ? previous!.localRecovery
+                    : SearchLocalRecovery(offset, {
+                        for (final key in ['library', 'liked'])
+                          key: ?previous?.parts[key],
+                      })
+              : null
+        : previous?.localRecovery;
     return SearchPage(
+      binding: SearchPageBinding(fence, q, kind),
+      localRecovery: recovery,
+      parts: {
+        for (final key in {
+          ...partTracks.keys,
+          ...partArtists.keys,
+          ...partAlbums.keys,
+        })
+          key: SearchResultPart(
+            tracks: partTracks[key] ?? [],
+            artists: partArtists[key] ?? [],
+            albums: partAlbums[key] ?? [],
+          ),
+      },
       tracks: tracks,
       artists: _browseFirst(artists),
       albums: _browseFirst(albums),
@@ -319,6 +397,176 @@ final class SearchRepository extends CatalogRepository {
       savedFailures: savedPage.failures,
     );
   }
+
+  /// Retry failed endpoints at their captured failed window, never load-more.
+  Future<SearchPage> retry(
+    String query,
+    SearchKind kind,
+    SearchPage before,
+  ) async {
+    await guard();
+    final q = query.trim();
+    if (before.binding?.matches(fence, q, kind) != true) {
+      return search(query, kind);
+    }
+    final missing = <String>{
+      if (_partFailed('library', before.failures)) 'library',
+      if (_partFailed('liked', before.failures)) 'liked',
+      if (_partFailed('discovery', before.failures) ||
+          before.hasUnresolvedTracks)
+        'discovery',
+      if (_partFailed('native', before.failures)) 'native',
+    };
+    // Library/liked share one HTTP window. A fresh track projection also
+    // replaces its own partial liked membership, never an old failed snapshot.
+    if (missing.contains('library') &&
+        (kind == SearchKind.all || kind == SearchKind.tracks)) {
+      missing.add('liked');
+    }
+    final localRetried =
+        missing.contains('library') || missing.contains('liked');
+    final results = await Future.wait([
+      _search(
+        q,
+        kind,
+        onlyParts: missing,
+        discoveryRefreshLimit: before.discoveryLimit,
+        recoveryOffset: localRetried ? before.localRecovery?.offset : null,
+      ),
+      _searchSaved(q, kind, previous: before, retry: true),
+    ]);
+    await guard();
+    final fresh = results[0], saved = results[1];
+    final parts = Map<String, SearchResultPart>.of(before.parts);
+    for (final key in missing) {
+      final current = fresh.parts[key] ?? SearchResultPart();
+      parts[key] = _partFailed(key, fresh.failures)
+          ? _mergePart(parts[key] ?? SearchResultPart(), current)
+          : (key == 'library' || key == 'liked') && before.localRecovery != null
+          ? _mergePart(
+              before.localRecovery!.prefix[key] ?? SearchResultPart(),
+              current,
+            )
+          : current;
+    }
+    final failures = <String, AppFailure>{
+      for (final entry in before.failures.entries)
+        if (!entry.key.startsWith('saved:') &&
+            !missing.any((part) => _partFailed(part, {entry.key: entry.value})))
+          entry.key: entry.value,
+      ...fresh.failures,
+    };
+    final tracks = <String, Track>{};
+    final artists = <String, CatalogEntity>{},
+        albums = <String, CatalogEntity>{};
+    for (final key in ['liked', 'library', 'discovery', 'native']) {
+      final part = parts[key];
+      if (part == null) continue;
+      for (final row in part.tracks) {
+        tracks.putIfAbsent(row.ref.identityKey, () => row);
+      }
+      for (final row in part.artists) {
+        artists.putIfAbsent(row.ref.identityKey, () => row);
+      }
+      for (final row in part.albums) {
+        albums.putIfAbsent(row.ref.identityKey, () => row);
+      }
+    }
+    final orderedTracks = <Track>[],
+        orderedArtists = <CatalogEntity>[],
+        orderedAlbums = <CatalogEntity>[];
+    for (final row in before.tracks) {
+      final current = tracks.remove(row.ref.identityKey);
+      if (current != null) orderedTracks.add(current);
+    }
+    for (final row in before.artists) {
+      final current = artists.remove(row.ref.identityKey);
+      if (current != null) orderedArtists.add(current);
+    }
+    for (final row in before.albums) {
+      final current = albums.remove(row.ref.identityKey);
+      if (current != null) orderedAlbums.add(current);
+    }
+    orderedTracks.addAll(tracks.values);
+    orderedArtists.addAll(artists.values);
+    orderedAlbums.addAll(albums.values);
+    final localFailed =
+        _partFailed('library', fresh.failures) ||
+        _partFailed('liked', fresh.failures);
+    final discoveryRetried = missing.contains('discovery'),
+        discoveryFailed = _partFailed('discovery', fresh.failures);
+    return SearchPage(
+      binding: before.binding,
+      localRecovery: localRetried
+          ? localFailed
+                ? before.localRecovery ?? fresh.localRecovery
+                : null
+          : before.localRecovery,
+      parts: parts,
+      tracks: orderedTracks,
+      artists: _browseFirst(orderedArtists),
+      albums: _browseFirst(orderedAlbums),
+      failures: failures,
+      localOffset: localRetried && !localFailed
+          ? fresh.localOffset
+          : before.localOffset,
+      localHasMore: localRetried && !localFailed
+          ? fresh.localHasMore
+          : before.localHasMore,
+      discoveryLimit: discoveryRetried && !discoveryFailed
+          ? fresh.discoveryLimit
+          : before.discoveryLimit,
+      discoveryHasMore: discoveryRetried && !discoveryFailed
+          ? fresh.discoveryHasMore
+          : before.discoveryHasMore,
+      alias: discoveryRetried && !discoveryFailed ? fresh.alias : before.alias,
+    ).withSaved(
+      artists: saved.savedArtists,
+      albums: saved.savedAlbums,
+      artistsOffset: saved.savedArtistsOffset,
+      albumsOffset: saved.savedAlbumsOffset,
+      artistsHasMore: saved.savedArtistsHasMore,
+      albumsHasMore: saved.savedAlbumsHasMore,
+      artistsRefreshPending: saved.savedArtistsRefreshPending,
+      albumsRefreshPending: saved.savedAlbumsRefreshPending,
+      artistsPartialSeen: saved.savedArtistsPartialSeen,
+      albumsPartialSeen: saved.savedAlbumsPartialSeen,
+      savedFailures: saved.failures,
+    );
+  }
+
+  bool _partFailed(String part, Map<String, AppFailure> failures) =>
+      switch (part) {
+        'library' => failures.keys.any(
+          (key) => key == 'library' || key.startsWith('library:'),
+        ),
+        'liked' =>
+          failures.containsKey('liked') ||
+              failures.containsKey('library') ||
+              failures.containsKey('library:tracks'),
+        'native' => failures.keys.any(
+          (key) => key == 'native' || key.startsWith('native:'),
+        ),
+        _ => failures.containsKey(part),
+      };
+
+  SearchResultPart _mergePart(
+    SearchResultPart before,
+    SearchResultPart fresh,
+  ) => SearchResultPart(
+    tracks: {
+      for (final row in [...before.tracks, ...fresh.tracks])
+        row.ref.identityKey: row,
+    }.values,
+    artists: {
+      for (final row in [...before.artists, ...fresh.artists])
+        row.ref.identityKey: row,
+    }.values,
+    albums: {
+      for (final row in [...before.albums, ...fresh.albums])
+        row.ref.identityKey: row,
+    }.values,
+  );
 
   /// Recheck collection membership without querying external catalogues again.
   Future<SearchPage> refreshSaved(

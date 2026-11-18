@@ -17,7 +17,7 @@ enum DownloadRunResult { ready, busy, cancelled, retry, failed }
 
 /// File retention ownership is independent of the job's manual-start admission.
 /// Unknown persisted origins are retained and protect the file from eviction.
-enum DownloadOrigin { manual, liked, offlineMix, legacy }
+enum DownloadOrigin { manual, liked, offlineMix, offlineMixDaily, legacy }
 
 /// Immutable durable job. A new user retry receives a new generation; a worker
 /// always keeps the fence and generation originally delivered to it.
@@ -50,7 +50,12 @@ final class DeviceDownload {
   /// originally created for a rotating mix. Legacy ownership is conservative.
   final Set<String> origins;
   bool get exclusivelyOfflineMixOwned =>
-      origins.length == 1 && origins.contains(DownloadOrigin.offlineMix.name);
+      origins.isNotEmpty &&
+      origins.every(
+        (origin) =>
+            origin == DownloadOrigin.offlineMix.name ||
+            origin == DownloadOrigin.offlineMixDaily.name,
+      );
   final DownloadCheckpoint? checkpoint;
   final String? writer;
   final int leaseUntil;

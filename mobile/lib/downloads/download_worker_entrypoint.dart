@@ -16,11 +16,13 @@ import '../core/storage/owner_store.dart';
 import '../core/storage/sqlite_owner_store.dart';
 import '../core/storage/sqlite_session_store.dart';
 import '../playback/playback_resolver.dart';
+import '../playback/resolved_media.dart';
 import 'android_media_probe.dart';
 import 'download_coordinator.dart';
 import 'download_models.dart';
 import 'device_network_monitor.dart';
 import 'device_storage_guard.dart';
+import 'device_process_scope.dart';
 import 'download_network_access.dart';
 import 'download_network_policy.dart';
 import 'download_repository.dart';
@@ -29,6 +31,8 @@ import 'offline_mix_quota.dart';
 import 'download_verifier.dart';
 import 'download_worker_bridge.dart';
 import 'private_media_paths.dart';
+import 'offline_mix_daily_factory.dart';
+import 'offline_mix_refresh_admission.dart';
 import 'protected_media_fetcher.dart';
 
 export 'download_network_policy.dart' show loadDownloadNetworkPolicy;
@@ -56,7 +60,14 @@ Future<void> runDownloadWorker({
   };
 
   Future<Map<String, Object?>> execute(Object? arguments) async {
-    final request = DownloadWorkRequest.decode(arguments);
+    final refreshRequest = arguments is Map && arguments.containsKey('kind')
+        ? OfflineMixRefreshRequest.decode(arguments)
+        : null;
+    final request = refreshRequest == null
+        ? DownloadWorkRequest.decode(arguments)
+        : null;
+    final originalFence =
+        refreshRequest?.originalFence ?? request!.originalFence;
     BrokerClient? client;
     SqliteSessionStore? sessions;
     StreamSubscription? revocations;
@@ -70,13 +81,13 @@ Future<void> runDownloadWorker({
       final authority = await NativeSessionAuthorityProxy.attach(
         client,
         ClientRole.download,
-        expectedFence: request.originalFence,
+        expectedFence: originalFence,
       );
       if (stopped) return outcome('cancelled');
-      await authority.assertCurrent(request.originalFence);
+      await authority.assertCurrent(originalFence);
       sessions = await SqliteSessionStore.open();
       final owners = SqliteOwnerStore(sessions);
-      final policy = await loadNetworkPolicy(owners, request.originalFence);
+      final policy = await loadNetworkPolicy(owners, originalFence);
       final support = await getApplicationSupportDirectory();
       final canonicalSupport = await support.resolveSymbolicLinks();
       final paths = await PrivateMediaPaths.create(
@@ -87,28 +98,47 @@ Future<void> runDownloadWorker({
         authority: authority,
         paths: paths,
         verifier: const DownloadVerifier(probe: AndroidMediaProbe()),
+        processScope: await DeviceProcessScope.read(),
         beforeRemove: (_) async {
           throw StateError('Worker cannot remove media');
         },
       );
       final api = DartApiTransport(
-        client: DartJsonHttpClient(),
+        client: DartJsonHttpClient(networkPolicy: policy),
         authority: authority,
       );
       deviceNetwork = DeviceNetworkMonitor();
       await deviceNetwork.start();
       final access = DownloadNetworkAccess(
         repository: repository,
-        fence: request.originalFence,
+        fence: originalFence,
         policy: policy,
         readNetwork: () async => deviceNetwork!.value,
       );
+      final mixes = OfflineMixRepository(
+        downloads: repository,
+        fence: originalFence,
+      );
+      final daily = createOfflineMixDailyRefresh(
+        downloads: repository,
+        mixes: mixes,
+        transport: api,
+        authority: authority,
+        networkPolicy: policy,
+        monitor: deviceNetwork,
+        access: access,
+        guard: () async {
+          if (stopped) throw mediaCancelled;
+          await authority.assertCurrent(originalFence);
+          if (stopped) throw mediaCancelled;
+        },
+      );
       final quota = OfflineMixQuota(
         repository: repository,
-        fence: request.originalFence,
+        fence: originalFence,
         evict: (captured) =>
-            repository.evictIfUnprotected(captured, request.originalFence),
-        recover: () => repository.recoverRemovals(request.originalFence),
+            repository.evictIfUnprotected(captured, originalFence),
+        recover: () => repository.recoverRemovals(originalFence),
       );
       coordinator = DownloadCoordinator(
         repository: repository,
@@ -122,7 +152,10 @@ Future<void> runDownloadWorker({
           securityContext: testSecurityContext,
         ),
         networkPolicy: policy,
-        revalidateNetwork: (job) => access.requireNetwork(job: job),
+        revalidateNetwork: (job) async {
+          await access.requireNetwork(job: job);
+          await daily.requireFile(job);
+        },
         beforeWrite: const DeviceStorageGuard().requireSpace,
         reserveWrite: quota.reserveWrite,
         onWriterDrained: quota.writerDrained,
@@ -131,7 +164,7 @@ Future<void> runDownloadWorker({
           coordinator!.cancelNetworkTransfers(retryWhenAllowed: true);
       deviceNetwork.addListener(routeChanged);
       revocations = authority.changes.listen((_) {
-        if (!authority.isCurrent(request.originalFence)) {
+        if (!authority.isCurrent(originalFence)) {
           stopped = true;
           unawaited(
             channel
@@ -145,6 +178,29 @@ Future<void> runDownloadWorker({
         await coordinator!.close();
         return outcome('cancelled');
       }
+      if (refreshRequest != null) {
+        await daily.run(refreshRequest.revision);
+        return outcome('ready');
+      }
+      final fileRequest = request!;
+      if (fileRequest.refreshRevision != null) {
+        final job = await repository.status(
+          fileRequest.downloadId,
+          originalFence,
+        );
+        if (job == null || job.generation != fileRequest.generation) {
+          return outcome('cancelled');
+        }
+        if (!job.manual) {
+          final ticket = await owners.transaction(
+            originalFence,
+            (tx) => OfflineMixRefreshAdmission.jobTicketIn(tx, job),
+          );
+          if (ticket?.revision != fileRequest.refreshRevision) {
+            return outcome('cancelled');
+          }
+        }
+      }
       // No metadata in notifications. Progress appears only for this admitted
       // original generation, and every asynchronous read is fenced again.
       progress = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -152,14 +208,14 @@ Future<void> runDownloadWorker({
         pendingProgress =
             () async {
                   final job = await repository.status(
-                    request.downloadId,
-                    request.originalFence,
+                    fileRequest.downloadId,
+                    originalFence,
                   );
                   if (!stopped &&
-                      authority.isCurrent(request.originalFence) &&
+                      authority.isCurrent(originalFence) &&
                       job != null &&
-                      job.originalFence == request.originalFence &&
-                      job.generation == request.generation &&
+                      job.originalFence == originalFence &&
+                      job.generation == fileRequest.generation &&
                       job.writer != null) {
                     await channel.invokeMethod<void>('progress', {
                       'bytes': job.bytes,
@@ -171,20 +227,30 @@ Future<void> runDownloadWorker({
                 .whenComplete(() => pendingProgress = null);
       });
       final result = await coordinator!.run(
-        request.downloadId,
-        request.originalFence,
-        request.generation,
+        fileRequest.downloadId,
+        originalFence,
+        fileRequest.generation,
       );
       if (result == DownloadRunResult.ready) {
         // Manifest failure retains the last complete mix and the verified file.
         // It must not turn a completed transfer into a new download attempt.
         try {
-          final mixes = OfflineMixRepository(
-            downloads: repository,
-            fence: request.originalFence,
-          );
           final pending = (await mixes.read()).pending;
-          if (pending != null) await mixes.commit(pending.generation);
+          if (pending != null) {
+            final ticket = await owners.transaction(
+              originalFence,
+              (tx) => OfflineMixRefreshAdmission.bindingIn(
+                tx,
+                pending.generation,
+                originalFence,
+              ),
+            );
+            if (ticket != null) {
+              await daily.commitIfReady();
+            } else {
+              await mixes.commit(pending.generation);
+            }
+          }
         } catch (_) {
           // The retained pending intent is retried by the owner's UI/recovery.
         }
@@ -192,12 +258,12 @@ Future<void> runDownloadWorker({
       var delay = 0;
       if (result == DownloadRunResult.retry) {
         final latest = await repository.status(
-          request.downloadId,
-          request.originalFence,
+          fileRequest.downloadId,
+          originalFence,
         );
         if (latest != null &&
-            latest.originalFence == request.originalFence &&
-            latest.generation == request.generation) {
+            latest.originalFence == originalFence &&
+            latest.generation == fileRequest.generation) {
           final remaining =
               latest.retryNotBefore - DateTime.now().millisecondsSinceEpoch;
           delay = remaining > 0 ? remaining : 0;
@@ -205,7 +271,10 @@ Future<void> runDownloadWorker({
       }
       return outcome(result.name, delay);
     } on AppFailure catch (error) {
-      return outcome(error.retryable ? 'retry' : 'cancelled');
+      return outcome(
+        error.retryable ? 'retry' : 'cancelled',
+        error.retryAfter?.inMilliseconds ?? 0,
+      );
     } catch (_) {
       return outcome('failed');
     } finally {

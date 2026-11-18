@@ -12,6 +12,18 @@ class DownloadWorkRequestTest {
         catch (_: ClassCastException) { }
     }
 
+    @Test fun dailyEnvelopeIsClosedMarkedAndSurvivesRetryWithoutWeakeningNetwork() {
+        val request = DownloadWorkRequest.parse(identity.wire() + ("refreshRevision" to 7))
+        assertEquals(identity, request.identity)
+        assertEquals(NetworkType.UNMETERED, request.networkType)
+        assertEquals(3, request.flat()["workProtocolVersion"])
+        assertEquals(7L, request.flat()["refreshRevision"])
+        assertEquals(request.flat(), DownloadWorkRequest.fromFlat(request.flat()).flat())
+        rejects { DownloadWorkRequest.parse(identity.wire() + mapOf("refreshRevision" to 7, "networkConstraint" to "connected")) }
+        rejects { DownloadWorkRequest.fromFlat(request.flat() - "refreshRevision") }
+        rejects { DownloadWorkIdentity.fromFlat(request.flat()) }
+    }
+
     @Test fun omittedScheduleConstraintIsUnmeteredAndIdentityIsUnchanged() {
         val request = DownloadWorkRequest.parse(identity.wire())
         assertEquals(identity, request.identity)

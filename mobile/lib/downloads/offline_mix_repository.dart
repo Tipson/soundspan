@@ -13,6 +13,8 @@ import 'download_checkpoint.dart';
 import 'download_models.dart';
 import 'download_repository.dart';
 import 'device_media_barrier.dart';
+import 'offline_mix_refresh_policy.dart';
+import 'offline_mix_refresh_admission.dart';
 
 /// One ordered occurrence; repeated recordings share a download, not a row.
 final class OfflineMixItem {
@@ -142,6 +144,7 @@ final class OfflineMixRepository {
         job.id,
         cp,
         fence.epoch,
+        processScope: downloads.processScope,
       );
       return token == null ? null : (id: job.id, file: cp, token: token);
     });
@@ -212,6 +215,7 @@ final class OfflineMixRepository {
   Future<OfflineMixSnapshot> stage(
     MusicMix source, {
     String quality = 'original',
+    OfflineMixRefreshTicket? refreshTicket,
   }) async {
     if (!source.loaded ||
         source.tracks.isEmpty ||
@@ -240,7 +244,35 @@ final class OfflineMixRepository {
         )
         .toString();
     return downloads.store.transaction(fence, (tx) async {
+      if (refreshTicket != null &&
+          (refreshTicket.sourceIdentity != source.identity ||
+              refreshTicket.quality != quality ||
+              !await OfflineMixRefreshPolicy(
+                store: downloads.store,
+                fence: fence,
+              ).isCurrentIn(tx, refreshTicket))) {
+        throw const AppFailure(
+          code: 'offline_mix_refresh_stale',
+          message: 'Ежедневное обновление изменилось.',
+        );
+      }
       final record = await _read(tx);
+      if (refreshTicket != null &&
+          (record.state.active?.sourceIdentity != source.identity ||
+              record.state.active?.quality != quality ||
+              record.state.active?.title != source.title ||
+              (record.state.pending != null &&
+                  await OfflineMixRefreshAdmission.bindingIn(
+                        tx,
+                        record.state.pending!.generation,
+                        fence,
+                      ) ==
+                      null))) {
+        throw const AppFailure(
+          code: 'offline_mix_refresh_stale',
+          message: 'Сохранённая подборка изменилась.',
+        );
+      }
       for (final track in source.tracks) {
         final raw = await tx.read(
           DownloadRepository.namespace,
@@ -248,7 +280,8 @@ final class OfflineMixRepository {
         );
         if (raw == null) continue;
         final job = DeviceDownload.fromJson(raw);
-        if (job.state == DownloadState.removing ||
+        if ((job.state == DownloadState.removing &&
+                (job.checkpoint != null || job.files.isNotEmpty)) ||
             (job.checkpoint != null &&
                 await DeviceMediaBarrier.unavailable(
                   tx,
@@ -297,6 +330,15 @@ final class OfflineMixRepository {
           pending: snapshot,
         ),
       );
+      if (refreshTicket == null) {
+        await tx.remove(OfflineMixRefreshAdmission.bindingNamespace, 'current');
+      } else {
+        await tx.write(OfflineMixRefreshAdmission.bindingNamespace, 'current', {
+          'version': 1,
+          'mixGeneration': generation,
+          'ticket': refreshTicket.encode(),
+        });
+      }
       return snapshot;
     });
   }
@@ -304,81 +346,104 @@ final class OfflineMixRepository {
   /// Bind only journal generations actually admitted for this exact intent.
   /// A crash before binding is recoverable from the already persisted file IDs;
   /// an existing binding cannot silently follow a newer user retry generation.
-  Future<bool> bind(int generation, Iterable<DeviceDownload> jobs) async =>
-      downloads.store.transaction(fence, (tx) async {
-        final record = await _read(tx);
-        final pending = record.state.pending;
-        if (pending == null ||
-            pending.generation != generation ||
-            pending.ownerEpoch != fence.epoch) {
-          return false;
-        }
-        final byId = <String, DeviceDownload>{};
-        for (final job in jobs) {
-          if (byId.containsKey(job.id) ||
-              !pending.items.any((item) => item.downloadId == job.id)) {
-            return false;
-          }
-          byId[job.id] = job;
-        }
-        if (byId.isEmpty) return false;
-        final items = <OfflineMixItem>[];
-        for (final item in pending.items) {
-          final job = byId[item.downloadId];
-          if (job == null) {
-            items.add(item);
-            continue;
-          }
-          final current = await _job(tx, item, pending);
-          if (current == null ||
-              current.state == DownloadState.removing ||
-              (current.checkpoint != null &&
-                  await DeviceMediaBarrier.unavailable(
-                    tx,
-                    current.id,
-                    current.checkpoint!,
-                  )) ||
-              current.generation != job.generation ||
-              current.originalFence != job.originalFence ||
-              (current.state != DownloadState.ready &&
-                  current.originalFence != fence) ||
-              (item.downloadGeneration != null &&
-                  (item.downloadGeneration != job.generation ||
-                      item.downloadEpoch != job.originalFence.epoch))) {
-            return false;
-          }
-          items.add(
-            OfflineMixItem(
-              track: item.track,
-              downloadId: item.downloadId,
-              occurrenceId: item.occurrenceId,
-              downloadGeneration: job.generation,
-              downloadEpoch: job.originalFence.epoch,
-            ),
-          );
-        }
-        await _write(
-          tx,
-          record.generation,
-          OfflineMixState(
-            active: record.state.active,
-            previous: record.state.previous,
-            pending: _withItems(pending, items),
-          ),
-        );
-        return true;
-      });
+  Future<bool> bind(
+    int generation,
+    Iterable<DeviceDownload> jobs, {
+    OfflineMixRefreshTicket? refreshTicket,
+  }) async => downloads.store.transaction(fence, (tx) async {
+    final record = await _read(tx);
+    final pending = record.state.pending;
+    if (pending == null ||
+        pending.generation != generation ||
+        pending.ownerEpoch != fence.epoch) {
+      return false;
+    }
+    if (!await OfflineMixRefreshAdmission.admitsManifest(
+      tx,
+      generation,
+      OfflineMixRefreshPolicy(store: downloads.store, fence: fence),
+      refreshTicket,
+    )) {
+      return false;
+    }
+    final byId = <String, DeviceDownload>{};
+    for (final job in jobs) {
+      if (byId.containsKey(job.id) ||
+          !pending.items.any((item) => item.downloadId == job.id)) {
+        return false;
+      }
+      byId[job.id] = job;
+    }
+    if (byId.isEmpty) return false;
+    final items = <OfflineMixItem>[];
+    for (final item in pending.items) {
+      final job = byId[item.downloadId];
+      if (job == null) {
+        items.add(item);
+        continue;
+      }
+      final current = await _job(tx, item, pending);
+      if (current == null ||
+          current.state == DownloadState.removing ||
+          (current.checkpoint != null &&
+              await DeviceMediaBarrier.unavailable(
+                tx,
+                current.id,
+                current.checkpoint!,
+              )) ||
+          current.generation != job.generation ||
+          current.originalFence != job.originalFence ||
+          (current.state != DownloadState.ready &&
+              current.originalFence != fence) ||
+          (item.downloadGeneration != null &&
+              (item.downloadGeneration != job.generation ||
+                  item.downloadEpoch != job.originalFence.epoch))) {
+        return false;
+      }
+      items.add(
+        OfflineMixItem(
+          track: item.track,
+          downloadId: item.downloadId,
+          occurrenceId: item.occurrenceId,
+          downloadGeneration: job.generation,
+          downloadEpoch: job.originalFence.epoch,
+        ),
+      );
+    }
+    await _write(
+      tx,
+      record.generation,
+      OfflineMixState(
+        active: record.state.active,
+        previous: record.state.previous,
+        pending: _withItems(pending, items),
+      ),
+    );
+    return true;
+  });
 
   /// Hash every ready file outside SQL, then atomically recheck the pending
   /// intent and every journal generation/claim before switching the manifest.
   /// No network requests, byte transfers or file deletion occur here.
-  Future<bool> commit(int generation) async {
+  Future<bool> commit(
+    int generation, {
+    OfflineMixRefreshTicket? refreshTicket,
+    Future<void> Function()? beforeCommit,
+  }) async {
     final candidate = await downloads.store.transaction(fence, (tx) async {
       final record = await _read(tx);
       final pending = record.state.pending;
       if (pending == null ||
           pending.generation != generation ||
           pending.ownerEpoch != fence.epoch) {
+        return null;
+      }
+      if (!await OfflineMixRefreshAdmission.admitsManifest(
+        tx,
+        generation,
+        OfflineMixRefreshPolicy(store: downloads.store, fence: fence),
+        refreshTicket,
+      )) {
         return null;
       }
       final jobs = <String, DeviceDownload>{};
@@ -420,6 +485,7 @@ final class OfflineMixRepository {
           verified: candidate.jobs[item.downloadId]!.checkpoint,
         ),
     ]);
+    await beforeCommit?.call();
     return downloads.store.transaction(fence, (tx) async {
       final record = await _read(tx);
       final pending = record.state.pending;
@@ -427,6 +493,14 @@ final class OfflineMixRepository {
           pending.generation != generation ||
           pending.ownerEpoch != fence.epoch ||
           pending.revision != verified.revision) {
+        return false;
+      }
+      if (!await OfflineMixRefreshAdmission.admitsManifest(
+        tx,
+        generation,
+        OfflineMixRefreshPolicy(store: downloads.store, fence: fence),
+        refreshTicket,
+      )) {
         return false;
       }
       for (final item in verified.items) {
@@ -446,6 +520,20 @@ final class OfflineMixRepository {
         record.generation,
         OfflineMixState(active: verified, previous: record.state.active),
       );
+      if (refreshTicket != null) {
+        await tx.write(OfflineMixRefreshAdmission.statusNamespace, 'current', {
+          'version': 1,
+          'revision': refreshTicket.revision,
+          'code': 'complete',
+        });
+        if (!await OfflineMixRefreshPolicy(
+          store: downloads.store,
+          fence: fence,
+        ).finishIn(tx, refreshTicket, success: true)) {
+          throw const FormatException('Refresh manifest receipt changed');
+        }
+        await tx.remove(OfflineMixRefreshAdmission.bindingNamespace, 'current');
+      }
       return true;
     });
   }

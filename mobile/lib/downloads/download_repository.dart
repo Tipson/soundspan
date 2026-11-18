@@ -18,7 +18,10 @@ import 'download_models.dart';
 import 'download_verifier.dart';
 import 'private_media_paths.dart';
 import 'device_media_barrier.dart';
+import 'device_process_scope.dart';
 import 'offline_mix_repository.dart';
+import 'offline_mix_refresh_policy.dart';
+import 'offline_mix_refresh_admission.dart';
 
 final class DownloadRepository {
   DownloadRepository({
@@ -28,6 +31,7 @@ final class DownloadRepository {
     required this.verifier,
     required this.beforeRemove,
     this.afterRemove,
+    this.processScope = const DeviceProcessScope.unknown(),
     this.writerLease = const Duration(seconds: 30),
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now;
@@ -40,6 +44,7 @@ final class DownloadRepository {
   /// Releases this attempt's in-process guard after successful beforeRemove,
   /// including a rejected durable deletion admission or failed file operation.
   final void Function(DeviceDownload)? afterRemove;
+  final DeviceProcessScope processScope;
   final Duration writerLease;
   final DateTime Function() clock;
   static const namespace = 'deviceDownloads.v1';
@@ -104,6 +109,7 @@ final class DownloadRepository {
     SessionFence fence, {
     bool manual = true,
     DownloadOrigin? origin,
+    OfflineMixRefreshTicket? refreshTicket,
   }) async {
     if (!track.playable ||
         !const {
@@ -123,20 +129,71 @@ final class DownloadRepository {
     final fileOrigin =
         origin ?? (manual ? DownloadOrigin.manual : DownloadOrigin.liked);
     return _mutate(id, fence, (tx) async {
+      if (refreshTicket != null &&
+          (manual ||
+              fileOrigin != DownloadOrigin.offlineMixDaily ||
+              refreshTicket.quality != quality ||
+              !await OfflineMixRefreshPolicy(
+                store: store,
+                fence: fence,
+              ).isCurrentIn(tx, refreshTicket))) {
+        throw mediaCancelled;
+      }
+      Future<DeviceDownload> writeEnqueued(DeviceDownload job) async {
+        await _write(tx, job);
+        if (refreshTicket != null &&
+            !job.manual &&
+            job.state != DownloadState.ready &&
+            !(job.state == DownloadState.paused &&
+                (job.errorCode == null ||
+                    job.errorCode == 'download_cancelled'))) {
+          await tx.write(OfflineMixRefreshAdmission.jobsNamespace, id, {
+            'version': 1,
+            'generation': job.generation,
+            'ticket': refreshTicket.encode(),
+          });
+        }
+        return job;
+      }
+
       final old = await _read(tx, id, fence);
+      // A fully finalized explicit removal ends that file's retention intent.
+      // Keep ownership while any historical checkpoint still needs protection.
+      final retainedOrigins =
+          old != null &&
+              (old.state != DownloadState.removing || _files(old).isNotEmpty)
+          ? old.origins
+          : const <String>{};
       if (old != null &&
           old.state != DownloadState.removing &&
           (old.state == DownloadState.ready || old.originalFence == fence)) {
-        return _write(
-          tx,
+        if (refreshTicket != null &&
+            OfflineMixRefreshAdmission.onlyDaily(old) &&
+            old.state != DownloadState.ready &&
+            !(old.state == DownloadState.paused &&
+                (old.errorCode == null ||
+                    old.errorCode == 'download_cancelled'))) {
+          final bound = await OfflineMixRefreshAdmission.jobTicketIn(tx, old);
+          if (bound != null && bound.nonce != refreshTicket.nonce) {
+            return writeEnqueued(
+              old.patch({
+                'generation': old.generation + 1,
+                'writer': null,
+                'leaseUntil': 0,
+                'state': 'queued',
+                'errorCode': null,
+              }),
+            );
+          }
+        }
+        return writeEnqueued(
           old.patch({
             'manual': old.manual || manual,
             'origins': {...old.origins, fileOrigin.name}.toList()..sort(),
           }),
         );
       }
-      return _write(
-        tx,
+      return writeEnqueued(
         DeviceDownload(
           id: id,
           track: track,
@@ -145,7 +202,7 @@ final class DownloadRepository {
           generation: (old?.generation ?? 0) + 1,
           state: DownloadState.queued,
           manual: manual,
-          origins: Set.unmodifiable({...?old?.origins, fileOrigin.name}),
+          origins: Set.unmodifiable({...retainedOrigins, fileOrigin.name}),
           files: old?.files ?? const [],
           retryNotBefore: old?.retryNotBefore ?? 0,
         ),
@@ -355,7 +412,10 @@ final class DownloadRepository {
         (old.writer != null && old.leaseUntil > now)) {
       return null;
     }
+    final daily = await _currentDailyIn(tx, old);
+    if (OfflineMixRefreshAdmission.onlyDaily(old) && !daily) return null;
     if (!old.manual &&
+        !daily &&
         AutomaticDownloadControl.paused(
           await tx.read(
             AutomaticDownloadControl.namespace,
@@ -401,7 +461,12 @@ final class DownloadRepository {
     await store.transaction(claim.originalFence, (tx) async {
       final current = await _read(tx, claim.id, claim.originalFence);
       if (!owns(current, claim)) throw mediaCancelled;
-      if (!current!.manual &&
+      final daily = await _currentDailyIn(tx, current!);
+      if (OfflineMixRefreshAdmission.onlyDaily(current) && !daily) {
+        throw mediaCancelled;
+      }
+      if (!current.manual &&
+          !daily &&
           AutomaticDownloadControl.paused(
             await tx.read(
               AutomaticDownloadControl.namespace,
@@ -424,6 +489,11 @@ final class DownloadRepository {
   }) => _mutate(claim.id, claim.originalFence, (tx) async {
     final old = await _read(tx, claim.id, claim.originalFence);
     if (!owns(old, claim)) throw mediaCancelled;
+    if (state == DownloadState.ready &&
+        OfflineMixRefreshAdmission.onlyDaily(old!) &&
+        !await _currentDailyIn(tx, old)) {
+      throw mediaCancelled;
+    }
     // Commit the failed job and global auto pause together. A headless worker
     // must not depend on a visible Downloads screen observing its error.
     if (pauseAutomaticDownloads) {
@@ -445,6 +515,44 @@ final class DownloadRepository {
           'retryNotBefore': max(old.retryNotBefore, retryNotBefore),
       }),
     );
+  });
+
+  Future<bool> _currentDailyIn(OwnerTransaction tx, DeviceDownload job) async =>
+      job.origins.contains(DownloadOrigin.offlineMixDaily.name) &&
+      await OfflineMixRefreshAdmission.currentJobIn(
+        tx,
+        job,
+        OfflineMixRefreshPolicy(store: store, fence: job.originalFence),
+      );
+
+  /// Disable only this exact purely daily generation, preserving READY and
+  /// manual/liked/legacy promotions and all immutable file inventory.
+  Future<bool> stopDailyIfCurrent(
+    DeviceDownload captured, {
+    required int expectedRevision,
+  }) => _mutate(captured.id, captured.originalFence, (tx) async {
+    final current = await _read(tx, captured.id, captured.originalFence);
+    if (current == null ||
+        current.generation != captured.generation ||
+        current.state == DownloadState.ready ||
+        !OfflineMixRefreshAdmission.onlyDaily(current)) {
+      return false;
+    }
+    if ((await OfflineMixRefreshAdmission.jobTicketIn(tx, current))?.revision !=
+        expectedRevision) {
+      return false;
+    }
+    await _write(
+      tx,
+      current.patch({
+        'generation': current.generation + 1,
+        'state': 'paused',
+        'writer': null,
+        'leaseUntil': 0,
+        'errorCode': 'offline_mix_refresh_disabled',
+      }),
+    );
+    return true;
   });
   Future<void> heartbeat(DeviceDownload claim) async {
     await assertClaim(claim);
@@ -533,6 +641,7 @@ final class DownloadRepository {
         job.id,
         cp,
         fence.epoch,
+        processScope: processScope,
       );
       return token == null ? null : (id: job.id, file: cp, token: token);
     });
@@ -645,6 +754,7 @@ final class DownloadRepository {
             tx,
             current.id,
             _files(current).values,
+            processScope: processScope,
           );
           if (reserved == null) return null;
           await _write(
@@ -770,6 +880,7 @@ final class DownloadRepository {
           tx,
           id,
           _files(current).values,
+          processScope: processScope,
         );
         if (reserved == null) {
           throw const AppFailure(

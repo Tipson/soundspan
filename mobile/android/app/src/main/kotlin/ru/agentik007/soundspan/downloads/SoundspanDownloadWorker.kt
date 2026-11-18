@@ -35,9 +35,11 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
     private var progressHidden = false
     private val notificationId = id.hashCode()
     override suspend fun doWork(): Result {
-        val work = try { DownloadWorkRequest.fromFlat(inputData.keyValueMap) } catch (_: Exception) { return Result.failure() }
-        val identity = work.identity
-        if (work.requiresLegacyUpgrade) {
+        val refresh = try { if (inputData.getString("kind") != null) OfflineMixRefreshRequest.fromFlat(inputData.keyValueMap) else null }
+            catch (_: Exception) { return Result.failure() }
+        val work = try { if (refresh == null) DownloadWorkRequest.fromFlat(inputData.keyValueMap) else null }
+            catch (_: Exception) { return Result.failure() }
+        if (work?.requiresLegacyUpgrade == true) {
             // Old queued specs may be CONNECTED. updateWork affects the NEXT run,
             // so this run must retry before foreground admission or any Dart/HTTP.
             return try {
@@ -52,12 +54,12 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
         return executionPool.run { try {
             // Foreground admission is subject to Android quotas/start limits.
             setForeground(foreground())
-            withContext(Dispatchers.Main) { start(identity) }
+            withContext(Dispatchers.Main) { start(refresh?.wire() ?: work!!.wire()) }
             val outcome = withTimeout(6 * 60 * 60 * 1000L) { done.await() }
             when (outcome.outcome) {
                 "ready", "cancelled" -> Result.success(Data.Builder().putString("outcome", outcome.outcome).build())
                 "busy", "retry" -> {
-                    if (outcome.retryAfterMillis > 0) {
+                    if (outcome.retryAfterMillis > 0 && work != null) {
                         // Official WorkManager updateWork applies a running
                         // request's new spec to its next retry, retaining UUID,
                         // attempts and the immutable original job identity.
@@ -100,10 +102,11 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
     private fun updatedRequest(work: DownloadWorkRequest, backoffMillis: Long) =
         OneTimeWorkRequestBuilder<SoundspanDownloadWorker>()
             .setId(id).setInputData(Data.Builder().putAll(work.flat()).build()).addTag(work.identity.ownerTag)
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(work.networkType).build())
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(work.networkType)
+                .setRequiresCharging(work.requiresCharging).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, backoffMillis, TimeUnit.MILLISECONDS).build()
 
-    private fun start(identity: DownloadWorkIdentity) {
+    private fun start(request: Map<String, Any>) {
         val loader = FlutterInjector.instance().flutterLoader()
         loader.startInitialization(applicationContext)
         loader.ensureInitializationComplete(applicationContext, null)
@@ -121,7 +124,7 @@ class SoundspanDownloadWorker(context: Context, parameters: WorkerParameters) : 
                     if (ready) { result.error("worker_protocol", "Already ready", null); return@setMethodCallHandler }
                     ready = true
                     result.success(null)
-                    transport.invokeMethod("run", identity.wire(), object : MethodChannel.Result {
+                    transport.invokeMethod("run", request, object : MethodChannel.Result {
                         override fun success(value: Any?) { done.complete(try { DownloadWorkOutcome.parse(value) } catch (_: Exception) { DownloadWorkOutcome("failed") }) }
                         override fun error(code: String, message: String?, details: Any?) { done.complete(DownloadWorkOutcome("failed")) }
                         override fun notImplemented() { done.complete(DownloadWorkOutcome("failed")) }

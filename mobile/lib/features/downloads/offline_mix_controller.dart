@@ -5,13 +5,19 @@ import 'package:flutter/foundation.dart';
 import '../../core/model/app_failure.dart';
 import '../../downloads/download_models.dart';
 import '../../downloads/offline_mix_repository.dart';
+import '../../downloads/offline_mix_daily_refresh.dart';
+import '../../downloads/offline_mix_refresh_policy.dart';
 import '../home/home_models.dart';
 import '../library/library_models.dart';
 import 'downloads_controller.dart';
 
 /// Manual offline snapshot admission, retaining the existing transfer pipeline.
 final class OfflineMixController extends ChangeNotifier {
-  OfflineMixController({required this.repository, required this.downloads}) {
+  OfflineMixController({
+    required this.repository,
+    required this.downloads,
+    this.dailyRefresh,
+  }) {
     if (!identical(repository.downloads, downloads.repository) ||
         repository.fence != downloads.fence) {
       throw ArgumentError('Offline mix and downloads must share an owner');
@@ -19,6 +25,87 @@ final class OfflineMixController extends ChangeNotifier {
   }
   final OfflineMixRepository repository;
   final DownloadsController downloads;
+  final OfflineMixDailyRefresh? dailyRefresh;
+  OfflineMixRefreshState _dailyState = const OfflineMixRefreshState();
+  OfflineMixRefreshState get dailyState =>
+      isCurrent ? _dailyState : const OfflineMixRefreshState();
+  String _dailyCode = '';
+  String get dailyStatus => switch (_dailyCode) {
+    'complete' => 'Последнее обновление полностью сохранено.',
+    'waiting' => 'Новый состав сохраняется. Готовый микс остаётся доступен.',
+    'source_unavailable' =>
+      'Источник недоступен или переименован. Готовый микс сохранён.',
+    'conditions' => 'Обновление ждёт зарядку и сеть без тарификации.',
+    'holdoff' =>
+      'Сервер попросил подождать перед повтором. Готовый микс сохранён.',
+    'failed' => 'Не удалось обновить. Готовый микс сохранён; можно повторить.',
+    'quota' =>
+      'Лимит офлайн-микса исчерпан. Измените его выше и повторите обновление.',
+    'storage' => 'Не хватает памяти устройства. Готовый микс сохранён.',
+    'paused' => 'Загрузка приостановлена. Готовый микс остаётся доступен.',
+    'manual_pending' => 'Автообновление ожидает завершения ручного сохранения.',
+    'source_changed' => 'Сохранённая подборка изменилась. Выключите и снова включите обновление для её выбора.',
+    'scheduled' => 'Повтор назначен на зарядке и в сети без тарификации.',
+    _ =>
+      _dailyState.enabled
+          ? 'Ежедневно на зарядке и в сети без тарификации.'
+          : 'Автоматическое обновление выключено.',
+  };
+  AppFailure? dailyFailure;
+  bool _dailyBusy = false;
+  bool get dailyBusy => isCurrent && _dailyBusy;
+
+  Future<void> loadDailySettings() => _dailyAction(() async {});
+  Future<void> setDailyEnabled(bool enabled) => _dailyAction(() async {
+    await dailyRefresh?.configure(enabled);
+  });
+  Future<void> retryDailyRefresh() => _dailyAction(() async {
+    await dailyRefresh?.retry();
+    if (isCurrent) _dailyCode = 'scheduled';
+  }, retainStatus: true);
+
+  Future<void> _dailyAction(
+    Future<void> Function() action, {
+    bool retainStatus = false,
+  }) {
+    final daily = dailyRefresh;
+    if (!isCurrent || daily == null || _dailyBusy) return Future.value();
+    _dailyBusy = true;
+    _notify();
+    return _track(() async {
+      Object? actionError;
+      try {
+        try {
+          await action();
+        } catch (error) {
+          actionError = error;
+        }
+        final saved = await repository.read();
+        final policy = await daily.policy.read();
+        final status = await daily.readStatus();
+        if (!isCurrent) return;
+        _state = saved;
+        _dailyState = policy;
+        if (!retainStatus) {
+          _dailyCode = status;
+        }
+        if (policy.enabled &&
+            (saved.active?.sourceIdentity != policy.sourceIdentity ||
+                saved.active?.quality != policy.quality)) {
+          _dailyCode = 'source_changed';
+        }
+        dailyFailure = actionError == null
+            ? null
+            : collectionFailure(actionError);
+      } catch (error) {
+        if (isCurrent) dailyFailure = collectionFailure(error);
+      } finally {
+        _dailyBusy = false;
+        _notify();
+      }
+    });
+  }
+
   OfflineMixState _state = const OfflineMixState();
   AppFailure? _failure;
   String? _notice;
@@ -206,6 +293,16 @@ final class OfflineMixController extends ChangeNotifier {
         final before = await repository.read();
         if (!isCurrent) return;
         final pending = before.pending;
+        if (dailyRefresh != null && pending != null) {
+          try {
+            await dailyRefresh!.commitIfReady();
+          } on AppFailure catch (error) {
+            if (error.code != OfflineMixDailyRefresh.restricted.code &&
+                error.code != 'offline_mix_refresh_stale') {
+              rethrow;
+            }
+          }
+        }
         if (pending != null &&
             pending.items.every((i) => i.downloadGeneration != null)) {
           await repository.commit(pending.generation);

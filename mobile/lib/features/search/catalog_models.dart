@@ -1,5 +1,6 @@
 import '../../core/model/track.dart';
 import '../../core/model/app_failure.dart';
+import '../../core/model/owner_key.dart';
 import '../library/library_models.dart';
 
 enum CatalogSource { library, discovery, ytmusic }
@@ -7,6 +8,38 @@ enum CatalogSource { library, discovery, ytmusic }
 enum CatalogEntityKind { artist, album }
 
 enum SearchKind { all, tracks, artists, albums }
+
+/// Ephemeral result ownership; a retry cannot adopt another query or session.
+final class SearchPageBinding {
+  const SearchPageBinding(this.fence, this.query, this.kind);
+  final SessionFence fence;
+  final String query;
+  final SearchKind kind;
+  bool matches(SessionFence owner, String text, SearchKind category) =>
+      fence == owner && query == text && kind == category;
+}
+
+/// Endpoint provenance for the current page, not a persisted search cache.
+final class SearchResultPart {
+  SearchResultPart({
+    Iterable<Track> tracks = const [],
+    Iterable<CatalogEntity> artists = const [],
+    Iterable<CatalogEntity> albums = const [],
+  }) : tracks = List.unmodifiable(tracks),
+       artists = List.unmodifiable(artists),
+       albums = List.unmodifiable(albums);
+  final List<Track> tracks;
+  final List<CatalogEntity> artists, albums;
+}
+
+/// A failed raw library window and the successful prefix preceding it.
+/// Its partial membership is replaced on recovery, not retained as old likes.
+final class SearchLocalRecovery {
+  SearchLocalRecovery(this.offset, Map<String, SearchResultPart> prefix)
+    : prefix = Map.unmodifiable(prefix);
+  final int offset;
+  final Map<String, SearchResultPart> prefix;
+}
 
 /// Source and opaque ID own navigation. Names are display metadata only.
 final class CatalogEntityRef {
@@ -68,12 +101,16 @@ final class SearchPage {
     this.savedArtistsPartialSeen = false,
     this.savedAlbumsPartialSeen = false,
     this.alias,
+    this.binding,
+    this.localRecovery,
+    Map<String, SearchResultPart> parts = const {},
   }) : tracks = List.unmodifiable(tracks),
        artists = List.unmodifiable(artists),
        albums = List.unmodifiable(albums),
        savedArtists = List.unmodifiable(savedArtists),
        savedAlbums = List.unmodifiable(savedAlbums),
-       failures = Map.unmodifiable(failures);
+       failures = Map.unmodifiable(failures),
+       parts = Map.unmodifiable(parts);
   final List<Track> tracks;
   final List<CatalogEntity> artists;
   final List<CatalogEntity> albums;
@@ -90,6 +127,9 @@ final class SearchPage {
   /// Omitted raw rows remain disclosed until a successful replacement read.
   final bool savedArtistsPartialSeen, savedAlbumsPartialSeen;
   final String? alias;
+  final SearchPageBinding? binding;
+  final SearchLocalRecovery? localRecovery;
+  final Map<String, SearchResultPart> parts;
   bool get hasMore =>
       localHasMore ||
       discoveryHasMore ||
@@ -120,6 +160,9 @@ final class SearchPage {
     discoveryLimit: discoveryLimit,
     discoveryHasMore: discoveryHasMore,
     alias: alias,
+    binding: binding,
+    localRecovery: localRecovery,
+    parts: parts,
     savedArtists: artists,
     savedAlbums: albums,
     savedArtistsOffset: artistsOffset,

@@ -82,6 +82,7 @@ class DownloadHarness {
     Future<void> Function(int bytes)? beforeWrite,
     Future<void> Function(DeviceDownload claim, int nextLength)? reserveWrite,
     Future<void> Function(DeviceDownload claim)? onWriterDrained,
+    Future<void> Function(DeviceDownload claim)? revalidateNetwork,
   }) => DownloadCoordinator(
     repository: repository,
     resolverForQuality: (q) => PlaybackResolver(
@@ -104,6 +105,7 @@ class DownloadHarness {
     beforeWrite: beforeWrite,
     reserveWrite: reserveWrite,
     onWriterDrained: onWriterDrained,
+    revalidateNetwork: revalidateNetwork,
   );
   Future<void> send(
     HttpRequest r, {

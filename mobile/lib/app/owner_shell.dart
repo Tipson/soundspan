@@ -883,6 +883,7 @@ class _OwnerShellState extends State<OwnerShell>
             'offline' => OfflineSettingsScreen(
               policy: owner.policy,
               downloads: s.downloads,
+              offlineMix: s.offlineMix,
               onDownloads: () {
                 if (!mounted ||
                     !context.mounted ||
