@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Import a bounded text list or Spotify JSON export through an explicit draft preview. Choose playlist, liked, saved album/artist and exact negative categories independently; keep unresolved positions and recover the same server job after an ambiguous response. Hide the new entry on servers without a fresh compatible capability and retain existing URL/M3U import flows. Prepare Android release 0.1.17 (20).
 - Keep offline mix progress updating while the download list refreshes. Preserve the observer deadline across parent rebuilds and stop it when its surface or application is hidden.
 - Limit Android background download engines to two across the process, including foreground greedy scheduling. Waiting and cancelled work cannot consume another engine or leak a slot. Prepare Android release 0.1.16 (19).
 - Save a complete mix for offline listening from its action menu. Show finite download progress and the retained playable mix in Downloads, and provide an offline detail screen with exact file-generation playback, retry and individual pinning. Keep ordinary queues compatible and prepare Android release 0.1.15 (18); automatic daily rotation remains opt-in work outside this manual stage.

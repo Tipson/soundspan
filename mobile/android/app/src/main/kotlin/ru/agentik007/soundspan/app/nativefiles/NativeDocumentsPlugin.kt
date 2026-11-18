@@ -59,7 +59,7 @@ class NativeDocumentsPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activ
                 if (call.method != "pick") { result.notImplemented(); return@setMethodCallHandler }
                 val args = call.arguments as? Map<*, *>
                 val kind = args?.get("kind") as? String
-                if (args?.keys != setOf("kind") || kind !in setOf("image", "playlist")) {
+                if (args?.keys != setOf("kind") || kind !in setOf("image", "playlist", "export")) {
                     result.error("document_protocol", "Invalid document request", null)
                     return@setMethodCallHandler
                 }
@@ -81,7 +81,7 @@ class NativeDocumentsPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activ
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = if (kind == "image") "image/*" else "*/*"
-                    putExtra(Intent.EXTRA_MIME_TYPES, if (kind == "image") arrayOf("image/jpeg", "image/png", "image/webp") else arrayOf(
+                    putExtra(Intent.EXTRA_MIME_TYPES, if (kind == "image") arrayOf("image/jpeg", "image/png", "image/webp") else if (kind == "export") arrayOf("text/plain", "application/json", "application/octet-stream") else arrayOf(
                         "audio/x-mpegurl", "audio/mpegurl", "application/vnd.apple.mpegurl", "application/x-mpegurl", "text/plain", "application/octet-stream"
                     ))
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

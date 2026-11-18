@@ -9,6 +9,7 @@ import '../../core/network/network_policy.dart';
 import '../../core/session/session_authority.dart';
 import '../../core/storage/owner_store.dart';
 import 'import_models.dart';
+import 'import_draft_models.dart';
 
 /// Exact JSON API adapter. Mutation admission and checkpoint share one fence.
 final class ImportRepository {
@@ -41,6 +42,7 @@ final class ImportRepository {
     String suffix, {
     ApiMethod method = ApiMethod.get,
     Map<String, Object?>? body,
+    Map<String, String> query = const {},
   }) async {
     await _guard();
     networkPolicy.requireNetwork();
@@ -50,6 +52,7 @@ final class ImportRepository {
         method: method,
         path: '/api/import$suffix',
         body: body,
+        query: query,
       ),
       fence: fence,
     );
@@ -81,6 +84,160 @@ final class ImportRepository {
 
   Future<ImportJob> getJob(String id) async => _job(
     importObject(await _request('/jobs/${Uri.encodeComponent(id)}'))['job'],
+    id: id,
+  );
+
+  ImportDraftJob _draft(Object? raw, {String? id}) {
+    final draft = ImportDraftJob.fromJson(raw);
+    if (draft.userId != fence.owner.userId || (id != null && draft.id != id)) {
+      throw invalidImport;
+    }
+    return draft;
+  }
+
+  Future<List<ImportDraftJob>> listDrafts() async {
+    final response = importObject(
+      await _request('/jobs', query: {'includeDrafts': '1'}),
+    );
+    final values = response['jobs'];
+    if (values is! List) throw invalidImport;
+    final drafts = <ImportDraftJob>[];
+    final ids = <String>{};
+    for (final raw in values) {
+      final row = importObject(raw);
+      if (row['userId'] != fence.owner.userId ||
+          !ids.add(importString(row['id']))) {
+        throw invalidImport;
+      }
+      if (row['draftData'] != null) drafts.add(_draft(row));
+    }
+    return List.unmodifiable(drafts);
+  }
+
+  Future<ImportDraftJob> getDraft(String id) async => _draft(
+    importObject(await _request('/drafts/${Uri.encodeComponent(id)}'))['job'],
+    id: id,
+  );
+
+  Future<ImportDraftJob> createDraft({
+    required String content,
+    String format = 'text',
+    String? name,
+    String textCategory = 'playlists',
+  }) async {
+    final body = _draftUpload(content, format, name, textCategory);
+    return _draft(
+      importObject(
+        await _request('/drafts', method: ApiMethod.post, body: body),
+      )['job'],
+    );
+  }
+
+  Future<ImportDraftJob> updateDraft(
+    ImportDraftJob job, {
+    required String content,
+    String format = 'text',
+    String? name,
+    String textCategory = 'playlists',
+  }) async => _draft(
+    importObject(
+      await _request(
+        '/drafts/${Uri.encodeComponent(job.id)}',
+        method: ApiMethod.put,
+        body: {
+          ..._draftUpload(content, format, name, textCategory),
+          'revision': job.revision,
+        },
+      ),
+    )['job'],
+    id: job.id,
+  );
+
+  static Map<String, Object?> _draftUpload(
+    String content,
+    String format,
+    String? name,
+    String category,
+  ) {
+    if (!const {'text', 'spotify-json'}.contains(format) ||
+        !const {'playlists', 'likes', 'dislikes'}.contains(category) ||
+        content.trim().isEmpty ||
+        utf8.encode(content).length > 512 * 1024 ||
+        content.contains(RegExp(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]'))) {
+      throw const AppFailure(
+        code: 'import_file_invalid',
+        message:
+            'Выберите текст или экспорт Spotify в UTF-8 размером до 512 КБ.',
+      );
+    }
+    final result = {
+      'format': format,
+      'content': content,
+      'textCategory': category,
+      ..._name(name),
+    };
+    if (utf8.encode(jsonEncode(result)).length > 1024 * 1024) {
+      throw const AppFailure(
+        code: 'import_file_too_large',
+        message: 'Текст слишком большой для отправки.',
+      );
+    }
+    return result;
+  }
+
+  Future<ImportDraftJob> previewDraft(ImportDraftJob job) async => _draft(
+    importObject(
+      await _request(
+        '/drafts/${Uri.encodeComponent(job.id)}/preview',
+        method: ApiMethod.post,
+        body: {'revision': job.revision},
+      ),
+    )['job'],
+    id: job.id,
+  );
+
+  Future<ImportDraftJob> confirmDraft(
+    ImportDraftJob job,
+    Set<ImportDraftCategory> categories,
+  ) async {
+    if ((!job.canConfirm && !job.canRetryConfirmed) ||
+        (job.canRetryConfirmed &&
+            (categories.length != job.confirmedCategories.length ||
+                !categories.containsAll(job.confirmedCategories))) ||
+        categories.isEmpty ||
+        !categories.any((c) => job.count(c) > 0)) {
+      throw const AppFailure(
+        code: 'import_selection_empty',
+        message: 'Выберите, что добавить в медиатеку.',
+      );
+    }
+    return _draft(
+      importObject(
+        await _request(
+          '/drafts/${Uri.encodeComponent(job.id)}/confirm',
+          method: ApiMethod.post,
+          body: {
+            'revision': job.revision,
+            'previewRevision': job.preview!.previewRevision,
+            'mappingDigest': job.preview!.mappingDigest,
+            'categories': [
+              for (final c in ImportDraftCategory.values)
+                if (categories.contains(c)) c.name,
+            ],
+          },
+        ),
+      )['job'],
+      id: job.id,
+    );
+  }
+
+  Future<ImportDraftJob> cancelDraft(String id) async => _draft(
+    importObject(
+      await _request(
+        '/jobs/${Uri.encodeComponent(id)}/cancel',
+        method: ApiMethod.post,
+      ),
+    )['job'],
     id: id,
   );
   Future<ImportJob> submit(Uri url, {String? name}) async {

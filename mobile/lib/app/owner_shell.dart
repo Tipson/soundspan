@@ -27,6 +27,7 @@ import '../features/home/home_models.dart';
 import '../features/home/home_screen.dart';
 import '../features/home/mix_screen.dart';
 import '../features/imports/import_screen.dart';
+import '../features/imports/import_draft_screen.dart';
 import '../features/library/library_models.dart';
 import '../features/library/library_screen.dart';
 import '../features/likes/likes_screen.dart';
@@ -1078,19 +1079,34 @@ class _OwnerShellState extends State<OwnerShell>
             onPlay: _play,
           );
         case AppRouteKind.importPlaylist:
-          return ImportScreen(
-            controller: s.imports,
-            foreground:
-                Navigator.of(context) ==
-                    Navigator.of(context, rootNavigator: true)
-                ? null
-                : widget.rootExposure,
-            pickDocument: () =>
-                NativeDocuments().pickPlaylist(isCurrent: () => s.isCurrent),
-            onOpenPlaylist: (id) =>
-                _launch(AppDestination(AppRouteKind.playlist, id: id)),
-            onOpenLibrary: () =>
-                _launch(const AppDestination(AppRouteKind.playlist)),
+          return ValueListenableBuilder(
+            valueListenable: s.owner.capabilities.state,
+            builder: (context, features, child) => ImportScreen(
+              controller: s.imports,
+              draftBuilder: features?.importDrafts == true
+                  ? (_) => ImportDraftScreen(
+                      controller: s.draftImports,
+                      pickDocument: () => NativeDocuments().pickMusicExport(
+                        isCurrent: () => s.isCurrent,
+                      ),
+                      onOpenPlaylist: (id) => _launch(
+                        AppDestination(AppRouteKind.playlist, id: id),
+                      ),
+                      refreshAvailability: s.owner.capabilities.refresh,
+                    )
+                  : null,
+              foreground:
+                  Navigator.of(context) ==
+                      Navigator.of(context, rootNavigator: true)
+                  ? null
+                  : widget.rootExposure,
+              pickDocument: () =>
+                  NativeDocuments().pickPlaylist(isCurrent: () => s.isCurrent),
+              onOpenPlaylist: (id) =>
+                  _launch(AppDestination(AppRouteKind.playlist, id: id)),
+              onOpenLibrary: () =>
+                  _launch(const AppDestination(AppRouteKind.playlist)),
+            ),
           );
       }
     }),

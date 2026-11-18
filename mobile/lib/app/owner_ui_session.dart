@@ -16,6 +16,7 @@ import '../features/home/home_controller.dart';
 import '../features/home/home_models.dart';
 import '../features/home/home_repository.dart';
 import '../features/imports/import_controller.dart';
+import '../features/imports/import_draft_controller.dart';
 import '../features/imports/import_repository.dart';
 import '../features/inbox/inbox_controller.dart';
 import '../features/inbox/inbox_repository.dart';
@@ -113,6 +114,11 @@ final class OwnerUiSession {
       ),
     );
     lifetime.add(imports.close);
+    draftImports = ImportDraftController(
+      repository: imports.repository,
+      supported: () => owner.capabilities.importDraftsEnabled == true,
+    );
+    lifetime.add(draftImports.close);
     wave = own(
       WaveController(
         continuation: owner.wave,
@@ -370,6 +376,7 @@ final class OwnerUiSession {
   late final LibraryController library;
   late final PlaylistController playlists;
   late final ImportController imports;
+  late final ImportDraftController draftImports;
   late final WaveController wave;
   late final LikedDownloadAutomation automation;
   late final DownloadsController downloads;

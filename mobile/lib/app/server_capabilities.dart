@@ -84,10 +84,12 @@ final class ServerCapabilities {
     this.audius = false,
     this.loudnessTargetLufs,
     this.orderedWave = false,
+    this.importDrafts = false,
   });
   final bool discovery, autoPlaylists, federation, audius;
   final double? loudnessTargetLufs;
   final bool orderedWave;
+  final bool importDrafts;
   factory ServerCapabilities.decode(Object? value) {
     if (value is! Map ||
         value['discovery'] is! bool ||
@@ -119,6 +121,11 @@ final class ServerCapabilities {
       audius: value['audius'] as bool? ?? false,
       loudnessTargetLufs: (loudness as num?)?.toDouble(),
       orderedWave: value.containsKey('orderedWave'),
+      importDrafts:
+          value['importDrafts'] is Map &&
+          (value['importDrafts'] as Map).length == 1 &&
+          (value['importDrafts'] as Map)['version'] is int &&
+          (value['importDrafts'] as Map)['version'] == 1,
     );
   }
   Map<String, Object?> toJson() => {
@@ -127,6 +134,7 @@ final class ServerCapabilities {
     'federation': federation,
     'audius': audius,
     if (orderedWave) 'orderedWave': {'version': 1},
+    if (importDrafts) 'importDrafts': {'version': 1},
     if (loudnessTargetLufs != null) 'loudnessTargetLufs': loudnessTargetLufs,
   };
 }
@@ -170,6 +178,14 @@ final class ServerCapabilitiesRepository {
           _elapsed() - _onlineAt! >= Duration.zero &&
           _elapsed() - _onlineAt! < const Duration(seconds: 300)
       ? state.value?.orderedWave
+      : null;
+  bool? get importDraftsEnabled =>
+      _current &&
+          policy.networkAllowed &&
+          _onlineAt != null &&
+          _elapsed() - _onlineAt! >= Duration.zero &&
+          _elapsed() - _onlineAt! < const Duration(seconds: 300)
+      ? state.value?.importDrafts
       : null;
   VoidCallback? onPlayCreationRefresh;
   void _policyChanged() {

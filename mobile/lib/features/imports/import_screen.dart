@@ -19,6 +19,7 @@ class ImportScreen extends StatefulWidget {
     this.initialUrl,
     this.autoLoad = true,
     this.jobId,
+    this.draftBuilder,
   });
   final ImportController controller;
   final Future<PlaylistDocument?> Function() pickDocument;
@@ -27,6 +28,7 @@ class ImportScreen extends StatefulWidget {
   final ValueListenable<bool>? foreground;
   final String? initialUrl, jobId;
   final bool autoLoad;
+  final WidgetBuilder? draftBuilder;
   @override
   State<ImportScreen> createState() => _ImportScreenState();
 }
@@ -282,6 +284,19 @@ class _ImportScreenState extends State<ImportScreen>
                       'Задания продолжаются на сервере после закрытия приложения. Возвращайтесь сюда, чтобы увидеть результат.',
                     ),
                     const SizedBox(height: 16),
+                    if (widget.jobId == null && widget.draftBuilder != null)
+                      _button(
+                        'Текст или экспорт',
+                        enabled
+                            ? () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: widget.draftBuilder!,
+                                  ),
+                                );
+                              }
+                            : null,
+                      ),
                     if (!c.repository.networkPolicy.networkAllowed)
                       const Padding(
                         padding: EdgeInsets.only(bottom: 16),

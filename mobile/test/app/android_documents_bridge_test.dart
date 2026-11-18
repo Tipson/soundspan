@@ -13,6 +13,17 @@ void main() {
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   setUp(() => debugDefaultTargetPlatformOverride = TargetPlatform.android);
+  test('Android export uses its bounded native selector kind', () async {
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.arguments, {'kind': 'export'});
+      return {
+        'name': 'music.json',
+        'bytes': Uint8List.fromList(utf8.encode('{"tracks":[]}')),
+      };
+    });
+    final file = await NativeDocuments().pickMusicExport(isCurrent: () => true);
+    expect(file!.format, 'spotify-json');
+  });
   tearDown(() {
     debugDefaultTargetPlatformOverride = null;
     messenger.setMockMethodCallHandler(channel, null);

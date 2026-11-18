@@ -13,8 +13,13 @@ import '../features/settings/settings_models.dart';
 typedef OpenNativeDocument = Future<XFile?> Function(List<XTypeGroup> groups);
 
 final class PlaylistDocument {
-  const PlaylistDocument({required this.name, required this.content});
+  const PlaylistDocument({
+    required this.name,
+    required this.content,
+    this.format,
+  });
   final String name, content;
+  final String? format;
 }
 
 /// User-selected documents only. Neither paths nor filename-supplied MIME are
@@ -30,7 +35,11 @@ final class NativeDocuments {
     }
     try {
       final reply = await _channel.invokeMethod<Object?>('pick', {
-        'kind': identical(groups.single, _photoTypes) ? 'image' : 'playlist',
+        'kind': identical(groups.single, _photoTypes)
+            ? 'image'
+            : identical(groups.single, _exportTypes)
+            ? 'export'
+            : 'playlist',
       });
       if (reply == null) return null;
       if (reply is! Map ||
@@ -53,6 +62,12 @@ final class NativeDocuments {
   }
 
   static const maxPlaylistBytes = 512 * 1024;
+  static const _exportTypes = XTypeGroup(
+    label: 'Музыкальный экспорт',
+    extensions: ['txt', 'json'],
+    mimeTypes: ['text/plain', 'application/json', 'application/octet-stream'],
+    uniformTypeIdentifiers: ['public.data'],
+  );
   static const _playlistTypes = XTypeGroup(
     label: 'Плейлист M3U',
     extensions: ['m3u', 'm3u8'],
@@ -159,6 +174,48 @@ final class NativeDocuments {
       throw _largePlaylist;
     }
     return PlaylistDocument(name: name, content: content);
+  });
+
+  Future<PlaylistDocument?> pickMusicExport({
+    required bool Function() isCurrent,
+  }) => _pick(_exportTypes, isCurrent, (file) async {
+    final extension = RegExp(
+      r'\.(txt|json)$',
+      caseSensitive: false,
+    ).firstMatch(file.name);
+    const invalid = AppFailure(
+      code: 'import_file_invalid',
+      message: 'Выберите текстовый файл или экспорт Spotify в UTF-8 размером до 512 КБ.',
+    );
+    if (extension == null) throw invalid;
+    final bytes = await _read(file, maxPlaylistBytes, isCurrent, invalid);
+    String content;
+    try {
+      content = utf8.decode(bytes);
+    } on FormatException {
+      throw invalid;
+    }
+    if (content.startsWith('\ufeff')) content = content.substring(1);
+    if (content.trim().isEmpty || content.contains('\u0000')) throw invalid;
+    final basename = file.name
+        .replaceAll('\\', '/')
+        .split('/')
+        .last
+        .replaceAll(RegExp(r'[\x00-\x1f\x7f]'), '')
+        .replaceFirst(RegExp(r'\.(txt|json)$', caseSensitive: false), '')
+        .trim();
+    final name = basename.isEmpty
+        ? 'Импорт музыки'
+        : basename.substring(0, math.min(basename.length, 200));
+    if (utf8.encode(jsonEncode({'content': content, 'name': name})).length >
+        1024 * 1024) {
+      throw invalid;
+    }
+    return PlaylistDocument(
+      name: name,
+      content: content,
+      format: extension[1]!.toLowerCase() == 'json' ? 'spotify-json' : 'text',
+    );
   });
 
   Future<AvatarInput?> pickAvatar({required bool Function() isCurrent}) =>

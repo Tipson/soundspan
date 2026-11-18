@@ -11,6 +11,26 @@ import 'package:soundspan/core/model/app_failure.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'bounded music export preserves JSON text and explicit format',
+    () async {
+      const content = '{"playlists":[]}';
+      final documents = NativeDocuments(
+        open: (groups) async {
+          expect(groups.single.mimeTypes, contains('application/json'));
+          return XFile.fromData(
+            Uint8List.fromList(utf8.encode(content)),
+            path: 'Моя музыка.json',
+          );
+        },
+      );
+      final file = await documents.pickMusicExport(isCurrent: () => true);
+      expect(file!.format, 'spotify-json');
+      expect(file.content, content);
+      expect(file.name, 'Моя музыка');
+    },
+  );
+
   test('cancelled document selection does not fabricate a file', () async {
     final documents = NativeDocuments(open: (_) async => null);
     expect(await documents.pickPlaylist(isCurrent: () => true), isNull);
