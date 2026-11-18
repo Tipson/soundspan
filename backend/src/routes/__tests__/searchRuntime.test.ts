@@ -1765,4 +1765,156 @@ describe("search route runtime behavior", () => {
         expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({ error: "Similar artists search failed" });
     });
+
+    describe("public discovery cache byte budget", () => {
+        const cap = 1024 * 1024;
+        for (const kind of ["discover", "similar"]) {
+            const handler =
+                kind === "discover" ? discoverHandler : discoverSimilarHandler;
+            const req = {
+                query:
+                    kind === "discover"
+                        ? { q: "budget", type: "music", limit: "5" }
+                        : { artist: "Budget", limit: "5" },
+            } as any;
+            it.each([cap, cap + 1])(
+                `${kind} reads exact cap %i and falls back before parsing oversized cache`,
+                async (size) => {
+                    const payload =
+                        kind === "discover"
+                            ? {
+                                  results: [
+                                      {
+                                          id: "cached-budget",
+                                          type: "artist",
+                                          name: "Cached",
+                                      },
+                                  ],
+                                  aliasInfo: null,
+                              }
+                            : {
+                                  similarArtists: [
+                                      { id: "cached-budget", name: "Cached" },
+                                  ],
+                              };
+                    const base = JSON.stringify(payload);
+                    const cached =
+                        base + " ".repeat(size - Buffer.byteLength(base));
+                    mockRedisGet.mockResolvedValueOnce(cached);
+                    const parse = jest.spyOn(JSON, "parse");
+                    try {
+                        const res = createRes();
+                        await handler(req, res);
+                        const rows =
+                            kind === "discover"
+                                ? res.body.results
+                                : res.body.similarArtists;
+                        expect(
+                            rows.some(
+                                (row: { id: string }) =>
+                                    row.id === "cached-budget",
+                            ),
+                        ).toBe(size <= cap);
+                        expect(
+                            parse.mock.calls.some((args) => args[0] === cached),
+                        ).toBe(size <= cap);
+                        expect(res.statusCode).toBe(200);
+                    } finally {
+                        parse.mockRestore();
+                    }
+                },
+            );
+            it(`${kind} rejects a multibyte oversized cache without parsing it`, async () => {
+                const payload =
+                    kind === "discover"
+                        ? {
+                              results: [{ id: "cached-budget" }],
+                              aliasInfo: null,
+                          }
+                        : { similarArtists: [{ id: "cached-budget" }] };
+                const cached = JSON.stringify({
+                    ...payload,
+                    padding: "я".repeat(cap / 2),
+                });
+                expect(cached.length).toBeLessThan(cap);
+                expect(Buffer.byteLength(cached)).toBeGreaterThan(cap);
+                mockRedisGet.mockResolvedValueOnce(cached);
+                const parse = jest.spyOn(JSON, "parse");
+                try {
+                    const res = createRes();
+                    await handler(req, res);
+                    const rows =
+                        kind === "discover"
+                            ? res.body.results
+                            : res.body.similarArtists;
+                    expect(
+                        rows.some(
+                            (row: { id: string }) => row.id === "cached-budget",
+                        ),
+                    ).toBe(false);
+                    expect(
+                        parse.mock.calls.some((args) => args[0] === cached),
+                    ).toBe(false);
+                    expect(res.statusCode).toBe(200);
+                } finally {
+                    parse.mockRestore();
+                }
+            });
+        }
+        it.each([cap, cap + 1])(
+            "similar writes only entries within exact cap %i and retains the response",
+            async (size) => {
+                const base = JSON.stringify({
+                    similarArtists: [{ id: "live-budget", name: "" }],
+                });
+                const row = {
+                    id: "live-budget",
+                    name: "x".repeat(size - Buffer.byteLength(base)),
+                };
+                mockGetSimilarArtists.mockResolvedValueOnce([{ name: "Seed" }]);
+                mockEnrichSimilarArtists.mockResolvedValueOnce([row]);
+                const res = createRes();
+                await discoverSimilarHandler(
+                    { query: { artist: "Budget" } } as any,
+                    res,
+                );
+                expect(res.body).toEqual({ similarArtists: [row] });
+                expect(Buffer.byteLength(JSON.stringify(res.body))).toBe(size);
+                if (size > cap)
+                    expect(mockRedisSetEx.mock.calls.length).toBe(0);
+                else
+                    expect(mockRedisSetEx).toHaveBeenCalledWith(
+                        expect.any(String),
+                        3600,
+                        JSON.stringify(res.body),
+                    );
+            },
+        );
+        it("discover retains complete oversized live results without caching them", async () => {
+            mockGetSystemSettings.mockResolvedValueOnce({
+                ytMusicEnabled: false,
+            });
+            const album = "я".repeat(cap / 2);
+            mockSearchTracks.mockResolvedValueOnce([
+                {
+                    type: "track",
+                    id: "live-budget",
+                    name: "Budget",
+                    artist: "Artist",
+                    album,
+                },
+            ]);
+            const res = createRes();
+            await discoverHandler(
+                { query: { q: "budget", type: "music", limit: "5" } } as any,
+                res,
+            );
+            expect(res.statusCode).toBe(200);
+            expect(res.body.results[0].album).toBe(album);
+            expect(Buffer.byteLength(JSON.stringify(res.body))).toBeGreaterThan(
+                cap,
+            );
+            expect(mockRedisSetEx.mock.calls.length).toBe(0);
+        });
+    });
 });

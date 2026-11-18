@@ -22,6 +22,7 @@ import { searchYtMusicDiscoveryCatalog } from "../services/ytMusicDiscoveryCatal
 import { searchLikedRemoteTracks } from "../services/likedRemoteSearch";
 import type { YtMusicDiscoveryCatalogFilter } from "../services/ytMusicDiscoveryCatalog";
 import { getSystemSettings } from "../utils/systemSettings";
+import { isSearchCacheEntryWithinLimit } from "../services/cacheHelpers";
 import { ytMusicSearchLimiter } from "../middleware/rateLimiter";
 import {
     normalizeArtistName as normalizeCanonicalArtistName,
@@ -1035,7 +1036,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
             const cached = configurationDegraded
                 ? null
                 : await redisClient.get(cacheKey);
-            if (cached) {
+            if (cached && isSearchCacheEntryWithinLimit(cached)) {
                 logger.debug(
                     `[SEARCH DISCOVER] Cache hit for query="${query}" type=${type}`,
                 );
@@ -1261,7 +1262,10 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         // hide the missing catalog source for the full 15-minute TTL.
         if (!externalSearchFailed) {
             try {
-                await redisClient.setEx(cacheKey, 900, JSON.stringify(payload));
+                const serialized = JSON.stringify(payload);
+                if (isSearchCacheEntryWithinLimit(serialized)) {
+                    await redisClient.setEx(cacheKey, 900, serialized);
+                }
             } catch (err) {
                 logger.warn("[SEARCH DISCOVER] Redis write error:", err);
             }
@@ -1334,7 +1338,7 @@ router.get("/discover/similar", async (req, res) => {
         const cacheKey = `search:discover:similar:${normalizeCacheQuery(artistName)}:${artistMbid}:${similarLimit}`;
         try {
             const cached = await redisClient.get(cacheKey);
-            if (cached) {
+            if (cached && isSearchCacheEntryWithinLimit(cached)) {
                 logger.debug(
                     `[SEARCH SIMILAR] Cache hit for artist="${artistName}"`,
                 );
@@ -1379,7 +1383,10 @@ router.get("/discover/similar", async (req, res) => {
 
         try {
             // Cache TTL: 1 hour (3600s) -- similar artists rarely change
-            await redisClient.setEx(cacheKey, 3600, JSON.stringify(payload));
+            const serialized = JSON.stringify(payload);
+            if (isSearchCacheEntryWithinLimit(serialized)) {
+                await redisClient.setEx(cacheKey, 3600, serialized);
+            }
         } catch (err) {
             logger.warn("[SEARCH SIMILAR] Redis write error:", err);
         }

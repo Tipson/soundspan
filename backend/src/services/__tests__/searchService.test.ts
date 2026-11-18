@@ -1237,4 +1237,144 @@ describe("search service", () => {
         expect(filtered).toEqual([]);
         expect(prisma.track.findMany).not.toHaveBeenCalled();
     });
+
+    describe("public search cache byte budget", () => {
+        const cap = 1024 * 1024;
+        const empty = {
+            artists: [],
+            albums: [],
+            tracks: [],
+            podcasts: [],
+            audiobooks: [],
+            episodes: [],
+        };
+        const liveArtist = {
+            id: "live-budget",
+            name: "Live",
+            mbid: "live",
+            heroUrl: null,
+            rank: 1,
+        };
+        const read = (kind: string) =>
+            kind === "all"
+                ? searchService.searchAll({ query: "budget", limit: 5 })
+                : searchService.searchByType({
+                      query: "budget",
+                      type: "artists",
+                      limit: 5,
+                  });
+        function liveRows(name = "Live") {
+            return [
+                jest
+                    .spyOn(searchService, "searchArtists")
+                    .mockResolvedValue([{ ...liveArtist, name }]),
+                jest.spyOn(searchService, "searchAlbums").mockResolvedValue([]),
+                jest.spyOn(searchService, "searchTracks").mockResolvedValue([]),
+                jest
+                    .spyOn(searchService, "searchPodcastsFTS")
+                    .mockResolvedValue([]),
+                jest
+                    .spyOn(searchService, "searchAudiobooksFTS")
+                    .mockResolvedValue([]),
+                jest
+                    .spyOn(searchService, "searchEpisodes")
+                    .mockResolvedValue([]),
+            ];
+        }
+        for (const kind of ["all", "typed"]) {
+            it.each([cap, cap + 1])(
+                `${kind} reads exact UTF8 cap %i without parsing an oversized entry`,
+                async (size) => {
+                    const payload = {
+                        ...empty,
+                        artists: [{ ...liveArtist, id: "cached-budget" }],
+                    };
+                    const base = JSON.stringify(payload);
+                    const cached =
+                        base + " ".repeat(size - Buffer.byteLength(base));
+                    redisClient.get.mockResolvedValueOnce(cached);
+                    const spies = liveRows(),
+                        parse = jest.spyOn(JSON, "parse");
+                    try {
+                        const result = await read(kind);
+                        expect(result.artists[0].id).toBe(
+                            size <= cap ? "cached-budget" : "live-budget",
+                        );
+                        expect(
+                            parse.mock.calls.some((args) => args[0] === cached),
+                        ).toBe(size <= cap);
+                    } finally {
+                        parse.mockRestore();
+                        spies.forEach((spy) => spy.mockRestore());
+                    }
+                },
+            );
+            it(`${kind} uses UTF8 bytes for a multibyte cached entry`, async () => {
+                const cached = JSON.stringify({
+                    ...empty,
+                    artists: [{ ...liveArtist, id: "cached-budget" }],
+                    padding: "я".repeat(cap / 2),
+                });
+                expect(cached.length).toBeLessThan(cap);
+                expect(Buffer.byteLength(cached)).toBeGreaterThan(cap);
+                redisClient.get.mockResolvedValueOnce(cached);
+                const spies = liveRows(),
+                    parse = jest.spyOn(JSON, "parse");
+                try {
+                    expect((await read(kind)).artists[0].id).toBe(
+                        "live-budget",
+                    );
+                    expect(
+                        parse.mock.calls.some((args) => args[0] === cached),
+                    ).toBe(false);
+                } finally {
+                    parse.mockRestore();
+                    spies.forEach((spy) => spy.mockRestore());
+                }
+            });
+            it.each([cap, cap + 1])(
+                `${kind} writes only entries at or below the exact cap %i`,
+                async (size) => {
+                    const base = JSON.stringify({
+                        ...empty,
+                        artists: [{ ...liveArtist, name: "" }],
+                    });
+                    const name = "x".repeat(size - Buffer.byteLength(base));
+                    const spies = liveRows(name);
+                    try {
+                        const result = await read(kind);
+                        expect(result.artists[0].name).toBe(name);
+                        expect(Buffer.byteLength(JSON.stringify(result))).toBe(
+                            size,
+                        );
+                        if (size > cap)
+                            expect(redisClient.setEx.mock.calls.length).toBe(0);
+                        else
+                            expect(redisClient.setEx).toHaveBeenCalledWith(
+                                expect.any(String),
+                                kind === "all" ? 300 : 120,
+                                JSON.stringify(result),
+                            );
+                    } finally {
+                        spies.forEach((spy) => spy.mockRestore());
+                    }
+                },
+            );
+            it(`${kind} returns useful multibyte live rows without caching oversized JSON`, async () => {
+                const name = "я".repeat(cap / 2);
+                const spies = liveRows(name);
+                try {
+                    const result = await read(kind);
+                    expect(JSON.stringify(result).length).toBeLessThan(cap);
+                    expect(
+                        Buffer.byteLength(JSON.stringify(result)),
+                    ).toBeGreaterThan(cap);
+                    expect(result.artists[0].name).toBe(name);
+                    expect(redisClient.setEx.mock.calls.length).toBe(0);
+                } finally {
+                    spies.forEach((spy) => spy.mockRestore());
+                }
+            });
+        }
+    });
 });

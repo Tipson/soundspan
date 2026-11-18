@@ -10,6 +10,7 @@ import {
 import { trackBrowseSql } from "../utils/libraryRadioPredicates";
 import { escapeLikePattern } from "../utils/likePattern";
 import { getSearchCacheVersion } from "./searchCacheVersion";
+import { isSearchCacheEntryWithinLimit } from "./cacheHelpers";
 
 const MAX_TRACK_SEARCH_TERMS = 6;
 const SEARCH_CACHE_PAYLOAD_VERSION = 2;
@@ -901,7 +902,7 @@ export class SearchService {
         const cacheKey = `search:all:p${SEARCH_CACHE_PAYLOAD_VERSION}:v${cacheVersion}:${normalizeCacheQuery(query)}:${limit}:${genre || ""}:${source}`;
         try {
             const cached = await redisClient.get(cacheKey);
-            if (cached) {
+            if (cached && isSearchCacheEntryWithinLimit(cached)) {
                 logger.debug(`[SEARCH] Cache HIT for query: "${query}"`);
                 const parsed = JSON.parse(cached);
                 // Transform cached audiobook coverUrls to ensure consistency
@@ -948,7 +949,10 @@ export class SearchService {
 
         // Cache for 5 minutes (balance freshness vs performance)
         try {
-            await redisClient.setEx(cacheKey, 300, JSON.stringify(results));
+            const serialized = JSON.stringify(results);
+            if (isSearchCacheEntryWithinLimit(serialized)) {
+                await redisClient.setEx(cacheKey, 300, serialized);
+            }
         } catch (err) {
             logger.warn("[SEARCH] Redis cache write error:", err);
         }
@@ -1017,7 +1021,7 @@ export class SearchService {
         const cacheKey = `search:${type}:p${SEARCH_CACHE_PAYLOAD_VERSION}:v${cacheVersion}:${normalizeCacheQuery(query)}:${limit}:${offset}:${genre || ""}:${source}`;
         try {
             const cached = await redisClient.get(cacheKey);
-            if (cached) {
+            if (cached && isSearchCacheEntryWithinLimit(cached)) {
                 logger.debug(
                     `[SEARCH] Cache HIT for ${type} query: "${query}"`,
                 );
@@ -1083,7 +1087,10 @@ export class SearchService {
 
         // Cache for 2 minutes
         try {
-            await redisClient.setEx(cacheKey, 120, JSON.stringify(results));
+            const serialized = JSON.stringify(results);
+            if (isSearchCacheEntryWithinLimit(serialized)) {
+                await redisClient.setEx(cacheKey, 120, serialized);
+            }
         } catch (err) {
             logger.warn("[SEARCH] Redis write error:", err);
         }

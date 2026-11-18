@@ -1,6 +1,12 @@
 import crypto from "crypto";
 import path from "path";
 
+const MAX_SEARCH_CACHE_ENTRY_BYTES = 1024 * 1024;
+
+/** Bound serialized public search metadata before parsing or storing it. */
+export const isSearchCacheEntryWithinLimit = (serialized: string): boolean =>
+    Buffer.byteLength(serialized, "utf8") <= MAX_SEARCH_CACHE_ENTRY_BYTES;
+
 interface BuildSha256CacheKeyInput {
     identity: string;
     suffix?: string;

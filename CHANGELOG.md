@@ -9,6 +9,8 @@
 
 ## Unreleased
 
+- Bound public search cache entries by their UTF-8 byte size, preserving live results when cached metadata is oversized or malformed.
+
 - Provide authenticated, non-cached Android update metadata from an optional read-only operator release tree, requiring a bound verification receipt and immutable same-origin APK paths. Keep upload and publication outside the application.
 
 - Gate keyed Play creation by an explicit bounded account cohort. Keep accepted receipt recovery available in replay-only mode, recheck admission after metadata preparation, and preserve legacy playback while activation defaults off.
