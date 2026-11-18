@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../core/model/app_failure.dart';
 import '../core/model/owner_key.dart';
@@ -22,6 +23,7 @@ final class DownloadCoordinator {
     this.beforeWrite,
     this.reserveWrite,
     this.onWriterDrained,
+    this.onError,
   });
   final DownloadRepository repository;
   final PlaybackResolver Function(String) resolverForQuality;
@@ -40,6 +42,10 @@ final class DownloadCoordinator {
 
   /// Optional accounting after confirmed private-file and response drain.
   final Future<void> Function(DeviceDownload claim)? onWriterDrained;
+
+  /// Synchronous diagnostic evidence only. Observer errors never alter the
+  /// original failure, persistence, cancellation or retry decision.
+  final void Function(Object error)? onError;
   final Set<MediaCancellation> _active = {};
   final Set<MediaCancellation> _networkTransfers = {};
   final Set<MediaCancellation> _networkDeferrals = {};
@@ -134,10 +140,38 @@ final class DownloadCoordinator {
       }
     }
 
+    const writeLimit = 256 * 1024;
+    Stream<List<int>> coalesce(Stream<List<int>> body) async* {
+      var buffer = Uint8List(writeLimit);
+      var used = 0;
+      await for (final fragment in body) {
+        cancel.check();
+        var start = 0;
+        while (start < fragment.length) {
+          cancel.check();
+          final remaining = fragment.length - start;
+          final count = remaining < writeLimit - used
+              ? remaining
+              : writeLimit - used;
+          buffer.setRange(used, used + count, fragment, start);
+          used += count;
+          start += count;
+          if (used == writeLimit) {
+            yield buffer;
+            buffer = Uint8List(writeLimit);
+            used = 0;
+          }
+        }
+      }
+      cancel.check();
+      if (used > 0) yield Uint8List.sublistView(buffer, 0, used);
+    }
+
     Future<void> write(List<int> chunk) async {
-      const limit = 256 * 1024;
-      for (var start = 0; start < chunk.length; start += limit) {
-        final end = start + limit < chunk.length ? start + limit : chunk.length;
+      for (var start = 0; start < chunk.length; start += writeLimit) {
+        final end = start + writeLimit < chunk.length
+            ? start + writeLimit
+            : chunk.length;
         await check();
         await beforeWrite?.call(end - start);
         if (reserveWrite != null) {
@@ -292,7 +326,10 @@ final class DownloadCoordinator {
             strongEtag: etag,
           ),
         );
-        await for (final chunk in response.body) {
+        // A network fragment is not a durable checkpoint boundary. Keep only
+        // one bounded window; cancellation still observes every fragment and
+        // write() re-admits the current claim before any bytes reach disk.
+        await for (final chunk in coalesce(response.body)) {
           await write(chunk);
           offset += chunk.length;
           if (total != null && offset > total) throw invalidMedia;
@@ -375,6 +412,11 @@ final class DownloadCoordinator {
       );
       return DownloadRunResult.ready;
     } catch (error) {
+      try {
+        onError?.call(error);
+      } catch (_) {
+        // Optional evidence cannot replace the original transfer outcome.
+      }
       final deferred =
           _networkDeferrals.contains(cancel) &&
           !_closed &&

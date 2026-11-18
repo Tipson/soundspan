@@ -82,6 +82,7 @@ Future<void> runDownloadWorker({
     Future<void>? pendingProgress;
     DeviceNetworkMonitor? deviceNetwork;
     VoidCallback? routeChanged;
+    String? coordinatorErrorCode;
     try {
       if (stopped) return outcome('cancelled');
       phase = DownloadWorkerPhase.attach;
@@ -177,6 +178,8 @@ Future<void> runDownloadWorker({
         },
         reserveWrite: quota.reserveWrite,
         onWriterDrained: quota.writerDrained,
+        onError: (error) =>
+            coordinatorErrorCode = DownloadWorkDiagnostic.errorCode(error),
       );
       routeChanged = () =>
           coordinator!.cancelNetworkTransfers(retryWhenAllowed: true);
@@ -331,7 +334,12 @@ Future<void> runDownloadWorker({
                   job.originalFence == originalFence &&
                   job.generation == fileRequest.generation
               ? (
-                  code: manifestIssue?['code'] as String? ?? job.errorCode,
+                  code:
+                      manifestIssue?['code'] as String? ??
+                      DownloadWorkDiagnostic.fileErrorCode(
+                        job.errorCode,
+                        coordinatorErrorCode,
+                      ),
                   state: job.state.name,
                 )
               : (code: manifestIssue?['code'] as String?, state: null);

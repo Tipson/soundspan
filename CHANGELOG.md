@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Group small download fragments into bounded writes while preserving cancellation, storage admission, verified bytes and durable-prefix recovery. Retain closed diagnostic causes for generic transfer failures. Prepare Android release 0.1.20 (23).
 - Record bounded, non-identifying Android background download outcomes to distinguish setup, network, file, manifest and shutdown failures. Preserve existing retry, cancellation and completed-file behavior. Prepare Android release 0.1.19 (22).
 - Open the Downloads list from offline settings while preserving normal nested tab navigation and the current playback queue.
 - Keep useful search results and successful page windows while retrying failed sources. Recover the exact failed window, preserve source identities and cursors, and reject late results after query, category, membership or account changes.

@@ -155,6 +155,17 @@ abstract final class DownloadWorkDiagnostic {
     };
   }
 
+  /// Refine only a generic failure of this worker's captured file generation.
+  /// Persisted typed failures stay authoritative; all output remains closed.
+  static String fileErrorCode(
+    String? persistedCode,
+    String? observedErrorCode,
+  ) => safeCode(
+    persistedCode == 'download_failed' && observedErrorCode != null
+        ? observedErrorCode
+        : persistedCode,
+  );
+
   static Map<String, Object?> capture({
     required DownloadWorkerPhase phase,
     Object? error,
