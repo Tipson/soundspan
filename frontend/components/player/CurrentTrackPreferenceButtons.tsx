@@ -29,16 +29,19 @@ export function CurrentTrackPreferenceButtons(
     props: CurrentTrackPreferenceButtonsProps,
 ) {
     const { advanceQueue } = useAudioControls();
+    const advanceQueueRef = useRef(advanceQueue);
+    useLayoutEffect(() => {
+        advanceQueueRef.current = advanceQueue;
+    }, [advanceQueue]);
     const replacementGeneration = getPlaybackReplacementGeneration();
     const queueGeneration = getQueueReplacementGeneration();
     const callbackIdentity = useMemo(
         () => ({
             trackId: props.trackId,
-            advanceQueue,
             replacementGeneration,
             queueGeneration,
         }),
-        [props.trackId, advanceQueue, replacementGeneration, queueGeneration],
+        [props.trackId, replacementGeneration, queueGeneration],
     );
     const activeCallbackRef = useRef<typeof callbackIdentity | null>(
         callbackIdentity,
@@ -62,7 +65,7 @@ export function CurrentTrackPreferenceButtons(
                     getQueueReplacementGeneration()
             )
                 return;
-            callbackIdentity.advanceQueue("feedback");
+            advanceQueueRef.current("feedback");
         },
         [callbackIdentity],
     );

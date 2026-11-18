@@ -112,6 +112,36 @@ test("late dislike confirmation cannot skip a newly selected track", async () =>
     await act(async () => root.unmount());
 });
 
+test("confirmed dislike survives a control rerender for the same queue occurrence", async () => {
+    const { CurrentTrackPreferenceButtons } =
+        await import("../../components/player/CurrentTrackPreferenceButtons");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+        const props = { trackId: "yt:abcdefghijk" };
+        await act(async () =>
+            root.render(
+                React.createElement(CurrentTrackPreferenceButtons, props),
+            ),
+        );
+        const confirmation = state.callbacks.at(-1);
+        assert.ok(confirmation);
+        state.advanceQueue = (reason: string) => {
+            state.advances.push(`latest:${reason}`);
+        };
+        await act(async () =>
+            root.render(
+                React.createElement(CurrentTrackPreferenceButtons, props),
+            ),
+        );
+        await act(async () => confirmation(props.trackId));
+        assert.deepEqual(state.advances, ["latest:feedback"]);
+    } finally {
+        await act(async () => root.unmount());
+    }
+});
+
 for (const trackId of ["vk:-1_2", "yandex:0007", "yt:abcdefghijk"]) {
     test(`late ${trackId} feedback cannot race a replacement before React commits`, async () => {
         const { CurrentTrackPreferenceButtons } =
@@ -168,6 +198,9 @@ for (const trackId of ["vk:-1_2", "yandex:0007", "yt:abcdefghijk"]) {
             );
             const oldConfirmation = state.callbacks.at(-1);
             assert.ok(oldConfirmation);
+            const { recordPlaybackReplacement } =
+                await import("../../lib/audio-engine/playbackAdvanceOrigin");
+            recordPlaybackReplacement();
             state.advanceQueue = (reason: string) => {
                 state.advances.push(`new:${reason}`);
             };
