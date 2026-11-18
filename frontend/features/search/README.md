@@ -18,11 +18,14 @@ identity play directly; only metadata-only rows use provider fuzzy matching.
 An incomplete discovery response retains its successful matches, exposes a
 partial-catalogue notice and an explicit repeat action, and remains stale in
 the client cache. Successful complete discovery keeps its normal cache window.
+The repeat action refreshes only unavailable sources. Overlapping retries share
+the in-flight personal search read and preserve healthy catalog results.
 Persisted YouTube, VK and Yandex favorites appear in an owner-scoped
 "Из любимого" group without contacting providers. The All view previews five
 rows; Tracks continues through raw personal pages even when invalid metadata
 leaves a page empty. Only exact visible provider duplicates are suppressed.
-Personal-read failures retain other results and allow an explicit retry.
+Partial favorite failures and complete private-library read errors retain other
+results and allow an explicit retry in both All and Tracks views.
 Preference writes invalidate private library search without refetching provider
 catalogs; retiring the authenticated runtime clears its private query cache.
 Explicitly saved albums and artists use separate owner-scoped search pages and

@@ -46,7 +46,8 @@ interface UseSearchDataReturn {
 }
 
 /**
- * Executes useSearchData.
+ * Combines independent catalog and owner search queries for the current term.
+ * Explicit retry refreshes unavailable sources and shares in-flight private reads.
  */
 export function useSearchData({
     query,
@@ -62,6 +63,7 @@ export function useSearchData({
         data: libraryResults,
         isLoading: isLibrarySearching,
         isFetching: isLibraryFetching,
+        isError: isLibraryError,
         refetch: refetchLibrary,
     } = useSearchQuery(
         query,
@@ -160,6 +162,15 @@ export function useSearchData({
     const hasSearched = query.trim().length >= 2;
     const personalUnavailable =
         effectiveLibraryResults?.streamingUnavailable === true;
+    const libraryUnavailable =
+        libraryType === "tracks" ? libraryTrackSearch.isError : isLibraryError;
+    const discoveryUnavailable = Boolean(
+        discoverData?.partialFailure || isDiscoverError,
+    );
+    const serviceUnavailable =
+        serviceSearchEnabled &&
+        (serviceCatalog.isError ||
+            Boolean(serviceCatalog.data?.unavailable.length));
     const serviceNotice =
         serviceSearchEnabled && serviceCatalog.isError
             ? "VK и Яндекс сейчас недоступны. Показаны результаты остальных каталогов."
@@ -170,28 +181,34 @@ export function useSearchData({
     return {
         catalogNotice:
             [
-                discoverData?.partialFailure || isDiscoverError
+                discoveryUnavailable
                     ? "Часть онлайн-каталога временно недоступна. Доступные результаты сохранены."
                     : null,
                 serviceNotice,
-                personalUnavailable
-                    ? "Не удалось найти треки в любимом. Остальные результаты сохранены."
-                    : null,
+                libraryUnavailable
+                    ? "Поиск по вашей музыке временно недоступен. Остальные результаты сохранены."
+                    : personalUnavailable
+                      ? "Не удалось найти треки в любимом. Остальные результаты сохранены."
+                      : null,
             ]
                 .filter(Boolean)
                 .join(" ") || null,
         retryCatalogSearch: async () => {
             if (!hasSearched) return;
             await Promise.allSettled([
-                refetchDiscover({ cancelRefetch: false }),
-                ...(serviceSearchEnabled
+                ...(discoveryUnavailable
+                    ? [refetchDiscover({ cancelRefetch: false })]
+                    : []),
+                ...(serviceUnavailable
                     ? [serviceCatalog.refetch({ cancelRefetch: false })]
                     : []),
-                ...(personalUnavailable
+                ...(personalUnavailable || libraryUnavailable
                     ? [
                           libraryType === "tracks"
-                              ? libraryTrackSearch.refetch()
-                              : refetchLibrary(),
+                              ? libraryTrackSearch.refetch({
+                                    cancelRefetch: false,
+                                })
+                              : refetchLibrary({ cancelRefetch: false }),
                       ]
                     : []),
             ]);
