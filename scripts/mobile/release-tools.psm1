@@ -130,8 +130,14 @@ function Assert-ApkMetadata([string]$Certificates, [string]$Badging, [string]$Ex
     if ($Badging -notmatch "(?m)^package: name='ru\.agentik007\.soundspan' versionCode='$($expectedVersion.versionCode)' versionName='$([regex]::Escape($expectedVersion.versionName))'" -or $Badging -notmatch "(?m)^sdkVersion:'24'" -or $Badging -notmatch "(?m)^targetSdkVersion:'36'") { throw 'APK identity/version/SDK mismatch' }
     if ($Badging -match '(?i)application-debuggable|application-testOnly|testOnly') { throw 'Debuggable or test-only APK rejected' }
     $allowed = @('android.permission.INTERNET','android.permission.WAKE_LOCK','android.permission.FOREGROUND_SERVICE','android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK','android.permission.FOREGROUND_SERVICE_DATA_SYNC','android.permission.POST_NOTIFICATIONS','android.permission.ACCESS_NETWORK_STATE','android.permission.RECEIVE_BOOT_COMPLETED','ru.agentik007.soundspan.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION')
-    foreach ($permission in [regex]::Matches($Badging, "(?m)^uses-permission[^:]*: name='([^']+)'")) {
-        if ($permission.Groups[1].Value -notin $allowed) { throw "Unexpected APK permission: $($permission.Groups[1].Value)" }
+    $permissions = @([regex]::Matches($Badging, "(?m)^uses-permission[^:]*: name='([^']+)'" ) | ForEach-Object { $_.Groups[1].Value })
+    if ($expectedVersion.versionCode -ge 29) {
+        $installerPermission = 'android.permission.REQUEST_INSTALL_PACKAGES'
+        $allowed += $installerPermission
+        if ($permissions -cnotcontains $installerPermission) { throw 'APK updater install permission is missing' }
+    }
+    foreach ($permission in $permissions) {
+        if ($permission -notin $allowed) { throw "Unexpected APK permission: $permission" }
     }
     foreach ($entry in $Entries) {
         if ($entry -match '(?i)(\.(p12|pfx|jks|keystore|dpapi|pem|key)$|(^|/)(key\.properties|signing\.json|\.env)(/|$))') { throw 'Private material packaged in APK' }
