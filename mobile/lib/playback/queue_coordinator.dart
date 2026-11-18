@@ -84,6 +84,8 @@ final class QueueCoordinator implements PlaybackController {
   String? _current;
   SessionFence? _fence;
   PreparedAudio? _resource;
+  final _pendingLocalDrains = <PreparedAudio>{};
+  final _localRevocations = <PreparedAudio, Future<void>>{};
   Duration _position = Duration.zero;
   Duration? _duration;
   Duration _buffer = Duration.zero;
@@ -261,7 +263,7 @@ final class QueueCoordinator implements PlaybackController {
     _processing = PlaybackProcessing.idle;
     _buffer = Duration.zero;
     _publish();
-    await Future.wait<void>([engine.stop(), resource.revoke()]);
+    await _stopAndRevoke(resource);
     return _resource?.uri != file && _preparingGeneration == null;
   }
 
@@ -468,9 +470,7 @@ final class QueueCoordinator implements PlaybackController {
         );
         _pruneExcludedFuture();
         _publish(PlaybackEventKind.transition, oldEntry);
-        final stopped = engine.stop();
-        await oldResource?.revoke();
-        await stopped;
+        await _stopAndRevoke(oldResource);
       case ReplaceQueue():
         final fence = command.fence;
         try {
@@ -1147,9 +1147,7 @@ final class QueueCoordinator implements PlaybackController {
     }
 
     try {
-      final stop = engine.stop();
-      await withinDeadline(() async => previousResource?.revoke());
-      await withinDeadline(() => stop);
+      await withinDeadline(() => _stopAndRevoke(previousResource));
       if (!_valid(generation, fence)) return;
       if (admissionCurrent?.call() == false) throw _admissionUnavailable;
       final entry = _entries.firstWhere((e) => e.entryId == id);
@@ -1216,9 +1214,8 @@ final class QueueCoordinator implements PlaybackController {
         return;
       }
       final sourceFailure = resource?.failure;
-      await resource?.revoke();
+      if (!handedToQueue) await resource?.revoke();
       if (!_valid(generation, fence)) return;
-      _resource = null;
       if (error is AppFailure && error.code == 'session_revoked') {
         await _clear();
       } else {
@@ -1406,8 +1403,12 @@ final class QueueCoordinator implements PlaybackController {
     final resource = _resource;
     final sourceFailure = resource?.failure;
     _resource = null;
-    unawaited(engine.stop());
-    if (resource != null) unawaited(resource.revoke());
+    unawaited(
+      _stopAndRevoke(resource).catchError((Object _) {
+        // A failed stop must retain a local reader pin; never infer decoder drain.
+        // The recoverable playback failure is already published below.
+      }),
+    );
     _failure =
         failure ??
         sourceFailure ??
@@ -1614,8 +1615,7 @@ final class QueueCoordinator implements PlaybackController {
     final resource = _resource;
     _resource = null;
     _publish();
-    await engine.stop();
-    await resource?.revoke();
+    await _stopAndRevoke(resource);
   }
 
   void _onEngine(EngineEvent event) {
@@ -1731,9 +1731,50 @@ final class QueueCoordinator implements PlaybackController {
     _processing = PlaybackProcessing.idle;
     _failure = null;
     _publish();
-    final stop = engine.stop();
-    await resource?.revoke();
-    await stop;
+    await _stopAndRevoke(resource);
+  }
+
+  Future<void> _stopAndRevoke(PreparedAudio? resource) {
+    if (resource != null && resource.uri.scheme == 'file') {
+      _pendingLocalDrains.add(resource);
+    }
+    // Capture before invoking the global native stop. A late acknowledgement
+    // cannot prove that a resource prepared after this call has also drained.
+    final captured = Set<PreparedAudio>.of(_pendingLocalDrains);
+    final stopped = Future<void>.sync(engine.stop);
+    final local = _releaseStoppedReaders(stopped, captured);
+    if (resource != null && resource.uri.scheme != 'file') {
+      return Future.wait<void>([local, resource.revokeAfterStop(stopped)]);
+    }
+    return local;
+  }
+
+  Future<void> _releaseStoppedReaders(
+    Future<void> stopped,
+    Set<PreparedAudio> captured,
+  ) async {
+    await stopped;
+    Object? failure;
+    StackTrace? failureStack;
+    for (final resource in captured) {
+      if (!_pendingLocalDrains.contains(resource)) continue;
+      final release = _localRevocations.putIfAbsent(
+        resource,
+        () => Future<void>.sync(resource.revoke),
+      );
+      try {
+        await release;
+        _pendingLocalDrains.remove(resource);
+      } catch (error, stack) {
+        failure ??= error;
+        failureStack ??= stack;
+      } finally {
+        if (identical(_localRevocations[resource], release)) {
+          _localRevocations.remove(resource);
+        }
+      }
+    }
+    if (failure != null) Error.throwWithStackTrace(failure, failureStack!);
   }
 
   @override

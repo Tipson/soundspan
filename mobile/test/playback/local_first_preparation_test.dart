@@ -37,7 +37,9 @@ void main() {
         qualities: () => ['high', 'medium'],
         openReady: (ref, quality, fence) async {
           qualities.add(quality);
-          return quality == 'medium' ? file : null;
+          return quality == 'medium'
+              ? PreparedAudio(uri: file.uri, revoke: () async {})
+              : null;
         },
         network: (_, _) async {
           network++;
@@ -109,7 +111,10 @@ void main() {
         qualities: () => ['high'],
         openReady: (_, _, _) async {
           authority.switchOwner();
-          return File.fromUri(Uri.file('D:/CodexData/temp/ready-fixture.wav'));
+          return PreparedAudio(
+            uri: Uri.file('D:/CodexData/temp/ready-fixture.wav'),
+            revoke: () async {},
+          );
         },
         network: (_, _) async {
           network++;

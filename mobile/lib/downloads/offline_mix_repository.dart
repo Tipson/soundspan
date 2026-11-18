@@ -12,6 +12,7 @@ import '../features/home/home_models.dart';
 import 'download_checkpoint.dart';
 import 'download_models.dart';
 import 'download_repository.dart';
+import 'device_media_barrier.dart';
 
 /// One ordered occurrence; repeated recordings share a download, not a row.
 final class OfflineMixItem {
@@ -104,26 +105,73 @@ final class OfflineMixRepository {
         );
       });
 
-  /// Resolve the frozen file of an active or retained previous snapshot.
-  /// Newer jobs for the same recording must not replace its exact checkpoint.
-  Future<File?> openVerifiedFile(int generation, TrackRef ref) async {
-    ({OfflineMixSnapshot snapshot, OfflineMixItem item})? pick(
-      OfflineMixState state,
-    ) {
-      for (final snapshot in [state.active, state.previous].nonNulls) {
-        if (snapshot.generation != generation) continue;
-        final items = snapshot.items.where((item) => item.track.ref == ref);
-        if (items.isNotEmpty) return (snapshot: snapshot, item: items.first);
-      }
-      return null;
-    }
+  /// Used inside the deletion transaction, sharing the canonical manifest
+  /// decoder rather than trusting a cached screen or partially decoded refs.
+  Future<bool> protectsDownload(OwnerTransaction tx, String id) async {
+    final record = await _read(tx);
+    return [record.state.active, record.state.previous, record.state.pending]
+        .nonNulls
+        .any((snapshot) => snapshot.items.any((item) => item.downloadId == id));
+  }
 
+  ({OfflineMixSnapshot snapshot, OfflineMixItem item})? _pick(
+    OfflineMixState state,
+    int generation,
+    TrackRef ref,
+  ) {
+    for (final snapshot in [state.active, state.previous].nonNulls) {
+      if (snapshot.generation != generation) continue;
+      final items = snapshot.items.where((item) => item.track.ref == ref);
+      if (items.isNotEmpty) return (snapshot: snapshot, item: items.first);
+    }
+    return null;
+  }
+
+  Future<DeviceMediaReader?> acquireVerifiedFile(
+    int generation,
+    TrackRef ref,
+  ) async {
     final selected = await downloads.store.transaction(fence, (tx) async {
-      final record = await _read(tx);
-      final found = pick(record.state);
+      final found = _pick((await _read(tx)).state, generation, ref);
       if (found == null) return null;
       final job = await _job(tx, found.item, found.snapshot);
       if (job == null || job.state == DownloadState.removing) return null;
+      final cp = found.item.verified!;
+      final token = await DeviceMediaBarrier.acquire(
+        tx,
+        job.id,
+        cp,
+        fence.epoch,
+      );
+      return token == null ? null : (id: job.id, file: cp, token: token);
+    });
+    if (selected == null) return null;
+    return downloads.verifyReader(
+      selected.id,
+      selected.file,
+      selected.token,
+      fence,
+      () => openVerifiedFile(generation, ref),
+    );
+  }
+
+  /// Resolve the frozen file of an active or retained previous snapshot.
+  /// Newer jobs for the same recording must not replace its exact checkpoint.
+  Future<File?> openVerifiedFile(int generation, TrackRef ref) async {
+    final selected = await downloads.store.transaction(fence, (tx) async {
+      final record = await _read(tx);
+      final found = _pick(record.state, generation, ref);
+      if (found == null) return null;
+      final job = await _job(tx, found.item, found.snapshot);
+      if (job == null ||
+          job.state == DownloadState.removing ||
+          await DeviceMediaBarrier.unavailable(
+            tx,
+            job.id,
+            found.item.verified!,
+          )) {
+        return null;
+      }
       return found;
     });
     if (selected == null) return null;
@@ -144,7 +192,7 @@ final class OfflineMixRepository {
     }
     final current = await downloads.store.transaction(fence, (tx) async {
       final record = await _read(tx);
-      final found = pick(record.state);
+      final found = _pick(record.state, generation, ref);
       if (found == null ||
           found.item.downloadId != selected.item.downloadId ||
           found.snapshot.revision != selected.snapshot.revision ||
@@ -152,7 +200,9 @@ final class OfflineMixRepository {
         return false;
       }
       final job = await _job(tx, found.item, found.snapshot);
-      return job != null && job.state != DownloadState.removing;
+      return job != null &&
+          job.state != DownloadState.removing &&
+          !await DeviceMediaBarrier.unavailable(tx, job.id, cp);
     });
     return current ? file : null;
   }
@@ -191,6 +241,27 @@ final class OfflineMixRepository {
         .toString();
     return downloads.store.transaction(fence, (tx) async {
       final record = await _read(tx);
+      for (final track in source.tracks) {
+        final raw = await tx.read(
+          DownloadRepository.namespace,
+          downloads.key(track.ref, quality, fence.owner),
+        );
+        if (raw == null) continue;
+        final job = DeviceDownload.fromJson(raw);
+        if (job.state == DownloadState.removing ||
+            (job.checkpoint != null &&
+                await DeviceMediaBarrier.unavailable(
+                  tx,
+                  job.id,
+                  job.checkpoint!,
+                ))) {
+          throw const AppFailure(
+            code: 'offline_mix_file_unavailable',
+            message: 'Файл занят удалением. Повторите сохранение.',
+            retryable: true,
+          );
+        }
+      }
       final generation = record.generation + 1;
       if (generation > 9007199254740991) {
         throw const FormatException('Mix generation');
@@ -260,6 +331,13 @@ final class OfflineMixRepository {
           }
           final current = await _job(tx, item, pending);
           if (current == null ||
+              current.state == DownloadState.removing ||
+              (current.checkpoint != null &&
+                  await DeviceMediaBarrier.unavailable(
+                    tx,
+                    current.id,
+                    current.checkpoint!,
+                  )) ||
               current.generation != job.generation ||
               current.originalFence != job.originalFence ||
               (current.state != DownloadState.ready &&
@@ -306,8 +384,15 @@ final class OfflineMixRepository {
       final jobs = <String, DeviceDownload>{};
       for (final item in pending.items) {
         final job = await _job(tx, item, pending);
-        if (!_readyBound(job, item)) return null;
-        jobs[item.downloadId] = job!;
+        if (!_readyBound(job, item) ||
+            await DeviceMediaBarrier.unavailable(
+              tx,
+              job!.id,
+              job.checkpoint!,
+            )) {
+          return null;
+        }
+        jobs[item.downloadId] = job;
       }
       return (snapshot: pending, jobs: jobs);
     });
@@ -347,7 +432,12 @@ final class OfflineMixRepository {
       for (final item in verified.items) {
         final current = await _job(tx, item, verified);
         if (!_readyBound(current, item) ||
-            !_sameFile(current!.checkpoint!, item.verified!)) {
+            !_sameFile(current!.checkpoint!, item.verified!) ||
+            await DeviceMediaBarrier.unavailable(
+              tx,
+              current.id,
+              item.verified!,
+            )) {
           return false;
         }
       }

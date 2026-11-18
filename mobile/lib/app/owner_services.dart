@@ -100,6 +100,7 @@ final class NativeOwnerServices implements AppOwnerScope {
   Future<void>? _closing;
   final _retire = <Future<void> Function()>[];
   final _blockedFiles = <Uri, int>{};
+  final Map<DeviceDownload, Set<Uri>> _removalReservations = Map.identity();
   final _preparations = <Future<PreparedAudio>>{};
 
   static Future<NativeOwnerServices> create({
@@ -201,6 +202,7 @@ final class NativeOwnerServices implements AppOwnerScope {
       paths: paths,
       verifier: DownloadVerifier(probe: probe),
       beforeRemove: _beforeRemove,
+      afterRemove: _afterRemove,
     );
     offlineMix = OfflineMixRepository(downloads: downloads, fence: fence);
     downloadNetwork = DeviceNetworkMonitor();
@@ -554,19 +556,24 @@ final class NativeOwnerServices implements AppOwnerScope {
     final offlineGeneration = entry.context.offlineMixGeneration;
     if (offlineGeneration != null) {
       await _guard();
-      final file = await offlineMix.openVerifiedFile(
+      final reader = await offlineMix.acquireVerifiedFile(
         offlineGeneration,
         entry.track.ref,
       );
-      await _guard();
-      if (file == null) {
+      if (reader == null) {
         throw const AppFailure(
           code: 'offline_mix_file_unavailable',
           message: 'Сохранённый файл недоступен. Откройте микс в загрузках и повторите сохранение.',
         );
       }
-      if (_blockedFiles.containsKey(file.uri)) throw _busyFile;
-      return PreparedAudio(uri: file.uri, revoke: () async {});
+      try {
+        await _guard();
+        if (_blockedFiles.containsKey(reader.file.uri)) throw _busyFile;
+        return PreparedAudio(uri: reader.file.uri, revoke: reader.release);
+      } catch (_) {
+        await reader.release();
+        rethrow;
+      }
     }
     final networkRevision = _networkRevision;
     await _guard();
@@ -576,11 +583,16 @@ final class NativeOwnerServices implements AppOwnerScope {
       policy: policy,
       qualities: () => _qualityOrder(selected),
       openReady: (ref, candidate, original) async {
-        final file = await downloads.openReady(ref, candidate, original);
-        if (file == null) return null;
-        await _guard();
-        if (_blockedFiles.containsKey(file.uri)) throw _busyFile;
-        return file;
+        final reader = await downloads.acquireReady(ref, candidate, original);
+        if (reader == null) return null;
+        try {
+          await _guard();
+          if (_blockedFiles.containsKey(reader.file.uri)) throw _busyFile;
+          return PreparedAudio(uri: reader.file.uri, revoke: reader.release);
+        } catch (_) {
+          await reader.release();
+          rethrow;
+        }
       },
       network: protectedAudioPreparation(
         PlaybackResolver(
@@ -656,15 +668,25 @@ final class NativeOwnerServices implements AppOwnerScope {
     } catch (_) {
       // This callback rejected deletion. Drop only this attempt's reservation;
       // concurrent or successful deletions retain their own path reservations.
-      for (final file in files) {
-        final remaining = _blockedFiles[file]! - 1;
-        if (remaining == 0) {
-          _blockedFiles.remove(file);
-        } else {
-          _blockedFiles[file] = remaining;
-        }
-      }
+      _unblockRemovalFiles(files);
       rethrow;
+    }
+    _removalReservations[job] = files;
+  }
+
+  void _afterRemove(DeviceDownload job) {
+    final files = _removalReservations.remove(job);
+    if (files != null) _unblockRemovalFiles(files);
+  }
+
+  void _unblockRemovalFiles(Set<Uri> files) {
+    for (final file in files) {
+      final remaining = _blockedFiles[file]! - 1;
+      if (remaining == 0) {
+        _blockedFiles.remove(file);
+      } else {
+        _blockedFiles[file] = remaining;
+      }
     }
   }
 

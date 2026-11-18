@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import '../core/model/owner_key.dart';
 import '../core/model/track_ref.dart';
 import '../core/network/network_policy.dart';
@@ -7,14 +5,14 @@ import '../core/session/session_authority.dart';
 import 'playback_engine.dart';
 import 'queue_snapshot.dart';
 
-typedef OpenReadyMedia = Future<File?> Function(
+typedef OpenReadyMedia = Future<PreparedAudio?> Function(
   TrackRef ref,
   String quality,
   SessionFence fence,
 );
 
-/// Only DownloadRepository.openReady may supply a file: it verifies the private
-/// path, manifest, hash and original owner fence. No server filePath is used.
+/// Local preparation carries the verified reader capability through to the
+/// queue. Presence-only checks cannot substitute an unreserved server filePath.
 final class LocalFirstPreparation {
   const LocalFirstPreparation({
     required this.authority,
@@ -36,12 +34,13 @@ final class LocalFirstPreparation {
       throw ArgumentError('Invalid local quality order');
     }
     for (final quality in order) {
-      final file = await openReady(entry.track.ref, quality, fence);
-      await authority.assertCurrent(fence);
-      if (file != null) {
-        // A local file is independent of network admission. The queue authority
-        // still revokes its active source on owner changes and before removal.
-        return PreparedAudio(uri: file.uri, revoke: () async {});
+      final prepared = await openReady(entry.track.ref, quality, fence);
+      try {
+        await authority.assertCurrent(fence);
+        if (prepared != null) return prepared;
+      } catch (_) {
+        await prepared?.revoke();
+        rethrow;
       }
     }
     policy.requireNetwork();

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/network/stored_network_policy.dart';
 import '../../downloads/download_network_rules.dart';
 import '../downloads/downloads_controller.dart';
+import '../downloads/storage_status_card.dart';
 import 'settings_screen.dart';
 
 class OfflineSettingsScreen extends StatefulWidget {
@@ -27,22 +28,23 @@ class _OfflineSettingsScreenState extends State<OfflineSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadNetworkRulesAfterBuild();
+    _loadDownloadPreferencesAfterBuild();
   }
 
   @override
   void didUpdateWidget(OfflineSettingsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.downloads != downloads) {
-      _loadNetworkRulesAfterBuild();
+      _loadDownloadPreferencesAfterBuild();
     }
   }
 
-  void _loadNetworkRulesAfterBuild() {
+  void _loadDownloadPreferencesAfterBuild() {
     final controller = downloads;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && identical(controller, downloads) && controller.isCurrent) {
         unawaited(controller.loadNetworkRules());
+        unawaited(controller.loadQuota());
       }
     });
   }
@@ -122,6 +124,81 @@ class _OfflineSettingsScreenState extends State<OfflineSettingsScreen> {
     ];
   }
 
+  List<Widget> _quotaSettings() {
+    if (downloads.offlineQuota == null) return const [];
+    final usage = downloads.quotaUsage;
+    final enabled =
+        downloads.isCurrent && !downloads.busy && !downloads.quotaLoading;
+    final options = <int>{
+      512 * 1024 * 1024,
+      1024 * 1024 * 1024,
+      2 * 1024 * 1024 * 1024,
+      if (usage != null) usage.limitBytes,
+    }.toList()..sort();
+    String label(int bytes) => bytes % (1024 * 1024 * 1024) == 0
+        ? '${bytes ~/ (1024 * 1024 * 1024)} ГБ'
+        : '${bytes ~/ (1024 * 1024)} МБ';
+    return [
+      const Divider(height: 32),
+      Text(
+        'Память для офлайн-микса',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 8),
+      const Text(
+        'Отдельные загрузки и Любимое в этот лимит не входят. Готовый микс остаётся доступен, если для обновления не хватает места.',
+      ),
+      const SizedBox(height: 12),
+      if (downloads.quotaLoading) const LinearProgressIndicator(),
+      if (downloads.quotaFailure case final failure?) ...[
+        SettingsFailure(failure.message),
+        TextButton(
+          onPressed: enabled ? () => downloads.loadQuota() : null,
+          child: const Text('Прочитать лимит снова'),
+        ),
+      ],
+      if (usage != null) ...[
+        Semantics(
+          label: 'Лимит офлайн-микса',
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                key: const ValueKey('offline-mix-quota-limit'),
+                value: usage.limitBytes,
+                isExpanded: true,
+                itemHeight: 56,
+                items: options
+                    .map(
+                      (bytes) => DropdownMenuItem(
+                        value: bytes,
+                        child: Text(label(bytes)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: enabled
+                    ? (bytes) {
+                        if (bytes != null) {
+                          unawaited(downloads.setQuotaLimit(bytes));
+                        }
+                      }
+                    : null,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Использовано лимита: ${downloadBytes(usage.usedBytes)}. Включая текущие загрузки.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([policy, downloads]),
@@ -175,6 +252,7 @@ class _OfflineSettingsScreenState extends State<OfflineSettingsScreen> {
               ),
             if (downloads.failure != null)
               SettingsFailure(downloads.failure!.message),
+            ..._quotaSettings(),
             const SizedBox(height: 20),
             OutlinedButton.icon(
               onPressed: widget.onDownloads,
@@ -182,8 +260,10 @@ class _OfflineSettingsScreenState extends State<OfflineSettingsScreen> {
               label: const Text('Управлять загрузками'),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Удаление отдельных файлов и состояние памяти доступны в загрузках. Автоматического удаления музыки нет.',
+            Text(
+              downloads.offlineQuota == null
+                  ? 'Удаление отдельных файлов и состояние памяти доступны в загрузках. Автоматического удаления музыки нет.'
+                  : 'Отдельно сохранённые треки удаляются только вручную. Для офлайн-микса защищены текущая и предыдущая готовые версии.',
             ),
           ],
         ),

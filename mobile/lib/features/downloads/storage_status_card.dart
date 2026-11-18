@@ -72,6 +72,9 @@ class StorageStatusCard extends StatelessWidget {
 
 String downloadStatus(DeviceDownload job) {
   if (job.errorCode == 'download_cancelled') return 'Отменено';
+  if (job.errorCode == 'offline_mix_quota_exceeded') {
+    return 'Лимит офлайн-микса. Измените его в настройках и повторите сохранение.';
+  }
   if (const {
     'download_storage_error',
     'download_storage_full',

@@ -25,6 +25,7 @@ import 'download_network_access.dart';
 import 'download_network_policy.dart';
 import 'download_repository.dart';
 import 'offline_mix_repository.dart';
+import 'offline_mix_quota.dart';
 import 'download_verifier.dart';
 import 'download_worker_bridge.dart';
 import 'private_media_paths.dart';
@@ -102,6 +103,13 @@ Future<void> runDownloadWorker({
         policy: policy,
         readNetwork: () async => deviceNetwork!.value,
       );
+      final quota = OfflineMixQuota(
+        repository: repository,
+        fence: request.originalFence,
+        evict: (captured) =>
+            repository.evictIfUnprotected(captured, request.originalFence),
+        recover: () => repository.recoverRemovals(request.originalFence),
+      );
       coordinator = DownloadCoordinator(
         repository: repository,
         resolverForQuality: (quality) => PlaybackResolver(
@@ -116,6 +124,8 @@ Future<void> runDownloadWorker({
         networkPolicy: policy,
         revalidateNetwork: (job) => access.requireNetwork(job: job),
         beforeWrite: const DeviceStorageGuard().requireSpace,
+        reserveWrite: quota.reserveWrite,
+        onWriterDrained: quota.writerDrained,
       );
       routeChanged = () =>
           coordinator!.cancelNetworkTransfers(retryWhenAllowed: true);

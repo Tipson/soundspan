@@ -20,6 +20,8 @@ final class DownloadCoordinator {
     required this.networkPolicy,
     this.revalidateNetwork,
     this.beforeWrite,
+    this.reserveWrite,
+    this.onWriterDrained,
   });
   final DownloadRepository repository;
   final PlaybackResolver Function(String) resolverForQuality;
@@ -31,6 +33,13 @@ final class DownloadCoordinator {
 
   /// Capacity admission before each bounded private-file write.
   final Future<void> Function(int bytes)? beforeWrite;
+
+  /// Reserve this exact claim's resulting file length before its write.
+  final Future<void> Function(DeviceDownload claim, int nextLength)?
+  reserveWrite;
+
+  /// Optional accounting after confirmed private-file and response drain.
+  final Future<void> Function(DeviceDownload claim)? onWriterDrained;
   final Set<MediaCancellation> _active = {};
   final Set<MediaCancellation> _networkTransfers = {};
   final Set<MediaCancellation> _networkDeferrals = {};
@@ -131,6 +140,10 @@ final class DownloadCoordinator {
         final end = start + limit < chunk.length ? start + limit : chunk.length;
         await check();
         await beforeWrite?.call(end - start);
+        if (reserveWrite != null) {
+          final nextLength = await sink!.position() + end - start;
+          await reserveWrite!(job, nextLength);
+        }
         await check();
         await sink!.writeFrom(chunk, start, end);
       }
@@ -409,15 +422,26 @@ final class DownloadCoordinator {
       await events.cancel();
       if (heartbeat != null) await heartbeat;
       cancel.cancel();
+      var drained = true;
       try {
         await response?.close();
       } catch (_) {
+        drained = false;
         /* Preserve the recorded failure. */
       }
       try {
         await sink?.close();
       } catch (_) {
+        drained = false;
         /* A failed flush/close was already reported. */
+      }
+      if (drained && onWriterDrained != null) {
+        try {
+          await onWriterDrained!(job);
+        } catch (_) {
+          // A retained quota reservation is conservative. A ready commit must
+          // not become a retry just because optional accounting is unavailable.
+        }
       }
       _networkTransfers.remove(cancel);
       _networkDeferrals.remove(cancel);

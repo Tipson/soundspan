@@ -18,6 +18,18 @@ final class PreparedAudio {
   /// Safe typed cause from this exact resource; no URI or credentials enter state.
   final AppFailure? Function()? readFailure;
   AppFailure? get failure => readFailure?.call();
+
+  /// A local reader remains reserved until the native decoder has drained.
+  /// Network revocation starts immediately so blocked gateway IO can stop too.
+  Future<void> revokeAfterStop(Future<void> stopped) async {
+    if (uri.scheme == 'file') {
+      await stopped;
+      await revoke();
+    } else {
+      await Future.wait<void>([stopped, revoke()]);
+    }
+  }
+
   @override
   String toString() => 'PreparedAudio(<private>)';
 }

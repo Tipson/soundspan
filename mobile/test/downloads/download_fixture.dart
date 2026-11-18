@@ -80,6 +80,8 @@ class DownloadHarness {
   DownloadCoordinator newRunner(
     DownloadRepository repository, {
     Future<void> Function(int bytes)? beforeWrite,
+    Future<void> Function(DeviceDownload claim, int nextLength)? reserveWrite,
+    Future<void> Function(DeviceDownload claim)? onWriterDrained,
   }) => DownloadCoordinator(
     repository: repository,
     resolverForQuality: (q) => PlaybackResolver(
@@ -100,6 +102,8 @@ class DownloadHarness {
     ),
     networkPolicy: const NetworkPolicy.online(),
     beforeWrite: beforeWrite,
+    reserveWrite: reserveWrite,
+    onWriterDrained: onWriterDrained,
   );
   Future<void> send(
     HttpRequest r, {

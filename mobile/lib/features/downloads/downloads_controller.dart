@@ -11,6 +11,7 @@ import '../../downloads/download_network_access.dart';
 import '../../downloads/download_network_rules.dart';
 import '../../downloads/download_repository.dart';
 import '../../downloads/liked_download_automation.dart';
+import '../../downloads/offline_mix_quota.dart';
 import '../../downloads/stored_download_network_rules.dart';
 import '../library/library_models.dart';
 
@@ -44,6 +45,7 @@ final class DownloadsController extends ChangeNotifier {
     this.networkAccess,
     this.confirmNetworkUse,
     this.onNetworkRulesChanged,
+    this.offlineQuota,
   });
   final DownloadRepository repository;
   final SessionFence fence;
@@ -56,6 +58,51 @@ final class DownloadsController extends ChangeNotifier {
   final DownloadNetworkAccess? networkAccess;
   Future<bool> Function(int count)? confirmNetworkUse;
   final Future<void> Function()? onNetworkRulesChanged;
+  final OfflineMixQuota? offlineQuota;
+  OfflineMixQuotaUsage? _quotaUsage;
+  AppFailure? _quotaFailure;
+  bool _quotaLoading = false;
+  int _quotaRevision = 0;
+  OfflineMixQuotaUsage? get quotaUsage => isCurrent ? _quotaUsage : null;
+  AppFailure? get quotaFailure => isCurrent ? _quotaFailure : null;
+  bool get quotaLoading => isCurrent && _quotaLoading;
+
+  Future<void> loadQuota() => _runQuota();
+  Future<void> setQuotaLimit(int bytes) => _runQuota(limit: bytes);
+
+  Future<void> _runQuota({int? limit}) {
+    final quota = offlineQuota;
+    if (!isCurrent || quota == null || _quotaLoading) return Future.value();
+    final revision = ++_quotaRevision;
+    _quotaLoading = true;
+    _notify();
+    return _track(() async {
+      try {
+        if (!identical(quota.repository, repository) || quota.fence != fence) {
+          throw collectionStaleSession;
+        }
+        if (limit != null) await quota.setLimit(limit);
+        final usage = await quota.usage();
+        await repository.authority.assertCurrent(fence);
+        if (isCurrent && revision == _quotaRevision) {
+          _quotaUsage = usage;
+          _quotaFailure = null;
+        }
+      } catch (_) {
+        if (isCurrent && revision == _quotaRevision) {
+          _quotaUsage = null;
+          _quotaFailure = const AppFailure(
+            code: 'offline_mix_quota_unavailable',
+            message: 'Не удалось прочитать или сохранить лимит офлайн-микса. Повторите попытку.',
+          );
+        }
+      } finally {
+        if (revision == _quotaRevision) _quotaLoading = false;
+        _notify();
+      }
+    });
+  }
+
   DownloadNetworkRules? _networkRules;
   AppFailure? _networkRulesFailure;
   bool _networkRulesLoading = false;

@@ -293,73 +293,92 @@ void main() {
     await queue.dispose();
   });
 
-  test(
-    'deleted ready generation cannot escape a delayed prepare into decoder',
-    () async {
-      final authority = CollectionAuthority();
-      final store = _HeldReadyStore();
-      final queue = QueueCoordinator(
-        authority: authority,
-        engine: ReportingEngine(),
-        prepare: (_, _) => throw StateError('No autoplay'),
-      );
-      final owner = await NativeOwnerServices.create(
-        authority: authority,
-        store: store,
-        fence: collectionFence,
-        playback: queue,
-        supportDirectory: root,
-        cancelDownloads: (_) async {},
-      );
-      final track = collectionTrack(1);
-      final job = await owner.downloads.enqueue(
-        track,
-        'original',
-        collectionFence,
-      );
-      final claim = (await owner.downloads.claim(
-        job.id,
-        collectionFence,
-        job.generation,
-      ))!;
-      final file = await owner.downloads.paths.file(
-        collectionOwner,
-        job.id,
-        claim.generation,
-        claim.writer!,
-        ready: true,
-      );
-      await file.writeAsBytes(audioBytes);
-      await owner.downloads.updateClaim(
-        claim,
-        state: DownloadState.ready,
-        release: true,
-        checkpoint: DownloadCheckpoint(
-          generation: claim.generation,
-          claim: claim.writer!,
-          bytes: audioBytes.length,
-          sha256: sha256.convert(audioBytes).toString(),
+  test('ready generation stays reserved throughout delayed preparation and teardown', () async {
+    final authority = CollectionAuthority();
+    final store = _HeldReadyStore();
+    final queue = QueueCoordinator(
+      authority: authority,
+      engine: ReportingEngine(),
+      prepare: (_, _) => throw StateError('No autoplay'),
+    );
+    final owner = await NativeOwnerServices.create(
+      authority: authority,
+      store: store,
+      fence: collectionFence,
+      playback: queue,
+      supportDirectory: root,
+      cancelDownloads: (_) async {},
+    );
+    final track = collectionTrack(1);
+    final job = await owner.downloads.enqueue(
+      track,
+      'original',
+      collectionFence,
+    );
+    final claim = (await owner.downloads.claim(
+      job.id,
+      collectionFence,
+      job.generation,
+    ))!;
+    final file = await owner.downloads.paths.file(
+      collectionOwner,
+      job.id,
+      claim.generation,
+      claim.writer!,
+      ready: true,
+    );
+    await file.writeAsBytes(audioBytes);
+    await owner.downloads.updateClaim(
+      claim,
+      state: DownloadState.ready,
+      release: true,
+      checkpoint: DownloadCheckpoint(
+        generation: claim.generation,
+        claim: claim.writer!,
+        bytes: audioBytes.length,
+        sha256: sha256.convert(audioBytes).toString(),
+      ),
+    );
+    store.remaining = 2;
+    final pending = owner.prepare(
+      QueueEntry(
+        entryId: 'delayed',
+        track: track,
+        context: const PlayContext(surface: PlaySurface.library),
+      ),
+      collectionFence,
+    );
+    await store.started.future;
+    await expectLater(
+      owner.downloads.remove(job.id, collectionFence),
+      throwsA(
+        isA<AppFailure>().having(
+          (error) => error.code,
+          'code',
+          'download_in_use',
         ),
-      );
-      store.remaining = 2;
-      final pending = owner.prepare(
-        QueueEntry(
-          entryId: 'delayed',
-          track: track,
-          context: const PlayContext(surface: PlaySurface.library),
+      ),
+    );
+    expect(await file.exists(), isTrue);
+    store.gate.complete();
+    final prepared = await pending;
+    expect(prepared.uri, file.uri);
+    await expectLater(
+      owner.downloads.remove(job.id, collectionFence),
+      throwsA(
+        isA<AppFailure>().having(
+          (error) => error.code,
+          'code',
+          'download_in_use',
         ),
-        collectionFence,
-      );
-      final rejected = expectLater(pending, throwsA(isA<AppFailure>()));
-      await store.started.future;
-      await owner.downloads.remove(job.id, collectionFence);
-      store.gate.complete();
-      await rejected;
-      expect(await file.exists(), isFalse);
-      await owner.close();
-      await queue.dispose();
-    },
-  );
+      ),
+    );
+    await prepared.revoke();
+    await owner.downloads.remove(job.id, collectionFence);
+    expect(await file.exists(), isFalse);
+    await owner.close();
+    await queue.dispose();
+  });
 
   test('owner store cannot borrow a replacement same-owner fence', () async {
     final authority = CollectionAuthority();

@@ -7,6 +7,7 @@ import '../core/model/track_ref.dart';
 import '../downloads/download_worker_bridge.dart';
 import '../downloads/download_models.dart';
 import '../downloads/liked_download_automation.dart';
+import '../downloads/offline_mix_quota.dart';
 import '../downloads/reschedule_network_downloads.dart';
 import '../features/account/account_controller.dart';
 import '../features/account/account_repository.dart';
@@ -172,6 +173,7 @@ final class OwnerUiSession {
       requestNotificationPermission: worker.requestNotificationPermission,
       automation: automation,
       networkAccess: owner.downloadAccess,
+      offlineQuota: OfflineMixQuota(repository: owner.downloads, fence: fence),
       onNetworkRulesChanged: () async {
         owner.downloadRulesChanged();
         await rescheduleNetworkDownloads(

@@ -17,6 +17,8 @@ import 'automatic_download_control.dart';
 import 'download_models.dart';
 import 'download_verifier.dart';
 import 'private_media_paths.dart';
+import 'device_media_barrier.dart';
+import 'offline_mix_repository.dart';
 
 final class DownloadRepository {
   DownloadRepository({
@@ -25,6 +27,7 @@ final class DownloadRepository {
     required this.paths,
     required this.verifier,
     required this.beforeRemove,
+    this.afterRemove,
     this.writerLease = const Duration(seconds: 30),
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now;
@@ -33,6 +36,10 @@ final class DownloadRepository {
   final PrivateMediaPaths paths;
   final DownloadVerifier verifier;
   final Future<void> Function(DeviceDownload) beforeRemove;
+
+  /// Releases this attempt's in-process guard after successful beforeRemove,
+  /// including a rejected durable deletion admission or failed file operation.
+  final void Function(DeviceDownload)? afterRemove;
   final Duration writerLease;
   final DateTime Function() clock;
   static const namespace = 'deviceDownloads.v1';
@@ -456,6 +463,12 @@ final class DownloadRepository {
       return null;
     }
     final cp = job.checkpoint!;
+    if (await store.transaction(
+      fence,
+      (tx) => DeviceMediaBarrier.unavailable(tx, job.id, cp),
+    )) {
+      return null;
+    }
     final file = await paths.file(
       fence.owner,
       job.id,
@@ -491,8 +504,226 @@ final class DownloadRepository {
         current?.checkpoint?.claim != cp.claim) {
       return null;
     }
+    if (await store.transaction(
+      fence,
+      (tx) => DeviceMediaBarrier.unavailable(tx, job.id, cp),
+    )) {
+      return null;
+    }
     await authority.assertCurrent(fence);
     return file;
+  }
+
+  /// Reserve the exact ready file for playback before any asynchronous file IO.
+  /// Presence/verification callers keep using openReady without holding readers.
+  Future<DeviceMediaReader?> acquireReady(
+    TrackRef ref,
+    String quality,
+    SessionFence fence,
+  ) async {
+    final selected = await store.transaction(fence, (tx) async {
+      final job = await _read(tx, key(ref, quality, fence.owner), fence);
+      if (job?.state != DownloadState.ready ||
+          job?.checkpoint?.sha256 == null) {
+        return null;
+      }
+      final cp = job!.checkpoint!;
+      final token = await DeviceMediaBarrier.acquire(
+        tx,
+        job.id,
+        cp,
+        fence.epoch,
+      );
+      return token == null ? null : (id: job.id, file: cp, token: token);
+    });
+    if (selected == null) return null;
+    return verifyReader(
+      selected.id,
+      selected.file,
+      selected.token,
+      fence,
+      () => openReady(ref, quality, fence),
+    );
+  }
+
+  /// Complete a reservation selected in an existing owner transaction. A stale
+  /// owner cannot bypass SQL admission to clear an orphan reader after logout.
+  Future<DeviceMediaReader?> verifyReader(
+    String id,
+    DownloadCheckpoint cp,
+    String token,
+    SessionFence fence,
+    Future<File?> Function() verify,
+  ) async {
+    Future<void> release() async {
+      try {
+        await store.transaction(
+          fence,
+          (tx) => DeviceMediaBarrier.release(tx, id, cp, token),
+        );
+      } on AppFailure catch (error) {
+        if (!const {'stale_session', 'session_revoked'}.contains(error.code)) {
+          rethrow;
+        }
+        // No proof of storage/decoder reconciliation: keep the orphan protected.
+      }
+    }
+
+    try {
+      final expected = await paths.file(
+        fence.owner,
+        id,
+        cp.generation,
+        cp.claim,
+        ready: true,
+      );
+      final file = await verify();
+      if (file == null || file.uri != expected.uri) {
+        await release();
+        return null;
+      }
+      await authority.assertCurrent(fence);
+      return DeviceMediaReader(file, release);
+    } catch (_) {
+      await release();
+      rethrow;
+    }
+  }
+
+  Map<String, DownloadCheckpoint> _files(DeviceDownload job) => {
+    for (final cp in [
+      ...job.files,
+      if (job.checkpoint != null) job.checkpoint!,
+    ])
+      DeviceMediaBarrier.fileKey(cp): cp,
+  };
+
+  String _fileSnapshot(DeviceDownload job) {
+    final files = _files(job), keys = files.keys.toList()..sort();
+    return jsonEncode([for (final key in keys) files[key]!.toJson()]);
+  }
+
+  /// Final atomic automatic-retention admission. A captured listing is never
+  /// deletion authority. False means stale/protected/busy; IO errors propagate.
+  Future<bool> evictIfUnprotected(
+    DeviceDownload captured,
+    SessionFence fence,
+  ) async {
+    if (captured.originalFence.owner != fence.owner ||
+        captured.state != DownloadState.ready) {
+      return false;
+    }
+    final removals = await _mutate<List<DeviceFileRemoval>?>(
+      captured.id,
+      fence,
+      (tx) async {
+        final current = await _read(tx, captured.id, fence);
+        if (current == null ||
+            current.generation != captured.generation ||
+            current.state != DownloadState.ready ||
+            !current.exclusivelyOfflineMixOwned ||
+            current.checkpoint?.sha256 == null ||
+            current.checkpoint!.bytes < 1 ||
+            current.writer != null ||
+            current.leaseUntil != 0 ||
+            _fileSnapshot(current) != _fileSnapshot(captured)) {
+          return null;
+        }
+        try {
+          if (await OfflineMixRepository(
+            downloads: this,
+            fence: fence,
+          ).protectsDownload(tx, current.id)) {
+            return null;
+          }
+          for (final cp in _files(current).values) {
+            if (await DeviceMediaBarrier.unavailable(tx, current.id, cp)) {
+              return null;
+            }
+          }
+          final reserved = await DeviceMediaBarrier.reserve(
+            tx,
+            current.id,
+            _files(current).values,
+          );
+          if (reserved == null) return null;
+          await _write(
+            tx,
+            current.patch({
+              'state': 'removing',
+              'generation': current.generation + 1,
+              'writer': null,
+              'leaseUntil': 0,
+            }),
+          );
+          return reserved;
+        } on FormatException {
+          return null;
+        }
+      },
+    );
+    if (removals == null) return false;
+    await _unlinkAndFinalize(captured.id, removals, fence);
+    return true;
+  }
+
+  /// Recover only previously admitted exact-file removals. No TTL, directory
+  /// sweep or orphan inference; new writer claims and origins remain untouched.
+  Future<int> recoverRemovals(SessionFence fence) async {
+    final pending = await store.transaction(fence, DeviceMediaBarrier.pending);
+    final byId = <String, List<DeviceFileRemoval>>{};
+    for (final removal in pending) {
+      byId.putIfAbsent(removal.downloadId, () => []).add(removal);
+    }
+    for (final entry in byId.entries) {
+      await _unlinkAndFinalize(entry.key, entry.value, fence);
+    }
+    return pending.length;
+  }
+
+  Future<void> _unlinkAndFinalize(
+    String id,
+    List<DeviceFileRemoval> removals,
+    SessionFence fence,
+  ) async {
+    for (final removal in removals) {
+      for (final ready in [false, true]) {
+        final file = await paths.file(
+          fence.owner,
+          id,
+          removal.file.generation,
+          removal.file.claim,
+          ready: ready,
+        );
+        try {
+          if (await file.exists()) await file.delete();
+        } on FileSystemException {
+          if (await file.exists()) rethrow;
+        }
+      }
+    }
+    await _mutate<void>(id, fence, (tx) async {
+      for (final removal in removals) {
+        await DeviceMediaBarrier.finalize(tx, removal);
+      }
+      final current = await _read(tx, id, fence);
+      if (current == null) return;
+      final removed = removals
+          .map((r) => DeviceMediaBarrier.fileKey(r.file))
+          .toSet();
+      await _write(
+        tx,
+        current.patch({
+          'files': current.files
+              .where((cp) => !removed.contains(DeviceMediaBarrier.fileKey(cp)))
+              .map((cp) => cp.toJson())
+              .toList(),
+          if (current.checkpoint != null &&
+              removed.contains(DeviceMediaBarrier.fileKey(current.checkpoint!)))
+            'checkpoint': null,
+        }),
+      );
+    });
   }
 
   Future<void> remove(
@@ -506,59 +737,62 @@ final class DownloadRepository {
       return;
     }
     await beforeRemove(old);
-    final releasedPaths = {
-      for (final cp in [
-        ...old.files,
-        if (old.checkpoint != null) old.checkpoint!,
-      ])
-        '${cp.generation}:${cp.claim}',
-    };
-    final removed = await _mutate<DeviceDownload?>(id, fence, (tx) async {
-      final current = await _read(tx, id, fence);
-      // Completion or lease reclaim can change the writer without replacing
-      // this job. Only a new generation supersedes the user's deletion intent.
-      if (current == null || current.generation != old.generation) {
-        return null;
-      }
-      if ([
-        ...current.files,
-        if (current.checkpoint != null) current.checkpoint!,
-      ].any((cp) => !releasedPaths.contains('${cp.generation}:${cp.claim}'))) {
-        throw const AppFailure(
-          code: 'download_in_use',
-          message: 'Запись изменилась во время удаления. Повторите удаление.',
-          retryable: true,
-        );
-      }
-      return _write(
+    try {
+      final releasedPaths = {
+        for (final cp in [
+          ...old.files,
+          if (old.checkpoint != null) old.checkpoint!,
+        ])
+          '${cp.generation}:${cp.claim}',
+      };
+      final removed = await _mutate<List<DeviceFileRemoval>?>(id, fence, (
         tx,
-        current.patch({
-          'state': 'removing',
-          'generation': current.generation + 1,
-          'writer': null,
-          'leaseUntil': 0,
-        }),
-      );
-    });
-    if (removed == null) return;
-    final claims = {
-      for (final cp in [
-        ...removed.files,
-        if (removed.checkpoint != null) removed.checkpoint!,
-      ])
-        '${cp.generation}:${cp.claim}': cp,
-    };
-    for (final cp in claims.values) {
-      for (final ready in [false, true]) {
-        final file = await paths.file(
-          fence.owner,
+      ) async {
+        final current = await _read(tx, id, fence);
+        // Completion or lease reclaim can change the writer without replacing
+        // this job. Only a new generation supersedes the user's deletion intent.
+        if (current == null || current.generation != old.generation) {
+          return null;
+        }
+        if ([
+          ...current.files,
+          if (current.checkpoint != null) current.checkpoint!,
+        ].any(
+          (cp) => !releasedPaths.contains('${cp.generation}:${cp.claim}'),
+        )) {
+          throw const AppFailure(
+            code: 'download_in_use',
+            message: 'Запись изменилась во время удаления. Повторите удаление.',
+            retryable: true,
+          );
+        }
+        final reserved = await DeviceMediaBarrier.reserve(
+          tx,
           id,
-          cp.generation,
-          cp.claim,
-          ready: ready,
+          _files(current).values,
         );
-        if (await file.exists()) await file.delete();
-      }
+        if (reserved == null) {
+          throw const AppFailure(
+            code: 'download_in_use',
+            message: 'Запись ещё используется плеером.',
+            retryable: true,
+          );
+        }
+        await _write(
+          tx,
+          current.patch({
+            'state': 'removing',
+            'generation': current.generation + 1,
+            'writer': null,
+            'leaseUntil': 0,
+          }),
+        );
+        return reserved;
+      });
+      if (removed == null) return;
+      await _unlinkAndFinalize(id, removed, fence);
+    } finally {
+      afterRemove?.call(old);
     }
   }
 }
