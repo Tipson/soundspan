@@ -234,25 +234,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                         widget.smartShuffle == smart &&
                         (ModalRoute.of(context)?.isCurrent ?? true),
                   );
-                  if (mounted && c.isCurrent && smart.canUndo) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Будущие находки выключены'),
-                        action: SnackBarAction(
-                          label: 'Отменить',
-                          onPressed: () => unawaited(
-                            smart.undo(
-                              presented: () =>
-                                  mounted &&
-                                  widget.controller == c &&
-                                  widget.smartShuffle == smart &&
-                                  (ModalRoute.of(context)?.isCurrent ?? true),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }
                 }),
         ),
         MusicAction(
@@ -596,6 +577,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     ]),
     builder: (context, _) {
       final c = widget.controller;
+      final smart = widget.smartShuffle;
       final state = c.state;
       final d = state.detail;
       final playable = d?.items.any((e) => e.track.playable) ?? false;
@@ -630,6 +612,25 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
               ),
             if (widget.smartShuffle?.notice != null)
               MusicStatus(message: widget.smartShuffle!.notice!),
+            if (smart != null && smart.canUndo)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const ValueKey('playlist-smart-shuffle-undo'),
+                  style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                  onPressed: () => unawaited(
+                    smart.undo(
+                      presented: () =>
+                          mounted &&
+                          widget.controller == c &&
+                          widget.smartShuffle == smart &&
+                          (ModalRoute.of(context)?.isCurrent ?? true),
+                    ),
+                  ),
+                  icon: const Icon(Icons.undo_rounded),
+                  label: const Text('Отменить'),
+                ),
+              ),
             if (widget.smartShuffle?.failure != null)
               MusicStatus(
                 message: widget.smartShuffle!.failure!.message,

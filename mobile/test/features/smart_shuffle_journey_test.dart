@@ -101,8 +101,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(h.smart.active, false);
       expect(h.queue.snapshot.entries, hasLength(7));
-      await tester.drag(find.byType(SnackBar), const Offset(0, 300));
-      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Слушать'));
       await tester.tap(find.text('Слушать'));
       await tester.pumpAndSettle();

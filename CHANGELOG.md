@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Keep playlist-discovery Undo beside its status message while it remains valid, preserving bottom navigation hit targets and removing stale actions after queue, route or account changes.
 - Offer opt-in playlist playback with finite discoveries between the listener's own occurrences. Preserve exact duplicates, owner-bound cold queue metadata, current playback and history when future discoveries are disabled or safely restored.
 
 - Honor server-directed search retry delays across failed-source retry, paging and same-query submission, retaining available results and owner isolation. Prepare Android release 0.1.23 (26).
