@@ -30,6 +30,10 @@ import {
     isHiddenGenreItem,
 } from "@/features/explore/genreClassification";
 import { preserveDiscoverPrefixData } from "@/features/search/discoverSearchPlaceholder";
+import {
+    searchRetryDelay,
+    remainingSearchRetryMs,
+} from "@/features/search/searchRetryPolicy";
 import { getPlaylistNextPageParam } from "@/features/playlist/lib/playlistPagination";
 
 import { queryKeys } from "../lib/queryKeys";
@@ -630,7 +634,11 @@ export function useSearchQuery(
     return useQuery({
         queryKey: queryKeys.search(query, type, limit, source),
         queryFn: ({ signal }) => api.search(query, type, limit, signal, source),
-        enabled: enabled && query.length >= 2, // Only search if query is at least 2 characters
+        retryDelay: searchRetryDelay,
+        enabled: (cached) =>
+            enabled &&
+            query.length >= 2 &&
+            remainingSearchRetryMs(cached.state.error) === 0,
         staleTime: (search) =>
             search.state.data?.streamingUnavailable === true
                 ? 0
@@ -657,6 +665,7 @@ export function useDiscoverSearchQuery(
 ) {
     return useQuery({
         queryKey: queryKeys.discoverSearch(query, type, limit, scope),
+        retryDelay: searchRetryDelay,
         queryFn: async ({ signal, client, queryKey }) => {
             const result = await api.discoverSearch(
                 query,
@@ -674,7 +683,9 @@ export function useDiscoverSearchQuery(
                 ? { ...result, results: previous.results }
                 : result;
         },
-        enabled: query.length >= 2,
+        enabled: (cached) =>
+            query.length >= 2 &&
+            remainingSearchRetryMs(cached.state.error) === 0,
         placeholderData: (previousData, previousQuery) =>
             preserveDiscoverPrefixData(
                 previousData,

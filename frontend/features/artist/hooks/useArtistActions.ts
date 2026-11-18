@@ -14,6 +14,7 @@ import { toAddToPlaylistRef } from "@/lib/trackRef";
 import { toast } from "sonner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
+import { invalidatePersonalSearch } from "@/features/search/invalidatePersonalSearch";
 import { publishDeviceOfflineLikedChange } from "@/features/device-offline/likedAutomation";
 import {
     artistRu,
@@ -269,9 +270,7 @@ export function useArtistActions() {
                 );
                 toast.error(artistRu.likeAllFailed);
             } finally {
-                queryClient.invalidateQueries({
-                    queryKey: queryKeys.librarySearchAll(),
-                });
+                void invalidatePersonalSearch(queryClient);
             }
         },
         [queryClient],

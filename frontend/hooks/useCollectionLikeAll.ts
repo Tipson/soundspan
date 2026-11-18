@@ -6,6 +6,7 @@ import { buildOptimisticTrackPreferenceResponse } from "@/hooks/trackPreferenceO
 import { toast } from "sonner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
+import { invalidatePersonalSearch } from "@/features/search/invalidatePersonalSearch";
 import { publishDeviceOfflineLikedChangeForSignal } from "@/features/device-offline/likedAutomation";
 import {
     formatCollectionLikedRu,
@@ -158,9 +159,7 @@ export function useCollectionLikeAll(tracks: LikeableTrack[]) {
                 });
             }
         } finally {
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.librarySearchAll(),
-            });
+            void invalidatePersonalSearch(queryClient);
             setIsApplying(false);
         }
     };

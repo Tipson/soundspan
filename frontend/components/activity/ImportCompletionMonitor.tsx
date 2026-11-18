@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api, type ImportJobStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { queryKeys } from "@/lib/queryKeys";
+import { invalidatePersonalSearch } from "@/features/search/invalidatePersonalSearch";
 import { useFeatures } from "@/lib/features-context";
 
 const IMPORT_JOB_POLL_INTERVAL_MS = 3000;
@@ -86,10 +87,14 @@ export function ImportCompletionMonitor() {
             for (const queryKey of [
                 queryKeys.likedPlaylistAll(),
                 queryKeys.savedMusicAll(),
-                queryKeys.savedMusicSearchAll(),
                 queryKeys.mixes(),
             ])
                 void queryClientRef.current.invalidateQueries({ queryKey });
+            // The history DTO exposes the draft marker, not per-category
+            // counts. Refresh both private scopes only at this guarded draft
+            // completion; provider catalogs retain their independent cache.
+            void invalidatePersonalSearch(queryClientRef.current);
+            void invalidatePersonalSearch(queryClientRef.current, "saved");
         }
         window.dispatchEvent(new CustomEvent("playlist-created"));
         window.dispatchEvent(new CustomEvent("notifications-changed"));

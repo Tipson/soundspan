@@ -840,6 +840,13 @@ export abstract class ApiClientCore {
         const performRequest = async (): Promise<T> => {
             let response: Response;
             let rawBody: string;
+            const captured: {
+                receipt: ApiResponseReceipt | null;
+                bodyReadStarted: boolean;
+            } = {
+                receipt: null,
+                bodyReadStarted: false,
+            };
             try {
                 const received = await this.fetchWithTimeout(
                     url,
@@ -850,28 +857,32 @@ export abstract class ApiClientCore {
                     },
                     timeoutMs,
                     async (response) => {
-                        if (_onResponseReceipt) {
+                        if (
+                            _onResponseReceipt ||
+                            response.status === 429 ||
+                            response.status === 503
+                        ) {
                             const receivedMonotonicMs = performance.now();
-                            _onResponseReceipt(
-                                Object.freeze({
-                                    status: response.status,
-                                    receivedMonotonicMs,
-                                    privateNoStore: hasPrivateNoStore(
-                                        response.headers.get("Cache-Control"),
-                                    ),
-                                    retryAfterMs:
-                                        response.status === 429 ||
-                                        response.status === 503
-                                            ? readPlayRetryAfterMs(
-                                                  response.headers.get(
-                                                      "Retry-After",
-                                                  ),
-                                                  response.headers.get("Date"),
-                                              )
-                                            : null,
-                                }),
-                            );
+                            captured.receipt = Object.freeze({
+                                status: response.status,
+                                receivedMonotonicMs,
+                                privateNoStore: hasPrivateNoStore(
+                                    response.headers.get("Cache-Control"),
+                                ),
+                                retryAfterMs:
+                                    response.status === 429 ||
+                                    response.status === 503
+                                        ? readPlayRetryAfterMs(
+                                              response.headers.get(
+                                                  "Retry-After",
+                                              ),
+                                              response.headers.get("Date"),
+                                          )
+                                        : null,
+                            });
+                            _onResponseReceipt?.(captured.receipt);
                         }
+                        captured.bodyReadStarted = true;
                         return {
                             response,
                             rawBody:
@@ -889,6 +900,28 @@ export abstract class ApiClientCore {
                     _authSessionGeneration,
                     _assertSession,
                 );
+                const receipt = captured.receipt;
+                if (
+                    captured.bodyReadStarted &&
+                    receipt &&
+                    (receipt.status === 429 || receipt.status === 503) &&
+                    !fetchOptions.signal?.aborted
+                ) {
+                    // Received rejection headers remain authoritative even if
+                    // their body fails. Do not turn this into an inner timeout
+                    // replay before the caller can honor the server holdoff.
+                    const requestError = new Error(
+                        receipt.status === 429
+                            ? "Слишком много запросов. Повторите попытку позже."
+                            : "Сервис временно недоступен. Повторите попытку позже.",
+                        { cause: error },
+                    ) as ApiError;
+                    requestError.status = receipt.status;
+                    requestError.responseReceipt = receipt;
+                    if (receipt.retryAfterMs !== null)
+                        requestError.retryAfterMs = receipt.retryAfterMs;
+                    throw requestError;
+                }
                 if (
                     this.isTimeoutError(error) &&
                     isIdempotentMethod &&
@@ -947,6 +980,16 @@ export abstract class ApiClientCore {
                 );
                 (requestError as ApiError).status = response.status;
                 (requestError as ApiError).data = error;
+                if (
+                    captured.receipt &&
+                    (response.status === 429 || response.status === 503)
+                ) {
+                    (requestError as ApiError).responseReceipt =
+                        captured.receipt;
+                    if (captured.receipt.retryAfterMs !== null)
+                        (requestError as ApiError).retryAfterMs =
+                            captured.receipt.retryAfterMs;
+                }
 
                 // Handle marked session-auth failures with bounded token refresh.
                 if (

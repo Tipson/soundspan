@@ -7,10 +7,11 @@ import type { SearchResult, DiscoverResult, AliasInfo } from "../types";
 import { deriveDiscoverySelection } from "../discoverySelection";
 import { useMemo } from "react";
 import { useLibraryTrackSearch } from "./useLibraryTrackSearch";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { mergeServiceCatalogResults } from "../serviceCatalogMerge";
+import { remainingSearchRetryMs } from "../searchRetryPolicy";
 
 interface UseSearchDataProps {
     query: string;
@@ -59,6 +60,15 @@ export function useSearchData({
     similarArtistsLimit = 6,
     source = "all",
 }: UseSearchDataProps): UseSearchDataReturn {
+    const client = useQueryClient();
+    // Read the latest settled error at action time: repeated clicks can precede
+    // the next render, and a different source/query must retain its own timing.
+    const retryAllowed = (key: QueryKey) =>
+        remainingSearchRetryMs(client.getQueryState(key)?.error) === 0;
+    const libraryKey =
+        libraryType === "tracks"
+            ? queryKeys.searchTracks(query, source)
+            : queryKeys.search(query, libraryType, libraryLimit, source);
     const {
         data: libraryResults,
         isLoading: isLibrarySearching,
@@ -101,7 +111,9 @@ export function useSearchData({
         queryKey: queryKeys.serviceCatalog(query.trim()),
         queryFn: ({ signal }) =>
             api.searchMusicSourceCatalog(query.trim(), signal),
-        enabled: serviceSearchEnabled,
+        enabled: (cached) =>
+            serviceSearchEnabled &&
+            remainingSearchRetryMs(cached.state.error) === 0,
         staleTime: 60_000,
         retry: false,
     });
@@ -196,13 +208,23 @@ export function useSearchData({
         retryCatalogSearch: async () => {
             if (!hasSearched) return;
             await Promise.allSettled([
-                ...(discoveryUnavailable
+                ...(discoveryUnavailable &&
+                retryAllowed(
+                    queryKeys.discoverSearch(
+                        query,
+                        discoverType,
+                        discoverLimit,
+                        discoverScope,
+                    ),
+                )
                     ? [refetchDiscover({ cancelRefetch: false })]
                     : []),
-                ...(serviceUnavailable
+                ...(serviceUnavailable &&
+                retryAllowed(queryKeys.serviceCatalog(query.trim()))
                     ? [serviceCatalog.refetch({ cancelRefetch: false })]
                     : []),
-                ...(personalUnavailable || libraryUnavailable
+                ...((personalUnavailable || libraryUnavailable) &&
+                retryAllowed(libraryKey)
                     ? [
                           libraryType === "tracks"
                               ? libraryTrackSearch.refetch({
@@ -231,6 +253,11 @@ export function useSearchData({
         ),
         hasNextLibraryTracks: Boolean(libraryTrackSearch.hasNextPage),
         isFetchingNextLibraryTracks: libraryTrackSearch.isFetchingNextPage,
-        fetchNextLibraryTracks: libraryTrackSearch.fetchNextPage,
+        fetchNextLibraryTracks: async () => {
+            if (retryAllowed(libraryKey))
+                return libraryTrackSearch.fetchNextPage({
+                    cancelRefetch: false,
+                });
+        },
     };
 }

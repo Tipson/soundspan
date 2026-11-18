@@ -32,6 +32,7 @@ import {
     type LikedPlaylistTrack,
 } from "@/lib/api";
 import { queryKeys, useLikedPlaylistQuery } from "@/hooks/useQueries";
+import { invalidatePersonalSearch } from "@/features/search/invalidatePersonalSearch";
 import { formatTime } from "@/utils/formatTime";
 import { shuffleArray } from "@/utils/shuffle";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
@@ -301,9 +302,7 @@ export default function MyLikedPlaylistPage() {
         },
         onSettled: () => {
             setRemovingTrackId(null);
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.librarySearchAll(),
-            });
+            void invalidatePersonalSearch(queryClient);
             queryClient.invalidateQueries({
                 queryKey: queryKeys.likedPlaylistAll(),
             });

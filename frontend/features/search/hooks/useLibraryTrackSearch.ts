@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import type { LibraryTrack, SearchResult } from "../types";
 import type { LikedPlaylistTrack } from "@/lib/api";
+import { searchRetryDelay, remainingSearchRetryMs } from "../searchRetryPolicy";
 
 /** One bounded page supported by the local `/search` offset contract. */
 export const LIBRARY_TRACK_SEARCH_PAGE_SIZE = 50;
@@ -15,6 +16,7 @@ export function useLibraryTrackSearch(
 ) {
     const search = useInfiniteQuery({
         queryKey: queryKeys.searchTracks(query, source),
+        retryDelay: searchRetryDelay,
         queryFn: async ({ pageParam, signal }): Promise<SearchResult> =>
             (await api.search(
                 query,
@@ -38,7 +40,10 @@ export function useLibraryTrackSearch(
                 ? nextOffset
                 : undefined;
         },
-        enabled: enabled && query.trim().length >= 2,
+        enabled: (cached) =>
+            enabled &&
+            query.trim().length >= 2 &&
+            remainingSearchRetryMs(cached.state.error) === 0,
         staleTime: (search) =>
             search.state.data?.pages.some(
                 (page) => page.streamingUnavailable === true,

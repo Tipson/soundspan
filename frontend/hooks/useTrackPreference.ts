@@ -22,6 +22,7 @@ import {
     type TrackPreferenceOptimisticQueryClient,
 } from "@/hooks/trackPreferenceOptimistic";
 import { queryKeys } from "@/lib/queryKeys";
+import { invalidatePersonalSearch } from "@/features/search/invalidatePersonalSearch";
 import { publishDeviceOfflineLikedChangeForSignal } from "@/features/device-offline/likedAutomation";
 import {
     captureRecommendationFeedback,
@@ -139,9 +140,7 @@ export function useTrackPreference(
             queryClient.invalidateQueries({
                 queryKey: queryKeys.personalizedHomeAll(),
             });
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.librarySearchAll(),
-            });
+            void invalidatePersonalSearch(queryClient);
             publishDeviceOfflineLikedChangeForSignal(data.signal);
         },
         onError: (_error, _signal, context) => {
@@ -157,9 +156,7 @@ export function useTrackPreference(
                 context.canonicalQueryKey,
                 completion.rollbackPreference,
             );
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.librarySearchAll(),
-            });
+            void invalidatePersonalSearch(queryClient);
             queryClient.invalidateQueries({
                 queryKey: context.canonicalQueryKey,
                 exact: true,

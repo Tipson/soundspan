@@ -15,6 +15,7 @@ import {
     type SavedMusicEntityType,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
+import { invalidatePersonalSearch } from "@/features/search/invalidatePersonalSearch";
 
 const EMPTY_SAVED_ITEMS: SavedMusicEntity[] = [];
 
@@ -138,9 +139,7 @@ export function useSavedMusicEntity(entity: SavedMusicEntityInput | null) {
                 queryClient.invalidateQueries({
                     queryKey: queryKeys.savedMusicAll(),
                 }),
-                queryClient.invalidateQueries({
-                    queryKey: queryKeys.savedMusicSearchAll(),
-                }),
+                invalidatePersonalSearch(queryClient, "saved"),
             ]);
         },
     });

@@ -14,6 +14,7 @@ import {
     getAuthRuntimeLease,
 } from "@/lib/auth-runtime-generation";
 import { queryKeys } from "@/lib/queryKeys";
+import { invalidatePersonalSearch } from "@/features/search/invalidatePersonalSearch";
 import { useVisibilityGatedInterval } from "@/hooks/useVisibilityGatedInterval";
 
 const MAX_FILE_BYTES = 512 * 1024;
@@ -224,11 +225,14 @@ export function ImportDraftFlow({
                     queryKeys.playlists(),
                     queryKeys.likedPlaylistAll(),
                     queryKeys.savedMusicAll(),
-                    queryKeys.savedMusicSearchAll(),
                     queryKeys.personalizedHomeAll(),
                     queryKeys.mixes(),
                 ])
                     void queryClient.invalidateQueries({ queryKey });
+                if (next.draftResult.likes || next.draftResult.dislikes)
+                    void invalidatePersonalSearch(queryClient);
+                if (next.draftResult.albums || next.draftResult.artists)
+                    void invalidatePersonalSearch(queryClient, "saved");
                 window.dispatchEvent(new CustomEvent("notifications-changed"));
                 if (next.draftResult.playlistIds.length)
                     window.dispatchEvent(new CustomEvent("playlist-created"));
