@@ -138,6 +138,43 @@ describe("config module", () => {
         },
     );
 
+    it("binds explicit Play creation cohort controls without activating defaults", async () => {
+        expect(
+            (
+                await loadConfigModule({
+                    PLAY_CREATION_MODE: undefined,
+                    PLAY_CREATION_COHORT_USER_IDS: undefined,
+                })
+            ).config.playCreation,
+        ).toMatchObject({
+            newCreationsEnabled: false,
+            replaySupported: false,
+        });
+        expect(
+            (
+                await loadConfigModule({
+                    PLAY_CREATION_MODE: "cohort",
+                    PLAY_CREATION_COHORT_USER_IDS: "alice,bob",
+                })
+            ).config.playCreation,
+        ).toMatchObject({
+            newCreationsEnabled: true,
+            replaySupported: true,
+            newCreationUserIds: ["alice", "bob"],
+        });
+        expect(
+            (
+                await loadConfigModule({
+                    PLAY_CREATION_MODE: "replay",
+                    PLAY_CREATION_COHORT_USER_IDS: "*",
+                })
+            ).config.playCreation,
+        ).toMatchObject({
+            newCreationsEnabled: false,
+            replaySupported: true,
+        });
+    });
+
     it.each(["enabled", "TRUE", " true ", "1"])(
         "rejects malformed recommendation tracing enablement %s",
         async (value) => {

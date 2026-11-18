@@ -17,6 +17,10 @@ const suite = integrationUrl && databaseName ? describe : describe.skip;
 const mockPlayCreationPolicy = {
     newCreationsEnabled: false,
     replaySupported: false,
+    newCreationUserIds: [
+        "dev08-core-owner",
+        "dev08-core-other",
+    ] as readonly string[],
 };
 jest.mock("../src/config", () => {
     const actual = jest.requireActual("../src/config");
@@ -90,6 +94,10 @@ suite("owner-scoped Play creation contract on isolated PostgreSQL", () => {
     beforeEach(async () => {
         mockPlayCreationPolicy.newCreationsEnabled = true;
         mockPlayCreationPolicy.replaySupported = true;
+        mockPlayCreationPolicy.newCreationUserIds = [
+            "dev08-core-owner",
+            "dev08-core-other",
+        ];
         samples.length = 0;
         await prisma.user.deleteMany({
             where: { id: { startsWith: "dev08-core-" } },
@@ -125,6 +133,88 @@ suite("owner-scoped Play creation contract on isolated PostgreSQL", () => {
         expect(await prisma.play.count({ where: { userId: owner.id } })).toBe(
             0,
         );
+    });
+
+    test("cohort admission is enforced by both private capabilities and the real POST", async () => {
+        mockPlayCreationPolicy.newCreationUserIds = ["dev08-core-other"];
+        const features = await request(app)
+            .get("/api/system/features")
+            .set("Authorization", `Bearer ${auth.generateToken(owner)}`);
+        expect(features.status).toBe(200);
+        expect(features.body.playCreation).toMatchObject({
+            newCreationsEnabled: false,
+            replaySupported: true,
+            allowedSources: [],
+        });
+        expect(features.body.playCreation).not.toHaveProperty(
+            "newCreationUserIds",
+        );
+        const clientPlaybackId = key();
+        expect((await post(clientPlaybackId)).status).toBe(503);
+        expect(await prisma.play.count({ where: { userId: owner.id } })).toBe(
+            0,
+        );
+        expect(
+            await prisma.playCreationReceipt.count({
+                where: { userId: owner.id },
+            }),
+        ).toBe(0);
+        mockPlayCreationPolicy.newCreationUserIds = [owner.id];
+        const accepted = await post(clientPlaybackId);
+        expect(accepted.status).toBe(200);
+        mockPlayCreationPolicy.newCreationUserIds = [];
+        const replay = await post(clientPlaybackId);
+        expect(replay.status).toBe(200);
+        expect(replay.body.id).toBe(accepted.body.id);
+        expect(replay.body.playCreation.disposition).toBe("replayed");
+        expect((await post(key("C".repeat(32)))).status).toBe(503);
+        expect(await prisma.play.count({ where: { userId: owner.id } })).toBe(
+            1,
+        );
+        expect(
+            await prisma.playCreationReceipt.count({
+                where: { userId: owner.id },
+            }),
+        ).toBe(1);
+    });
+
+    test("cohort removal during preparation is checked again under the real owner lock", async () => {
+        const { createPlayAccounting } =
+            require("../src/services/playAccounting") as typeof import("../src/services/playAccounting");
+        const service = createPlayAccounting(prisma, mockPlayCreationPolicy);
+        let entered!: () => void;
+        let release!: () => void;
+        const prepared = new Promise<void>((resolve) => {
+            entered = resolve;
+        });
+        const held = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const pending = service.createOrReplay(
+            owner.id,
+            key(),
+            { musicSourceRecording: recording },
+            async () => {
+                entered();
+                await held;
+                return {};
+            },
+        );
+        await prepared;
+        mockPlayCreationPolicy.newCreationUserIds = [];
+        release();
+        await expect(pending).rejects.toMatchObject({
+            status: 503,
+            code: "play_creation_disabled",
+        });
+        expect(await prisma.play.count({ where: { userId: owner.id } })).toBe(
+            0,
+        );
+        expect(
+            await prisma.playCreationReceipt.count({
+                where: { userId: owner.id },
+            }),
+        ).toBe(0);
     });
 
     test("a frozen owner/key/payload returns one Play and a versioned replay acknowledgement", async () => {

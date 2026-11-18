@@ -84,9 +84,14 @@ function fixture() {
         },
     };
     const database = {
+        user: tx.user,
         $transaction: jest.fn().mockImplementation(async (work) => work(tx)),
     };
-    const policy = { newCreationsEnabled: true, replaySupported: true };
+    const policy = {
+        newCreationsEnabled: true,
+        replaySupported: true,
+        newCreationUserIds: ["alice"] as readonly string[] | undefined,
+    };
     const service = createPlayAccounting(
         database as unknown as PrismaClient,
         policy,
@@ -107,6 +112,97 @@ function fixture() {
     };
     return { tx, database, owner, policy, service, prepare, receipt };
 }
+
+test("cohort capabilities admit only the exact authenticated owner without exposing the list", async () => {
+    const f = fixture();
+    f.policy.newCreationUserIds = ["alice"];
+    f.tx.user.findUniqueOrThrow.mockResolvedValue({ playHistoryEpoch: 7 });
+    for (const userId of ["bob", "Alice", "alice-extra", "alice "]) {
+        const capabilities = await f.service.capabilities(userId);
+        expect(capabilities).toMatchObject({
+            newCreationsEnabled: false,
+            replaySupported: true,
+            allowedSources: [],
+        });
+        expect(capabilities).not.toHaveProperty("newCreationUserIds");
+    }
+    expect(await f.service.capabilities("alice")).toMatchObject({
+        newCreationsEnabled: true,
+        replaySupported: true,
+        allowedSources: ["youtube", "vk", "yandex"],
+    });
+});
+
+test.each([{ users: undefined }, { users: [] }, { users: ["bob"] }])(
+    "a non-cohort new key cannot prepare metadata or write a Play ($users)",
+    async ({ users }) => {
+        const f = fixture();
+        f.policy.newCreationUserIds = users;
+        await expect(
+            f.service.createOrReplay("alice", key, payload, f.prepare),
+        ).rejects.toMatchObject({ status: 503 });
+        expect(f.tx.$queryRaw).toHaveBeenCalledTimes(1);
+        expect(f.prepare).not.toHaveBeenCalled();
+        expect(f.tx.play.create).not.toHaveBeenCalled();
+        expect(f.tx.playCreationReceipt.create).not.toHaveBeenCalled();
+        expect(f.tx.playScrobbleDispatch.create).not.toHaveBeenCalled();
+    },
+);
+
+test("creation never advertises or writes when receipt recovery is disabled", async () => {
+    const f = fixture();
+    f.policy.replaySupported = false;
+    f.tx.user.findUniqueOrThrow.mockResolvedValue({ playHistoryEpoch: 7 });
+    expect(await f.service.capabilities("alice")).toMatchObject({
+        newCreationsEnabled: false,
+        replaySupported: false,
+        allowedSources: [],
+    });
+    await expect(
+        f.service.createOrReplay("alice", key, payload, f.prepare),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(f.prepare).not.toHaveBeenCalled();
+    expect(f.tx.play.create).not.toHaveBeenCalled();
+});
+
+test.each(["cohort removal", "producer rollback"])(
+    "%s is rechecked under the second owner lock after preparation",
+    async (change) => {
+        const f = fixture();
+        f.policy.newCreationUserIds = ["alice"];
+        f.prepare.mockImplementation(async () => {
+            if (change === "cohort removal")
+                f.policy.newCreationUserIds = ["bob"];
+            else f.policy.newCreationsEnabled = false;
+            return { trackYtMusicId: "youtube-1" };
+        });
+        await expect(
+            f.service.createOrReplay("alice", key, payload, f.prepare),
+        ).rejects.toMatchObject({ status: 503 });
+        expect(f.tx.$queryRaw).toHaveBeenCalledTimes(2);
+        expect(f.prepare).toHaveBeenCalledTimes(1);
+        expect(f.tx.play.create).not.toHaveBeenCalled();
+        expect(f.tx.playCreationReceipt.create).not.toHaveBeenCalled();
+    },
+);
+
+test.each([true, false])(
+    "a stored receipt replays outside the cohort while new producers enabled=%s",
+    async (enabled) => {
+        const f = fixture();
+        f.policy.newCreationUserIds = [];
+        f.policy.newCreationsEnabled = enabled;
+        f.tx.playCreationReceipt.findUnique.mockResolvedValue(f.receipt);
+        await expect(
+            f.service.createOrReplay("alice", key, payload, f.prepare),
+        ).resolves.toMatchObject({
+            id: "previous-play",
+            playCreation: { disposition: "replayed" },
+        });
+        expect(f.prepare).not.toHaveBeenCalled();
+        expect(f.tx.play.create).not.toHaveBeenCalled();
+    },
+);
 
 test("enabled capabilities advertise only supported sources and a fresh server clock", async () => {
     const f = fixture();

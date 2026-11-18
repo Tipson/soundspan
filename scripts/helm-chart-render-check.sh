@@ -265,6 +265,8 @@ for deployment_name in "$RELEASE_NAME" "${RELEASE_NAME}-backend" "${RELEASE_NAME
     manifest_file="$tmp_recommendations_individual_default"
   fi
   for env_name in \
+    PLAY_CREATION_MODE \
+    PLAY_CREATION_COHORT_USER_IDS \
     RECOMMENDATION_ENGINE_MODE \
     RECOMMENDATION_HYBRID_ROLLOUT_PERCENT \
     RECOMMENDATION_EXPLORATION_PERCENT \
@@ -311,6 +313,67 @@ done
 
 assert_deployment_music_mount_writable "${RELEASE_NAME}-backend-worker" "$tmp_recommendations_individual"
 assert_deployment_music_mount_writable "${RELEASE_NAME}-audio-analyzer" "$tmp_recommendations_individual"
+
+echo "[CHECK] render scoped Play creation policy across AIO and individual workloads"
+helm template "$RELEASE_NAME" "$CHART_PATH" \
+  --set-string config.playCreation.mode=cohort \
+  --set-string 'config.playCreation.cohortUserIds=owner_A\,owner-B' \
+  >"$tmp_recommendations_aio"
+helm template "$RELEASE_NAME" "$CHART_PATH" \
+  --set deploymentMode=individual --set backendWorker.enabled=true \
+  --set-string config.playCreation.mode=cohort \
+  --set-string 'config.playCreation.cohortUserIds=owner_A\,owner-B' \
+  >"$tmp_recommendations_individual"
+for deployment_name in "$RELEASE_NAME" "${RELEASE_NAME}-backend" "${RELEASE_NAME}-backend-worker"; do
+  manifest_file="$tmp_recommendations_aio"
+  if [[ "$deployment_name" != "$RELEASE_NAME" ]]; then
+    manifest_file="$tmp_recommendations_individual"
+  fi
+  assert_deployment_env_value "$deployment_name" "PLAY_CREATION_MODE" "cohort" "$manifest_file"
+  assert_deployment_env_value "$deployment_name" "PLAY_CREATION_COHORT_USER_IDS" "owner_A,owner-B" "$manifest_file"
+done
+
+echo "[CHECK] workload Play policy overrides chart values, including explicit empty cohort"
+for mode in aio individual; do
+  helm template "$RELEASE_NAME" "$CHART_PATH" \
+    --set "deploymentMode=$mode" --set backendWorker.enabled=true \
+    --set-string config.playCreation.mode=cohort \
+    --set-string config.playCreation.cohortUserIds=chart-owner \
+    --set-string aio.env.PLAY_CREATION_MODE=replay \
+    --set-string aio.env.PLAY_CREATION_COHORT_USER_IDS= \
+    --set-string backend.env.PLAY_CREATION_MODE=replay \
+    --set-string backend.env.PLAY_CREATION_COHORT_USER_IDS= \
+    --set-string backendWorker.env.PLAY_CREATION_MODE=replay \
+    --set-string backendWorker.env.PLAY_CREATION_COHORT_USER_IDS= \
+    >"$tmp_recommendations_aio"
+  deployments=("$RELEASE_NAME")
+  if [[ "$mode" == individual ]]; then
+    deployments=("${RELEASE_NAME}-backend" "${RELEASE_NAME}-backend-worker")
+  fi
+  for deployment_name in "${deployments[@]}"; do
+    assert_deployment_env_value "$deployment_name" "PLAY_CREATION_MODE" "replay" "$tmp_recommendations_aio"
+    assert_deployment_env_value "$deployment_name" "PLAY_CREATION_COHORT_USER_IDS" "" "$tmp_recommendations_aio"
+  done
+done
+
+echo "[CHECK] nullable Play policy leaves global environment values unshadowed"
+for mode in aio individual; do
+  helm template "$RELEASE_NAME" "$CHART_PATH" \
+    --set "deploymentMode=$mode" --set backendWorker.enabled=true \
+    --set-string global.env.PLAY_CREATION_MODE=replay \
+    --set-string global.env.PLAY_CREATION_COHORT_USER_IDS=owner_A \
+    >"$tmp_recommendations_aio"
+  line_match '^  PLAY_CREATION_MODE: "replay"$' "$tmp_recommendations_aio"
+  line_match '^  PLAY_CREATION_COHORT_USER_IDS: "owner_A"$' "$tmp_recommendations_aio"
+  deployments=("$RELEASE_NAME")
+  if [[ "$mode" == individual ]]; then
+    deployments=("${RELEASE_NAME}-backend" "${RELEASE_NAME}-backend-worker")
+  fi
+  for deployment_name in "${deployments[@]}"; do
+    assert_deployment_env_absent "$deployment_name" "PLAY_CREATION_MODE" "$tmp_recommendations_aio"
+    assert_deployment_env_absent "$deployment_name" "PLAY_CREATION_COHORT_USER_IDS" "$tmp_recommendations_aio"
+  done
+done
 
 echo "[CHECK] render AcoustID value in AIO and individual analyzer deployments"
 helm template "$RELEASE_NAME" "$CHART_PATH" \

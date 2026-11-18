@@ -23,10 +23,12 @@ import {
     playPayloadSchema,
 } from "./playAccountingProtocol";
 
-/** Activation stays disabled until durable external delivery and clients are ready. */
+/** New producers require an exact owner cohort; accepted receipt recovery is independent. */
 export interface PlayCreationPolicy {
     newCreationsEnabled: boolean;
     replaySupported: boolean;
+    /** Omission or an empty list never authorizes new creation. */
+    newCreationUserIds?: readonly string[];
 }
 /** Only server-resolved shared identities may be prepared outside the owner lock. */
 export interface PreparedPlayIdentity {
@@ -50,15 +52,20 @@ export function createPlayAccounting(
     clock = () => new Date(),
 ) {
     const transactionOptions = { maxWait: 5_000, timeout: 5_000 };
+    const admitsNew = (userId: string) =>
+        policy.newCreationsEnabled &&
+        policy.replaySupported &&
+        policy.newCreationUserIds?.includes(userId) === true;
     return {
         async capabilities(userId: string) {
             const owner = await database.user.findUniqueOrThrow({
                 where: { id: userId },
                 select: { playHistoryEpoch: true },
             });
+            const newCreationsEnabled = admitsNew(userId);
             return {
                 version: 1,
-                newCreationsEnabled: policy.newCreationsEnabled,
+                newCreationsEnabled,
                 replaySupported: policy.replaySupported,
                 createPath: "/api/plays/idempotent",
                 ownerHistoryEpoch: owner.playHistoryEpoch,
@@ -66,7 +73,7 @@ export function createPlayAccounting(
                 replayWindowSeconds: 86_400,
                 futureSkewSeconds: 300,
                 capabilityTtlSeconds: 300,
-                allowedSources: policy.newCreationsEnabled
+                allowedSources: newCreationsEnabled
                     ? ["youtube", "vk", "yandex"]
                     : [],
             };
@@ -133,7 +140,7 @@ export function createPlayAccounting(
                         );
                     return acknowledge(receipt.playId, "replayed");
                 }
-                if (!policy.newCreationsEnabled || !policy.replaySupported)
+                if (!admitsNew(userId))
                     throw new PlayAccountingError(
                         503,
                         "play_creation_disabled",
@@ -454,5 +461,5 @@ export function createPlayAccounting(
     };
 }
 
-/** Process adapter; activation policy is intentionally unavailable through environment. */
+/** Process adapter; config defaults off and supplies the explicit operator cohort. */
 export const playAccounting = createPlayAccounting(prisma, config.playCreation);

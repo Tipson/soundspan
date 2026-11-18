@@ -82,6 +82,8 @@ spec:
             "ALLOWED_ORIGINS" true
             "LOG_LEVEL" true
             "DOCS_PUBLIC" true
+            "PLAY_CREATION_MODE" true
+            "PLAY_CREATION_COHORT_USER_IDS" true
             "RECOMMENDATION_ENGINE_MODE" true
             "RECOMMENDATION_WAVE_SEQUENCE_ENABLED" true
             "RECOMMENDATION_TRACE_ENABLED" true
@@ -281,6 +283,20 @@ spec:
             {{- else if not (kindIs "invalid" .Values.config.recommendations.traceEnabled) }}
             - name: RECOMMENDATION_TRACE_ENABLED
               value: {{ .Values.config.recommendations.traceEnabled | quote }}
+            {{- end }}
+            {{- if hasKey $aioEnv "PLAY_CREATION_MODE" }}
+            - name: PLAY_CREATION_MODE
+              value: {{ index $aioEnv "PLAY_CREATION_MODE" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.playCreation.mode) }}
+            - name: PLAY_CREATION_MODE
+              value: {{ .Values.config.playCreation.mode | quote }}
+            {{- end }}
+            {{- if hasKey $aioEnv "PLAY_CREATION_COHORT_USER_IDS" }}
+            - name: PLAY_CREATION_COHORT_USER_IDS
+              value: {{ index $aioEnv "PLAY_CREATION_COHORT_USER_IDS" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.playCreation.cohortUserIds) }}
+            - name: PLAY_CREATION_COHORT_USER_IDS
+              value: {{ .Values.config.playCreation.cohortUserIds | quote }}
             {{- end }}
             {{- if hasKey $aioEnv "RECOMMENDATION_ENGINE_MODE" }}
             - name: RECOMMENDATION_ENGINE_MODE

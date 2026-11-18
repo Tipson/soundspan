@@ -782,6 +782,15 @@ config:
     audius: null
     # -- Scoped peer credentials and read-only host federation API.
     federation: false
+  # -- Owner-scoped keyed Play admission and accepted receipt recovery.
+  playCreation:
+    # -- off | replay | cohort; null leaves env absent (application default off).
+    mode: null
+    # -- Case-sensitive exact User.id CSV, not usernames; null leaves env absent.
+    #    Explicit empty string admits nobody. Maximum 256 entries, each 1..128
+    #    ASCII letters/digits/_/-, total raw input <=40 KiB. Malformed lists deny
+    #    new admission while replay/cohort retain accepted receipt recovery.
+    cohortUserIds: null
   # -- Hybrid recommendation and bounded remote-analysis controls. Null leaves
   #    the variable absent so the application default applies and global.env or
   #    workload envFrom can supply it without being shadowed by the chart.

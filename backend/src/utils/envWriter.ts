@@ -31,6 +31,7 @@ const ENV_CATEGORIES = {
     OpenAI: ["OPENAI_API_KEY"],
     Audiobookshelf: ["AUDIOBOOKSHELF_URL", "AUDIOBOOKSHELF_API_KEY"],
     Audius: ["FEATURE_AUDIUS"],
+    "Play Accounting": ["PLAY_CREATION_MODE", "PLAY_CREATION_COHORT_USER_IDS"],
     "Docker Paths": ["MUSIC_PATH", "DOWNLOAD_PATH"],
     "Recommendations & Remote Analysis": [
         "RECOMMENDATION_ENGINE_MODE",

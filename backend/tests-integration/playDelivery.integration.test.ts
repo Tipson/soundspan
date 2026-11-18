@@ -4,7 +4,11 @@ import { createPlayDeliveryTestDatabase } from "./playDeliveryTestDatabase";
 
 const integrationUrl = process.env.INTEGRATION_DATABASE_URL;
 const suite = integrationUrl ? describe : describe.skip;
-const mockPolicy = { newCreationsEnabled: true, replaySupported: true };
+const mockPolicy = {
+    newCreationsEnabled: true,
+    replaySupported: true,
+    newCreationUserIds: ["delivery-owner"],
+};
 jest.mock("../src/config", () => {
     const actual = jest.requireActual("../src/config");
     return {

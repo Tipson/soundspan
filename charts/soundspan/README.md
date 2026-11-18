@@ -679,6 +679,8 @@ When `deploymentMode=individual` and `backendWorker.enabled=true`, the chart inj
 | Env Var | Helm Value | Required | Default |
 | --- | --- | --- | --- |
 | `AUDIO_ANALYSIS_ENABLED` | `config.features.audioAnalysis` | No | `true` |
+| `PLAY_CREATION_MODE` | `config.playCreation.mode` | No | App default: `off`; `off`, `replay`, or `cohort`; unknown values use `off`. Replay/cohort retain accepted-key recovery independently of cohort membership. Chart leaves unset unless configured. |
+| `PLAY_CREATION_COHORT_USER_IDS` | `config.playCreation.cohortUserIds` | No | App default: empty. Exact case-sensitive `User.id` CSV (not usernames), at most 256 entries of 1..128 ASCII letters/digits/`_`/`-`, raw input at most 40 KiB. Trim surrounding whitespace and deduplicate. Empty/malformed lists admit nobody; replay remains available in replay/cohort mode. Explicit empty string overrides an inherited list. |
 | `RECOMMENDATION_ENGINE_MODE` | `config.recommendations.engineMode` | No | App default: `shadow` (chart leaves unset unless configured) |
 | `RECOMMENDATION_WAVE_SEQUENCE_ENABLED` | `config.recommendations.waveSequenceEnabled` | No | App default: `false` (chart leaves unset unless configured); advertises version 1 for explicitly opted-in Wave clients |
 | `RECOMMENDATION_TRACE_ENABLED` | `config.recommendations.traceEnabled` | No | App default: `false` (chart leaves unset unless configured); bounded private generation diagnostics, readable only through the interactive-admin endpoint |

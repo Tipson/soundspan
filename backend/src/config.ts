@@ -4,6 +4,7 @@ import * as fs from "fs";
 import { validateMusicConfig, MusicConfig } from "./utils/configValidator";
 import { logger } from "./utils/logger";
 import { validateEncryptionKey } from "./utils/encryption";
+import { parsePlayCreationRollout } from "./config/playCreationRollout";
 import {
     isEnvFlagEnabled,
     parseEnvBool,
@@ -942,11 +943,10 @@ export const config = {
     // Coarse feature flags for ML/recommendation subsystems.
     // Existing analysis defaults remain enabled; optional integrations opt in.
     // Operators can override them through the Helm chart's config.features.
-    playCreation: {
-        // No activation surface before external delivery and client phase gates.
-        newCreationsEnabled: false,
-        replaySupported: false,
-    },
+    playCreation: parsePlayCreationRollout(
+        process.env.PLAY_CREATION_MODE,
+        process.env.PLAY_CREATION_COHORT_USER_IDS,
+    ),
     features: {
         // Audio analysis queueing/consumption (Essentia + CLAP vibe embeddings)
         audioAnalysis: parseEnvBool(process.env.AUDIO_ANALYSIS_ENABLED, true),

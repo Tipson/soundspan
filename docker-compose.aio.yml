@@ -72,6 +72,8 @@ services:
       # Preserve Redis streams/groups across restarts unless explicitly overridden
       - REDIS_FLUSH_ON_STARTUP=${REDIS_FLUSH_ON_STARTUP:-false}
       # Coarse feature flags for ML/recommendation subsystems (default: true)
+      - PLAY_CREATION_MODE=${PLAY_CREATION_MODE:-off}
+      - PLAY_CREATION_COHORT_USER_IDS=${PLAY_CREATION_COHORT_USER_IDS:-}
       - RECOMMENDATION_ENGINE_MODE=${RECOMMENDATION_ENGINE_MODE:-shadow}
       - RECOMMENDATION_WAVE_SEQUENCE_ENABLED=${RECOMMENDATION_WAVE_SEQUENCE_ENABLED:-false}
       - RECOMMENDATION_TRACE_ENABLED=${RECOMMENDATION_TRACE_ENABLED:-false}
