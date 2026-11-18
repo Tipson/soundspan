@@ -61,12 +61,15 @@ $sandbox = New-Module -ScriptBlock {
     }
     function Assert-NewOutput {
         param($Path)
-        if ($env:SOUNDSPAN_RELEASE_TEST_CASE -eq 'success' -and [IO.Path]::GetFileName($Path) -notmatch '^soundspan-0\.1\.17\+20-111111111111-\d{8}T\d{9}Z\.(apk|json)$') { throw 'Builder filename does not match the source release version' }
+        $sourceVersion = release-tools\Read-PubspecVersion (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '../../mobile/pubspec.yaml'))
+        $prefix = [regex]::Escape("soundspan-$($sourceVersion.versionName)+$($sourceVersion.versionCode)-111111111111-")
+        if ($env:SOUNDSPAN_RELEASE_TEST_CASE -eq 'success' -and [IO.Path]::GetFileName($Path) -notmatch ("^$prefix" + '\d{8}T\d{9}Z\.(apk|json)$')) { throw "Builder filename does not match the source release version: expected prefix $prefix, received $([IO.Path]::GetFileName($Path))" }
         release-tools\Assert-NewOutput $Path
     }
     function Test-ReleaseApk {
         param($Apk, $Tools, $Certificate, $ExpectedVersionName, $ExpectedVersionCode)
-        if ($ExpectedVersionName -cne '0.1.17' -or $ExpectedVersionCode -ne 20) { throw 'Builder omitted the source release version at APK verification' }
+        $sourceVersion = release-tools\Read-PubspecVersion (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '../../mobile/pubspec.yaml'))
+        if ($ExpectedVersionName -cne $sourceVersion.versionName -or $ExpectedVersionCode -ne $sourceVersion.versionCode) { throw 'Builder omitted the source release version at APK verification' }
         Record 'verify-apk'
         throw 'FIXTURE_APK_BOUNDARY'
     }
