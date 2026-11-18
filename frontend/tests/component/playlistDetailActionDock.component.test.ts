@@ -183,3 +183,63 @@ test("playlist sheet preserves callbacks, ownership and focus when opening anoth
     host.remove();
     target.remove();
 });
+
+test("owner opt-in smart shuffle stays in the secondary sheet and has an explicit cancellation action", async () => {
+    const { PlaylistDetailActionDock } =
+        await import("@/features/playlist/components/PlaylistDetailActionDock");
+    const { createRoot } = await import("react-dom/client");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    let calls = 0;
+    const props = {
+        ...createDockProps(),
+        smartShuffle: {
+            active: false,
+            busy: false,
+            onToggle: () => {
+                calls++;
+            },
+        },
+    };
+    try {
+        await React.act(async () =>
+            root.render(React.createElement(PlaylistDetailActionDock, props)),
+        );
+        assert.equal(host.querySelectorAll("button").length, 3);
+        await React.act(async () =>
+            host
+                .querySelector<HTMLButtonElement>(
+                    '[aria-label="Ещё действия"]',
+                )!
+                .click(),
+        );
+        const start = document.querySelector<HTMLButtonElement>(
+            '[aria-label="Умный shuffle · предпросмотр"]',
+        );
+        assert.ok(start);
+        assert.ok(start.className.includes("min-h-11"));
+        await React.act(async () => start.click());
+        assert.equal(calls, 1);
+        assert.equal(document.querySelector('[role="dialog"]'), null);
+        await React.act(async () =>
+            root.render(
+                React.createElement(PlaylistDetailActionDock, {
+                    ...props,
+                    smartShuffle: { ...props.smartShuffle, busy: true },
+                }),
+            ),
+        );
+        await React.act(async () =>
+            host
+                .querySelector<HTMLButtonElement>(
+                    '[aria-label="Ещё действия"]',
+                )!
+                .click(),
+        );
+        assert.ok(document.querySelector('[aria-label="Отменить подготовку"]'));
+    } finally {
+        await React.act(async () => root.unmount());
+        host.remove();
+    }
+});

@@ -219,10 +219,24 @@ mock.module("@/hooks/useQueuedTrackIds", {
     },
 });
 
+const fixtureAudioControls = {
+    playTracks: () => undefined,
+    playNow: () => undefined,
+    pause: () => undefined,
+    resume: () => undefined,
+    addTracksToQueue: () => undefined,
+};
+
+mock.module("@/lib/audio-controls-context", {
+    namedExports: { useAudioControls: () => fixtureAudioControls },
+});
+
 mock.module("@/lib/audio-state-context", {
     namedExports: {
         useAudioState: () => ({
             currentTrack: state.currentTrack,
+            queue: [],
+            getQueueRevision: () => 0,
         }),
     },
 });
@@ -231,6 +245,8 @@ mock.module("@/lib/audio-context", {
     namedExports: {
         useAudioState: () => ({
             currentTrack: state.currentTrack,
+            queue: [],
+            getQueueRevision: () => 0,
         }),
         useAudioPlayback: () => ({
             isPlaying: state.isPlaying,
@@ -238,13 +254,7 @@ mock.module("@/lib/audio-context", {
         usePlaybackStatus: () => ({
             isPlaying: state.isPlaying,
         }),
-        useAudioControls: () => ({
-            playTracks: () => undefined,
-            playNow: () => undefined,
-            pause: () => undefined,
-            resume: () => undefined,
-            addTracksToQueue: () => undefined,
-        }),
+        useAudioControls: () => fixtureAudioControls,
     },
 });
 

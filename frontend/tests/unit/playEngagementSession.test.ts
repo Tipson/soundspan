@@ -10,6 +10,7 @@ import type {
     PlayLogInput,
     PlayLogResponse,
 } from "../../lib/api/plays";
+import { buildSmartShuffleQueue } from "../../lib/audio/finiteSmartShuffle";
 
 function deferred<T>() {
     let resolve!: (value: T) => void;
@@ -57,6 +58,41 @@ test("every online play joins the current tab session while preserving direct li
         resolvePlaybackRecommendationSessionId(undefined, "tab-session"),
         "tab-session",
     );
+});
+
+test("finite smart playlist lineage uses the supported playlist context even after navigating to Wave", () => {
+    const queue = buildSmartShuffleQueue(
+        [
+            {
+                id: "a",
+                playlistItemId: "item-a",
+                title: "A",
+                artist: { name: "Artist" },
+                album: { title: "Album" },
+                duration: 180,
+            },
+        ],
+        [
+            {
+                id: "b",
+                title: "B",
+                artist: { name: "Artist" },
+                album: { title: "Album" },
+                duration: 180,
+            },
+        ],
+        { playlistId: "playlist-1", sessionId: "session-1", seed: 1 },
+    );
+    for (const row of queue)
+        assert.deepEqual(
+            resolvePlaybackRecommendationContext(
+                "/vibe",
+                false,
+                "new",
+                row.smartShuffle,
+            ),
+            { playContext: "playlist" },
+        );
 });
 
 test("completed playback is patched once even when POST resolves after the end", async () => {

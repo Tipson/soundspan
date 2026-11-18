@@ -160,6 +160,7 @@ export function usePlayEngagementTracking({
                 typeof window === "undefined" ? null : window.location.pathname,
                 vibeMode,
                 waveMode,
+                currentTrack.smartShuffle,
             );
             getTracker().start({
                 key: occurrence.key,

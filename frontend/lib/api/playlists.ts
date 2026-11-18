@@ -10,8 +10,12 @@ export function WithPlaylists<TBase extends ApiClientConstructor>(Base: TBase) {
             return this.request<ApiData[]>("/playlists");
         }
 
-        async getPlaylist(id: string) {
-            return this.request<PlaylistDetailResponse>(`/playlists/${id}`);
+        /** Read the existing bounded full snapshot; caller cancellation carries no new authority. */
+        async getPlaylist(id: string, signal?: AbortSignal) {
+            return this.request<PlaylistDetailResponse>(
+                `/playlists/${id}`,
+                signal ? { signal } : undefined,
+            );
         }
 
         async getPlaylistPage(

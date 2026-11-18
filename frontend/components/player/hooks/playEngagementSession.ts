@@ -7,6 +7,7 @@ import type {
     PlayWaveMode,
 } from "@/lib/api/plays";
 import { readPlayEngagementAck } from "@/lib/playCreateWire";
+import { readSmartShuffleLineage } from "@/lib/audio/finiteSmartShuffle";
 import type {
     AdaptiveWaveSkipCapture,
     AdaptiveWaveSkipReceipt,
@@ -114,7 +115,10 @@ export function resolvePlaybackRecommendationContext(
     pathname: string | null | undefined,
     vibeMode: boolean,
     waveMode: PlayWaveMode,
+    smartShuffle?: unknown,
 ): PlayRecommendationContext {
+    if (readSmartShuffleLineage(smartShuffle))
+        return { playContext: "playlist" };
     const normalizedPath = pathname?.split(/[?#]/, 1)[0] ?? "";
     if (vibeMode || normalizedPath === "/vibe") {
         return { playContext: "wave", waveMode };

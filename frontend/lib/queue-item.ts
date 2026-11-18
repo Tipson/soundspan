@@ -9,6 +9,7 @@
 
 import type { Track } from "./audio-state-context";
 import { normalizePlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
+import { readSmartShuffleLineage } from "./audio/finiteSmartShuffle";
 
 /** Queue entry representing a podcast episode in the unified play queue. */
 export interface EpisodeQueueItem {
@@ -140,11 +141,17 @@ export function normalizeQueueItems(raw: unknown): QueueItem[] {
             continue;
         }
 
-        const { radioOrigin: rawRadioOrigin, ...trackFields } = candidate;
+        const {
+            radioOrigin: rawRadioOrigin,
+            smartShuffle: rawSmartShuffle,
+            ...trackFields
+        } = candidate;
         const radioOrigin = normalizePlaybackRadioOrigin(rawRadioOrigin);
+        const smartShuffle = readSmartShuffleLineage(rawSmartShuffle);
         items.push({
             ...(trackFields as unknown as Track),
             ...(radioOrigin ? { radioOrigin } : {}),
+            ...(smartShuffle ? { smartShuffle } : {}),
             itemType: "track",
         });
     }

@@ -342,6 +342,7 @@ function manualQueueOccurrence(track: Track): Track {
         recommendationGenerationId: undefined,
         recommendationSessionId: undefined,
         recommendationQueueMode: undefined,
+        smartShuffle: undefined,
     };
 }
 

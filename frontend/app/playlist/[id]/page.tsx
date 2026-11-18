@@ -73,6 +73,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { MusicDetailTrackSurface } from "@/components/music-detail";
 import { PlaylistDetailHero } from "@/features/playlist/components/PlaylistDetailHero";
 import { PlaylistDetailActionDock } from "@/features/playlist/components/PlaylistDetailActionDock";
+import { useSmartShuffle } from "@/features/playlist/hooks/useSmartShuffle";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 import {
     buildPlaylistCoverUrls,
@@ -252,6 +253,7 @@ export default function PlaylistDetailPage() {
         () => mergePlaylistDetailPages(playlistPages?.pages ?? []),
         [playlistPages?.pages],
     );
+    const smartShuffle = useSmartShuffle(playlistId, playlist);
 
     useEffect(() => {
         const target = loadMoreRef.current;
@@ -720,6 +722,7 @@ export default function PlaylistDetailPage() {
                         onOpenShare={() => setShowShareModal(true)}
                         onToggleHide={() => void handleToggleHide()}
                         onDelete={() => setShowDeleteConfirm(true)}
+                        smartShuffle={smartShuffle}
                     />
                 }
             />

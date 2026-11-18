@@ -2597,3 +2597,89 @@ test("adversarial finite six skips during trailing GET preserves latest committe
         "finite second triple must eventually get a fresh continuation after all six server ACKs",
     );
 });
+
+test("explicit manual add strips smart insertion lineage without mutating the original occurrence", async () => {
+    const selected = makeTrack("current", "artist-1");
+    const state = createDeferredAudioState({
+        queue: [selected],
+        currentIndex: 0,
+        currentTrack: selected,
+        playbackType: "track",
+    });
+    const playback = createPlaybackStub({ currentTime: 23, duration: 200 });
+    const controls = await renderControls({ state, playback });
+    const discovery: Track = {
+        ...makeTrack("chosen", "artist-2"),
+        recommendationSessionId: "smart-shuffle:session-1",
+        recommendationQueueMode: "finite",
+        smartShuffle: {
+            v: 1,
+            sessionId: "session-1",
+            playlistId: "playlist-1",
+            seed: 1,
+            snapshotId: "12345678",
+            kind: "injected",
+            occurrenceId: "injected:session-1:0",
+            cursor: 1,
+            enabled: true,
+        },
+    };
+    controls.addToQueue(discovery, { silent: true });
+    state.commit();
+    const added = (state.queue as Track[]).at(-1)!;
+    assert.equal(added.id, "chosen");
+    assert.equal(added.smartShuffle, undefined);
+    assert.equal(added.recommendationSessionId, undefined);
+    assert.equal(discovery.smartShuffle?.kind, "injected");
+    assert.equal(state.currentTrack, selected);
+    assert.equal(playback.currentTime, 23);
+});
+
+test("finite smart next/back keeps duplicate item occurrences and never refills a finished pool", async () => {
+    const { buildSmartShuffleQueue } =
+        await import("../../lib/audio/finiteSmartShuffle");
+    const tracks = buildSmartShuffleQueue(
+        [
+            { ...makeTrack("same", "artist-1"), playlistItemId: "item-1" },
+            { ...makeTrack("same", "artist-1"), playlistItemId: "item-2" },
+            { ...makeTrack("third", "artist-2"), playlistItemId: "item-3" },
+        ],
+        [makeTrack("found", "artist-3")],
+        { playlistId: "playlist-1", sessionId: "session-1", seed: 1 },
+    );
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub({ currentTime: 0, duration: 200 });
+    let controls = await renderControls({ state, playback });
+    controls.playTracks(tracks, 0, false, {
+        replaceQueue: true,
+        preserveOrder: true,
+    });
+    state.commit();
+    assert.equal(state.vibeMode, false);
+    controls = await renderControls({ state, playback });
+    controls.next();
+    state.commit();
+    assert.equal((state.currentTrack as Track).playlistItemId, "item-2");
+    controls = await renderControls({ state, playback });
+    controls.next();
+    state.commit();
+    controls = await renderControls({ state, playback });
+    controls.next();
+    state.commit();
+    assert.equal((state.currentTrack as Track).id, "found");
+    controls = await renderControls({ state, playback });
+    controls.previous();
+    state.commit();
+    assert.equal((state.currentTrack as Track).playlistItemId, "item-3");
+    controls = await renderControls({ state, playback });
+    controls.next();
+    state.commit();
+    const requests = apiCalls.personalizedRequests.length;
+    controls = await renderControls({ state, playback });
+    controls.next();
+    await flushAsync();
+    state.commit();
+    assert.equal(state.currentIndex, 3);
+    assert.equal((state.queue as Track[]).length, 4);
+    assert.equal(apiCalls.personalizedRequests.length, requests);
+});

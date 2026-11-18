@@ -349,11 +349,18 @@ export function WithLibrary<TBase extends ApiClientConstructor>(Base: TBase) {
             );
         }
 
-        async getRadioTracks(type: string, value?: string, limit = 50) {
+        /** Load the existing finite radio pool with optional caller cancellation. */
+        async getRadioTracks(
+            type: string,
+            value?: string,
+            limit = 50,
+            signal?: AbortSignal,
+        ) {
             const params = new URLSearchParams({ type, limit: String(limit) });
             if (value) params.append("value", value);
             return this.request<{ tracks: ApiData[] }>(
                 `/library/radio?${params.toString()}`,
+                signal ? { signal } : undefined,
             );
         }
 

@@ -138,6 +138,8 @@ export interface AudioFeatures {
 }
 
 export interface Track {
+    /** Local finite playlist preview; serialized only with the existing queue. */
+    smartShuffle?: import("./audio/finiteSmartShuffle").SmartShuffleLineage;
     /** Station selected by the user; does not change as the current song advances. */
     radioOrigin?: PlaybackRadioOrigin;
     /** Exact service-catalog recording retained independently of temporary playback leases. */
@@ -255,6 +257,8 @@ interface AudioStateContextType {
 
     // Queue state (unified mixed-media queue: tracks + podcast episodes)
     queue: QueueItem[];
+    /** Synchronous existing context revision fences pending finite queue work. */
+    getQueueRevision: () => number;
     currentIndex: number;
     isShuffle: boolean;
     repeatMode: "off" | "one" | "all";
@@ -487,6 +491,10 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         const revision = ++radioContextRevisionRef.current;
         setRadioContextRevision(revision);
     }, []);
+    const getQueueRevision = useCallback(
+        () => radioContextRevisionRef.current,
+        [],
+    );
     const setCurrentTrack = useRadioContextSetter(
         setCurrentTrackState,
         markRadioContextMutation,
@@ -1576,6 +1584,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             localTrackPlaybackOccurrence,
             commitLocalTrackPlaybackOccurrence,
             queue,
+            getQueueRevision,
             currentIndex,
             isShuffle,
             repeatMode,
@@ -1617,6 +1626,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             localTrackPlaybackOccurrence,
             commitLocalTrackPlaybackOccurrence,
             queue,
+            getQueueRevision,
             currentIndex,
             isShuffle,
             repeatMode,

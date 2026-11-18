@@ -46,6 +46,12 @@ interface PlaylistDetailActionDockProps {
     onOpenShare: () => void;
     onToggleHide: () => void;
     onDelete: () => void;
+    smartShuffle?: {
+        active: boolean;
+        busy: boolean;
+        notice?: string | null;
+        onToggle: () => void;
+    };
 }
 
 interface SecondaryActionProps {
@@ -106,6 +112,7 @@ export function PlaylistDetailActionDock({
     onOpenShare,
     onToggleHide,
     onDelete,
+    smartShuffle,
 }: PlaylistDetailActionDockProps) {
     const likeLabel = isAllLiked ? ru.playlist.unlikeAll : ru.playlist.likeAll;
     const shareLabel = isPublic
@@ -144,6 +151,41 @@ export function PlaylistDetailActionDock({
             <MusicDetailSecondaryActions>
                 {(close) => (
                     <>
+                        {isOwner &&
+                            playableTracks.length > 0 &&
+                            smartShuffle && (
+                                <div className="rounded-xl border border-brand/20 bg-brand/5">
+                                    <SecondaryAction
+                                        label={
+                                            smartShuffle.busy
+                                                ? "Отменить подготовку"
+                                                : smartShuffle.active
+                                                  ? "Выключить умный shuffle"
+                                                  : "Умный shuffle · предпросмотр"
+                                        }
+                                        icon={
+                                            smartShuffle.busy ? (
+                                                <Loader2 className="h-5 w-5 animate-spin" />
+                                            ) : (
+                                                <Shuffle className="h-5 w-5" />
+                                            )
+                                        }
+                                        onClick={() => {
+                                            close();
+                                            smartShuffle.onToggle();
+                                        }}
+                                        className={
+                                            smartShuffle.active
+                                                ? "text-brand-light"
+                                                : undefined
+                                        }
+                                    />
+                                    <p className="px-3 pb-3 text-xs leading-relaxed text-content-muted">
+                                        {smartShuffle.notice ??
+                                            "До 99 ваших треков: по находке после трёх, пока есть подходящие. В коротком плейлисте — одна в конце. Исходный плейлист не изменится."}
+                                    </p>
+                                </div>
+                            )}
                         {playableTracks.length > 0 && (
                             <SecondaryAction
                                 label={ru.playlist.addAllQueue}

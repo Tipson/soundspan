@@ -25,7 +25,11 @@ import {
     RecommendationQueueAdmissionPolicy,
     type RecommendationQueuePreparation,
 } from "./recommendationQueueAdmissionPolicy";
-import type { RecommendationQueueAdmissionCapture } from "./recommendationQueueAdmission";
+import type {
+    RecommendationQueueAdmissionCapture,
+    CapturedRecommendationQueueAdmissionResult,
+    FiniteQueueAdmissionReference,
+} from "./recommendationQueueAdmission";
 
 const storageKey = createMigratingStorageKey(
     RECOMMENDATION_FEEDBACK_STORAGE_SUFFIX,
@@ -57,6 +61,15 @@ export interface RecommendationQueueFeedbackAccess {
     }) => boolean;
     captureAdmission?: () => RecommendationQueueAdmissionCapture;
     isAdmissionCurrent?: (
+        capture: RecommendationQueueAdmissionCapture,
+    ) => boolean;
+    /** Prepare another finite queue through this same owner's pending-write barrier. */
+    readmitCandidates?: (
+        references: readonly FiniteQueueAdmissionReference[],
+        signal?: AbortSignal,
+    ) => Promise<CapturedRecommendationQueueAdmissionResult>;
+    /** Pending queue work has its own intent fence and is not committed yet. */
+    isPreparationCurrent?: (
         capture: RecommendationQueueAdmissionCapture,
     ) => boolean;
 }
@@ -474,6 +487,26 @@ export function useRecommendationQueueFeedback({
             admission.coordinator.isCurrent(capture),
         [admission, isCurrent, isCollaborative],
     );
+    const readmitCandidates = useCallback(
+        (
+            references: readonly FiniteQueueAdmissionReference[],
+            signal?: AbortSignal,
+        ) =>
+            !isCurrent() || isCollaborative()
+                ? Promise.resolve({
+                      status: "superseded" as const,
+                      capture: admission.coordinator.capture(),
+                  })
+                : admission.coordinator.readmit(references, signal),
+        [admission, isCurrent, isCollaborative],
+    );
+    const isPreparationCurrent = useCallback(
+        (capture: RecommendationQueueAdmissionCapture) =>
+            isCurrent() &&
+            !isCollaborative() &&
+            admission.coordinator.isCurrent(capture),
+        [admission, isCurrent, isCollaborative],
+    );
     return useMemo(
         () => ({
             allows,
@@ -487,6 +520,8 @@ export function useRecommendationQueueFeedback({
             isAdvancePrepared,
             captureAdmission,
             isAdmissionCurrent,
+            readmitCandidates,
+            isPreparationCurrent,
         }),
         [
             allows,
@@ -500,6 +535,8 @@ export function useRecommendationQueueFeedback({
             isAdvancePrepared,
             captureAdmission,
             isAdmissionCurrent,
+            readmitCandidates,
+            isPreparationCurrent,
         ],
     );
 }

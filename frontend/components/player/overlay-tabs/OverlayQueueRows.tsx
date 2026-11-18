@@ -246,6 +246,14 @@ export const OverlayQueueTrackRow = memo(function OverlayQueueTrackRow({
                         >
                             {track.displayTitle ?? track.title}
                         </p>
+                        {track.smartShuffle?.kind === "injected" && (
+                            <span
+                                className="shrink-0 rounded-full border border-brand/30 bg-brand/10 px-1.5 py-0.5 text-[10px] text-brand-light"
+                                title="Находка из радио плейлиста"
+                            >
+                                Находка
+                            </span>
+                        )}
                         {qualityBadge?.variant === "youtube" && (
                             <YouTubeBadge />
                         )}
