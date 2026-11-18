@@ -1,3 +1,4 @@
+import '../core/model/app_failure.dart';
 import '../core/network/api_transport.dart';
 import '../core/network/dart_api_transport.dart';
 import '../core/network/network_policy.dart';
@@ -75,6 +76,19 @@ final class OfflineMixRefreshJsonClient implements JsonHttpClient {
   @override
   Future<ApiResponse> send(ApiRequest request, {String? accessToken}) async {
     await admit();
-    return client.send(request, accessToken: accessToken);
+    final response = await client.send(request, accessToken: accessToken);
+    // This composition read is safe to reschedule through WorkManager. The
+    // transport itself still sends once; ambiguous mutations keep their policy.
+    if (request.method == ApiMethod.get &&
+        (response.statusCode == 502 || response.statusCode == 504)) {
+      throw AppFailure(
+        code: 'http_error',
+        message: 'Сервер временно не ответил. Готовый микс сохранён.',
+        statusCode: response.statusCode,
+        retryable: true,
+        retryAfter: response.retryAfter,
+      );
+    }
+    return response;
   }
 }

@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Reschedule safe offline composition reads after gateway 502/504 through the existing background retry policy, preserving the last complete mix and mutation replay rules. Prepare Android release 0.1.21 (24).
 - Group small download fragments into bounded writes while preserving cancellation, storage admission, verified bytes and durable-prefix recovery. Retain closed diagnostic causes for generic transfer failures. Prepare Android release 0.1.20 (23).
 - Record bounded, non-identifying Android background download outcomes to distinguish setup, network, file, manifest and shutdown failures. Preserve existing retry, cancellation and completed-file behavior. Prepare Android release 0.1.19 (22).
 - Open the Downloads list from offline settings while preserving normal nested tab navigation and the current playback queue.
