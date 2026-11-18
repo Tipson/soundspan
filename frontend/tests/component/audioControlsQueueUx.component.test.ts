@@ -401,6 +401,344 @@ const flushAsync = async () => {
     await new Promise((resolve) => setImmediate(resolve));
 };
 
+test("clearing a personal Wave then starting its cached prefix advances beyond the cleared recording", async (t) => {
+    const tracks = [
+        makeTrack("wave-a", "a"),
+        makeTrack("wave-b", "b"),
+        makeTrack("wave-c", "c"),
+    ];
+    const state = createDeferredAudioState({
+        queue: tracks,
+        currentIndex: 0,
+        currentTrack: tracks[0],
+        playbackType: "track",
+        vibeMode: true,
+        vibeQueueIds: tracks.map((row) => row.id),
+    });
+    const playback = createPlaybackStub({ currentTime: 7, duration: 200 });
+    playback.isPlaying = true;
+    stateHolder.current = state;
+    playbackHolder.current = playback;
+    const { AudioControlsProvider, useAudioControls } =
+        await import("../../lib/audio-controls-context");
+    const { createRoot } = await import("react-dom/client");
+    let controls!: ReturnType<typeof useAudioControls>;
+    function Probe() {
+        controls = useAudioControls();
+        return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    const render = async () =>
+        React.act(async () => {
+            root.render(
+                React.createElement(
+                    AudioControlsProvider,
+                    null,
+                    React.createElement(Probe),
+                ),
+            );
+        });
+    await render();
+    await React.act(async () => {
+        controls.clearQueue();
+        state.commit();
+    });
+    await render();
+    assert.equal(state.currentTrack, null);
+    assert.deepEqual(state.queue, []);
+    assert.equal(playback.isPlaying, false);
+    assert.equal(
+        state.localTrackPlaybackOccurrence,
+        0,
+        "clear is not a new Play or dislike/history observation",
+    );
+    await React.act(async () => {
+        controls.playTracks(tracks, 0, true);
+        state.commit();
+    });
+    await render();
+    assert.equal((state.currentTrack as Track).id, "wave-b");
+    assert.equal(state.currentIndex, 1);
+    assert.deepEqual(
+        (state.queue as Track[]).map((row) => row.id),
+        tracks.map((row) => row.id),
+        "server order is preserved",
+    );
+    assert.equal(state.localTrackPlaybackOccurrence, 1);
+    assert.equal(playback.isPlaying, true);
+});
+
+async function clearedWaveFixture(
+    t: { after: (fn: () => Promise<void>) => void },
+    currentIndex = 2,
+    beforeClear?: (tracks: Track[]) => void,
+) {
+    apiCalls.personalizedRequests.length = 0;
+    const tracks = [
+        makeTrack("wave-a", "a"),
+        makeTrack("wave-b", "b"),
+        makeTrack("wave-c", "c"),
+    ];
+    const state = createDeferredAudioState({
+        queue: tracks,
+        currentIndex,
+        currentTrack: tracks[currentIndex],
+        playbackType: "track",
+        vibeMode: true,
+        waveLanguage: "any",
+    });
+    const playback = createPlaybackStub();
+    playback.isPlaying = true;
+    stateHolder.current = state;
+    playbackHolder.current = playback;
+    const { AudioControlsProvider, useAudioControls } =
+        await import("../../lib/audio-controls-context");
+    const { createRoot } = await import("react-dom/client");
+    let controls!: ReturnType<typeof useAudioControls>;
+    function Probe() {
+        controls = useAudioControls();
+        return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    const render = async () =>
+        React.act(async () => {
+            root.render(
+                React.createElement(
+                    AudioControlsProvider,
+                    null,
+                    React.createElement(Probe),
+                ),
+            );
+        });
+    await render();
+    beforeClear?.(tracks);
+    await React.act(async () => {
+        controls.clearQueue();
+        state.commit();
+    });
+    await render();
+    return {
+        tracks,
+        state,
+        playback,
+        render,
+        controls: () => controls,
+        flush: async () => {
+            await React.act(async () => {
+                await flushAsync();
+                state.commit();
+            });
+            await render();
+        },
+    };
+}
+
+function restartFeed(ids: string[]) {
+    return {
+        generationId: "restart-generation",
+        shelves: {
+            listenAgain: [],
+            quickPicks: [],
+            discovery: ids.map((id) => ({
+                ...makeTrack(id, id),
+                source: "library",
+                provider: {},
+            })),
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    };
+}
+
+test("cleared Wave ordered tail retains the opaque continuation and its exact history tail", async (t) => {
+    const owner = {
+        authGeneration: apiSessionGeneration,
+        sessionId: getRecommendationSessionId(),
+        intent: JSON.stringify(["for-you", null, "any"]),
+    };
+    const page = (ids: string[], start: number, tailIds: string[]) =>
+        readOrderedWavePage({
+            orderedWave: {
+                version: 1,
+                sequenceId: "5d73c623-d11d-4fda-943e-0e01ce5b3be7",
+                startPosition: start,
+                nextCursor: `cursor-${start + ids.length}`,
+                items: ids.map((id, index) => ({
+                    position: start + index,
+                    track: {
+                        ...makeTrack(id, id),
+                        source: "library",
+                        provider: {},
+                        album: { ...makeTrack(id, id).album, coverArt: null },
+                    },
+                })),
+                tail: tailIds.map((id, index) => ({
+                    source: "library",
+                    id,
+                    position: start + ids.length - tailIds.length + index,
+                })),
+            },
+        } as Parameters<typeof readOrderedWavePage>[0])!;
+    const seed = page(["wave-a", "wave-b", "wave-c"], 0, ["wave-b", "wave-c"]);
+    const next = page(["wave-fresh"], 3, ["wave-c", "wave-fresh"]);
+    const fixture = await clearedWaveFixture(t, 2, (tracks) =>
+        assert.equal(
+            orderedWaveQueueCheckpoints.commit(tracks, seed, owner),
+            true,
+        ),
+    );
+    personalizedFeed.current = { ...restartFeed([]), orderedWave: next };
+    fixture
+        .controls()
+        .playTracks(fixture.tracks, 0, true, {
+            orderedWave: { page: seed, owner },
+        });
+    await fixture.flush();
+    assert.equal((fixture.state.currentTrack as Track).id, "wave-fresh");
+    assert.equal(fixture.state.currentIndex, 3);
+    const checkpoint = orderedWaveQueueCheckpoints.capture(
+        fixture.state.queue as Track[],
+        owner,
+    );
+    assert.equal(checkpoint?.nextPosition, 4);
+    assert.equal(checkpoint?.nextCursor, "cursor-4");
+    assert.equal(
+        new URL(
+            apiCalls.personalizedRequests[0],
+            "https://example.test",
+        ).searchParams.get("waveSequenceCursor"),
+        "cursor-3",
+    );
+});
+
+test("cleared Wave tail requests continuation before playing a fresh recording", async (t) => {
+    const fixture = await clearedWaveFixture(t);
+    personalizedFeed.current = restartFeed(["wave-fresh"]);
+    fixture.controls().playTracks(fixture.tracks, 0, true);
+    assert.equal(fixture.state.currentTrack, null);
+    await fixture.flush();
+    assert.equal((fixture.state.currentTrack as Track).id, "wave-fresh");
+    assert.equal(apiCalls.personalizedRequests.length, 1);
+    const path = new URL(
+        apiCalls.personalizedRequests[0],
+        "https://example.test",
+    );
+    assert.equal(path.searchParams.get("cursor"), "3");
+    assert.equal(path.searchParams.get("surface"), "wave");
+    assert.equal(fixture.state.localTrackPlaybackOccurrence, 1);
+});
+
+test("cleared Wave one-recording fallback is bounded and asks again after the next Clear", async (t) => {
+    const fixture = await clearedWaveFixture(t, 0);
+    const only = [fixture.tracks[0]];
+    personalizedFeed.current = restartFeed(["wave-a"]);
+    fixture.controls().playTracks(only, 0, true);
+    await fixture.flush();
+    assert.equal((fixture.state.currentTrack as Track).id, "wave-a");
+    assert.equal(apiCalls.personalizedRequests.length, 1);
+    fixture.controls().clearQueue();
+    fixture.state.commit();
+    await fixture.render();
+    fixture.controls().playTracks(only, 0, true);
+    await fixture.flush();
+    assert.equal(
+        apiCalls.personalizedRequests.length,
+        2,
+        "the exhausted cached prefix is never reused forever without I/O",
+    );
+});
+
+for (const action of [
+    "pause",
+    "manual",
+    "clear",
+    "owner",
+    "direction",
+] as const) {
+    test(`cleared Wave late continuation cannot replace a newer ${action} intent`, async (t) => {
+        const fixture = await clearedWaveFixture(t);
+        let release!: (value: unknown) => void;
+        personalizedRequestImpl.current = () =>
+            new Promise((resolve) => {
+                release = resolve;
+            });
+        fixture.controls().playTracks(fixture.tracks, 0, true);
+        await fixture.flush();
+        assert.equal(apiCalls.personalizedRequests.length, 1);
+        if (action === "pause") fixture.controls().pause();
+        if (action === "manual")
+            fixture.controls().playTracks([makeTrack("manual", "m")]);
+        if (action === "clear") fixture.controls().clearQueue();
+        if (action === "owner") apiSessionGeneration++;
+        if (action === "direction") fixture.state.waveMode = "new";
+        fixture.state.commit();
+        await fixture.render();
+        release(restartFeed(["late-wave"]));
+        await fixture.flush();
+        assert.equal(
+            (fixture.state.currentTrack as Track | null)?.id ?? null,
+            action === "manual" ? "manual" : null,
+        );
+        assert.equal(fixture.playback.isPlaying, action === "manual");
+    });
+}
+
+test("cleared Wave bookmark does not override explicit index, finite playlist or changed direction", async (t) => {
+    for (const action of ["index", "finite", "direction", "owner"] as const) {
+        const fixture = await clearedWaveFixture(t, 0);
+        if (action === "direction") fixture.state.waveMode = "new";
+        if (action === "owner") apiSessionGeneration++;
+        await fixture.render();
+        fixture
+            .controls()
+            .playTracks(
+                fixture.tracks,
+                action === "index" ? 2 : 0,
+                action !== "finite",
+            );
+        fixture.state.commit();
+        await fixture.render();
+        assert.equal(
+            (fixture.state.currentTrack as Track).id,
+            action === "index" ? "wave-c" : "wave-a",
+        );
+    }
+});
+
+test("cleared Wave continuation waits for admission and skips denied candidates", async (t) => {
+    const fixture = await clearedWaveFixture(t, 0);
+    const policy = fixture.state.recommendationFeedback as Record<
+        string,
+        unknown
+    >;
+    let release!: () => void;
+    policy.prepareTracks = () =>
+        new Promise<"ready">((resolve) => {
+            release = () => resolve("ready");
+        });
+    policy.readyFor = (track: Track) => track.id !== "wave-b";
+    fixture.controls().playTracks(fixture.tracks, 0, true);
+    await fixture.flush();
+    assert.equal(fixture.state.currentTrack, null);
+    release();
+    await fixture.flush();
+    assert.equal((fixture.state.currentTrack as Track).id, "wave-c");
+    assert.equal(fixture.state.localTrackPlaybackOccurrence, 1);
+});
+
 test("automatic recommendation Next waits for policy and skips denied recordings without touching current early", async () => {
     const current = makeTrack("policy-current", "artist");
     const denied = makeTrack("policy-denied", "artist");

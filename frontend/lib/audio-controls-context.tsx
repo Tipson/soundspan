@@ -1,5 +1,8 @@
 "use client";
-import { orderedWaveQueueCheckpoints } from "./audio/orderedWaveSequence";
+import {
+    orderedWaveQueueCheckpoints,
+    type OrderedWaveCheckpoint,
+} from "./audio/orderedWaveSequence";
 import { getRecommendationSessionId } from "./recommendationSession";
 
 import {
@@ -97,7 +100,15 @@ import {
 import { useVibeModeControls } from "@/lib/audio/useVibeModeControls";
 import { resolveAdaptiveWaveSkip } from "@/lib/audio/adaptiveWaveQueue";
 import { useAdaptiveWaveRetune } from "@/lib/audio/useAdaptiveWaveRetune";
-import { isProviderRadioTrack } from "@/lib/audio/providerRadioContinuation";
+import {
+    isProviderRadioTrack,
+    buildProviderRadioContinuationPath,
+    collectProviderRadioContinuation,
+} from "@/lib/audio/providerRadioContinuation";
+import {
+    fetchPersonalizedWaveFeed,
+    orderedWaveOwner,
+} from "@/lib/audio/fetchPersonalizedWaveFeed";
 import { applyTrackClick } from "@/lib/audio-engine/playbackOccurrence";
 import { withPlaybackRadioOrigin } from "@/lib/radio/playbackRadioOrigin";
 import {
@@ -369,6 +380,15 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     const lastCursorTrackIndexRef = useRef<number | null>(null);
     const lastCursorIsShuffleRef = useRef<boolean | null>(null);
     const adaptiveWaveSkipStreakRef = useRef(0);
+    // Clear removes the queue, not the personal Wave's continuation point.
+    const clearedWaveRef = useRef<{
+        owner: string;
+        recording: string;
+        intent: number;
+        replacement: number;
+        checkpoint?: OrderedWaveCheckpoint;
+        request?: AbortController;
+    } | null>(null);
     const pendingManualTailAdvanceRef = useRef<{
         token: object;
         trackId: string;
@@ -424,6 +444,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             pendingManualTailAdvanceRef.current = null;
             pendingRecommendationAdvanceRef.current?.controller.abort();
             pendingRecommendationAdvanceRef.current = null;
+            clearedWaveRef.current?.request?.abort();
+            clearedWaveRef.current = null;
             queueDebugLog("AudioControlsProvider unmounted");
         };
     }, []);
@@ -755,72 +777,251 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            const normalizedStartIndex = Math.min(
-                Math.max(startIndex, 0),
-                tracks.length - 1,
-            );
-            const startTrack = tracks[normalizedStartIndex];
-            if (!startTrack?.id) return;
-            if (options?.replaceQueue) {
-                writePlaybackReplacementIntent(state.currentTrack?.id ?? null);
-            } else if (applyTrackClick(state, playbackState, startTrack))
-                return;
-            state.recommendationFeedback.reset();
+            const commitTracks = (
+                tracks: Track[],
+                startIndex: number,
+                options?: PlayTracksOptions,
+            ) => {
+                const normalizedStartIndex = Math.min(
+                    Math.max(startIndex, 0),
+                    tracks.length - 1,
+                );
+                const startTrack = tracks[normalizedStartIndex];
+                if (!startTrack?.id) return;
+                if (options?.replaceQueue) {
+                    writePlaybackReplacementIntent(
+                        state.currentTrack?.id ?? null,
+                    );
+                } else if (applyTrackClick(state, playbackState, startTrack))
+                    return;
+                state.recommendationFeedback.reset();
 
-            queueDebugLog("playTracks()", {
-                tracksLen: tracks.length,
-                startIndex,
-                firstTrackId: tracks[0]?.id,
-                startTrackId: tracks[startIndex]?.id,
-                isVibeQueue,
-            });
+                queueDebugLog("playTracks()", {
+                    tracksLen: tracks.length,
+                    startIndex,
+                    firstTrackId: tracks[0]?.id,
+                    startTrackId: tracks[startIndex]?.id,
+                    isVibeQueue,
+                });
 
-            if (isVibeQueue) {
-                state.setVibeMode(true);
-                state.setVibeSourceFeatures(null);
-                state.setVibeQueueIds(tracks.map((track) => track.id));
-            }
-            // If not a vibe queue and vibe mode is on, disable it
-            if (!isVibeQueue && state.vibeMode) {
-                state.setVibeMode(false);
-                state.setVibeSourceFeatures(null);
-                state.setVibeQueueIds([]);
-            }
+                if (isVibeQueue) {
+                    state.setVibeMode(true);
+                    state.setVibeSourceFeatures(null);
+                    state.setVibeQueueIds(tracks.map((track) => track.id));
+                }
+                // If not a vibe queue and vibe mode is on, disable it
+                if (!isVibeQueue && state.vibeMode) {
+                    state.setVibeMode(false);
+                    state.setVibeSourceFeatures(null);
+                    state.setVibeQueueIds([]);
+                }
 
-            state.commitLocalTrackPlaybackOccurrence();
+                state.commitLocalTrackPlaybackOccurrence();
 
-            resetPersistedTrackStartPosition(startTrack.id);
-            state.setPlaybackType("track");
-            state.setCurrentAudiobook(null);
-            state.setCurrentPodcast(null);
-            state.setQueue(tracks);
+                resetPersistedTrackStartPosition(startTrack.id);
+                state.setPlaybackType("track");
+                state.setCurrentAudiobook(null);
+                state.setCurrentPodcast(null);
+                state.setQueue(tracks);
+                if (
+                    isVibeQueue &&
+                    options?.orderedWave &&
+                    options.orderedWave.owner.authGeneration ===
+                        api.getSessionGeneration() &&
+                    options.orderedWave.owner.sessionId ===
+                        getRecommendationSessionId()
+                ) {
+                    orderedWaveQueueCheckpoints.commit(
+                        tracks,
+                        options.orderedWave.page,
+                        options.orderedWave.owner,
+                    );
+                }
+                state.setCurrentIndex(normalizedStartIndex);
+                state.setCurrentTrack(startTrack);
+                playbackState.setIsPlaying(true);
+                playbackState.setCurrentTime(0);
+                state.setRepeatOneCount(0);
+                if (options?.preserveOrder || isVibeQueue) {
+                    state.setIsShuffle(false);
+                    state.setShuffleIndices([]);
+                } else {
+                    state.setShuffleIndices(
+                        generateShuffleIndices(
+                            tracks.length,
+                            normalizedStartIndex,
+                        ),
+                    );
+                }
+                clearedWaveRef.current?.request?.abort();
+                clearedWaveRef.current = null;
+            };
+
+            const bookmark = clearedWaveRef.current;
+            const owner = () =>
+                JSON.stringify(
+                    orderedWaveOwner(
+                        latestAdvanceStateRef.current.waveMode,
+                        latestAdvanceStateRef.current.waveMood,
+                        latestAdvanceStateRef.current.waveLanguage,
+                    ),
+                );
+            const restartIsCurrent = () => {
+                const latest = latestAdvanceStateRef.current;
+                return (
+                    clearedWaveRef.current === bookmark &&
+                    bookmark !== null &&
+                    bookmark.owner === owner() &&
+                    bookmark.intent === getPlaybackIntentGeneration() &&
+                    bookmark.replacement === getQueueReplacementGeneration() &&
+                    latest.queue.length === 0 &&
+                    latest.currentTrack === null &&
+                    !getActiveListenTogetherSession()
+                );
+            };
             if (
-                isVibeQueue &&
-                options?.orderedWave &&
-                options.orderedWave.owner.authGeneration ===
-                    api.getSessionGeneration() &&
-                options.orderedWave.owner.sessionId ===
-                    getRecommendationSessionId()
+                !bookmark ||
+                !isVibeQueue ||
+                startIndex !== 0 ||
+                options?.radioOrigin ||
+                !restartIsCurrent()
             ) {
-                orderedWaveQueueCheckpoints.commit(
+                clearedWaveRef.current?.request?.abort();
+                clearedWaveRef.current = null;
+                commitTracks(tracks, startIndex, options);
+                return;
+            }
+            const clearedIndex = tracks.findIndex(
+                (track) =>
+                    resolvePreferenceTrackId(track) === bookmark.recording,
+            );
+            if (clearedIndex < 0) {
+                commitTracks(tracks, startIndex, options);
+                return;
+            }
+            const readyFor =
+                state.recommendationFeedback.readyFor ??
+                state.recommendationFeedback.allows;
+            const nextIndex = tracks.findIndex(
+                (track, index) => index > clearedIndex && readyFor(track),
+            );
+            if (nextIndex >= 0 && !state.recommendationFeedback.prepareTracks) {
+                commitTracks(tracks, nextIndex, options);
+                return;
+            }
+            if (bookmark.request) return;
+            const controller = new AbortController();
+            bookmark.request = controller;
+            const admission = state.recommendationFeedback.captureAdmission?.();
+            const stillCurrent = () =>
+                restartIsCurrent() &&
+                !controller.signal.aborted &&
+                (!admission ||
+                    !state.recommendationFeedback.isAdmissionCurrent ||
+                    state.recommendationFeedback.isAdmissionCurrent(admission));
+            void (async () => {
+                const prepare = async (candidates: Track[]) => {
+                    if (state.recommendationFeedback.prepareTracks) {
+                        const result =
+                            await state.recommendationFeedback.prepareTracks(
+                                candidates,
+                            );
+                        if (result === "superseded" || !stillCurrent())
+                            return false;
+                    }
+                    return stillCurrent();
+                };
+                if (!(await prepare(tracks))) return;
+                const admittedSuffix = tracks.findIndex(
+                    (track, index) => index > clearedIndex && readyFor(track),
+                );
+                if (admittedSuffix >= 0) {
+                    commitTracks(tracks, admittedSuffix, options);
+                    return;
+                }
+                let candidates = tracks;
+                let candidateOptions = options;
+                let firstCandidateIndex = 0;
+                // Never wrap an exhausted cached prefix before asking the server
+                // for its existing continuation (one request, including reset budget).
+                const receipt = await fetchPersonalizedWaveFeed(
+                    buildProviderRadioContinuationPath(
+                        tracks,
+                        tracks.length,
+                        25,
+                        state.waveMode,
+                        state.waveMood,
+                        undefined,
+                        state.waveLanguage,
+                    ),
+                    {
+                        signal: controller.signal,
+                        checkpoint: bookmark.checkpoint,
+                        resetBudget: { remaining: 1 },
+                    },
+                );
+                if (!stillCurrent()) return;
+                const continuation = collectProviderRadioContinuation(
+                    receipt.feed,
                     tracks,
-                    options.orderedWave.page,
-                    options.orderedWave.owner,
+                    25,
+                    state.waveMode,
                 );
-            }
-            state.setCurrentIndex(normalizedStartIndex);
-            state.setCurrentTrack(startTrack);
-            playbackState.setIsPlaying(true);
-            playbackState.setCurrentTime(0);
-            state.setRepeatOneCount(0);
-            if (options?.preserveOrder || isVibeQueue) {
-                state.setIsShuffle(false);
-                state.setShuffleIndices([]);
-            } else {
-                state.setShuffleIndices(
-                    generateShuffleIndices(tracks.length, normalizedStartIndex),
+                if (
+                    receipt.page &&
+                    continuation.length !== receipt.page.items.length
+                )
+                    throw new Error(
+                        "Ordered Wave continuation changed before queue admission",
+                    );
+                if (continuation.length) {
+                    // Opaque continuation tails still refer to the prior page.
+                    // Keep that ordered prefix as history, never replay it.
+                    candidates = receipt.page
+                        ? [...tracks, ...continuation]
+                        : continuation;
+                    firstCandidateIndex = receipt.page ? tracks.length : 0;
+                    candidateOptions = receipt.page
+                        ? {
+                              orderedWave: {
+                                  page: receipt.page,
+                                  owner: orderedWaveOwner(
+                                      state.waveMode,
+                                      state.waveMood,
+                                      state.waveLanguage,
+                                  ),
+                              },
+                          }
+                        : undefined;
+                }
+                if (candidates !== tracks && !(await prepare(candidates)))
+                    return;
+                let index = candidates.findIndex(
+                    (track, index) =>
+                        index >= firstCandidateIndex &&
+                        resolvePreferenceTrackId(track) !==
+                            bookmark.recording &&
+                        readyFor(track),
                 );
-            }
+                // A one-recording catalogue may legitimately have no alternative.
+                if (index < 0)
+                    index = candidates.findIndex(
+                        (track, index) =>
+                            index >= firstCandidateIndex && readyFor(track),
+                    );
+                if (index >= 0)
+                    commitTracks(candidates, index, candidateOptions);
+            })()
+                .catch(() => {
+                    if (stillCurrent())
+                        toast.error(
+                            "Не удалось продолжить Волну. Повторите попытку.",
+                        );
+                })
+                .finally(() => {
+                    if (clearedWaveRef.current === bookmark)
+                        bookmark.request = undefined;
+                });
         },
         [
             state,
@@ -2387,6 +2588,30 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             return;
         }
 
+        clearedWaveRef.current?.request?.abort();
+        const personalWave =
+            state.vibeMode &&
+            state.currentTrack &&
+            !normalizePlaybackRadioOrigin(state.currentTrack.radioOrigin) &&
+            state.currentTrack.recommendationQueueMode !== "finite";
+        const waveOwner = orderedWaveOwner(
+            state.waveMode,
+            state.waveMood,
+            state.waveLanguage,
+        );
+        clearedWaveRef.current = personalWave
+            ? {
+                  owner: JSON.stringify(waveOwner),
+                  recording: resolvePreferenceTrackId(state.currentTrack!),
+                  intent: getPlaybackIntentGeneration(),
+                  replacement: getQueueReplacementGeneration(),
+                  checkpoint: orderedWaveQueueCheckpoints.capture(
+                      state.queue,
+                      waveOwner,
+                      Boolean(state.isShuffle),
+                  ),
+              }
+            : null;
         recordPlaybackReplacement();
         state.recommendationFeedback.reset();
         state.setQueue([]);

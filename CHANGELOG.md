@@ -9,6 +9,8 @@
 
 ## Unreleased
 
+- Continue a cleared personal Wave beyond its previous recording, retaining server order and bounded fresh continuation at the end of a page. Preserve explicit playlist, pause and account intent.
+
 - Bound public search cache entries by their UTF-8 byte size, preserving live results when cached metadata is oversized or malformed.
 
 - Provide authenticated, non-cached Android update metadata from an optional read-only operator release tree, requiring a bound verification receipt and immutable same-origin APK paths. Keep upload and publication outside the application.
