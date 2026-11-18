@@ -55,6 +55,7 @@ import '../features/settings/offline_settings_screen.dart';
 import '../features/settings/playback_settings_screen.dart';
 import '../features/settings/settings_models.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/updates/app_update_screen.dart';
 import '../features/tastes/taste_screen.dart';
 import '../features/wave/wave_screen.dart';
 import '../features/wave/wave_direction_sheet.dart';
@@ -254,6 +255,22 @@ class _OwnerShellState extends State<OwnerShell>
 
   void _launch(AppDestination destination, {bool overlay = false}) =>
       _report(_open(destination, overlay: overlay));
+  Widget _appUpdatePage(void Function(VoidCallback) retire) {
+    final controller = s.newAppUpdate();
+    retire(controller.dispose);
+    final tab = s.router.currentTab;
+    return Builder(
+      builder: (context) => AppUpdateScreen(
+        controller: controller,
+        visibilityChanges: Listenable.merge([s.router, widget.rootExposure]),
+        isExposed: () =>
+            Navigator.of(context) ==
+                Navigator.of(context, rootNavigator: true) ||
+            (widget.rootExposure.value && s.router.currentTab == tab),
+      ),
+    );
+  }
+
   void _report(Future<void> navigation) {
     unawaited(
       navigation.catchError((Object _) {
@@ -851,6 +868,7 @@ class _OwnerShellState extends State<OwnerShell>
           );
         case AppRouteKind.settings:
           return switch (destination.id) {
+            'updates' => _appUpdatePage(retire),
             'profile' => OwnerProfileScreen(
               session: s,
               pickAvatar: s.settings.canUpload ? widget.pickAvatar : null,
@@ -915,6 +933,9 @@ class _OwnerShellState extends State<OwnerShell>
                 ),
                 onOffline: () => _launch(
                   const AppDestination(AppRouteKind.settings, id: 'offline'),
+                ),
+                onUpdates: () => _launch(
+                  const AppDestination(AppRouteKind.settings, id: 'updates'),
                 ),
                 onAccount: () =>
                     _launch(const AppDestination(AppRouteKind.account)),

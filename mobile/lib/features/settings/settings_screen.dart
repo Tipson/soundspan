@@ -14,6 +14,7 @@ class SettingsScreen extends StatelessWidget {
     required this.onHistory,
     this.onShares,
     this.onInbox,
+    this.onUpdates,
   });
   final VoidCallback onProfile,
       onTaste,
@@ -22,6 +23,7 @@ class SettingsScreen extends StatelessWidget {
       onAccount,
       onHistory;
   final VoidCallback? onShares, onInbox;
+  final VoidCallback? onUpdates;
   @override
   Widget build(BuildContext context) => ScreenScaffold(
     title: 'Настройки',
@@ -92,6 +94,16 @@ class SettingsScreen extends StatelessWidget {
               onInbox!,
             ),
         ]),
+        if (onUpdates != null)
+          _group(context, 'Приложение', [
+            _entry(
+              context,
+              Icons.system_update_outlined,
+              'Обновление приложения',
+              'Проверить новую версию',
+              onUpdates!,
+            ),
+          ]),
       ],
     ),
   );

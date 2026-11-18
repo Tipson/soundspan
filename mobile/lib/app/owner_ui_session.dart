@@ -1,6 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
+import '../core/network/dart_api_transport.dart';
+import '../features/updates/apk_update_controller.dart';
+import '../features/updates/apk_update_downloader.dart';
+import '../features/updates/release_update_repository.dart';
+import 'native_app_update.dart';
 
 import '../core/model/track.dart';
 import '../core/model/track_ref.dart';
@@ -433,6 +441,49 @@ final class OwnerUiSession {
   }
 
   bool get isCurrent => lifetime.isOpen && owner.authority.isCurrent(fence);
+  ApkUpdateController newAppUpdate() {
+    final json = DartJsonHttpClient(
+      maxResponseBytes: 65536,
+      networkPolicy: owner.policy,
+    );
+    final repository = ReleaseUpdateRepository(
+      transport: DartApiTransport(client: json, authority: owner.authority),
+      authority: owner.authority,
+      fence: fence,
+      networkPolicy: owner.policy,
+    );
+    final downloader = ApkUpdateDownloader(
+      directory: Directory('${owner.supportDirectory.path}/app-updates'),
+      admit: () async {
+        await owner.downloadNetwork.start();
+        await owner.downloadAccess.requireNetwork();
+      },
+      readFreeBytes: () async {
+        final raw = await const MethodChannel('soundspan/storage')
+            .invokeMethod<Object?>('freeBytes');
+        if (raw is! int || raw < 0) {
+          throw const FileSystemException('Storage unavailable');
+        }
+        return raw;
+      },
+    );
+    late final ApkUpdateController controller;
+    controller = ApkUpdateController(
+      repository: repository,
+      downloader: downloader,
+      installer: NativeAppUpdate(),
+      isCurrent: () => isCurrent,
+      networkPolicy: owner.policy,
+      onDispose: () {
+        owner.downloadNetwork.removeListener(controller.networkChanged);
+        repository.dispose();
+        unawaited(json.close());
+      },
+    );
+    owner.downloadNetwork.addListener(controller.networkChanged);
+    return controller;
+  }
+
   SessionFence get fence => owner.fence;
   Future<void> guard() => playbackActions.guard();
   T own<T extends ChangeNotifier>(T controller) {
