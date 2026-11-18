@@ -77,27 +77,30 @@ class DownloadHarness {
     beforeRemove: (j) async => await beforeRemove?.call(j),
     clock: () => currentTime,
   );
-  DownloadCoordinator newRunner(DownloadRepository repository) =>
-      DownloadCoordinator(
-        repository: repository,
-        resolverForQuality: (q) => PlaybackResolver(
-          authority: authority,
-          transport: DartApiTransport(
-            authority: authority,
-            client: ScriptedJsonClient(
-              (_, _) => throw StateError('Unexpected JSON'),
-            ),
-          ),
-          quality: q,
+  DownloadCoordinator newRunner(
+    DownloadRepository repository, {
+    Future<void> Function(int bytes)? beforeWrite,
+  }) => DownloadCoordinator(
+    repository: repository,
+    resolverForQuality: (q) => PlaybackResolver(
+      authority: authority,
+      transport: DartApiTransport(
+        authority: authority,
+        client: ScriptedJsonClient(
+          (_, _) => throw StateError('Unexpected JSON'),
         ),
-        fetcher: ProtectedMediaFetcher(
-          authority: authority,
-          securityContext: server.clientContext,
-          idleTimeout: const Duration(seconds: 2),
-          maxConcurrent: 1,
-        ),
-        networkPolicy: const NetworkPolicy.online(),
-      );
+      ),
+      quality: q,
+    ),
+    fetcher: ProtectedMediaFetcher(
+      authority: authority,
+      securityContext: server.clientContext,
+      idleTimeout: const Duration(seconds: 2),
+      maxConcurrent: 1,
+    ),
+    networkPolicy: const NetworkPolicy.online(),
+    beforeWrite: beforeWrite,
+  );
   Future<void> send(
     HttpRequest r, {
     String? etag = '"v1"',

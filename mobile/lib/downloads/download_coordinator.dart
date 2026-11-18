@@ -19,6 +19,7 @@ final class DownloadCoordinator {
     required this.fetcher,
     required this.networkPolicy,
     this.revalidateNetwork,
+    this.beforeWrite,
   });
   final DownloadRepository repository;
   final PlaybackResolver Function(String) resolverForQuality;
@@ -27,6 +28,9 @@ final class DownloadCoordinator {
 
   /// Re-read durable rules and active-route facts for this exact claimed job.
   final Future<void> Function(DeviceDownload claim)? revalidateNetwork;
+
+  /// Capacity admission before each bounded private-file write.
+  final Future<void> Function(int bytes)? beforeWrite;
   final Set<MediaCancellation> _active = {};
   final Set<MediaCancellation> _networkTransfers = {};
   final Set<MediaCancellation> _networkDeferrals = {};
@@ -121,6 +125,17 @@ final class DownloadCoordinator {
       }
     }
 
+    Future<void> write(List<int> chunk) async {
+      const limit = 256 * 1024;
+      for (var start = 0; start < chunk.length; start += limit) {
+        final end = start + limit < chunk.length ? start + limit : chunk.length;
+        await check();
+        await beforeWrite?.call(end - start);
+        await check();
+        await sink!.writeFrom(chunk, start, end);
+      }
+    }
+
     try {
       await check();
       final part = await repository.paths.file(
@@ -153,8 +168,7 @@ final class DownloadCoordinator {
         if (await source.exists() && await source.length() >= previous.bytes) {
           sink = await repository.paths.io.openWrite(part, append: false);
           await for (final chunk in source.openRead(0, previous.bytes)) {
-            await check();
-            await sink.writeFrom(chunk);
+            await write(chunk);
           }
           await sink.flush();
           await sink.close();
@@ -266,8 +280,7 @@ final class DownloadCoordinator {
           ),
         );
         await for (final chunk in response.body) {
-          await check();
-          await sink.writeFrom(chunk);
+          await write(chunk);
           offset += chunk.length;
           if (total != null && offset > total) throw invalidMedia;
           // Flush before the durable count advances; recovery copies at most

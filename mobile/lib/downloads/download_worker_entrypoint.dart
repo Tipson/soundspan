@@ -20,6 +20,7 @@ import 'android_media_probe.dart';
 import 'download_coordinator.dart';
 import 'download_models.dart';
 import 'device_network_monitor.dart';
+import 'device_storage_guard.dart';
 import 'download_network_access.dart';
 import 'download_network_policy.dart';
 import 'download_repository.dart';
@@ -114,6 +115,7 @@ Future<void> runDownloadWorker({
         ),
         networkPolicy: policy,
         revalidateNetwork: (job) => access.requireNetwork(job: job),
+        beforeWrite: const DeviceStorageGuard().requireSpace,
       );
       routeChanged = () =>
           coordinator!.cancelNetworkTransfers(retryWhenAllowed: true);
