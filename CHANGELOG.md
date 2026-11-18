@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Honor server-directed search retry delays across failed-source retry, paging and same-query submission, retaining available results and owner isolation. Prepare Android release 0.1.23 (26).
 - Preserve the current download generation and verified checkpoint when WorkManager interrupts unfinished work, keeping explicit cancellation and owner/policy changes authoritative. Prepare Android release 0.1.22 (25).
 - Reschedule safe offline composition reads after gateway 502/504 through the existing background retry policy, preserving the last complete mix and mutation replay rules. Prepare Android release 0.1.21 (24).
 - Group small download fragments into bounded writes while preserving cancellation, storage admission, verified bytes and durable-prefix recovery. Retain closed diagnostic causes for generic transfer failures. Prepare Android release 0.1.20 (23).

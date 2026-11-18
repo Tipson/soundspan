@@ -8,6 +8,25 @@ import 'catalog_adapters.dart';
 import 'catalog_models.dart';
 import 'catalog_repository.dart';
 
+/// An ephemeral source failure; monotonic deadlines never cross repositories.
+final class _SearchFailureReceipt extends AppFailure {
+  _SearchFailureReceipt(
+    AppFailure failure,
+    this.repository,
+    this.binding,
+    this.availableAfter,
+  ) : super(
+        code: failure.code,
+        message: failure.message,
+        retryable: failure.retryable,
+        statusCode: failure.statusCode,
+        retryAfter: failure.retryAfter,
+      );
+  final SearchRepository repository;
+  final SearchPageBinding binding;
+  final Duration availableAfter;
+}
+
 final class SearchRepository extends CatalogRepository {
   SearchRepository({
     required super.transport,
@@ -15,6 +34,94 @@ final class SearchRepository extends CatalogRepository {
     required super.fence,
     required super.networkPolicy,
   });
+  final _retryClock = Stopwatch()..start();
+  // One existing failure snapshot for the active query, not a query-key cache.
+  SearchPage? _retrySnapshot;
+
+  void _bindRetry(String query, SearchKind kind) {
+    if (_retrySnapshot?.binding?.matches(fence, query, kind) != true) {
+      _retrySnapshot = SearchPage(
+        binding: SearchPageBinding(fence, query, kind),
+      );
+    }
+  }
+
+  @override
+  Future<Object?> get(
+    String path, [
+    Map<String, String> query = const {},
+  ]) async {
+    final binding = _retrySnapshot?.binding;
+    // Even a blocked read must observe logout/offline fences.
+    networkPolicy.requireNetwork();
+    await guard();
+    final key = switch (path) {
+      '/api/search' => 'library', // liked and all projections share this wire
+      '/api/search/discover' => 'discovery',
+      '/api/music-sources/catalog' => 'native',
+      '/api/library/saved' => 'saved:${query['type']}',
+      _ => null,
+    };
+    if (key == null ||
+        binding == null ||
+        binding.query != (query['q'] ?? query['query'])) {
+      return super.get(path, query);
+    }
+    final before = _retrySnapshot!.failures[key];
+    if (before is _SearchFailureReceipt &&
+        identical(before.repository, this) &&
+        identical(before.binding, binding) &&
+        _retryClock.elapsed < before.availableAfter) {
+      throw before;
+    }
+    void publish(AppFailure? failure) {
+      // The controller's revision cannot protect this repository slot: a held
+      // A read must not replace B's failure receipt on the same owner.
+      if (!isCurrent || !identical(_retrySnapshot?.binding, binding)) return;
+      final failures = Map<String, AppFailure>.of(_retrySnapshot!.failures);
+      final held = failures[key];
+      if (held is _SearchFailureReceipt &&
+          _retryClock.elapsed < held.availableAfter &&
+          (failure is! _SearchFailureReceipt ||
+              failure.availableAfter < held.availableAfter)) {
+        // A request dispatched before a sibling's 429 cannot lift that budget.
+        return;
+      }
+      if (failure == null) {
+        failures.remove(key);
+      } else {
+        failures[key] = failure;
+      }
+      _retrySnapshot = SearchPage(binding: binding, failures: failures);
+    }
+
+    try {
+      final value = await super.get(path, query);
+      publish(null);
+      return value;
+    } on AppFailure catch (error) {
+      final delay = error.retryAfter;
+      if (error.retryable &&
+          (error.statusCode == 429 || error.statusCode == 503) &&
+          delay != null &&
+          delay > Duration.zero) {
+        final bounded = delay > const Duration(hours: 24)
+            ? const Duration(hours: 24)
+            : delay;
+        final receipt = _SearchFailureReceipt(
+          error,
+          this,
+          binding,
+          _retryClock.elapsed + bounded,
+        );
+        publish(receipt);
+        throw receipt;
+      }
+      publish(null);
+      rethrow;
+    }
+  }
+
   Future<SearchPage> search(
     String query,
     SearchKind kind, {
@@ -39,6 +146,7 @@ final class SearchRepository extends CatalogRepository {
         message: 'Введите не более 500 символов.',
       );
     }
+    _bindRetry(q, kind);
     final offset = recoveryOffset ?? previous?.localOffset ?? 0,
         limit = discoveryRefreshLimit ?? (previous?.discoveryLimit ?? 0) + 50;
     final failures = <String, AppFailure>{...?previous?.failures};
@@ -591,6 +699,7 @@ final class SearchRepository extends CatalogRepository {
   }) async {
     final before = previous ?? SearchPage();
     if (query.isEmpty || kind == SearchKind.tracks) return before;
+    _bindRetry(query, kind);
     final failures = <String, AppFailure>{
       for (final entry in before.failures.entries)
         if (entry.key.startsWith('saved:')) entry.key: entry.value,
@@ -725,9 +834,9 @@ final class SearchRepository extends CatalogRepository {
           refreshPending: false,
           partialSeen: incomplete,
         );
-      } catch (_) {
+      } catch (error) {
         if (!isCurrent) rethrow;
-        failures[key] = partial;
+        failures[key] = error is _SearchFailureReceipt ? error : partial;
         // A failed request never consumes its raw window or drops good rows.
         return (
           items: old,
