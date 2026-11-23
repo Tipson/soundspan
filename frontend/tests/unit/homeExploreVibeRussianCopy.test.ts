@@ -8,7 +8,6 @@ const USER_SURFACES = [
     "features/discover/components/DiscoverActionBar.tsx",
     "features/discover/components/DiscoverSettings.tsx",
     "features/discover/components/HowItWorks.tsx",
-    "features/home/components/HomeHero.tsx",
     "features/home/components/HomeQuickActions.tsx",
     "features/home/components/PersonalizedTrackShelf.tsx",
     "features/explore/components/MadeForYouSection.tsx",

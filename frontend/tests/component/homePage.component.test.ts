@@ -133,16 +133,8 @@ mock.module("@/features/home/components/SectionHeader", {
     },
 });
 
-mock.module("@/features/home/components/ArtistsGrid", {
-    namedExports: { ArtistsGrid: marker("artists-grid") },
-});
-
 mock.module("@/features/home/components/PopularArtistsGrid", {
     namedExports: { PopularArtistsGrid: marker("popular-artists-grid") },
-});
-
-mock.module("@/components/ui/LastFmBadge", {
-    namedExports: { LastFmBadge: marker("lastfm") },
 });
 
 beforeEach(() => {

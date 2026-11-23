@@ -87,7 +87,6 @@ not a router; it pins one representation for each YouTube playback attempt.
 | `backend/src/routes/browseYtMusicErrors.ts` | Shared YouTube Music browse error mapping; not a router                                              |
 | `backend/src/routes/deviceLink.ts`         | `/api/device-link`                                                                                    |
 | `backend/src/routes/discover/index.ts`     | `/api/discover`                                                                                       |
-| `backend/src/routes/discoverTrackPayload.ts` | Shared discovery track response mapping; not a router                                               |
 | `backend/src/routes/downloads.ts`          | `/api/downloads`                                                                                      |
 | `backend/src/routes/enrichment.ts`         | `/api/enrichment`                                                                                     |
 | `backend/src/routes/enrichmentMusicBrainzArtistSearch.ts` | MusicBrainz artist-autocomplete handler mounted by `enrichment.ts`; not a router                 |

@@ -15,10 +15,7 @@ Start-here guide for `frontend/features/home`.
 
 | Path | Kind |
 | --- | --- |
-| `components/ArtistsGrid.tsx` | components |
-| `components/ContinueListening.tsx` | components |
 | `components/FeaturedPlaylistsGrid.tsx` | components |
-| `components/HomeHero.tsx` | components |
 | `components/HomeQuickActions.tsx` | legacy utility links; intentionally not rendered on Home |
 | `components/HomeWaveHero.tsx` | personalized My Wave launch surface |
 | `components/HomeMadeForYou.tsx` | bounded set of distinct account-backed and generated mixes |

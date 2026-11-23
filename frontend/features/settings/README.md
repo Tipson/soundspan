@@ -31,7 +31,6 @@ Start-here guide for `frontend/features/settings`.
 | `components/sections/federationPairing.tsx` | components |
 | `components/sections/federationPeerSettings.tsx` | components |
 | `components/sections/FederationHealthPanel.tsx` | components |
-| `components/sections/IntegrationsSection.tsx` | components |
 | `components/sections/LibraryHealthSection.tsx` | components |
 | `components/sections/libraryHealthDetails.tsx` | components |
 | `components/sections/LibrarySafetySection.tsx` | minimal admin control for permanent local-album deletion |

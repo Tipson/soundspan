@@ -11,7 +11,6 @@ const surfaceFiles = [
     "components/track/TrackList.tsx",
     "components/track/TrackRow.tsx",
     "components/track/badges.tsx",
-    "components/ui/LibraryBadge.tsx",
     "features/artist/components/PopularTracks.tsx",
     "features/audiobook/components/AudiobookActionBar.tsx",
     "features/audiobook/components/AboutSection.tsx",

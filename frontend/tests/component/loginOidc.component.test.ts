@@ -117,10 +117,6 @@ mock.module("next/image", {
         }),
 });
 
-mock.module("@/components/ui/GalaxyBackground", {
-    namedExports: { GalaxyBackground: () => null },
-});
-
 const testLogger = {
     debug: () => undefined,
     info: () => undefined,
