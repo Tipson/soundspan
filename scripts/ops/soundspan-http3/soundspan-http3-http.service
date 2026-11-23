@@ -1,0 +1,19 @@
+[Unit]
+Description=Soundspan private HTTP bridge to direct metadata transport
+After=docker.service soundspan-http3-direct.service
+Requires=soundspan-http3-direct.service
+
+[Service]
+Type=simple
+User=privoxy
+ExecStart=/usr/sbin/privoxy --no-daemon /opt/soundspan-http3-egress/privoxy.config
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_INET AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

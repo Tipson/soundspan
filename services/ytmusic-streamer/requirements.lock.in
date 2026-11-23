@@ -23,6 +23,8 @@ pydantic>=2.13.4
 httpx>=0.28.1
 requests>=2.34.2
 certifi>=2026.10.19
+# The verified QUIC client; keep its ABI within yt-dlp's supported range.
+curl-cffi==0.17.0
 # yt-dlp[default] stable extras (see requirements-exempt.txt)
 brotli>=1.2.1
 pycryptodomex>=3.23.0

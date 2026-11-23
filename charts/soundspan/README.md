@@ -331,6 +331,10 @@ download metadata and do not launch additional extraction.
 
 `ytmusicStreamer.env.YTMUSIC_JS_CLIENT_FALLBACK` defaults to `null`, which omits the variable and leaves the code default disabled. Set it to `"1"` to opt into the bounded JavaScript-client recovery described above. The template's existing environment-map rendering handles explicit values; no new render path is required.
 
+`ytmusicStreamer.env.YTMUSIC_CDN_HTTP3` is also omitted by default. Set it to `"1"` only when the streamer's direct UDP/443 route is prepared. Signed GoogleVideo audio uses bounded HTTP/3 reads with TLS verification; metadata retains its configured proxy. Scope any QUIC/DPI profile to this pod or service, rather than the cluster's common VPN.
+
+`YTMUSIC_METADATA_HTTP3="1"` additionally selects verified QUIC for the fixed YouTube extraction endpoints and image assets. Metadata stays bounded to eight MiB and uses no background producer. `YTMUSIC_HTTP3_DOH_URL` optionally supplies an HTTPS resolver for these clients only. Both values default to `null` in `ytmusicStreamer.env`, preserving host DNS and metadata transport unless explicitly selected.
+
 When `ytmusicStreamer.enabled` is true, the streamer pod also mounts the
 chart's music volume at `/music` (controlled by
 `ytmusicStreamer.musicMount.enabled`, default `true`). This is required for

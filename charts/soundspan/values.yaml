@@ -467,6 +467,10 @@ ytmusicStreamer:
     # Set YTMUSIC_LOCATION when the cluster region differs from the listeners.
     YTMUSIC_LANGUAGE: "en"
     YTMUSIC_LOCATION: ""
+    # null omits the opt-in direct GoogleVideo HTTP/3 transport.
+    YTMUSIC_CDN_HTTP3: null
+    YTMUSIC_METADATA_HTTP3: null
+    YTMUSIC_HTTP3_DOH_URL: null
     # Shared stream metadata/playback extraction budget; unset uses 2.
     YTMUSIC_YTDLP_EXTRACT_CONCURRENCY: null
     # Opt-in one-slot JavaScript recovery; unset keeps the code default disabled.

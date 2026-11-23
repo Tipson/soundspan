@@ -2,6 +2,8 @@
 
 [Русский](README.md) · **English**
 
+[Download Android APK 0.1.27 (30)](https://github.com/Tipson/soundspan/releases/download/android-v0.1.27%2B30/soundspan-0.1.27-30.apk) · [Signing, SHA-256 and build details](https://github.com/Tipson/soundspan/releases/tag/android-v0.1.27%2B30)
+
 [![Core User Journeys](https://github.com/Tipson/soundspan/actions/workflows/core-user-journeys.yml/badge.svg)](https://github.com/Tipson/soundspan/actions/workflows/core-user-journeys.yml)
 [![Quality Checks](https://github.com/Tipson/soundspan/actions/workflows/quality-visibility.yml/badge.svg)](https://github.com/Tipson/soundspan/actions/workflows/quality-visibility.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)

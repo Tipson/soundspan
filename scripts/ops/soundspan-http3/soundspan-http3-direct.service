@@ -1,0 +1,18 @@
+[Unit]
+Description=Soundspan direct metadata transport without foreign relay
+After=network-online.target soundspan-http3-nfq.service
+Requires=soundspan-http3-nfq.service
+
+[Service]
+Type=simple
+ExecStart=/opt/soundspan-egress-reserve/xray run -c /opt/soundspan-http3-egress/direct.json
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target

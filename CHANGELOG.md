@@ -15,6 +15,8 @@
 
 ## Unreleased
 
+- Support opt-in HTTP/3 for GoogleVideo media and YouTube metadata with bounded reads, cancellation, TLS verification and client-scoped DoH. Keep the transport disabled by default and provide an isolated Soundspan egress profile.
+
 - Keep the current-track dislike skip active across feedback-driven player rerenders while retaining track, queue replacement and unmount guards.
 
 - Simplify personal mix cards and shelves by removing composition diagnostics and empty direction notices while keeping playback, refresh and useful failure actions.

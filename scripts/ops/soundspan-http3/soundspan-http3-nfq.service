@@ -1,0 +1,32 @@
+[Unit]
+Description=Soundspan scoped TCP and QUIC DPI profile
+After=network-online.target docker.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/python3 /opt/soundspan-http3-egress/rules.py check
+ExecStart=/opt/soundspan-http3-egress/nfqws2 --uid=0:0 --qnum=33363 \
+ --lua-init=@/opt/soundspan-http3-egress/zapret-lib.lua \
+ --lua-init=@/opt/soundspan-http3-egress/zapret-antidpi.lua \
+ --blob=quic_google:@/opt/soundspan-http3-egress/quic-google.bin \
+ --filter-tcp=443 --filter-l7=tls --hostlist=/opt/soundspan-http3-egress/youtube-hosts.txt \
+ --payload=tls_client_hello \
+ --lua-desync=fake:blob=fake_default_tls:tcp_md5:tcp_seq=-10000:repeats=6 \
+ --lua-desync=multidisorder:pos=midsld --new \
+ --filter-udp=443 --filter-l7=quic --hostlist=/opt/soundspan-http3-egress/youtube-hosts.txt \
+ --payload=quic_initial --lua-desync=fake:blob=quic_google:repeats=11
+ExecStartPost=/usr/bin/python3 /opt/soundspan-http3-egress/rules.py install
+ExecReload=/usr/bin/python3 /opt/soundspan-http3-egress/rules.py install
+ExecStopPost=/usr/bin/python3 /opt/soundspan-http3-egress/rules.py remove
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SETUID CAP_SETGID
+
+[Install]
+WantedBy=multi-user.target

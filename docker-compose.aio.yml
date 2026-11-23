@@ -26,6 +26,9 @@ services:
       - TZ=${TZ:-UTC}
       - YTMUSIC_YTDLP_EXTRACT_CONCURRENCY=${YTMUSIC_YTDLP_EXTRACT_CONCURRENCY:-2}
       - YTMUSIC_JS_CLIENT_FALLBACK=${YTMUSIC_JS_CLIENT_FALLBACK:-0}
+      - YTMUSIC_CDN_HTTP3=${YTMUSIC_CDN_HTTP3:-0}
+      - YTMUSIC_METADATA_HTTP3=${YTMUSIC_METADATA_HTTP3:-0}
+      - YTMUSIC_HTTP3_DOH_URL=${YTMUSIC_HTTP3_DOH_URL:-}
       # AIO honors operator-supplied secrets; they take precedence and persist to /data/secrets.
       # Empty values generate and persist stable values on first boot.
       - SESSION_SECRET=${SESSION_SECRET:-}

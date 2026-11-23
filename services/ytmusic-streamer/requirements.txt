@@ -6,6 +6,7 @@ yt-dlp[default]>=2026.10.26
 brotli>=1.2.1
 # Exclude the compromised emSign root from the CA bundle used by HTTP clients.
 certifi>=2026.10.19
+curl-cffi==0.17.0
 # Required by yt-dlp's EmbedThumbnail postprocessor to write cover art into
 # opus/mp3/m4a downloads; without it /yt/download fails in postprocessing
 # ("module mutagen was not found").

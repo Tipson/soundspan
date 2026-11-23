@@ -33,6 +33,7 @@ from yt_download import (
 )
 from ytmusic_client import _get_ytmusic
 from ytmusic_extraction_budget import ExtractionAbandoned, ExtractionBudget
+from ytmusic_http3 import media_session, youtube_dl
 from ytmusic_js_fallback import SpoolLimitExceeded, javascript_options, run_with_js_fallback
 from ytmusic_po_fallback import FallbackDeferred, PoFallback, primary_options, token_options
 from ytmusic_priority_pacer import PriorityRatePacer
@@ -788,7 +789,7 @@ def _extract_with_manifest_fallback(ydl: Any, url: str, options: JsonObject) -> 
         },
     }
     _wait_for_provider(_extract_video_id(url) or "")
-    with yt_dlp.YoutubeDL(fallback_options) as fallback:
+    with youtube_dl(fallback_options) as fallback:
         return fallback.extract_info(url, download=False)
 
 
@@ -852,7 +853,6 @@ def _extract_with_po_fallback(
     check_result: Callable[[], None] | None = None,
 ) -> T:
     """Keep the optional single PO probe within existing deadlines and worker slots."""
-    import yt_dlp
 
     if deadline is None:
         deadline = _owned_extraction_deadline(download=download)
@@ -885,7 +885,7 @@ def _extract_with_po_fallback(
         _wait_for_provider(video_id)
         check()
         log.info("Trying one anonymous PO recovery for %s", video_id)
-        with yt_dlp.YoutubeDL(token_options(options)) as fallback:
+        with youtube_dl(token_options(options)) as fallback:
             if download:
                 _bind_spool_transfer_phase(fallback, cancel_event)
             result = fallback.extract_info(url, download=download)
@@ -914,7 +914,6 @@ def _extract_with_client_recovery(
     cancel_event: threading.Event | None = None,
 ) -> T:
     """Keep PO and one opt-in solver recovery within the actual worker's lease."""
-    import yt_dlp
 
     deadline = _owned_extraction_deadline(download=download)
     session = getattr(_spool_worker_context, "session", None)
@@ -948,7 +947,7 @@ def _extract_with_client_recovery(
             _begin_spool_download_attempt()
         _wait_for_provider(video_id)
         check()
-        with yt_dlp.YoutubeDL(javascript_options(options, spool=download)) as fallback:
+        with youtube_dl(javascript_options(options, spool=download)) as fallback:
             if download:
                 _bind_spool_transfer_phase(fallback, cancelled)
             result = fallback.extract_info(url, download=download)
@@ -993,7 +992,6 @@ def _extract_stream_info(
     Performs cache lookup, paced extraction, result construction, cache store,
     and sanitized error mapping for both YouTube stream paths.
     """
-    import yt_dlp
 
     with _stream_cache_lock:
         cached = _stream_cache.get(cache_key)
@@ -1005,7 +1003,7 @@ def _extract_stream_info(
     try:
         _ensure_player_cache()
         ydl_opts = primary_options(ydl_opts)
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with youtube_dl(ydl_opts) as ydl:
 
             def primary() -> Any:
                 if cache_key.startswith("music:"):
@@ -1457,7 +1455,10 @@ def _iter_progressive_cdn_chunks(
     refresh_source: Callable[[], str] | None = None,
 ) -> Iterator[tuple[bytes, int | None]]:
     """Own a transfer and verify all published bytes before one source replacement."""
-    with requests.Session() as client:
+    with media_session(
+        cancel_check=session.cancel_event.is_set,
+        deadline=started_at + YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT,
+    ) as client:
         try:
             delivered = 0
             original_total: int | None = None
@@ -2084,7 +2085,9 @@ def _extract_spool_format_retry(
             raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
         _begin_spool_download_attempt()
         try:
-            with yt_dlp.YoutubeDL(options) as ydl:
+            with youtube_dl(
+                options, cancel_check=lambda: cancel_event is not None and cancel_event.is_set()
+            ) as ydl:
                 _bind_spool_transfer_phase(ydl, cancel_event)
                 info = ydl.extract_info(
                     f"https://music.youtube.com/watch?v={video_id}", download=True
@@ -3105,7 +3108,6 @@ async def yt_video_info(url: str = Query(...)) -> JsonObject:
     Return metadata for a regular YouTube video.
     No authentication required — uses yt-dlp anonymous extraction.
     """
-    import yt_dlp
 
     try:
         video_id = _extract_video_id(url)
@@ -3138,7 +3140,7 @@ async def yt_video_info(url: str = Query(...)) -> JsonObject:
     try:
 
         def _extract() -> Any:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with youtube_dl(ydl_opts) as ydl:
                 return ydl.extract_info(
                     f"https://www.youtube.com/watch?v={video_id}",
                     download=False,
@@ -3190,7 +3192,6 @@ async def yt_playlist_info(url: str = Query(...)) -> JsonObject:
     lists (list=RD*, which YouTube does not expose as a static set) with 422
     so the UI can explain why.
     """
-    import yt_dlp
 
     classification = classify_youtube_url(url)
     kind = classification.get("kind")
@@ -3236,7 +3237,7 @@ async def yt_playlist_info(url: str = Query(...)) -> JsonObject:
     try:
 
         def _extract() -> Any:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with youtube_dl(ydl_opts) as ydl:
                 return ydl.extract_info(enumerate_url, download=False)
 
         info = await _extract_yt_dlp_bounded(

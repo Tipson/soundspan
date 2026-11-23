@@ -13,6 +13,7 @@ from yt_download import (
     find_existing_download,
     resolve_download_filepath,
 )
+from ytmusic_http3 import youtube_dl
 from ytmusic_models import YtDownloadRequest
 from ytmusic_runtime import _USER_AGENT, JsonObject, app, log
 from ytmusic_stream import YTDLP_SOCKET_TIMEOUT, _extract_pacer, _extraction_budget
@@ -164,7 +165,7 @@ def _yt_download_sync(job: JsonObject, audio_format: str, quality: str, output_d
         job["status"] = "cancelled"
         return
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    with youtube_dl(ydl_opts, cancel_check=lambda: bool(job.get("cancel_requested"))) as ydl:
         info = _extraction_budget.run(lambda: ydl.extract_info(url, download=True))
     if not info:
         raise ValueError("Download failed — no info returned")
