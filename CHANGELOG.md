@@ -1,5 +1,9 @@
 # Changelog
 
+## Mobile source recovery
+
+- Accept Android playback attempt identifiers for automatic VK/Yandex recovery when YouTube fails before audio starts. Keep the selected representation pinned across retries and seeking.
+
 ## Radio queue identity
 
 - Keep personal Wave controls separate from song and artist stations. Retune the upcoming remote queue from account preferences after repeated negative feedback, preserving the current selection and pause state.

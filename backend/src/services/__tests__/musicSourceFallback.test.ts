@@ -18,6 +18,44 @@ const input = () => ({
     }),
 });
 describe("transparent provider fallback", () => {
+    it("recovers and pins a mobile base64url playback attempt across byte-range retries", async () => {
+        const resolve = jest.fn(async () => ({ streamPath: "/alternate" }));
+        const fallback = createMusicSourceFallback({
+            recording: async () => recording,
+            resolve,
+        });
+        const mobile = {
+            ...input(),
+            sessionId: Buffer.alloc(24, 251).toString("base64url"),
+        };
+        await expect(fallback.acquire(mobile)).resolves.toEqual({
+            redirect: "/alternate",
+        });
+        await expect(
+            fallback.acquire({ ...mobile, range: "bytes=2048-" }),
+        ).resolves.toEqual({ redirect: "/alternate" });
+        expect(resolve).toHaveBeenCalledTimes(1);
+
+        await fallback.acquire({
+            ...mobile,
+            sessionId: Buffer.alloc(24, 252).toString("base64url"),
+        });
+        expect(resolve).toHaveBeenCalledTimes(2);
+    });
+    it.each(["a".repeat(31), "a".repeat(33), ":".repeat(32), "../".repeat(11)])(
+        "does not correlate an invalid mobile playback session %s",
+        async (sessionId) => {
+            const resolve = jest.fn();
+            const fallback = createMusicSourceFallback({
+                recording: async () => recording,
+                resolve,
+            });
+            await expect(
+                fallback.acquire({ ...input(), sessionId }),
+            ).rejects.toEqual(failure);
+            expect(resolve).not.toHaveBeenCalled();
+        },
+    );
     it.each([404, 429, 500, 502, 503, 504])(
         "recovers upstream HTTP %s before audio starts",
         async (status) => {

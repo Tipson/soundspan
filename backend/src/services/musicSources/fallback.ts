@@ -29,9 +29,10 @@ export function createMusicSourceFallback(deps: Dependencies) {
             input: Input<T>,
         ): Promise<{ stream: T } | { redirect: string }> {
             input.signal.throwIfAborted();
+            // Web uses UUIDv4; Android uses 24 random bytes encoded as base64url.
             if (
                 !input.sessionId ||
-                !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(
+                !/^(?:[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}|[A-Za-z0-9_-]{32})$/i.test(
                     input.sessionId,
                 )
             )
