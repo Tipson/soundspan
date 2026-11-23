@@ -8,6 +8,7 @@ import {
     createSyntheticWav,
     fulfillAudioRange,
 } from "../fixtures/syntheticAudio";
+import { snapshotQueueAdmissionReferences } from "../../../lib/audio/recommendationQueueAdmission";
 
 /** Synthetic, public-free tracks; no real account or upstream catalog is used. */
 export const TRACKS = Array.from({ length: 40 }, (_, index) => ({
@@ -44,6 +45,8 @@ interface CoreApp {
     failTasteSaves: number;
     requests: Array<{ method: string; path: string; search: string }>;
     offlineStreamRequests: number;
+    queueAdmissionDecisions?: Map<string, "denied" | "unavailable">;
+    queueAdmissionStatus?: 404 | 503;
     setOffline(): Promise<void>;
 }
 
@@ -239,6 +242,30 @@ export const test = base.extend<{ app: CoreApp }>({
                         degraded: false,
                         reason: null,
                         seedCount: 3,
+                    });
+                }
+                if (key === "POST /api/personalized/queue-admission") {
+                    const references = snapshotQueueAdmissionReferences(
+                        request.postDataJSON()?.references,
+                    );
+                    if (!references)
+                        return json({ code: "INVALID_QUEUE_ADMISSION" }, 400);
+                    if (app.queueAdmissionStatus)
+                        return json(
+                            { error: "Admission unavailable" },
+                            app.queueAdmissionStatus,
+                        );
+                    return json({
+                        version: 1,
+                        appliesTo: "recommended_future",
+                        decisions: references.map(({ source, id }) => ({
+                            source,
+                            id,
+                            state:
+                                app.queueAdmissionDecisions?.get(
+                                    `${source}:${id}`,
+                                ) ?? "allowed",
+                        })),
                     });
                 }
                 if (key === "GET /api/personalized/daily-mixes")

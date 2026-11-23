@@ -11,8 +11,8 @@ test("online weekly discoveries keep a 40-track queue, source and play attributi
 }) => {
     const generation = "weekly-fixture-generation";
     const tracks = Array.from({ length: 40 }, (_, i) => ({
-        id: `yt:weekly-${i}`,
-        youtubeVideoId: `weekly-${i}`,
+        id: `yt:weekly-${String(i).padStart(4, "0")}`,
+        youtubeVideoId: `weekly-${String(i).padStart(4, "0")}`,
         title: `Открытие ${String(i + 1).padStart(2, "0")}`,
         artist: `Артист ${Math.floor(i / 2)}`,
         album: "Альбом",
@@ -81,7 +81,7 @@ test("online weekly discoveries keep a 40-track queue, source and play attributi
     await page.route(
         (url) =>
             url.origin === CORE_ORIGIN &&
-            /^\/api\/ytmusic\/stream-info-public\/weekly-\d+$/.test(
+            /^\/api\/ytmusic\/stream-info-public\/weekly-\d{4}$/.test(
                 url.pathname,
             ),
         (route) =>
@@ -91,13 +91,13 @@ test("online weekly discoveries keep a 40-track queue, source and play attributi
     await page.route(
         (url) =>
             url.origin === CORE_ORIGIN &&
-            /^\/api\/ytmusic\/stream-public\/weekly-\d+$/.test(url.pathname),
+            /^\/api\/ytmusic\/stream-public\/weekly-\d{4}$/.test(url.pathname),
         (route) => fulfillAudioRange(route, audio),
     );
     await page.route(
         (url) =>
             url.origin === CORE_ORIGIN &&
-            /^\/api\/library\/remote-tracks\/yt:weekly-\d+\/preference$/.test(
+            /^\/api\/library\/remote-tracks\/yt:weekly-\d{4}\/preference$/.test(
                 decodeURIComponent(url.pathname),
             ),
         (route) =>
@@ -108,7 +108,7 @@ test("online weekly discoveries keep a 40-track queue, source and play attributi
     await page.route(
         (url) =>
             url.origin === CORE_ORIGIN &&
-            /^\/api\/lyrics\/yt:weekly-\d+$/.test(
+            /^\/api\/lyrics\/yt:weekly-\d{4}$/.test(
                 decodeURIComponent(url.pathname),
             ),
         (route) =>
@@ -138,7 +138,7 @@ test("online weekly discoveries keep a 40-track queue, source and play attributi
     await page
         .getByRole("button", { name: "Воспроизвести всё", exact: true })
         .click();
-    await expectPlaying(page, "weekly-0");
+    await expectPlaying(page, "weekly-0000");
     await expect
         .poll(() =>
             page.evaluate(() =>
@@ -170,7 +170,7 @@ test("online weekly discoveries keep a 40-track queue, source and play attributi
         .getByRole("button", { name: "Следующий трек", exact: true })
         .last()
         .click();
-    await expectPlaying(page, "weekly-1");
+    await expectPlaying(page, "weekly-0001");
     await page
         .getByRole("button", { name: "Свернуть плеер", exact: true })
         .click();
