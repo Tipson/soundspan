@@ -2,6 +2,7 @@
 
 ## Mobile source recovery
 
+- Enable Deno/EJS for bounded PO-token recovery and recognize the explicitly supported bgutil 2.0.2 plugin while preserving primary-client options and recovery limits.
 - Accept Android playback attempt identifiers for automatic VK/Yandex recovery when YouTube fails before audio starts. Keep the selected representation pinned across retries and seeking.
 - Classify YouTube TLS and webpage failures as temporary transport errors instead of age restrictions, allowing automatic source recovery while preserving genuine age-verification failures.
 

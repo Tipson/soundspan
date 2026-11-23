@@ -23,7 +23,7 @@ def provider_available() -> bool:
     """Fail closed unless the explicitly packaged plugin/version is present."""
     try:
         plugin = import_module("yt_dlp_plugins.extractor.getpot_bgutil_http")
-        return bool(plugin.BgUtilHTTPPTP.PROVIDER_VERSION == "2.0.0")
+        return plugin.BgUtilHTTPPTP.PROVIDER_VERSION in {"2.0.0", "2.0.2"}
     except (ImportError, AttributeError):
         return False
 
@@ -111,6 +111,7 @@ def token_options(options: dict[str, Any]) -> dict[str, Any]:
     """Preserve quality/size/hooks while replacing anonymous-client shortcuts."""
     return {
         **options,
+        "js_runtimes": {"deno": {}},
         "extractor_args": {
             "youtube": {"player_client": ["mweb"]},
             "youtubepot-bgutilhttp": {"base_url": ["http://127.0.0.1:4416"]},

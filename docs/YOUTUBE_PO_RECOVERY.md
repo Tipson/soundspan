@@ -7,11 +7,13 @@ outage. Cached complete audio remains playable during provider cooldown.
 ## Optional packaging
 
 The ordinary sidecar image contains no token provider. An operator can package
-the bgutil HTTP plugin from tag `2.0.0`, commit
-`37169ee2656e08c5c2e5dc9df4c598c0cb4c88a8`, into the image's
-`yt_dlp_plugins` site-packages namespace. The tested extractor is yt-dlp
-`2026.08.19`; version changes require the playback tests and a bounded real
-audio probe. Source and license: [bgutil provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider/tree/2.0.0).
+the bgutil HTTP plugin from tag `2.0.2`, commit
+`26475e9d3665b972c4aeb83b4dbaafcf64b88438`, into the image's
+`yt_dlp_plugins` site-packages namespace. The provider gate also accepts the
+legacy `2.0.0` plugin. Pair yt-dlp `2026.10.26` with its required EJS `0.8.0`
+package and a supported Deno runtime. Version changes require the playback
+tests and a bounded real audio probe. Source and license:
+[bgutil provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider/tree/2.0.2).
 
 Run the matching HTTP provider as a Compose-managed companion using
 `network_mode: service:ytmusic-streamer`. Bind its process to `127.0.0.1:4416`,
@@ -40,6 +42,9 @@ the optional plugin image and companion restores the ordinary deployment.
 - A recognized `Sign in to confirm ... not a bot` DownloadError permits one
   anonymous `mweb` attempt through the loopback HTTP provider. Age restriction,
   private/removed content and a generic HTTP403 do not trigger this retry.
+- This token attempt enables Deno/EJS without changing the primary client's
+  runtime options. Token generation and format extraction do not prove that
+  the selected CDN can deliver audio bytes.
 - The attempt retains format/size selectors, cancellation hooks and the caller's
   worker slot/deadline. Its internal downloader retries are zero. Existing
   format-table retries surround neither the probe nor another probe.

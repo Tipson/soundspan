@@ -10,6 +10,23 @@ from yt_dlp.utils import DownloadError
 CHALLENGE = "Sign in to confirm you're not a bot"
 
 
+@pytest.mark.parametrize("version", ["2.0.0", "2.0.2"])
+def test_recognizes_explicitly_supported_packaged_provider(
+    monkeypatch: pytest.MonkeyPatch, version: str
+) -> None:
+    from types import SimpleNamespace
+
+    import ytmusic_po_fallback as module
+
+    plugin = SimpleNamespace(BgUtilHTTPPTP=SimpleNamespace(PROVIDER_VERSION=version))
+    monkeypatch.setattr(module, "import_module", lambda _name: plugin)
+    module.provider_available.cache_clear()
+    try:
+        assert module.provider_available()
+    finally:
+        module.provider_available.cache_clear()
+
+
 @pytest.fixture()
 def fallback(monkeypatch: pytest.MonkeyPatch) -> Any:
     import ytmusic_po_fallback as module
@@ -156,6 +173,7 @@ def test_options_preserve_audio_limits_without_mutating_primary() -> None:
 
     options = {
         "format": "audio-under-byte-limit",
+        "js_runtimes": {},
         "progress_hooks": [hook],
         "socket_timeout": 20,
         "outtmpl": "owned.%(ext)s",
@@ -165,9 +183,11 @@ def test_options_preserve_audio_limits_without_mutating_primary() -> None:
     assert result["format"] == options["format"]
     assert result["progress_hooks"][0] is hook
     assert result["outtmpl"] == options["outtmpl"]
+    assert result.get("js_runtimes") == {"deno": {}}
     assert result["extractor_args"]["youtube"] == {"player_client": ["mweb"]}
     assert result["retries"] == result["extractor_retries"] == result["fragment_retries"] == 0
     assert options["extractor_args"]["youtube"]["player_client"] == ["visionos"]
+    assert options["js_runtimes"] == {}
 
 
 @pytest.mark.parametrize("spool", [False, True])
