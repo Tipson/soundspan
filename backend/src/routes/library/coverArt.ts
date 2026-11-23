@@ -4,7 +4,6 @@ import { prisma, Prisma } from "../../utils/db";
 import { redisClient } from "../../utils/redis";
 import { logger } from "../../utils/logger";
 import crypto from "crypto";
-import path from "path";
 import { coverArtService } from "../../services/coverArt";
 import { resolveAlbumCover } from "../../services/metadata/albumCoverResolver";
 import { extractColorsFromImage } from "../../utils/colorExtractor";
@@ -19,10 +18,7 @@ import {
     resizeCoverArt,
     snapCoverArtSize,
 } from "../../services/coverArtResize";
-import {
-    sendInternalRouteError,
-    sendRouteError,
-} from "../../utils/routeErrorResponse";
+import { sendRouteError } from "../../utils/routeErrorResponse";
 import {
     getAlbumIdFromNativeCoverPath,
     persistHealedAlbumCover,

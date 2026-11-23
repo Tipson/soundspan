@@ -1,13 +1,8 @@
 import { Router, type Request, type Response } from "express";
-import {
-    requireAdmin,
-    requireAuth,
-    requireAuthOrToken,
-} from "../../middleware/auth";
+import { requireAdmin } from "../../middleware/auth";
 import { asyncHandler } from "../../middleware/asyncHandler";
 import { prisma, Prisma } from "../../utils/db";
 import { TRACK_VISIBLE_WHERE } from "../../utils/librarySorting";
-import path from "path";
 import { config } from "../../config";
 import { scanQueue } from "../../workers/queues";
 import { organizeSingles } from "../../workers/organizeSingles";
@@ -16,15 +11,7 @@ import {
     sendInternalRouteError,
     sendRouteError,
 } from "../../utils/routeErrorResponse";
-import {
-    DEFAULT_MY_LIKED_LIMIT,
-    isLibraryDeletionEnabled,
-    MAX_LIMIT,
-    MY_LIKED_PLAYLIST_DESCRIPTION,
-    MY_LIKED_PLAYLIST_ID,
-    MY_LIKED_PLAYLIST_NAME,
-    parseBooleanQueryParam,
-} from "../../utils/libraryRouteSupport";
+import { isLibraryDeletionEnabled } from "../../utils/libraryRouteSupport";
 import {
     admitLibraryMaintenance,
     finishOrganizationInBackground,

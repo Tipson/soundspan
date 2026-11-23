@@ -28,7 +28,6 @@ import { ru } from "@/lib/i18n/ru";
 interface MobileSidebarProps {
     isOpen: boolean;
     onClose: () => void;
-    hasActiveSessions: boolean;
 }
 
 const personalLinks = [

@@ -1,9 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import {
-    requireAdmin,
-    requireAuth,
-    requireAuthOrToken,
-} from "../../middleware/auth";
+import { requireAdmin } from "../../middleware/auth";
 import { asyncHandler } from "../../middleware/asyncHandler";
 import { lastFmService } from "../../services/lastfm";
 import { prisma, Prisma } from "../../utils/db";
@@ -20,31 +16,21 @@ import {
     getArtistDisplaySummary,
 } from "../../utils/metadataOverrides";
 import { safeResolvePath } from "../../utils/safeResolvePath";
+import { sendRouteError } from "../../utils/routeErrorResponse";
 import {
-    sendInternalRouteError,
-    sendRouteError,
-} from "../../utils/routeErrorResponse";
-import {
-    DEFAULT_MY_LIKED_LIMIT,
     isLibraryDeletionEnabled,
     MAX_LIMIT,
-    MY_LIKED_PLAYLIST_DESCRIPTION,
-    MY_LIKED_PLAYLIST_ID,
-    MY_LIKED_PLAYLIST_NAME,
     parseBooleanQueryParam,
 } from "../../utils/libraryRouteSupport";
 import {
-    ALBUM_SORT_MAP,
     ARTIST_SORT_MAP,
     LIBRARY_SURFACE_ALBUM_LOCATIONS,
-    TRACK_SORT_MAP,
     TRACK_VISIBLE_WHERE,
     isLibrarySurfaceAlbumLocation,
     parseLibraryOrigin,
     trackBrowseWhere,
 } from "../../utils/librarySorting";
 import {
-    PersistedTrackDeletionPath,
     resolvePersistedTrackDeletionPath,
     isSafeRecursiveDeletionTarget,
     libraryDeletionLogger,

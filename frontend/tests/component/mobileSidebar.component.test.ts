@@ -26,7 +26,6 @@ test("mobile install action closes the drawer and requests the existing installa
                 React.createElement(MobileSidebar, {
                     isOpen: true,
                     onClose: () => calls.push("close"),
-                    hasActiveSessions: false,
                 }),
             ),
         );
@@ -51,13 +50,11 @@ const state: {
     pathname: string;
     query: string;
     standalone: boolean;
-    hasActiveSessions: boolean;
     user: { id: string; role: string } | undefined;
 } = {
     pathname: "/discover",
     query: "",
     standalone: false,
-    hasActiveSessions: false,
     user: undefined,
 };
 
@@ -154,7 +151,6 @@ beforeEach(() => {
     state.pathname = "/discover";
     state.query = "";
     state.standalone = false;
-    state.hasActiveSessions = false;
     state.user = undefined;
 });
 
@@ -166,7 +162,6 @@ test("returns null when closed", async () => {
         React.createElement(MobileSidebar, {
             isOpen: false,
             onClose: () => undefined,
-            hasActiveSessions: false,
         }),
     );
 
@@ -181,7 +176,6 @@ test("keeps primary navigation outside the account drawer", async () => {
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose: () => undefined,
-            hasActiveSessions: state.hasActiveSessions,
         }),
     );
 
@@ -220,7 +214,6 @@ test("does not duplicate Vibe inside the account drawer", async () => {
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose: () => undefined,
-            hasActiveSessions: state.hasActiveSessions,
         }),
     );
 
@@ -238,7 +231,6 @@ test("admins see Requests and Admin links; users see neither", async () => {
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose: () => undefined,
-            hasActiveSessions: false,
         }),
     );
     assert.doesNotMatch(userHtml, /href="\/requests"/);
@@ -249,7 +241,6 @@ test("admins see Requests and Admin links; users see neither", async () => {
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose: () => undefined,
-            hasActiveSessions: false,
         }),
     );
     assert.match(adminHtml, /href="\/requests"/);
@@ -267,7 +258,6 @@ test("marks settings as the current route when viewing settings", async () => {
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose: () => undefined,
-            hasActiveSessions: state.hasActiveSessions,
         }),
     );
 
@@ -285,7 +275,6 @@ test("only downloads is active on the downloads tab and installed PWA hides inst
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose: () => undefined,
-            hasActiveSessions: false,
         }),
     );
     const container = document.createElement("div");
@@ -315,7 +304,6 @@ test("changing only the Library tab closes the mobile drawer", async () => {
         React.createElement(MobileSidebar, {
             isOpen: true,
             onClose,
-            hasActiveSessions: false,
         });
     try {
         await React.act(async () => root.render(tree()));

@@ -15,7 +15,6 @@ let queryClient = new QueryClient();
 const state = {
     pathname: "/library",
     isAuthenticated: true,
-    hasActiveSessions: false,
     isMobile: false,
     isTablet: false,
     isShortDesktop: false,
@@ -110,12 +109,6 @@ mock.module("@/lib/audio-state-context", {
     },
 });
 
-mock.module("@/hooks/useActiveListenSessions", {
-    namedExports: {
-        useActiveListenSessions: () => state.hasActiveSessions,
-    },
-});
-
 mock.module("@/hooks/useQueries", {
     namedExports: {
         queryKeys: { playlists: () => ["playlists"] },
@@ -207,7 +200,6 @@ after(() => {
 beforeEach(() => {
     state.pathname = "/library";
     state.isAuthenticated = true;
-    state.hasActiveSessions = false;
     state.isMobile = false;
     state.isTablet = false;
     state.isShortDesktop = false;

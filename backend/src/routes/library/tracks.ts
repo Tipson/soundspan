@@ -1,9 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import {
-    requireAdmin,
-    requireAuth,
-    requireAuthOrToken,
-} from "../../middleware/auth";
+import { requireAdmin, requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../middleware/asyncHandler";
 import { prisma, Prisma } from "../../utils/db";
 import { logger } from "../../utils/logger";
@@ -13,17 +9,12 @@ import { type Quality as StreamingQuality } from "../../services/audioStreaming"
 import { toVerifiedMusicSourceLikedTrack } from "../../services/musicSourceLikedTrack";
 import { shuffleArray } from "../../utils/shuffle";
 import {
-    applyTrackPreferenceOrderBias,
-    applyTrackPreferenceSimilarityBias,
     normalizeTrackPreferenceSignal,
     resolveTrackPreference,
     TRACK_DISLIKE_ENTITY_TYPE,
 } from "../../services/trackPreference";
 import {
     applyLocalTrackPreferenceSignal,
-    applyTrackPreferenceSignalToTrackIds,
-    buildTrackPreferenceScoreMapForUser,
-    formatAlbumPreferenceResponse,
     formatTrackPreferenceResponse,
     hasConnectedProviderToken,
     toLikedResponseTrack,
@@ -51,8 +42,6 @@ import {
     parseBooleanQueryParam,
 } from "../../utils/libraryRouteSupport";
 import {
-    ALBUM_SORT_MAP,
-    ARTIST_SORT_MAP,
     TRACK_BROWSE_WHERE,
     TRACK_SORT_MAP,
     TRACK_VISIBLE_WHERE,
@@ -67,9 +56,7 @@ import {
     TRACK_AUDIO_INFO_SELECT,
 } from "./trackAudioInfo";
 import {
-    PersistedTrackDeletionPath,
     resolvePersistedTrackDeletionPath,
-    isSafeRecursiveDeletionTarget,
     libraryDeletionLogger,
 } from "../../utils/libraryDeletion";
 import { deleteTrackAndRecomputeAlbum } from "../../services/trackDeletion";

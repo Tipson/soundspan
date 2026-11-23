@@ -1,9 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import {
-    requireAdmin,
-    requireAuth,
-    requireAuthOrToken,
-} from "../../middleware/auth";
+import { requireAdmin } from "../../middleware/auth";
 import { asyncHandler } from "../../middleware/asyncHandler";
 import { prisma, Prisma } from "../../utils/db";
 import { logger } from "../../utils/logger";
@@ -12,38 +8,22 @@ import fs from "fs";
 import { config } from "../../config";
 import { safeResolvePath } from "../../utils/safeResolvePath";
 import {
-    applyTrackPreferenceOrderBias,
-    applyTrackPreferenceSimilarityBias,
     normalizeTrackPreferenceSignal,
     resolveTrackPreference,
-    TRACK_DISLIKE_ENTITY_TYPE,
 } from "../../services/trackPreference";
 import {
     applyTrackPreferenceSignalToTrackIds,
-    buildTrackPreferenceScoreMapForUser,
     formatAlbumPreferenceResponse,
-    formatTrackPreferenceResponse,
-    hasConnectedProviderToken,
-    toLikedResponseTrack,
 } from "../../services/libraryTrackPreferences";
+import { sendRouteError } from "../../utils/routeErrorResponse";
 import {
-    sendInternalRouteError,
-    sendRouteError,
-} from "../../utils/routeErrorResponse";
-import {
-    DEFAULT_MY_LIKED_LIMIT,
     isLibraryDeletionEnabled,
     MAX_LIMIT,
-    MY_LIKED_PLAYLIST_DESCRIPTION,
-    MY_LIKED_PLAYLIST_ID,
-    MY_LIKED_PLAYLIST_NAME,
     parseBooleanQueryParam,
 } from "../../utils/libraryRouteSupport";
 import {
     ALBUM_SORT_MAP,
-    ARTIST_SORT_MAP,
     LIBRARY_SURFACE_ALBUM_LOCATIONS,
-    TRACK_SORT_MAP,
     TRACK_VISIBLE_WHERE,
     LOCAL_AUDIO_ANALYSIS_TRACK_WHERE,
     isLibrarySurfaceAlbumLocation,
@@ -51,9 +31,7 @@ import {
     trackBrowseWhere,
 } from "../../utils/librarySorting";
 import {
-    PersistedTrackDeletionPath,
     resolvePersistedTrackDeletionPath,
-    isSafeRecursiveDeletionTarget,
     libraryDeletionLogger,
 } from "../../utils/libraryDeletion";
 import { bumpSearchCacheVersion } from "../../services/searchCacheVersion";

@@ -87,7 +87,6 @@ export function Sidebar() {
             <MobileSidebar
                 isOpen={isMobileMenuOpen}
                 onClose={() => setIsMobileMenuOpen(false)}
-                hasActiveSessions={false}
             />
         );
     }

@@ -3,4 +3,6 @@ package-lock.json
 *.yml
 *.yaml
 tests/e2e/**/*-snapshots/
+# Generated browser reports are evidence, not source.
+output/
 public/welcome/vendor/
