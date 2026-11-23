@@ -1,0 +1,15 @@
+name: soundspan_session_bridge
+description: Private process-wide Soundspan session broker attachment.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.13.5
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: ru.agentik007.soundspan.session
+        pluginClass: SessionBrokerClientPlugin

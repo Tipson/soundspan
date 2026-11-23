@@ -192,3 +192,10 @@ soularr/
 
 # local DB snapshots (analysis data) — never commit
 backups/
+
+# Mobile signing material stays outside Git.
+*.p12
+*.pfx
+*.dpapi
+**/key.properties
+**/signing.json

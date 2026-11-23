@@ -1,0 +1,10 @@
+{
+  "src/main/java/com/ryanheise/just_audio/MainMethodCallHandler.java": "e94040e14ae05d48e117fa2499935546bd249570684ceeb791eb2eb539f68779",
+  "gradle.properties": "3c1fc1d9cad8765e2b44821c4774644b590bb58ecab6beb4bae2470ece0175be",
+  "src/main/AndroidManifest.xml": "bfe643676c7bfecf2683b1ad8044a754bc53141c9e4fc6714ad58c1530937b6d",
+  "src/main/java/com/ryanheise/just_audio/JustAudioPlugin.java": "b72144aff5e57bc706563287921d8fb7a631f9b7a14fa85a7b77180c2a9b7daa",
+  "build.gradle.kts": "e568ec02f8bdffabfeba525df3acea4959e07212195591285b1e3fda500cc2c2",
+  "src/main/java/com/ryanheise/just_audio/BetterEventChannel.java": "ce2816c014760b9397c38c43ccd5d5796928dd77a029b42e136baf4e8f9cfbe7",
+  "settings.gradle.kts": "eeff410ca24e1d9ad3c8191bf54771e3669eac0405c15fdd6fe2c60b89ab5d1d",
+  "src/main/java/com/ryanheise/just_audio/AudioPlayer.java": "b4d27bfe9d66a2fe75f13401b9ffb30bbacc2f614470167f3e7d98864c9f9f3c"
+}

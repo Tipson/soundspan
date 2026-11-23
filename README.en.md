@@ -10,7 +10,7 @@
 
 **A personal music platform: your own Wave, long mixes, weekly discoveries, and offline listening.**
 
-Soundspan brings online sources and your own music library together in one web application. Choose favorite artists, listen, and rate tracks: recommendations draw on your preferences and listening history. Host the platform on your own server and install the application on your phone as a PWA.
+Soundspan brings online sources and your own music library together in one web application. Choose favorite artists, listen, and rate tracks: recommendations draw on your preferences and listening history. Host the platform on your own server and install the web application on your phone as a PWA. The [native Android client and build instructions](mobile/README.md) are in `mobile/`.
 
 [Web Application](https://music.agentik007.ru) · [Deployment](docs/DEPLOYMENT.md) · [Documentation](docs/README.md) · [Report a Problem](https://github.com/Tipson/soundspan/issues)
 

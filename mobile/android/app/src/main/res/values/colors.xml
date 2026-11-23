@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Native startup mirrors MusicColors canvas and primary. -->
+    <color name="soundspan_canvas">#151413</color>
+    <color name="soundspan_accent">#C9AAF2</color>
+</resources>

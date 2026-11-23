@@ -2,6 +2,8 @@
 backend/
 frontend/
 packages/
+# Flutter uses Dart formatting and byte-sensitive signed fixtures.
+mobile/
 
 # Dependency lockfiles, documentation, and deployment configuration
 package-lock.json
