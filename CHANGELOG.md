@@ -3,6 +3,7 @@
 ## Mobile source recovery
 
 - Accept Android playback attempt identifiers for automatic VK/Yandex recovery when YouTube fails before audio starts. Keep the selected representation pinned across retries and seeking.
+- Classify YouTube TLS and webpage failures as temporary transport errors instead of age restrictions, allowing automatic source recovery while preserving genuine age-verification failures.
 
 ## Radio queue identity
 

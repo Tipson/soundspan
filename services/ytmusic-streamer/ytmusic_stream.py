@@ -694,8 +694,10 @@ def _stream_extraction_http_error(
 ) -> HTTPException:
     """Convert an extraction failure to the existing sanitized HTTP error."""
     error_str = str(error)
-    age_restricted = "Sign in to confirm your age" in error_str or (
-        "age" in error_str.lower() and "confirm" in error_str.lower()
+    age_restricted = re.search(
+        r"\b(?:(?:confirm|verify)\s+(?:your\s+)?age|age[- ]restricted|age verification)\b",
+        error_str,
+        re.IGNORECASE,
     )
     if age_restricted:
         log.error(

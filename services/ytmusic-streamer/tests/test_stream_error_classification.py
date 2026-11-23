@@ -98,6 +98,12 @@ async def test_stream_endpoint_keeps_age_restriction_at_451(
         "Remote end closed connection without response",
         "Requested format is not available",
         "Unable to extract player response; please report this issue",
+        (
+            "Unable to download API page: [SSL: UNEXPECTED_EOF_WHILE_READING] "
+            "EOF occurred in violation of protocol; please report this issue. "
+            "Confirm you are on the latest version"
+        ),
+        "Unable to download webpage: connection timed out. Confirm you are on the latest version",
     ),
 )
 async def test_stream_endpoint_keeps_transient_extraction_failures_at_502(
@@ -116,6 +122,23 @@ async def test_stream_endpoint_keeps_transient_extraction_failures_at_502(
 
     assert response.status_code == 502
     assert response.json() == {"error": "Failed to extract stream"}
+
+
+def test_bot_challenge_with_api_page_context_is_not_an_age_restriction() -> None:
+    """Extractor advice containing 'page' must not imply age verification."""
+    import ytmusic_stream
+
+    error = ytmusic_stream._stream_extraction_http_error(
+        VIDEO_ID,
+        "test extraction",
+        RuntimeError(
+            "Unable to download API page: Sign in to confirm you're not a bot. "
+            "Confirm you are on the latest version"
+        ),
+    )
+
+    assert error.status_code == 503
+    assert cast(dict[str, object], error.detail)["error"] == "provider_challenge"
 
 
 def test_spool_uses_the_same_permanent_unavailable_mapping(
