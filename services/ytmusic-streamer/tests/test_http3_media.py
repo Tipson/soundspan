@@ -248,6 +248,38 @@ def test_media_session_keeps_metadata_on_original_transport(monkeypatch):
     assert calls == ["https://www.youtube.com/watch?v=metadata"]
 
 
+@pytest.mark.parametrize("url", ["https://www.youtube.com/watch", b"https://www.youtube.com/watch"])
+def test_media_session_preserves_positional_metadata_params(monkeypatch, url):
+    from ytmusic_http3 import media_session
+
+    monkeypatch.setenv("YTMUSIC_CDN_HTTP3", "1")
+    calls = []
+    sentinel = object()
+
+    def original_get(self, url, params=None, **kwargs):
+        calls.append((url, params, kwargs))
+        return sentinel
+
+    monkeypatch.setattr(requests.Session, "get", original_get)
+    with media_session() as session:
+        assert session.get(url, {"v": "metadata"}, timeout=2) is sentinel
+    assert calls == [(url, {"v": "metadata"}, {"timeout": 2})]
+
+
+def test_media_session_encodes_positional_params_without_losing_signed_query(monkeypatch):
+    import ytmusic_http3
+
+    monkeypatch.setenv("YTMUSIC_CDN_HTTP3", "1")
+    origin = RangeOrigin()
+    transport = client(origin)
+    monkeypatch.setattr(ytmusic_http3, "Http3RangeClient", lambda **_options: transport)
+    with ytmusic_http3.media_session() as session:
+        response = session.get(URL, {"extra": "two words"}, headers={"Range": "bytes=0-3"})
+        assert response.content == b"0123"
+    assert origin.calls[0][0] == URL + "&extra=two+words"
+    assert origin.closed
+
+
 def test_ytdlp_handler_is_explicit_and_scoped(monkeypatch):
     from yt_dlp.networking.common import Request
     from yt_dlp.networking.exceptions import UnsupportedRequest

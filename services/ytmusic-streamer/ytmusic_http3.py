@@ -336,9 +336,11 @@ class _MediaSession(requests.Session):
         super().__init__()
         self._http3 = Http3RangeClient(**options)
 
-    def get(self, url: str, **kwargs: Any) -> requests.Response:
-        if not is_media_url(url):
-            return super().get(url, **kwargs)
+    def get(self, url: str | bytes, params: Any = None, **kwargs: Any) -> requests.Response:
+        if not isinstance(url, str) or not is_media_url(url):
+            return super().get(url, params=params, **kwargs)
+        if params is not None:
+            url = requests.Request("GET", url, params=params).prepare().url or url
         headers = kwargs.get("headers", {})
         first, last = _requested_range(headers)
         if last is None:
@@ -365,7 +367,7 @@ def youtube_dl(options: dict[str, Any], *, cancel_check: Callable[[], bool] = la
         return yt_dlp.YoutubeDL(options)
     from ytmusic_http3_ytdlp import GoogleVideoHttp3RH, YouTubeMetadataHttp3RH
 
-    class MediaYoutubeDL(yt_dlp.YoutubeDL):
+    class MediaYoutubeDL(yt_dlp.YoutubeDL):  # type: ignore[misc,no-any-unimported]  # Upstream is untyped.
         def extract_info(self, *args: Any, **kwargs: Any) -> Any:
             started = time.monotonic()
             succeeded = False

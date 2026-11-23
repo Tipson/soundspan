@@ -12,8 +12,9 @@ from weakref import WeakSet
 
 import certifi
 import requests
-from curl_cffi import CurlOpt, Session
+from curl_cffi import CurlECode, CurlOpt, Session
 from curl_cffi.requests.exceptions import RequestException
+from curl_cffi.requests.models import Response as CurlResponse
 from yt_dlp.networking._curlcffi import CurlCFFIRH
 from yt_dlp.networking.common import Request, RequestHandler, Response
 from yt_dlp.networking.exceptions import (
@@ -49,7 +50,7 @@ class _BufferedMetadataResponse:
             yield self.response.content[offset : offset + size]
 
 
-class BoundedMetadataSession(Session):
+class BoundedMetadataSession(Session[CurlResponse]):
     """Use the official yt-dlp adapter without curl's background streaming queue."""
 
     def request(self, *args: Any, **kwargs: Any) -> Any:
@@ -82,12 +83,12 @@ class BoundedMetadataSession(Session):
         except RequestException:
             if exceeded:
                 raise RequestException(
-                    "HTTP3 metadata response exceeded body limit", code=63
+                    "HTTP3 metadata response exceeded body limit", code=CurlECode.FILESIZE_EXCEEDED
                 ) from None
             raise
         if int(response.http_version) != 30:
-            response.close()
-            raise RequestException("Metadata response did not use HTTP/3", code=95)
+            response.close()  # type: ignore[no-untyped-call]  # curl_cffi Response.close is untyped.
+            raise RequestException("Metadata response did not use HTTP/3", code=CurlECode.HTTP3)
         response.content = bytes(body)
         log.info(
             "HTTP3 metadata received: status=%d bytes=%d duration_ms=%d",
@@ -98,10 +99,10 @@ class BoundedMetadataSession(Session):
         return _BufferedMetadataResponse(response)
 
 
-class YouTubeMetadataHttp3RH(CurlCFFIRH):
+class YouTubeMetadataHttp3RH(CurlCFFIRH):  # type: ignore[misc,no-any-unimported]  # Upstream is untyped.
     """Opt-in QUIC for extraction pages, player API and fixed YouTube assets."""
 
-    def _check_url_scheme(self, request: Request) -> str:
+    def _check_url_scheme(self, request: Request) -> str:  # type: ignore[no-any-unimported]  # yt-dlp boundary.
         parsed = urlsplit(request.url)
         host = parsed.hostname or ""
         asset = host in {"i.ytimg.com", "s.ytimg.com"}
@@ -119,7 +120,7 @@ class YouTubeMetadataHttp3RH(CurlCFFIRH):
             raise UnsupportedRequest("Direct metadata HTTP3 accepts only fixed YouTube endpoints")
         return "https"
 
-    def _get_proxies(self, _request: Request) -> dict[str, str]:
+    def _get_proxies(self, _request: Request) -> dict[str, str]:  # type: ignore[no-any-unimported]  # yt-dlp boundary.
         return {}
 
     def close(self) -> None:
@@ -134,13 +135,14 @@ class YouTubeMetadataHttp3RH(CurlCFFIRH):
         return BoundedMetadataSession(
             cookies=cookiejar,
             trust_env=False,
-            verify=certifi.where(),
+            # curl_cffi accepts a CA path at runtime; its constructor annotation is bool-only.
+            verify=certifi.where(),  # type: ignore[arg-type]
             http_version="v3only",
             curl_options=options,
         )
 
 
-class GoogleVideoHttp3RH(RequestHandler):
+class GoogleVideoHttp3RH(RequestHandler):  # type: ignore[misc,no-any-unimported]  # Upstream is untyped.
     """Own media readers; all metadata falls through to yt-dlp's usual handlers."""
 
     _SUPPORTED_URL_SCHEMES = ("https",)
@@ -150,7 +152,7 @@ class GoogleVideoHttp3RH(RequestHandler):
         self.cancel_check = cancel_check
         self._readers: WeakSet[Http3RangeReader] = WeakSet()
 
-    def _check_url_scheme(self, request: Request) -> str:
+    def _check_url_scheme(self, request: Request) -> str:  # type: ignore[no-any-unimported]  # yt-dlp boundary.
         if request.method != "GET" or not is_media_url(request.url):
             raise UnsupportedRequest("Direct HTTP3 accepts only HTTPS GoogleVideo media GETs")
         return "https"
@@ -159,7 +161,7 @@ class GoogleVideoHttp3RH(RequestHandler):
         """The explicitly selected direct CDN route intentionally ignores proxies."""
         super()._check_proxies({})
 
-    def _send(self, request: Request) -> Response:
+    def _send(self, request: Request) -> Response:  # type: ignore[no-any-unimported]  # yt-dlp boundary.
         client = Http3RangeClient(cancel_check=self.cancel_check)
         try:
             reader = Http3RangeReader(

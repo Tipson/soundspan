@@ -15,6 +15,8 @@
 
 ## Unreleased
 
+- Preserve positional query parameters and byte URLs when the opt-in HTTP/3 session adapts the Requests interface, retaining signed media queries and normal non-CDN request handling.
+
 - Support opt-in HTTP/3 for GoogleVideo media and YouTube metadata with bounded reads, cancellation, TLS verification and client-scoped DoH. Keep the transport disabled by default and provide an isolated Soundspan egress profile.
 
 - Keep the current-track dislike skip active across feedback-driven player rerenders while retaining track, queue replacement and unmount guards.

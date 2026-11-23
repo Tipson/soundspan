@@ -1,12 +1,25 @@
 {
-  "log": {"loglevel": "warning"},
-  "dns": {
-    "servers": [
-      {"address": "https+local://1.1.1.1/dns-query", "timeoutMs": 1500},
-      {"address": "https+local://1.0.0.1/dns-query", "timeoutMs": 1500}
+    "log": { "loglevel": "warning" },
+    "dns": {
+        "servers": [
+            { "address": "https+local://1.1.1.1/dns-query", "timeoutMs": 1500 },
+            { "address": "https+local://1.0.0.1/dns-query", "timeoutMs": 1500 }
+        ],
+        "queryStrategy": "UseIPv4"
+    },
+    "inbounds": [
+        {
+            "listen": "127.0.0.1",
+            "port": 11093,
+            "protocol": "socks",
+            "settings": { "auth": "noauth", "udp": false }
+        }
     ],
-    "queryStrategy": "UseIPv4"
-  },
-  "inbounds": [{"listen": "127.0.0.1", "port": 11093, "protocol": "socks", "settings": {"auth": "noauth", "udp": false}}],
-  "outbounds": [{"protocol": "freedom", "settings": {"domainStrategy": "UseIPv4"}, "streamSettings": {"sockopt": {"mark": 21332}}}]
+    "outbounds": [
+        {
+            "protocol": "freedom",
+            "settings": { "domainStrategy": "UseIPv4" },
+            "streamSettings": { "sockopt": { "mark": 21332 } }
+        }
+    ]
 }
