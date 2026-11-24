@@ -4,3 +4,8 @@ b340a7ccae6153d94805802b7b54de513e9661e0:backend/src/__tests__/audiusConfig.test
 # Exact historical finding: explanatory prose about Audius stream conditions,
 # not a credential. Other findings in these files remain blocking.
 b340a7ccae6153d94805802b7b54de513e9661e0:docs/AUDIUS.md:generic-api-key:28
+# Exact historical findings: public loopback-only TLS test fixture.
+8074e05ff9c513b40f68992f808d133e5b4340bb:mobile/integration_test/support/download_test_tls.dart:private-key:24
+8074e05ff9c513b40f68992f808d133e5b4340bb:mobile/test/support/localhost-test-key.pem:private-key:1
+51e6f6215c488e3a81cff5761d7c688ae1ab5f07:mobile/integration_test/support/download_test_tls.dart:private-key:24
+51e6f6215c488e3a81cff5761d7c688ae1ab5f07:mobile/test/support/localhost-test-key.pem:private-key:1
