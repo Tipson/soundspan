@@ -164,7 +164,7 @@ export function createMusicSourceFallback(deps: Dependencies) {
                             continue;
                         }
                         clearTimeout(timer);
-                        const error = outcome.error;
+                        const { error } = outcome;
                         if (!enabled) throw error;
                         const status = (
                             error as { response?: { status?: number } } | null
