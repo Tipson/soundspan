@@ -757,12 +757,14 @@ suite("owner-scoped Play creation contract on isolated PostgreSQL", () => {
     test("engagement hides another owner's Play behind the existing 404 contract", async () => {
         const other = await prisma.user.create({
             data: {
-                id: "dev08-core-foreign",
-                username: "dev08-core-foreign",
+                id: "dev08-core-other",
+                username: "dev08-core-other",
                 isTestAccount: true,
             },
         });
         const foreign = await post(key(), {}, other);
+        expect(foreign.status).toBe(200);
+        expect(foreign.body.id).toEqual(expect.any(String));
         expect((await engagement(foreign.body.id, 100)).status).toBe(404);
         expect(
             (

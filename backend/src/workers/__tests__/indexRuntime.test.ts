@@ -220,7 +220,16 @@ describe("workers runtime behavior", () => {
             unavailableAlbum: { create: jest.fn(async () => undefined) },
             audiobook: { count: jest.fn(async () => 0) },
         };
+        const loadRecommendationRuntime = jest.fn(() => {
+            throw new Error(
+                "Worker wiring must not initialize the recommendation pipeline",
+            );
+        });
 
+        jest.doMock(
+            "../../services/recommendations/recommendationRuntime",
+            loadRecommendationRuntime,
+        );
         jest.doMock("../../utils/logger", () => ({ logger }));
         jest.doMock("music-metadata", () => ({ parseFile: jest.fn() }), {
             virtual: true,
@@ -258,6 +267,13 @@ describe("workers runtime behavior", () => {
             () => ({
                 startCanonicalIdentityPromotionSweep,
                 stopCanonicalIdentityPromotionSweep,
+            }),
+        );
+        jest.doMock(
+            "../../services/recommendations/discoveryAnalysisPrefetchRuntime",
+            () => ({
+                startDiscoveryAnalysisPrefetch: jest.fn(),
+                stopDiscoveryAnalysisPrefetch: jest.fn(async () => undefined),
             }),
         );
         jest.doMock("../federationJobs", () => ({
@@ -488,6 +504,7 @@ describe("workers runtime behavior", () => {
             lidarrService,
             dataCacheService,
             trackReconciliationService,
+            loadRecommendationRuntime,
         };
     }
 
@@ -498,15 +515,15 @@ describe("workers runtime behavior", () => {
         jest.clearAllMocks();
     });
 
-    // Imports the full worker module graph under coverage instrumentation;
-    // the cold require crossed jest's 5s default once the graph grew (#812
-    // made coverage blocking), so this test carries its own budget.
+    // Exercise worker orchestration without initializing the feed pipeline
+    // behind the independently tested background prefetch adapter.
     it("imports without registering processors, then starts explicitly", async () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const workers = require("../index");
+        expect(mocks.loadRecommendationRuntime).not.toHaveBeenCalled();
         expect(mocks.scanQueue.process).not.toHaveBeenCalled();
         expect(mocks.startUnifiedEnrichmentWorker).not.toHaveBeenCalled();
         workers.startWorkers();

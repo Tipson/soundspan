@@ -38,10 +38,7 @@ suite("durable Play delivery on an isolated phase PostgreSQL database", () => {
     const key = () => `p1.0.${Date.now().toString(36)}.${"D".repeat(32)}`;
 
     beforeAll(async () => {
-        fixture = await createPlayDeliveryTestDatabase(
-            integrationUrl!,
-            "schema-fixture",
-        );
+        fixture = await createPlayDeliveryTestDatabase(integrationUrl!);
         prisma = (
             require("../src/utils/db") as typeof import("../src/utils/db")
         ).prisma;
