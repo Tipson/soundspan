@@ -661,11 +661,9 @@ const loudnessBackfillBatchSize = loudnessBackfillBatchSizeSchema.parse(
     Number(process.env.LOUDNESS_BACKFILL_BATCH_SIZE ?? "25"),
 );
 
-// Reverse-proxy hop count for client-IP resolution. A non-negative
-// TRUST_PROXY_HOPS makes X-Forwarded-For spoofing past that many hops untrusted
-// (so a client can't mint fresh per-IP rate-limit buckets). Unset/invalid →
-// trust all hops, preserving existing multi-hop Docker/Portainer behavior.
-const trustProxyHops = parseEnvInt(process.env.TRUST_PROXY_HOPS, -1);
+// Trust forwarded client identity only with an explicit non-negative safe hop
+// count. Missing or invalid configuration must not trust arbitrary XFF values.
+const trustProxyHops = parseEnvInt(process.env.TRUST_PROXY_HOPS, 0);
 
 // Initialize music configuration asynchronously
 /** Loads and validates music-path/cache settings, with safe fallback to env defaults. */
@@ -824,12 +822,12 @@ export const config = {
         (process.env.NODE_ENV || "development") === "production",
     ),
 
-    // Express `trust proxy` value: a numeric hop count for spoof-resistant IP
-    // resolution, or `true` (trust all) by default. Set TRUST_PROXY_HOPS to your
-    // real reverse-proxy depth (usually 1) to enable spoof protection.
-    trustProxy: (trustProxyHops >= 0 ? trustProxyHops : true) as
-        | number
-        | boolean,
+    // Keep the backend behind the configured proxy path: a shorter direct path
+    // could let a client supply one of the trusted hops. Zero trusts only the socket.
+    trustProxy:
+        Number.isSafeInteger(trustProxyHops) && trustProxyHops >= 0
+            ? trustProxyHops
+            : 0,
 
     // Worker event-loop stall watchdog (issue #43): a stall above the warn
     // threshold logs the active Bull jobs so liveness-probe kills can be

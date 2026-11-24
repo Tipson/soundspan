@@ -237,9 +237,9 @@ app.use((req, res, next) => {
     next();
 });
 
-// Trust proxy for reverse proxy setups (nginx, traefik, etc.). Defaults to
-// trusting all hops; set TRUST_PROXY_HOPS to a numeric depth (usually 1) so a
-// client can't spoof X-Forwarded-For to evade per-IP rate limits.
+// Forwarded identity requires an explicit trusted proxy depth. The default
+// trusts only the socket; match the actual forwarded address chain without
+// exposing a shorter route that would trust client-supplied hops.
 app.set("trust proxy", config.trustProxy);
 
 // Routes - All API routes prefixed with /api for clear separation from frontend
