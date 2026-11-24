@@ -6,7 +6,10 @@ there is no foreign relay or VPN outbound in `direct.example.json`.
 
 The streamer opt-in is `YTMUSIC_CDN_HTTP3=1`. Signed GoogleVideo media uses
 verified HTTP/3. `YTMUSIC_METADATA_HTTP3=1` additionally moves the fixed YouTube
-extraction endpoints and ytimg assets to bounded, synchronous QUIC requests.
+extraction endpoints, ytimg assets and public Music radio/search/catalog calls
+to bounded, synchronous QUIC requests. Private-account calls retain their
+configured transport. Public catalog requests reject account credentials and
+redirects; their existing request deadlines and eight-MiB response cap apply.
 An optional `YTMUSIC_HTTP3_DOH_URL=https://1.1.1.1/dns-query` avoids dependency
 on a filtered host resolver without changing it. Other metadata uses its
 existing HTTP proxy interface. The example

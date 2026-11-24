@@ -275,4 +275,338 @@ describe("transparent provider fallback", () => {
         ).rejects.toBeDefined();
         expect(resolve).not.toHaveBeenCalled();
     });
+
+    describe("initial connection budget", () => {
+        const delayedAudio = (
+            signal: AbortSignal,
+            ms: number,
+            value = "playing",
+        ): Promise<string> =>
+            new Promise((finish, reject) => {
+                const timer = setTimeout(() => finish(value), ms);
+                signal.addEventListener(
+                    "abort",
+                    () => {
+                        clearTimeout(timer);
+                        reject(signal.reason);
+                    },
+                    { once: true },
+                );
+            });
+        beforeEach(() => jest.useFakeTimers());
+        afterEach(() => {
+            jest.clearAllTimers();
+            jest.useRealTimers();
+        });
+
+        it("starts an exact alternate after six seconds of pending initial audio", async () => {
+            const resolve = jest.fn(async () => ({ streamPath: "/alternate" }));
+            const fallback = createMusicSourceFallback({
+                enabled: async () => true,
+                recording: async () => recording,
+                resolve,
+            });
+            let upstream: AbortSignal | undefined;
+            const pending = fallback.acquire({
+                ...input(),
+                original: (signal: AbortSignal) => {
+                    upstream = signal;
+                    return new Promise<string>((_, reject) => {
+                        signal.addEventListener(
+                            "abort",
+                            () => reject(signal.reason),
+                            { once: true },
+                        );
+                    });
+                },
+            });
+            await jest.advanceTimersByTimeAsync(5_999);
+            expect(upstream?.aborted).toBe(false);
+            expect(resolve).not.toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(upstream?.aborted).toBe(true);
+            expect(resolve).toHaveBeenCalledTimes(1);
+            await expect(pending).resolves.toEqual({ redirect: "/alternate" });
+        });
+
+        it("keeps acquired audio alive after the initial budget and preserves listener cancellation", async () => {
+            const controller = new AbortController();
+            const resolve = jest.fn();
+            const fallback = createMusicSourceFallback({
+                enabled: async () => true,
+                recording: async () => recording,
+                resolve,
+            });
+            let upstream: AbortSignal | undefined;
+            const pending = fallback.acquire({
+                ...input(),
+                signal: controller.signal,
+                original: (signal: AbortSignal) => {
+                    upstream = signal;
+                    return new Promise<string>((finish) => {
+                        setTimeout(() => finish("playing"), 2_500);
+                    });
+                },
+            });
+            await jest.advanceTimersByTimeAsync(2_500);
+            await expect(pending).resolves.toEqual({ stream: "playing" });
+            await jest.advanceTimersByTimeAsync(3_500);
+            expect(upstream?.aborted).toBe(false);
+            expect(resolve).not.toHaveBeenCalled();
+
+            controller.abort();
+            expect(upstream?.aborted).toBe(true);
+        });
+
+        it("does not start an alternate when the listener cancels before the initial budget", async () => {
+            const controller = new AbortController();
+            const reason = new Error("listener switched tracks");
+            const resolve = jest.fn(async () => ({ streamPath: "/alternate" }));
+            const fallback = createMusicSourceFallback({
+                enabled: async () => true,
+                recording: async () => recording,
+                resolve,
+            });
+            const pending = fallback.acquire({
+                ...input(),
+                signal: controller.signal,
+                original: (signal: AbortSignal) =>
+                    new Promise<string>((_, reject) => {
+                        signal.addEventListener(
+                            "abort",
+                            () => reject(signal.reason),
+                            { once: true },
+                        );
+                    }),
+            });
+            const cancelled = expect(pending).rejects.toBe(reason);
+            await jest.advanceTimersByTimeAsync(5_999);
+            controller.abort(reason);
+            await cancelled;
+            await jest.advanceTimersByTimeAsync(1);
+            expect(resolve).not.toHaveBeenCalled();
+        });
+
+        it.each(["no_match", "resolve_failed", "recording_failed"] as const)(
+            "preserves a slow valid original when the early alternate ends with %s",
+            async (outcome) => {
+                const resolve = jest.fn(async () => {
+                    if (outcome === "resolve_failed")
+                        throw new Error("alternate unavailable");
+                    return null;
+                });
+                const fallback = createMusicSourceFallback({
+                    enabled: async () => true,
+                    recording: async () => {
+                        if (outcome === "recording_failed")
+                            throw new Error("metadata unavailable");
+                        return recording;
+                    },
+                    resolve,
+                });
+                let upstream: AbortSignal | undefined;
+                const pending = fallback
+                    .acquire({
+                        ...input(),
+                        original: (signal: AbortSignal) => {
+                            upstream = signal;
+                            return delayedAudio(signal, 9_000);
+                        },
+                    })
+                    .then(
+                        (result) => result,
+                        (error: unknown) => ({ error }),
+                    );
+                await jest.advanceTimersByTimeAsync(6_000);
+                expect(upstream?.aborted).toBe(false);
+                await jest.advanceTimersByTimeAsync(3_000);
+                await expect(pending).resolves.toEqual({ stream: "playing" });
+                expect(upstream?.aborted).toBe(false);
+            },
+        );
+
+        it("keeps the primary winner pinned and cancels a pending late alternate", async () => {
+            let alternateSignal: AbortSignal | undefined;
+            const resolve = jest.fn(
+                async (_user, _recording, signal: AbortSignal) => {
+                    alternateSignal = signal;
+                    return new Promise<{ streamPath: string }>((finish) => {
+                        setTimeout(
+                            () => finish({ streamPath: "/late" }),
+                            3_000,
+                        );
+                    });
+                },
+            );
+            const fallback = createMusicSourceFallback({
+                enabled: async () => true,
+                recording: async () => recording,
+                resolve,
+            });
+            const first = input();
+            let upstream: AbortSignal | undefined;
+            const pending = fallback.acquire({
+                ...first,
+                original: (signal: AbortSignal) => {
+                    upstream = signal;
+                    return delayedAudio(signal, 7_000);
+                },
+            });
+            await jest.advanceTimersByTimeAsync(6_000);
+            expect(resolve).toHaveBeenCalledTimes(1);
+            expect(upstream?.aborted).toBe(false);
+            expect(alternateSignal?.aborted).toBe(false);
+            await jest.advanceTimersByTimeAsync(1_000);
+            await expect(pending).resolves.toEqual({ stream: "playing" });
+            expect(alternateSignal?.aborted).toBe(true);
+            await jest.advanceTimersByTimeAsync(2_000);
+            const original = jest.fn(async () => "original seek");
+            await expect(
+                fallback.acquire({ ...first, range: "bytes=100-", original }),
+            ).resolves.toEqual({ stream: "original seek" });
+            expect(resolve).toHaveBeenCalledTimes(1);
+            expect(upstream?.aborted).toBe(false);
+        });
+
+        it("cancels both pending sources without pinning a late alternate after owner cancellation", async () => {
+            const controller = new AbortController();
+            const reason = new Error("listener switched tracks");
+            let alternateSignal: AbortSignal | undefined;
+            const resolve = jest.fn(
+                async (_user, _recording, signal: AbortSignal) => {
+                    alternateSignal = signal;
+                    return new Promise<{ streamPath: string }>((finish) => {
+                        setTimeout(
+                            () => finish({ streamPath: "/stale" }),
+                            3_000,
+                        );
+                    });
+                },
+            );
+            const fallback = createMusicSourceFallback({
+                enabled: async () => true,
+                recording: async () => recording,
+                resolve,
+            });
+            const first = input();
+            let upstream: AbortSignal | undefined;
+            const pending = fallback.acquire({
+                ...first,
+                signal: controller.signal,
+                original: (signal: AbortSignal) => {
+                    upstream = signal;
+                    return delayedAudio(signal, 9_000);
+                },
+            });
+            const cancelled = expect(pending).rejects.toBe(reason);
+            await jest.advanceTimersByTimeAsync(6_500);
+            expect(resolve).toHaveBeenCalledTimes(1);
+            controller.abort(reason);
+            await cancelled;
+            expect(upstream?.aborted).toBe(true);
+            expect(alternateSignal?.aborted).toBe(true);
+            await jest.advanceTimersByTimeAsync(2_500);
+            await expect(
+                fallback.acquire({ ...first, original: async () => "fresh" }),
+            ).resolves.toEqual({ stream: "fresh" });
+            expect(resolve).toHaveBeenCalledTimes(1);
+        });
+
+        it("reuses an already pending exact lookup after an eligible primary failure", async () => {
+            const resolve = jest.fn(
+                async () =>
+                    new Promise<{ streamPath: string }>((finish) => {
+                        setTimeout(
+                            () => finish({ streamPath: "/alternate" }),
+                            3_000,
+                        );
+                    }),
+            );
+            const fallback = createMusicSourceFallback({
+                recording: async () => recording,
+                resolve,
+            });
+            const pending = fallback.acquire({
+                ...input(),
+                original: () =>
+                    new Promise<string>((_, reject) => {
+                        setTimeout(() => reject(failure), 7_000);
+                    }),
+            });
+            await jest.advanceTimersByTimeAsync(6_000);
+            expect(resolve).toHaveBeenCalledTimes(1);
+            await jest.advanceTimersByTimeAsync(3_000);
+            await expect(pending).resolves.toEqual({ redirect: "/alternate" });
+            expect(resolve).toHaveBeenCalledTimes(1);
+        });
+
+        it.each([403, 451])(
+            "preserves HTTP %s when the primary rejects before a pending alternate is selected",
+            async (status) => {
+                let alternateSignal: AbortSignal | undefined;
+                const resolve = jest.fn(
+                    async (_user, _recording, signal: AbortSignal) => {
+                        alternateSignal = signal;
+                        return new Promise<{ streamPath: string }>((finish) => {
+                            setTimeout(
+                                () => finish({ streamPath: "/late" }),
+                                3_000,
+                            );
+                        });
+                    },
+                );
+                const fallback = createMusicSourceFallback({
+                    recording: async () => recording,
+                    resolve,
+                });
+                const error = { response: { status } };
+                const first = input();
+                const pending = fallback.acquire({
+                    ...first,
+                    original: () =>
+                        new Promise<string>((_, reject) => {
+                            setTimeout(() => reject(error), 7_000);
+                        }),
+                });
+                const rejected = expect(pending).rejects.toBe(error);
+                await jest.advanceTimersByTimeAsync(6_000);
+                expect(resolve).toHaveBeenCalledTimes(1);
+                await jest.advanceTimersByTimeAsync(1_000);
+                await rejected;
+                expect(alternateSignal?.aborted).toBe(true);
+                await jest.advanceTimersByTimeAsync(2_000);
+                await expect(
+                    fallback.acquire({
+                        ...first,
+                        original: async () => "fresh",
+                    }),
+                ).resolves.toEqual({ stream: "fresh" });
+            },
+        );
+
+        it("honors the internal fallback delay override without shortening the hard primary budget", async () => {
+            const resolve = jest.fn(async () => null);
+            const fallback = createMusicSourceFallback({
+                fallbackDelayMs: 500,
+                recording: async () => recording,
+                resolve,
+            });
+            let upstream: AbortSignal | undefined;
+            const pending = fallback.acquire({
+                ...input(),
+                original: (signal: AbortSignal) => {
+                    upstream = signal;
+                    return delayedAudio(signal, 9_000);
+                },
+            });
+            await jest.advanceTimersByTimeAsync(499);
+            expect(resolve).not.toHaveBeenCalled();
+            await jest.advanceTimersByTimeAsync(1);
+            expect(resolve).toHaveBeenCalledTimes(1);
+            expect(upstream?.aborted).toBe(false);
+            await jest.advanceTimersByTimeAsync(8_500);
+            await expect(pending).resolves.toEqual({ stream: "playing" });
+        });
+    });
 });

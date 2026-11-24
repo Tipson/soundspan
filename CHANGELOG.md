@@ -15,6 +15,9 @@
 
 ## Unreleased
 
+- Start an exact-recording fallback lookup after six seconds of a pending initial YouTube load, retaining the original request when no usable alternative exists and cancelling only the losing startup path.
+- Route public YouTube Music radio, search and catalog requests through the opt-in verified HTTP/3 transport, retaining bounded responses and the existing private-account transport.
+
 - Refresh the analyzer and DCLAP dependency locks for fixed certifi, OAuthLib, pyasn1, filelock, MessagePack and setuptools releases while preserving the remaining package versions and the pinned inference stack.
 
 - Preserve positional query parameters and byte URLs when the opt-in HTTP/3 session adapts the Requests interface, retaining signed media queries and normal non-CDN request handling.

@@ -143,7 +143,13 @@ def _create_public_ytmusic(
     language: str | None = None,
 ) -> YTMusic:
     """Create one public client with an operation-specific transport budget."""
-    request_session = _build_ytmusic_requests_session(request_timeout_seconds)
+    request_session: requests.Session
+    if os.getenv("YTMUSIC_METADATA_HTTP3", "").strip().lower() in {"1", "true", "yes"}:
+        from ytmusic_public_http3 import PublicYTMusicHttp3Session
+
+        request_session = PublicYTMusicHttp3Session(request_timeout_seconds)
+    else:
+        request_session = _build_ytmusic_requests_session(request_timeout_seconds)
     try:
         yt = YTMusic(
             language=language or YTMUSIC_LANGUAGE,

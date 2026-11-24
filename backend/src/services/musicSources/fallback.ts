@@ -3,6 +3,7 @@ import { MusicSourceError, type RecordingRequest } from "./types";
 interface Dependencies {
     enabled?(): Promise<boolean>;
     primaryTimeoutMs?: number;
+    fallbackDelayMs?: number;
     recording(videoId: string): Promise<RecordingRequest | null>;
     resolve(
         userId: string,
@@ -55,6 +56,55 @@ export function createMusicSourceFallback(deps: Dependencies) {
                     ? await deps.enabled().catch(() => false)
                     : true;
                 const startup = new AbortController();
+                const alternate = new AbortController();
+                const alternateSignal = AbortSignal.any([
+                    input.signal,
+                    alternate.signal,
+                ]);
+                type Outcome =
+                    | { kind: "stream"; stream: T }
+                    | { kind: "error"; error: unknown }
+                    | {
+                          kind: "alternate";
+                          playback: { streamPath: string } | null;
+                      };
+                let completeAlternate!: (outcome: Outcome) => void;
+                const alternateResult = new Promise<Outcome>((finish) => {
+                    completeAlternate = finish;
+                });
+                let alternateStarted = false;
+                const startAlternate = () => {
+                    if (alternateStarted || alternateSignal.aborted) return;
+                    alternateStarted = true;
+                    void Promise.resolve()
+                        .then(async () => {
+                            alternateSignal.throwIfAborted();
+                            const recording = await deps.recording(
+                                input.videoId,
+                            );
+                            alternateSignal.throwIfAborted();
+                            if (!recording) return null;
+                            const playback = await deps.resolve(
+                                input.userId,
+                                recording,
+                                alternateSignal,
+                            );
+                            alternateSignal.throwIfAborted();
+                            return playback;
+                        })
+                        .then(
+                            (playback) =>
+                                completeAlternate({
+                                    kind: "alternate",
+                                    playback,
+                                }),
+                            () =>
+                                completeAlternate({
+                                    kind: "alternate",
+                                    playback: null,
+                                }),
+                        );
+                };
                 const timer = enabled
                     ? setTimeout(
                           () =>
@@ -67,51 +117,93 @@ export function createMusicSourceFallback(deps: Dependencies) {
                 const primarySignal = enabled
                     ? AbortSignal.any([input.signal, startup.signal])
                     : input.signal;
-                try {
-                    let stream: T;
-                    try {
-                        stream = await input.original(primarySignal);
-                    } finally {
-                        clearTimeout(timer);
-                    }
-                    bindings.set(key, { expires: now() + 3_600_000 });
-                    return { stream };
-                } catch (error) {
-                    input.signal.throwIfAborted();
-                    if (!enabled) throw error;
-                    const status = (
-                        error as { response?: { status?: number } } | null
-                    )?.response?.status;
-                    const networkCode = (error as { code?: string } | null)
-                        ?.code;
-                    if (
-                        !primarySignal.aborted &&
-                        ![404, 429, 500, 502, 503, 504].includes(status ?? 0) &&
-                        ![
-                            "ECONNABORTED",
-                            "ECONNREFUSED",
-                            "ECONNRESET",
-                            "ETIMEDOUT",
-                            "ENETUNREACH",
-                            "EHOSTUNREACH",
-                        ].includes(networkCode ?? "")
-                    )
-                        throw error;
-                    const recording = await deps.recording(input.videoId);
-                    input.signal.throwIfAborted();
-                    if (!recording) throw error;
-                    const playback = await deps.resolve(
-                        input.userId,
-                        recording,
-                        input.signal,
+                const fallbackTimer = enabled
+                    ? setTimeout(
+                          startAlternate,
+                          deps.fallbackDelayMs ?? 6_000,
+                      ).unref()
+                    : undefined;
+                let cancel = () => {};
+                const cancelled = new Promise<never>((_, reject) => {
+                    cancel = () => reject(input.signal.reason);
+                    input.signal.addEventListener("abort", cancel, {
+                        once: true,
+                    });
+                    if (input.signal.aborted) cancel();
+                });
+                const primary = Promise.resolve()
+                    .then(() => {
+                        primarySignal.throwIfAborted();
+                        return input.original(primarySignal);
+                    })
+                    .then<Outcome, Outcome>(
+                        (stream) => ({ kind: "stream", stream }),
+                        (error: unknown) => ({ kind: "error", error }),
                     );
+                let primaryWon = false;
+                try {
+                    let waiting = [primary, alternateResult, cancelled];
+                    let primaryFailure: { error: unknown } | undefined;
+                    let result: { stream: T } | { redirect: string };
+                    for (;;) {
+                        const outcome = await Promise.race(waiting);
+                        if (outcome.kind === "stream") {
+                            primaryWon = true;
+                            result = { stream: outcome.stream };
+                            break;
+                        }
+                        if (outcome.kind === "alternate") {
+                            if (outcome.playback) {
+                                result = {
+                                    redirect: outcome.playback.streamPath,
+                                };
+                                break;
+                            }
+                            if (primaryFailure) throw primaryFailure.error;
+                            waiting = [primary, cancelled];
+                            continue;
+                        }
+                        clearTimeout(timer);
+                        const error = outcome.error;
+                        if (!enabled) throw error;
+                        const status = (
+                            error as { response?: { status?: number } } | null
+                        )?.response?.status;
+                        const networkCode = (error as { code?: string } | null)
+                            ?.code;
+                        if (
+                            !primarySignal.aborted &&
+                            ![404, 429, 500, 502, 503, 504].includes(
+                                status ?? 0,
+                            ) &&
+                            ![
+                                "ECONNABORTED",
+                                "ECONNREFUSED",
+                                "ECONNRESET",
+                                "ETIMEDOUT",
+                                "ENETUNREACH",
+                                "EHOSTUNREACH",
+                            ].includes(networkCode ?? "")
+                        )
+                            throw error;
+                        primaryFailure = outcome;
+                        startAlternate();
+                        waiting = [alternateResult, cancelled];
+                    }
                     input.signal.throwIfAborted();
-                    if (!playback) throw error;
                     bindings.set(key, {
-                        redirect: playback.streamPath,
+                        ...("redirect" in result
+                            ? { redirect: result.redirect }
+                            : {}),
                         expires: now() + 3_600_000,
                     });
-                    return { redirect: playback.streamPath };
+                    return result;
+                } finally {
+                    clearTimeout(timer);
+                    clearTimeout(fallbackTimer);
+                    input.signal.removeEventListener("abort", cancel);
+                    alternate.abort();
+                    if (!primaryWon) startup.abort();
                 }
             } finally {
                 pending.delete(key);
