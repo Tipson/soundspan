@@ -1,5 +1,8 @@
 export {};
 
+import express from "express";
+import request from "supertest";
+
 const mockDotenvConfig = jest.fn();
 const mockValidateMusicConfig = jest.fn();
 const mockLoggerDebug = jest.fn();
@@ -791,19 +794,55 @@ describe("config module", () => {
         expect(devOn.config.secureCookies).toBe(true);
     });
 
-    it("trustProxy defaults to true and accepts a numeric hop count", async () => {
+    it("trustProxy defaults to no trusted hops and accepts a numeric hop count", async () => {
         const def = await loadConfigModule({ TRUST_PROXY_HOPS: undefined });
-        expect(def.config.trustProxy).toBe(true);
+        expect(def.config.trustProxy).toBe(0);
 
         const oneHop = await loadConfigModule({ TRUST_PROXY_HOPS: "1" });
         expect(oneHop.config.trustProxy).toBe(1);
 
+        const splitPath = await loadConfigModule({ TRUST_PROXY_HOPS: " 2 " });
+        expect(splitPath.config.trustProxy).toBe(2);
+
         const noTrust = await loadConfigModule({ TRUST_PROXY_HOPS: "0" });
         expect(noTrust.config.trustProxy).toBe(0);
-
-        const invalid = await loadConfigModule({ TRUST_PROXY_HOPS: "nope" });
-        expect(invalid.config.trustProxy).toBe(true);
     });
+
+    it.each([
+        undefined,
+        "",
+        "nope",
+        "true",
+        "-1",
+        "1.5",
+        "2hops",
+        "9007199254740992",
+    ])(
+        "does not trust forwarded client identity for TRUST_PROXY_HOPS=%s",
+        async (value) => {
+            const { config } = await loadConfigModule({
+                TRUST_PROXY_HOPS: value,
+            });
+            const app = express();
+            app.set("trust proxy", config.trustProxy);
+            app.get("/identity", (req, res) => {
+                res.json({
+                    ip: req.ip,
+                    peer: req.socket.remoteAddress,
+                    protocol: req.protocol,
+                });
+            });
+
+            const response = await request(app)
+                .get("/identity")
+                .set("X-Forwarded-For", "198.51.100.99")
+                .set("X-Forwarded-Proto", "https")
+                .expect(200);
+
+            expect(response.body.ip).toBe(response.body.peer);
+            expect(response.body.protocol).toBe("http");
+        },
+    );
 
     it("configures the TCP socket keepalive delay with a safe fallback", async () => {
         const defaults = await loadConfigModule({

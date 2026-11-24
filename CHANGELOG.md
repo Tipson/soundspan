@@ -1,5 +1,11 @@
 # Changelog
 
+## External-service recovery and proxy trust
+
+- Pin the patched proxy-addr dependency and require an explicit trusted proxy depth for forwarded client identity. Missing or invalid configuration trusts only the socket, preserving rate-limit identity against forged forwarded headers.
+- Share MusicBrainz transport-reset cooldown across API and worker callers. Honor both forms of Retry-After within a bounded cooldown without extending caller admission waits.
+- Document the configured-proxy media route independently of direct HTTP/3 catalog access, keeping URL extraction and IP-bound audio on one verified egress.
+
 ## Mobile source recovery
 
 - Enable Deno/EJS for bounded PO-token recovery and recognize the explicitly supported bgutil 2.0.2 plugin while preserving primary-client options and recovery limits.

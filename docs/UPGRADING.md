@@ -860,12 +860,13 @@ will silently stop working (a `secure` cookie is never sent over HTTP, so login
 won't persist). Development mode (`NODE_ENV` unset/`development`) still defaults
 to non-secure cookies.
 
-**New, optional — `TRUST_PROXY_HOPS`.** `trust proxy` was hardcoded to `true`
-(trust every hop), which lets a client spoof `X-Forwarded-For` to dodge per-IP
-rate limits. Set `TRUST_PROXY_HOPS` to your real reverse-proxy depth (usually
-`1` behind a single nginx/traefik) for spoof-resistant IP resolution. Left
-unset, behavior is unchanged (trust all) so multi-hop Docker/Portainer setups
-keep working. Both vars can be passed via the Helm chart's `global.env`.
+**Reverse-proxy trust — `TRUST_PROXY_HOPS`.** Unset, invalid, negative, or
+unsafe values trust no forwarded hops. Set a nonnegative integer that matches
+the actual forwarded address chain to retain client-IP rate limits and secure
+protocol detection behind a proxy. Check which proxies append their peer to
+`X-Forwarded-For`: a proxy that preserves an existing header does not add a hop
+to that chain. Block shorter paths that bypass the trusted ingress. Both vars
+can be passed via the Helm chart's `global.env`.
 
 ---
 
