@@ -152,25 +152,33 @@ describe("youtubeMusic service branch coverage", () => {
             params: { user_id: "u1" },
         });
 
-        await ytMusicService.getStreamProxy("u1", "video-id");
-        expect(mockClient.get).toHaveBeenNthCalledWith(
-            2,
-            "/proxy/video-id",
-            expect.objectContaining({
-                params: { user_id: "u1", purpose: "interactive" },
-                headers: {},
-                responseType: "stream",
-                timeout: 120000,
-                httpAgent: expect.objectContaining({
-                    maxSockets: 120,
-                    maxTotalSockets: 120,
+        const clock = jest
+            .spyOn(performance, "now")
+            .mockReturnValue(3)
+            .mockReturnValueOnce(0);
+        try {
+            await ytMusicService.getStreamProxy("u1", "video-id");
+            expect(mockClient.get).toHaveBeenNthCalledWith(
+                2,
+                "/proxy/video-id",
+                expect.objectContaining({
+                    params: { user_id: "u1", purpose: "interactive" },
+                    headers: {},
+                    responseType: "stream",
+                    timeout: 119_997,
+                    httpAgent: expect.objectContaining({
+                        maxSockets: 120,
+                        maxTotalSockets: 120,
+                    }),
+                    httpsAgent: expect.objectContaining({
+                        maxSockets: 120,
+                        maxTotalSockets: 120,
+                    }),
                 }),
-                httpsAgent: expect.objectContaining({
-                    maxSockets: 120,
-                    maxTotalSockets: 120,
-                }),
-            }),
-        );
+            );
+        } finally {
+            clock.mockRestore();
+        }
 
         await expect(ytMusicService.getLibraryPlaylists("u1")).resolves.toEqual(
             [],
