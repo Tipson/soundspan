@@ -15,7 +15,7 @@
 
 ## Unreleased
 
-- Refresh the analyzer and DCLAP dependency locks for fixed certifi, OAuthLib, pyasn1, filelock and MessagePack releases while preserving the remaining package versions and the pinned inference stack.
+- Refresh the analyzer and DCLAP dependency locks for fixed certifi, OAuthLib, pyasn1, filelock, MessagePack and setuptools releases while preserving the remaining package versions and the pinned inference stack.
 
 - Preserve positional query parameters and byte URLs when the opt-in HTTP/3 session adapts the Requests interface, retaining signed media queries and normal non-CDN request handling.
 
