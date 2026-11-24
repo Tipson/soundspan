@@ -26,8 +26,12 @@ describe("Play delivery database lifecycle without a database server", () => {
         admin.connect.mockResolvedValue(undefined);
         admin.query.mockReset().mockResolvedValue({ rows: [] });
         admin.end.mockResolvedValue(undefined);
-        jest.mocked(Client).mockImplementation(() => admin as unknown as Client);
-        jest.mocked(applyScaleMigrations).mockReset().mockResolvedValue(undefined);
+        jest.mocked(Client).mockImplementation(
+            () => admin as unknown as Client,
+        );
+        jest.mocked(applyScaleMigrations)
+            .mockReset()
+            .mockResolvedValue(undefined);
     });
 
     afterEach(() => {
@@ -94,14 +98,22 @@ describe("Play delivery database lifecycle without a database server", () => {
         expect(admin.end).toHaveBeenCalledTimes(1);
     });
 
-    test.each(["soundspan", "postgres", "dev08_admin", "dev08_delivery_1_2_extra"])(
+    test.each([
+        "soundspan",
+        "postgres",
+        "dev08_admin",
+        "dev08_delivery_1_2_extra",
+    ])(
         "schema-fixture rejects unsafe database %s before connecting or dropping",
         async (name) => {
             const url = new URL(adminUrl);
             url.pathname = `/${name}`;
 
             await expect(
-                createPlayDeliveryTestDatabase(url.toString(), "schema-fixture"),
+                createPlayDeliveryTestDatabase(
+                    url.toString(),
+                    "schema-fixture",
+                ),
             ).rejects.toThrow("Unsafe delivery test database name");
 
             expect(Client).not.toHaveBeenCalled();
