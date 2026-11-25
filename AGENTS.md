@@ -8,6 +8,15 @@ Repository contract for soundspan.
 2. See [CONTRIBUTING.md](CONTRIBUTING.md) for build, test, and PR workflow.
 3. If your agent runtime provides AWM, see [.awm/AGENTS-AWM.md](.awm/AGENTS-AWM.md) for the enhanced workflow. If you are unaware or unsure of what AWM is, do not read the file.
 4. If using Claude, also read [CLAUDE.md](CLAUDE.md).
+5. Read [Shared project knowledge](docs/knowledge/README.md), then its state and decisions before choosing work. Fetch current refs and inspect context changes before relying on a stale branch. Keep accepted context changes in the same PR as the code they describe; keep code, deployment and device evidence distinct.
+
+## Shared Project Context
+
+- `docs/knowledge/` is the shared context for this fork. Start with its README, STATE, DECISIONS and ROADMAP; use WORKFLOW for task ownership and updates.
+- Read the relevant area README and code as well. Shared notes supplement this contract; they do not override user instructions or grant permission to deploy, resume paused work, change access, or operate on production data.
+- Use a separate `codex/` task branch and PR into `dev`; the owner integrates accepted work through a `dev` → `main` PR. See `CONTRIBUTING.md`. Never infer deployed state from a merge alone.
+- Update the affected knowledge document in the same PR when a behavior, accepted decision, task state or verification boundary changes. Retain dated evidence in `docs/release-notes/`; do not turn historical or proposed work into current facts.
+- Commit only shareable project context. Credentials, private endpoints/configuration, raw user logs, local Obsidian settings and machine-specific state stay outside Git.
 
 ## Source Of Truth
 
