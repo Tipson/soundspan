@@ -4,10 +4,10 @@ First off, thanks for taking the time to contribute! 🎉
 
 ## Getting Started
 
-1. Fork the repository
-2. Clone your fork locally
+1. Accept collaborator access to `Tipson/soundspan`, or fork it if contributing without write access
+2. Clone the repository or your fork locally, and read [shared project knowledge](docs/knowledge/README.md)
 3. Set up the development environment and learn how to reproduce the CI gates locally — see **Local Setup & Pre-PR Verification** in [AGENTS.md](AGENTS.md). (There is no root install; each package builds on its own, and all Node packages require Node ≥ 24.)
-4. Create a new branch from `main` for your changes
+4. Fetch current refs and create a separate `codex/` task branch from `dev`
 
 ## Git Hooks
 
@@ -24,11 +24,15 @@ Your local hook can run `awm verify` on staged code files before each commit.
 
 ## Branch Strategy
 
-All development happens on the `main` branch:
+This fork uses `dev` for integration and `main` for accepted release source:
 
-- **All PRs should target `main`**
-- Every push to `main` triggers a nightly Docker build
-- Stable releases are created via version tags
+- Task branches use the `codex/` prefix and open PRs into **`dev`**.
+- The owner reviews and integrates a release through a **`dev` → `main` PR**.
+- A merge does not establish that the website or APK was updated. Deployment and physical-device acceptance need their own evidence and authorization.
+- Image builds on `main` follow the changed-path selection in the image workflow; documentation changes do not require an application deployment.
+- Keep relevant [project knowledge](docs/knowledge/WORKFLOW.md) current in the same PR as implementation changes.
+
+The full Quality Visibility workflow targets PRs into `main`, not `dev`. Inspect the actual checks for each PR and follow the local checks in `AGENTS.md`; a green `dev` PR does not imply full backend coverage. The shared workflow describes collaboration, not an assertion that branch protection is enabled.
 
 ## Versioning Notes
 
@@ -200,14 +204,14 @@ For net-new feature work, use the repo-local AWM feature plan schema from `docs/
 
 ## Pull Request Process
 
-1. **Target the `main` branch**
+1. **Target `dev` for task PRs; the owner opens the integration PR into `main`**
 2. Fill out the PR template completely
-3. Ensure the Docker build check passes
-4. Include docs updates in `CHANGELOG.md` and `README.md` when behavior is user-facing
+3. Complete the applicable local checks and inspect the CI checks that actually ran
+4. Update affected shared knowledge; include `CHANGELOG.md` and `README.md` updates when behavior is user-facing
 5. Wait for review - we'll provide feedback or approve
 
 ## Questions?
 
-Open a Discussion thread for questions that aren't bugs or feature requests.
+Use the relevant issue or PR for project questions and task coordination.
 
 Thanks for contributing!

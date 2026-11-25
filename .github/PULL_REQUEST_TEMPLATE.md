@@ -37,5 +37,6 @@ Fixes #
 -   [ ] My code follows the project's code style
 -   [ ] I have tested my changes locally
 -   [ ] I have updated documentation if needed
+-   [ ] I updated affected `docs/knowledge/` context, or explained why no shared facts changed
 -   [ ] My changes don't introduce new warnings
--   [ ] This PR targets the `main` branch
+-   [ ] This PR targets `dev` for a task, or is the owner's `dev` → `main` integration PR

@@ -2,6 +2,10 @@
 
 This index is the central navigation page for all project documentation under `docs/`.
 
+## Shared project knowledge
+
+Start with [`knowledge/README.md`](knowledge/README.md) for the shared context of `Tipson/soundspan`: current state, accepted decisions, the paused roadmap, development entry points and the update workflow. Both contributors and coding agents use this versioned context alongside the code. Historical verification remains separate from current behavior and deployment claims.
+
 ## Suggested Reading Paths
 
 ### New users
