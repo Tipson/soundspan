@@ -21,6 +21,8 @@
 
 ## Unreleased
 
+- Label the upcoming-track preview in the mobile player. Remove the filled storage panel from Downloads and fix an error when scrolling back to it.
+
 - Add Android launcher shortcuts to start My Wave, resume the saved queue, and open Downloads.
 
 - Start an exact-recording fallback lookup after six seconds of a pending initial YouTube load, retaining the original request when no usable alternative exists and cancelling only the losing startup path.

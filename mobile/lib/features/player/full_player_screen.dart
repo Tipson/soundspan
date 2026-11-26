@@ -530,6 +530,12 @@ class FullPlayerScreen extends StatelessWidget {
   }
 
   Widget _sections(BuildContext context) {
+    final current = controller.snapshot.currentEntryId;
+    final upcoming = controller.orderedEntries
+        .skipWhile((entry) => entry.entryId != current)
+        .skip(1)
+        .take(3)
+        .toList();
     return Column(
       key: const ValueKey('player-more'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -537,17 +543,21 @@ class FullPlayerScreen extends StatelessWidget {
         const Divider(),
         const SizedBox(height: 8),
         _sectionActions(context),
-        for (final entry
-            in controller.orderedEntries
-                .skipWhile(
-                  (e) => e.entryId != controller.snapshot.currentEntryId,
-                )
-                .skip(1)
-                .take(3))
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text('${entry.track.title} · ${entry.track.artist}'),
+        if (upcoming.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Semantics(
+            header: true,
+            child: Text(
+              'Далее в очереди',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
           ),
+          for (final entry in upcoming)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text('${entry.track.title} · ${entry.track.artist}'),
+            ),
+        ],
       ],
     );
   }

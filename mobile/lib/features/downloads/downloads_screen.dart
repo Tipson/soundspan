@@ -173,6 +173,9 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                             MusicStatus(message: automation!.notice!),
                           const SizedBox(height: 16),
                           TextField(
+                            key: const PageStorageKey(
+                              'device-downloads-search',
+                            ),
                             controller: _search,
                             onChanged: controller.setQuery,
                             decoration: const InputDecoration(
@@ -182,6 +185,9 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                           ),
                           const SizedBox(height: 8),
                           SingleChildScrollView(
+                            key: const PageStorageKey(
+                              'device-downloads-filters',
+                            ),
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: [

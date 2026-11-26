@@ -24,48 +24,40 @@ class StorageStatusCard extends StatelessWidget {
     final bytes = complete.fold<int>(0, (sum, j) => sum + j.bytes);
     final summary =
         '${musicQuantity(complete.length, one: 'готовая загрузка', few: 'готовые загрузки', many: 'готовых загрузок')} · ${downloadBytes(bytes)}';
-    return Container(
-      decoration: BoxDecoration(
-        color: MusicColors.surface1,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: const Border(),
-            collapsedShape: const Border(),
-            title: Semantics(
-              label: ready ? 'На этом устройстве' : null,
-              child: Text(
-                ready ? summary : 'Хранилище недоступно',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ExpansionTile(
+          key: const PageStorageKey('device-downloads-storage'),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 12),
+          shape: const Border(),
+          collapsedShape: const Border(),
+          title: Semantics(
+            label: ready ? 'На этом устройстве' : null,
+            child: Text(
+              ready ? summary : 'Хранилище недоступно',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
-            subtitle: !ready
-                ? Text(summary)
-                : settings.isEmpty
-                ? null
-                : const Text('Память и автозагрузка'),
-            children: [
-              const Text(
-                'Объём по данным загрузок приложения. Свободное место смотрите в настройках устройства. Серверная музыка и файлы на других устройствах сюда не входят.',
-              ),
-              ...settings,
-            ],
           ),
-          if (!ready)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: MusicStatus(
-                message: 'Проверьте доступ к памяти. Готовые записи остаются в списке; доступность файла проверяется при воспроизведении.',
-                error: true,
-              ),
+          subtitle: !ready
+              ? Text(summary)
+              : settings.isEmpty
+              ? null
+              : const Text('Память и автозагрузка'),
+          children: [
+            const Text(
+              'Объём по данным загрузок приложения. Свободное место смотрите в настройках устройства. Серверная музыка и файлы на других устройствах сюда не входят.',
             ),
-        ],
-      ),
+            ...settings,
+          ],
+        ),
+        if (!ready)
+          const MusicStatus(
+            message: 'Проверьте доступ к памяти. Готовые записи остаются в списке; доступность файла проверяется при воспроизведении.',
+            error: true,
+          ),
+      ],
     );
   }
 }

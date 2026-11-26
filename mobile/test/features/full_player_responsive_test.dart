@@ -145,6 +145,63 @@ void main() {
     expect(playback.commands, isEmpty);
   });
 
+  testWidgets('upcoming preview labels the next three tracks in play order', (
+    tester,
+  ) async {
+    final current = state(_title).currentEntry!;
+    const artist = 'Исполнитель';
+    final entries = [
+      for (var i = 0; i < 5; i++)
+        QueueEntry(
+          entryId: 'entry-$i',
+          track: Track(
+            ref: LibraryTrackRef('track-$i'),
+            title: 'Трек $i',
+            artist: artist,
+          ),
+          context: current.context,
+        ),
+    ];
+    playback.value = QueueSnapshot(
+      fence: collectionFence,
+      entries: [current, ...entries],
+      effectiveOrder: [
+        entries[0].entryId,
+        current.entryId,
+        entries[3].entryId,
+        entries[1].entryId,
+        entries[4].entryId,
+        entries[2].entryId,
+      ],
+      currentEntryId: current.entryId,
+      playingIntent: true,
+    );
+    await mount(tester, size: const Size(360, 800));
+    final header = find.text('Далее в очереди');
+    expect(header, findsOneWidget);
+    await tester.ensureVisible(header);
+    final upcoming = [
+      for (final i in [3, 1, 4]) find.text('Трек $i · $artist'),
+    ];
+    var previous = tester.getTopLeft(header).dy;
+    for (final track in upcoming) {
+      expect(track, findsOneWidget);
+      final top = tester.getTopLeft(track).dy;
+      expect(top, greaterThan(previous));
+      previous = top;
+    }
+    for (final i in [0, 2]) {
+      expect(find.text('Трек $i · $artist'), findsNothing);
+    }
+  });
+
+  testWidgets('upcoming preview hides its heading at the end of the queue', (
+    tester,
+  ) async {
+    await mount(tester, size: const Size(360, 800));
+    expect(find.text('Далее в очереди'), findsNothing);
+  });
+
   testWidgets(
     'long-title player exposes both text and related without scrolling',
     (tester) async {
