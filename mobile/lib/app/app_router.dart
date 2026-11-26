@@ -91,6 +91,21 @@ class AppRouter extends ChangeNotifier {
     }
   }
 
+  /// Reveal a tab's main screen when invoked from the OS launcher.
+  void selectRootTab(AppTab tab) {
+    if (!_capabilities.allowsTab(tab) || !_availableTabs.contains(tab)) return;
+    if (_context case final context?) {
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).popUntil((route) => route.isFirst);
+    }
+    if (_currentTab != tab) {
+      _keys[tab]!.currentState?.popUntil((route) => route.isFirst);
+    }
+    selectTab(tab);
+  }
+
   Future<T?> push<T>(AppDestination destination) {
     if (!_allowed(destination)) return Future.value();
     if (destination.kind == AppRouteKind.player) {

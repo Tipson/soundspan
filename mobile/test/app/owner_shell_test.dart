@@ -634,6 +634,48 @@ void main() {
     controller.dispose();
     await authority.updates.close();
   });
+  testWidgets('launcher Downloads reveals its root above any open screen', (
+    tester,
+  ) async {
+    final router = AppRouter(initialTab: AppTab.downloads);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppShell(
+          router: router,
+          destinations: {
+            for (final tab in AppTab.values)
+              tab: (_) => Text('root-${tab.name}'),
+          },
+          routeBuilder: (_, destination) =>
+              Scaffold(body: Text(destination.kind.name)),
+        ),
+      ),
+    );
+    final detail = router.push<void>(
+      const AppDestination(AppRouteKind.offlineMix),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('offlineMix'), findsOneWidget);
+    router.selectTab(AppTab.home);
+    await tester.pumpAndSettle();
+    final overlay = router.openOverlay<void>(
+      const AppDestination(AppRouteKind.player),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('player'), findsOneWidget);
+
+    router.selectRootTab(AppTab.downloads);
+    await tester.pumpAndSettle();
+    expect(find.text('root-downloads'), findsOneWidget);
+    expect(router.stackDepth(AppTab.downloads), 1);
+    expect(router.playerVisible, isFalse);
+    await detail;
+    await overlay;
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    router.dispose();
+  });
+
   testWidgets('radio route opens and exposure follows root/tab/stack', (
     tester,
   ) async {

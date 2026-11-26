@@ -106,6 +106,20 @@ final class WaveController extends ChangeNotifier {
     return _run(() => continuation.start(selection, fence), network: true);
   }
 
+  /// A launcher request is a play command even when a Wave already exists.
+  Future<void> playOrStart() {
+    if (state.status == WaveStatus.loading) return Future.value();
+    if (!ownsCurrentWave ||
+        snapshot.processing == PlaybackProcessing.completed) {
+      return start();
+    }
+    return _run(() async {
+      if (ownsCurrentWave && !snapshot.playing) {
+        await playback.dispatch(const Resume());
+      }
+    });
+  }
+
   Future<void> apply(WaveSelection draft) {
     ++_selectionRevision;
     return _run(

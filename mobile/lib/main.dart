@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'app/app_composition.dart';
 import 'app/app_environment.dart';
+import 'app/launcher_shortcut.dart';
 import 'app/native_app_resources.dart';
 import 'app/native_documents.dart';
 import 'app/owner_feature_scope.dart';
@@ -35,6 +38,9 @@ void main() {
 // second broker UI role, audio handler or owner graph. Startup failure is final
 // for this process; a UI retry cannot initialize AudioService twice.
 final _process = _openProcess();
+final _launcherShortcuts = Platform.isAndroid
+    ? LauncherShortcut.androidEvents()
+    : null;
 Future<({NativeAppResources resources, AppComposition composition})>
 _openProcess() async {
   final resources = await NativeAppResources.open(
@@ -121,6 +127,10 @@ class MainApp extends StatelessWidget {
         return SoundspanApp(
           composition: process.composition,
           onOriginSelected: process.resources.rememberOrigin,
+          launcherShortcuts: _launcherShortcuts,
+          onLauncherShortcut: (owner, shortcut) =>
+              (owner as OwnerFeatureScope<OwnerUiSession>).session
+                  .launchShortcut(shortcut),
           registrationBuilder: (_, origin, onRegistered) => RegistrationScreen(
             transport: process.resources.transport,
             authority: process.resources.authority,

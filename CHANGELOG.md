@@ -21,6 +21,8 @@
 
 ## Unreleased
 
+- Add Android launcher shortcuts to start My Wave, resume the saved queue, and open Downloads.
+
 - Start an exact-recording fallback lookup after six seconds of a pending initial YouTube load, retaining the original request when no usable alternative exists and cancelling only the losing startup path.
 - Route public YouTube Music radio, search and catalog requests through the opt-in verified HTTP/3 transport, retaining bounded responses and the existing private-account transport.
 

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../core/network/dart_api_transport.dart';
+import '../core/model/app_failure.dart';
 import '../features/updates/apk_update_controller.dart';
 import '../features/updates/apk_update_downloader.dart';
 import '../features/updates/release_update_repository.dart';
@@ -52,7 +53,10 @@ import '../features/settings/settings_models.dart';
 import '../features/tastes/taste_controller.dart';
 import '../features/tastes/taste_repository.dart';
 import '../features/wave/wave_controller.dart';
+import '../playback/playback_controller.dart';
+import 'app_destinations.dart';
 import 'app_router.dart';
+import 'launcher_shortcut.dart';
 import 'owner_feature_scope.dart';
 import 'owner_playback_actions.dart';
 import 'owner_services.dart';
@@ -486,6 +490,35 @@ final class OwnerUiSession {
 
   SessionFence get fence => owner.fence;
   Future<void> guard() => playbackActions.guard();
+
+  /// Executes a launcher action using the currently admitted owner graph.
+  Future<void> launchShortcut(LauncherShortcut shortcut) async {
+    try {
+      await guard();
+      switch (shortcut) {
+        case LauncherShortcut.playWave:
+          router.selectRootTab(AppTab.wave);
+          await wave.playOrStart();
+          if (wave.failure case final failure? when isCurrent) {
+            notice.value = failure.message;
+          }
+        case LauncherShortcut.resume:
+          final snapshot = owner.playback.snapshot;
+          if (snapshot.fence != fence || snapshot.currentEntry == null) {
+            notice.value = 'Нет сохранённой очереди для продолжения.';
+          } else if (!snapshot.playing) {
+            await owner.playback.dispatch(const Resume());
+          }
+        case LauncherShortcut.downloads:
+          router.selectRootTab(AppTab.downloads);
+      }
+    } on AppFailure catch (failure) {
+      if (isCurrent) notice.value = failure.message;
+    } catch (_) {
+      if (isCurrent) notice.value = 'Не удалось выполнить действие ярлыка.';
+    }
+  }
+
   T own<T extends ChangeNotifier>(T controller) {
     lifetime.add(controller.dispose);
     return controller;
