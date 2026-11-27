@@ -47,12 +47,13 @@ export function useKeyboardShortcuts() {
         if (!playbackType) return;
 
         const handleKeyPress = (e: KeyboardEvent) => {
-            // Ignore if user is typing in an input/textarea
+            // Keep native input and dialog controls in charge of their keys.
             const target = e.target as HTMLElement;
             if (
                 target.tagName === "INPUT" ||
                 target.tagName === "TEXTAREA" ||
-                target.isContentEditable
+                target.isContentEditable ||
+                target.closest?.('[role="dialog"]')
             ) {
                 return;
             }

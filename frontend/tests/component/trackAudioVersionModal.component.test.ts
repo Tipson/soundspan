@@ -35,6 +35,42 @@ mock.module("@/lib/api", {
     },
 });
 
+test("the audio dialog escapes the clipped player surface", async (t) => {
+    const { createRoot } = await import("react-dom/client");
+    const { TrackAudioVersionModal } =
+        await import("../../components/ui/TrackAudioVersionModal");
+    const player = document.createElement("div");
+    player.style.backdropFilter = "blur(16px)";
+    player.style.overflow = "hidden";
+    document.body.append(player);
+    const root = createRoot(player);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        player.remove();
+    });
+
+    const onClose = mock.fn();
+    await React.act(async () => {
+        root.render(
+            React.createElement(TrackAudioVersionModal, {
+                target: { source: "library", trackId: "track-1" },
+                trackName: "Трек",
+                onClose,
+            }),
+        );
+    });
+
+    const dialog = document.body.querySelector('[role="dialog"]');
+    assert.ok(dialog);
+    assert.equal(player.contains(dialog), false);
+    const close = dialog.querySelector<HTMLButtonElement>(
+        'button[aria-label="Закрыть"]',
+    );
+    assert.ok(close);
+    await React.act(async () => close.click());
+    assert.equal(onClose.mock.callCount(), 1);
+});
+
 test("a newly picked MP3 must be staged or discarded before publishing an older draft", async (t) => {
     const { createRoot } = await import("react-dom/client");
     const { TrackAudioVersionModal } =

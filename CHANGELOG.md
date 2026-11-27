@@ -21,6 +21,8 @@
 
 ## Unreleased
 
+- Open the full-version audio dialog above the web player so upload and close remain accessible.
+
 - Keep the current track version when a new audio draft is missing from storage. In the web dialog, stage or clear a newly selected file before publishing an older draft. Offer replacement only on exact catalog results and preload the Android administrator role.
 - Provide a writable alternate-audio volume for the API in hardened single-host deployments with a read-only music library.
 - Try the standard recording when a full version disappears during playback startup.
