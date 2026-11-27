@@ -2,8 +2,8 @@
 
 import { useRef, useState } from "react";
 import {
-    clampTrackSwipeOffset,
     resolveTrackSwipeAction,
+    resolveTrackSwipeOffset,
     resolveVerticalDragOffset,
     shouldCloseFromVerticalSwipe,
 } from "@/lib/overlay-gesture-policy";
@@ -126,30 +126,50 @@ export function useOverlayGestures({
     onCloseOverlay,
     onCloseDrawer,
 }: OverlayGestureOptions) {
-    const touchStartX = useRef<number | null>(null);
+    const trackSwipeStart = useRef<{ x: number; y: number } | null>(null);
     const [swipeOffset, setSwipeOffset] = useState(0);
 
-    const trackSwipeHandlers: TouchHandlerSet = {
-        onTouchStart: (e) => {
-            touchStartX.current = e.touches[0].clientX;
-        },
-        onTouchMove: (e) => {
-            if (touchStartX.current === null) return;
-            setSwipeOffset(
-                clampTrackSwipeOffset(
-                    e.touches[0].clientX - touchStartX.current,
-                ),
-            );
-        },
-        onTouchEnd: () => {
-            if (touchStartX.current === null) return;
-            const action = resolveTrackSwipeAction(swipeOffset, canSkip);
-            if (action === "previous") onPrevious();
-            if (action === "next") onNext();
-            setSwipeOffset(0);
-            touchStartX.current = null;
-        },
+    const resetTrackSwipe = () => {
+        trackSwipeStart.current = null;
+        setSwipeOffset(0);
     };
+
+    const trackSwipeHandlers: TouchHandlerSet & { onTouchCancel: () => void } =
+        {
+            onTouchStart: (e) => {
+                if (e.touches.length !== 1) {
+                    resetTrackSwipe();
+                    return;
+                }
+                const { clientX, clientY } = e.touches[0];
+                trackSwipeStart.current = { x: clientX, y: clientY };
+            },
+            onTouchMove: (e) => {
+                const start = trackSwipeStart.current;
+                if (!start) return;
+                const { clientX, clientY } = e.touches[0];
+                setSwipeOffset(
+                    resolveTrackSwipeOffset(
+                        clientX - start.x,
+                        clientY - start.y,
+                    ),
+                );
+            },
+            onTouchEnd: (e) => {
+                const start = trackSwipeStart.current;
+                if (!start) return;
+                const { clientX, clientY } = e.changedTouches[0];
+                const offset = resolveTrackSwipeOffset(
+                    clientX - start.x,
+                    clientY - start.y,
+                );
+                const action = resolveTrackSwipeAction(offset, canSkip);
+                if (action === "previous") onPrevious();
+                if (action === "next") onNext();
+                resetTrackSwipe();
+            },
+            onTouchCancel: resetTrackSwipe,
+        };
 
     const overlayClose = useVerticalCloseGesture(220, onCloseOverlay, true);
     const drawerClose = useVerticalCloseGesture(240, onCloseDrawer, false);

@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-    clampTrackSwipeOffset,
+    resolveTrackSwipeOffset,
     resolveTrackSwipeAction,
     resolveVerticalDragOffset,
     shouldCloseFromVerticalSwipe,
 } from "../../lib/overlay-gesture-policy";
 
-test("track swipe offset clamps to the visual travel range", () => {
-    assert.equal(clampTrackSwipeOffset(250), 100);
-    assert.equal(clampTrackSwipeOffset(-250), -100);
-    assert.equal(clampTrackSwipeOffset(42), 42);
+test("track swipe offset follows horizontal intent and clamps to the visual travel range", () => {
+    assert.equal(resolveTrackSwipeOffset(250, -10), 100);
+    assert.equal(resolveTrackSwipeOffset(-250, 10), -100);
+    assert.equal(resolveTrackSwipeOffset(42, 8), 42);
+    assert.equal(resolveTrackSwipeOffset(-100, -180), 0);
+    assert.equal(resolveTrackSwipeOffset(100, 90), 0);
 });
 
 test("track swipe action requires the threshold and skip permission", () => {

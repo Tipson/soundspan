@@ -432,7 +432,21 @@ export const test = base.extend<{ app: CoreApp }>({
                             migration: null,
                         },
                     });
-                if (key === "GET /api/settings") return json({});
+                if (key === "GET /api/settings")
+                    return json({
+                        playbackQuality: "original",
+                        loudnessMode: "auto",
+                    });
+                if (key === "GET /api/plays/summary")
+                    return json({
+                        allTime: 0,
+                        last7Days: 0,
+                        last30Days: 0,
+                        last365Days: 0,
+                    });
+                if (key === "GET /api/auth/app-passwords")
+                    return json({ appPasswords: [] });
+                if (key === "GET /api/api-keys") return json({ apiKeys: [] });
                 unexpected.push(key);
                 await route.abort("blockedbyclient");
             });

@@ -23,7 +23,7 @@ const qualityOptions = [
 ];
 
 const loudnessOptions = [
-    { value: "auto", label: "Автоматически (рекомендуется)" },
+    { value: "auto", label: "Автоматически" },
     { value: "track", label: "По трекам" },
     { value: "album", label: "По альбомам" },
     { value: "off", label: "Выключено" },
@@ -60,7 +60,7 @@ export function PlaybackSection({
             </SettingsRow>
             <SettingsRow
                 label="Выравнивание громкости"
-                description="Сглаживает разницу в громкости. Автоматический режим сохраняет исходную динамику альбомов и выравнивает остальные треки."
+                description="Рекомендуемый автоматический режим сохраняет исходную динамику альбомов и сглаживает разницу в громкости остальных треков."
             >
                 <SettingsSelect
                     value={loudnessMode}

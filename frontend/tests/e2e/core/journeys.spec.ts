@@ -3,6 +3,7 @@ import { test, TRACKS, login, readAudio, expectPlaying } from "./fixture";
 
 async function openTastes(page: Page) {
     await page.goto("/settings");
+    await page.getByRole("link", { name: /^Профиль/ }).click();
     await page
         .getByRole("button", { name: "Уточнить предпочтения", exact: true })
         .click();

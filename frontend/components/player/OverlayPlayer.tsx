@@ -224,6 +224,9 @@ export function OverlayPlayer() {
     const queueTracks = queue;
 
     const tabPanelHeightClass = "min-h-0 flex-1";
+    const metadataTextWrapping = isMobileOrTablet
+        ? "line-clamp-2 wrap-anywhere leading-tight!"
+        : "truncate";
 
     const handlePlayPause = useCallback(() => {
         if (audioError) {
@@ -467,8 +470,8 @@ export function OverlayPlayer() {
             data-media-kind={playbackType ?? "unknown"}
             data-player-transition
             initial={
-                shouldReduceMotion
-                    ? { opacity: 1, y: 0 }
+                isMobileOrTablet || shouldReduceMotion
+                    ? false
                     : { opacity: 0, y: 24 }
             }
             animate={{
@@ -497,6 +500,9 @@ export function OverlayPlayer() {
             }
             onTouchEnd={
                 isMobileOrTablet ? trackSwipeHandlers.onTouchEnd : undefined
+            }
+            onTouchCancel={
+                isMobileOrTablet ? trackSwipeHandlers.onTouchCancel : undefined
             }
         >
             {coverUrl && (
@@ -602,12 +608,17 @@ export function OverlayPlayer() {
                 className={cn(
                     "overlay-player-layout relative z-10 flex-1 min-h-0 px-4 pt-2",
                     isMobileOrTablet
-                        ? "overflow-hidden pb-24"
+                        ? "overflow-x-hidden overflow-y-auto overscroll-contain pb-[calc(6rem+env(safe-area-inset-bottom))]"
                         : "overflow-hidden pb-6 landscape:px-8",
                 )}
                 style={isMobileOrTablet ? undefined : { paddingRight: "50%" }}
             >
-                <div className="mx-auto flex h-full w-full max-w-5xl flex-col items-center justify-center gap-4 landscape:gap-6">
+                <div
+                    className={cn(
+                        "mx-auto flex w-full max-w-5xl flex-col items-center justify-center gap-4 landscape:gap-6",
+                        isMobileOrTablet ? "min-h-full" : "h-full",
+                    )}
+                >
                     {/* Left Rail: artwork + transport */}
                     <div
                         className={cn(
@@ -638,7 +649,11 @@ export function OverlayPlayer() {
                                 )}
                             />
                             <motion.div
-                                layoutId={artworkLayoutId}
+                                layoutId={
+                                    shouldReduceMotion
+                                        ? undefined
+                                        : artworkLayoutId
+                                }
                                 transition={{
                                     type: "spring",
                                     stiffness: 320,
@@ -706,12 +721,22 @@ export function OverlayPlayer() {
                                             onClick={returnToPreviousMode}
                                             className="min-w-0 hover:underline"
                                         >
-                                            <h1 className="truncate text-xl font-bold text-white">
+                                            <h1
+                                                className={cn(
+                                                    "text-xl font-bold text-white",
+                                                    metadataTextWrapping,
+                                                )}
+                                            >
                                                 {title}
                                             </h1>
                                         </Link>
                                     ) : (
-                                        <h1 className="truncate text-xl font-bold text-white">
+                                        <h1
+                                            className={cn(
+                                                "text-xl font-bold text-white",
+                                                metadataTextWrapping,
+                                            )}
+                                        >
                                             {title}
                                         </h1>
                                     )}
@@ -723,12 +748,22 @@ export function OverlayPlayer() {
                                         onClick={returnToPreviousMode}
                                         className="block hover:underline"
                                     >
-                                        <p className="mt-1 truncate text-base text-gray-400">
+                                        <p
+                                            className={cn(
+                                                "mt-1 text-base text-gray-400",
+                                                metadataTextWrapping,
+                                            )}
+                                        >
                                             {subtitle}
                                         </p>
                                     </Link>
                                 ) : (
-                                    <p className="mt-1 truncate text-base text-gray-400">
+                                    <p
+                                        className={cn(
+                                            "mt-1 text-base text-gray-400",
+                                            metadataTextWrapping,
+                                        )}
+                                    >
                                         {subtitle}
                                     </p>
                                 )}

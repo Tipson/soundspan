@@ -26,7 +26,7 @@ export function SettingsSelect({
     disabled,
 }: SettingsSelectProps) {
     return (
-        <div className="relative">
+        <div className="relative w-fit max-w-full">
             <select
                 id={id}
                 value={value}
@@ -34,7 +34,7 @@ export function SettingsSelect({
                 disabled={disabled}
                 className={`
                     appearance-none bg-surface-elevated text-content text-base sm:text-sm
-                    min-h-11 pl-3.5 pr-10 py-2.5 rounded-xl
+                    min-h-11 max-w-full pl-3.5 pr-10 py-2.5 rounded-xl
                     border border-line outline-none
                     ${SETTINGS_FIELD_FOCUS_RING}
                     cursor-pointer transition-colors

@@ -3,8 +3,12 @@
  * Kept free of React so the swipe/close thresholds are unit-testable.
  */
 
-/** Horizontal track-swipe offset, clamped to the visual travel range. */
-export function clampTrackSwipeOffset(deltaX: number): number {
+/** Visual offset for a predominantly horizontal track swipe. */
+export function resolveTrackSwipeOffset(
+    deltaX: number,
+    deltaY: number,
+): number {
+    if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return 0;
     return Math.max(-100, Math.min(100, deltaX));
 }
 

@@ -22,7 +22,11 @@
 ## Unreleased
 
 - Open the full-version audio dialog above the web player so upload and close remain accessible.
+- Wrap long track and artist names in the mobile web player and keep playback controls reachable on short screens. Open the full player from its artwork or track details and honor reduced-motion preferences when switching between players.
+- Keep the current track while scrolling vertically in the mobile web player. Escape and Back return keyboard focus to the mini-player, where Space activates the focused control.
 
+- Show Profile, Listening, Offline, and Security on the mobile web Settings overview. Keep unsaved drafts when switching sections and fit the automatic volume-leveling label on narrow screens.
+- Show Profile, Listening, Offline, and Security on the mobile web Settings overview. Keep unsaved drafts when switching sections, restore heading focus on browser Back and Forward, and fit the automatic volume-leveling label on narrow screens.
 - Keep the current track version when a new audio draft is missing from storage. In the web dialog, stage or clear a newly selected file before publishing an older draft. Offer replacement only on exact catalog results and preload the Android administrator role.
 - Provide a writable alternate-audio volume for the API in hardened single-host deployments with a read-only music library.
 - Try the standard recording when a full version disappears during playback startup.

@@ -1,5 +1,6 @@
 "use client";
 
+import type { Ref } from "react";
 import {
     useAudioControls,
     useAudioState,
@@ -27,7 +28,11 @@ import { supportsTrackPreferences } from "@/lib/trackRef";
 /**
  * Renders the MiniPlayer component.
  */
-export function MiniPlayer() {
+export function MiniPlayer({
+    openButtonRef,
+}: {
+    openButtonRef?: Ref<HTMLButtonElement>;
+}) {
     const { currentTrack, currentAudiobook, currentPodcast, playbackType } =
         useAudioState();
     const {
@@ -89,6 +94,9 @@ export function MiniPlayer() {
             <div
                 className="mobile-player-surface pointer-events-auto overflow-hidden rounded-[14px]"
                 data-player-layout="identity-ratings-play"
+                role="group"
+                aria-label={ru.player.nowPlaying}
+                onKeyDown={(event) => event.stopPropagation()}
             >
                 <div className="relative h-[2px] w-full bg-white/[0.08]">
                     <div
@@ -103,71 +111,68 @@ export function MiniPlayer() {
                         paddingLeft: "calc(0.75rem + var(--safe-area-left))",
                         paddingRight: "calc(0.75rem + var(--safe-area-right))",
                     }}
-                    onClick={() => setPlayerMode("overlay")}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setPlayerMode("overlay");
-                        }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={ru.player.open}
                 >
-                    <motion.div
-                        layoutId={artworkLayoutId}
-                        transition={{
-                            type: "spring",
-                            stiffness: 320,
-                            damping: 34,
-                        }}
-                        className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-black/30 ring-1 ring-white/10"
+                    <button
+                        ref={openButtonRef}
+                        type="button"
+                        aria-label={ru.player.open}
+                        onClick={() => setPlayerMode("overlay")}
+                        className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                     >
-                        {coverUrl ? (
-                            <CachedImage
-                                src={coverUrl}
-                                alt={title}
-                                fill
-                                sizes="44px"
-                                className="object-cover"
-                                unoptimized
-                            />
-                        ) : (
-                            <div className="flex h-full w-full items-center justify-center">
-                                <MusicIcon className="h-5 w-5 text-gray-400" />
-                            </div>
-                        )}
-                    </motion.div>
+                        <motion.span
+                            layoutId={artworkLayoutId}
+                            transition={{
+                                type: "spring",
+                                stiffness: 320,
+                                damping: 34,
+                            }}
+                            className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-black/30 ring-1 ring-white/10"
+                        >
+                            {coverUrl ? (
+                                <CachedImage
+                                    src={coverUrl}
+                                    alt={title}
+                                    fill
+                                    sizes="44px"
+                                    className="object-cover"
+                                    unoptimized
+                                />
+                            ) : (
+                                <span className="flex h-full w-full items-center justify-center">
+                                    <MusicIcon className="h-5 w-5 text-gray-400" />
+                                </span>
+                            )}
+                        </motion.span>
 
-                    <div className="min-w-0 flex-1">
-                        {audioError ? (
-                            <>
-                                <p className="truncate text-sm font-semibold text-error">
-                                    Ошибка воспроизведения
-                                </p>
-                                <p className="truncate text-xs text-error/75">
-                                    Нажмите «Повторить», чтобы переподключиться
-                                </p>
-                            </>
-                        ) : (
-                            <>
-                                <p className="truncate text-[13px] font-semibold text-content min-[360px]:text-sm">
-                                    {title}
-                                </p>
-                                <p className="mt-0.5 truncate text-xs text-content-muted">
-                                    {subtitle}
-                                </p>
-                            </>
-                        )}
-                    </div>
+                        <span className="min-w-0 flex-1">
+                            {audioError ? (
+                                <>
+                                    <span className="block truncate text-sm font-semibold text-error">
+                                        Ошибка воспроизведения
+                                    </span>
+                                    <span className="block truncate text-xs text-error/75">
+                                        Нажмите «Повторить», чтобы
+                                        переподключиться
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="block truncate text-[13px] font-semibold text-content min-[360px]:text-sm">
+                                        {title}
+                                    </span>
+                                    <span className="mt-0.5 block truncate text-xs text-content-muted">
+                                        {subtitle}
+                                    </span>
+                                </>
+                            )}
+                        </span>
+                    </button>
 
                     {playbackType === "track" &&
                         currentTrack?.id &&
                         supportsTrackPreferences(currentTrack) && (
                             <div
                                 className="flex flex-shrink-0 items-center"
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.stopPropagation()}
                                 role="group"
                                 aria-label={ru.player.preference}
                             >
@@ -185,8 +190,6 @@ export function MiniPlayer() {
 
                     <div
                         className="flex flex-shrink-0 items-center"
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
                         role="group"
                         aria-label={ru.player.controls}
                     >
