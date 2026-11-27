@@ -193,6 +193,7 @@ abstract final class MusicCodec {
         'recommendationSessionId': context.recommendationSessionId,
         if (context.offlineMixGeneration != null)
           'offlineMixGeneration': context.offlineMixGeneration,
+        if (context.fromDownloads) 'fromDownloads': true,
       }, decodePlayContext);
 
   static PlayContext decodePlayContext(Object? value) {
@@ -202,7 +203,10 @@ abstract final class MusicCodec {
       'recommendationGenerationId',
       'recommendationSessionId',
       'offlineMixGeneration',
+      'fromDownloads',
     });
+    final fromDownloads = row['fromDownloads'];
+    if (fromDownloads != null && fromDownloads is! bool) _fail();
     int? offlineGeneration;
     final offline = row['offlineMixGeneration'];
     if (offline != null) {
@@ -226,6 +230,7 @@ abstract final class MusicCodec {
         row['recommendationSessionId'],
       ),
       offlineMixGeneration: offlineGeneration,
+      fromDownloads: fromDownloads == true,
     );
   }
 
@@ -233,14 +238,23 @@ abstract final class MusicCodec {
     'entryId': entry.entryId,
     'track': encodeTrack(entry.track),
     'context': encodePlayContext(entry.context),
+    if (entry.standardAudio) 'standardAudio': true,
   }, decodeQueueEntry);
 
   static QueueEntry decodeQueueEntry(Object? value) {
-    final row = _object(value, {'entryId', 'track', 'context'});
+    final row = _object(value, {
+      'entryId',
+      'track',
+      'context',
+      'standardAudio',
+    });
+    final standardAudio = row['standardAudio'];
+    if (standardAudio != null && standardAudio is! bool) _fail();
     return QueueEntry(
       entryId: _text(row['entryId'], max: 256),
       track: decodeTrack(row['track']),
       context: decodePlayContext(row['context']),
+      standardAudio: standardAudio == true,
     );
   }
 

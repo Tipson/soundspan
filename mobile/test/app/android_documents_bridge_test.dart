@@ -30,6 +30,59 @@ void main() {
   });
 
   test(
+    'Android audio uses the native selector and preserves MP3 bytes',
+    () async {
+      final bytes = Uint8List.fromList([0x49, 0x44, 0x33, 0, 255]);
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'pick');
+        expect(call.arguments, {'kind': 'audio'});
+        return {'name': 'Полная версия.MP3', 'bytes': bytes};
+      });
+      final audio = (await NativeDocuments().pickTrackAudio(
+        isCurrent: () => true,
+      ))!;
+      expect(audio.name, 'Полная версия.MP3');
+      expect(audio.bytes, bytes);
+    },
+  );
+
+  test('Android audio rejects a native 16 MiB overflow', () async {
+    messenger.setMockMethodCallHandler(channel, (_) async {
+      throw PlatformException(code: 'document_too_large');
+    });
+    await expectLater(
+      NativeDocuments().pickTrackAudio(isCurrent: () => true),
+      throwsA(
+        isA<AppFailure>().having(
+          (e) => e.code,
+          'code',
+          'track_audio_too_large',
+        ),
+      ),
+    );
+  });
+
+  test('Dart independently rejects a bridge reply above 16 MiB', () async {
+    messenger.setMockMethodCallHandler(
+      channel,
+      (_) async => {
+        'name': 'track.mp3',
+        'bytes': Uint8List(16 * 1024 * 1024 + 1),
+      },
+    );
+    await expectLater(
+      NativeDocuments().pickTrackAudio(isCurrent: () => true),
+      throwsA(
+        isA<AppFailure>().having(
+          (e) => e.code,
+          'code',
+          'track_audio_too_large',
+        ),
+      ),
+    );
+  });
+
+  test(
     'Android preserves original M3U basename and exact UTF8 bytes',
     () async {
       messenger.setMockMethodCallHandler(channel, (call) async {
@@ -50,7 +103,7 @@ void main() {
     },
   );
 
-  test('native Back returns no selection for either kind', () async {
+  test('native Back returns no selection for each kind', () async {
     final kinds = <String>[];
     messenger.setMockMethodCallHandler(channel, (call) async {
       kinds.add((call.arguments as Map)['kind'] as String);
@@ -59,7 +112,8 @@ void main() {
     final documents = NativeDocuments();
     expect(await documents.pickAvatar(isCurrent: () => true), isNull);
     expect(await documents.pickPlaylist(isCurrent: () => true), isNull);
-    expect(kinds, ['image', 'playlist']);
+    expect(await documents.pickTrackAudio(isCurrent: () => true), isNull);
+    expect(kinds, ['image', 'playlist', 'audio']);
   });
 
   test('provider exception never exposes URI or provider message', () async {
@@ -108,19 +162,26 @@ void main() {
     );
   });
 
-  test('owner change during native chooser rejects late selection', () async {
-    final pending = Completer<Object?>();
-    var current = true;
-    messenger.setMockMethodCallHandler(channel, (_) => pending.future);
-    final selection = NativeDocuments().pickPlaylist(isCurrent: () => current);
-    current = false;
-    pending.complete({
-      'name': 'x.m3u',
-      'bytes': Uint8List.fromList(utf8.encode('#EXTM3U')),
-    });
-    await expectLater(
-      selection,
-      throwsA(isA<AppFailure>().having((e) => e.code, 'code', 'stale_session')),
-    );
-  });
+  test(
+    'owner change during native audio chooser rejects late selection',
+    () async {
+      final pending = Completer<Object?>();
+      var current = true;
+      messenger.setMockMethodCallHandler(channel, (_) => pending.future);
+      final selection = NativeDocuments().pickTrackAudio(
+        isCurrent: () => current,
+      );
+      current = false;
+      pending.complete({
+        'name': 'x.mp3',
+        'bytes': Uint8List.fromList([0x49, 0x44, 0x33]),
+      });
+      await expectLater(
+        selection,
+        throwsA(
+          isA<AppFailure>().having((e) => e.code, 'code', 'stale_session'),
+        ),
+      );
+    },
+  );
 }

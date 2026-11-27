@@ -10,6 +10,7 @@ final class PlayContext {
     this.recommendationGenerationId,
     this.recommendationSessionId,
     this.offlineMixGeneration,
+    this.fromDownloads = false,
   });
 
   final PlaySurface surface;
@@ -17,6 +18,7 @@ final class PlayContext {
   final String? recommendationGenerationId;
   final String? recommendationSessionId;
   final int? offlineMixGeneration;
+  final bool fromDownloads;
 
   /// A Wave session spans page generations; other feeds use their generation.
   String? get recommendationScopeKey {

@@ -301,7 +301,7 @@ void main() {
     },
   );
 
-  for (final status in [400, 401, 404, 429, 500]) {
+  for (final status in [400, 401, 404, 429, 451, 500]) {
     test('permanent/status$status does not acquire a transient retry budget', () async {
       var requests = 0;
       final server = await FakeTlsServer.start((r) async {
@@ -317,6 +317,14 @@ void main() {
         ReplaceQueue([_entry('one')], fence: authority.requireFence()),
       );
       expect(rig.queue.snapshot.failure?.statusCode, status);
+      if (status == 451) {
+        expect(rig.queue.snapshot.failure?.code, 'media_restricted');
+        expect(
+          rig.queue.snapshot.failure?.message,
+          contains('Источник ограничил доступ'),
+        );
+        expect(rig.queue.snapshot.failure?.retryable, isFalse);
+      }
       // Existing one401 refresh and one404 native lease renewal remain intact.
       expect(requests, const {401, 404}.contains(status) ? 2 : 1);
     });

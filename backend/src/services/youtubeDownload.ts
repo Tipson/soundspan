@@ -262,9 +262,13 @@ class YouTubeDownloadService {
     /**
      * Fetch metadata for a YouTube video (title, uploader, duration, thumbnail).
      */
-    async getVideoInfo(url: string): Promise<YtVideoInfo> {
+    async getVideoInfo(
+        url: string,
+        signal?: AbortSignal,
+    ): Promise<YtVideoInfo> {
         const res = await this.client.get("/yt/info", {
             params: { url },
+            signal,
         });
         return res.data;
     }

@@ -5,12 +5,14 @@ import { toMusicSourcePlaybackTrack } from "../../lib/audio/musicSourcePlayback"
 
 let calls = 0;
 let deviceCopy = false;
+let publishedAudio: string | null = null;
 let auth = new AbortController();
 let resolvePlayback = async (_candidate: unknown, _signal: AbortSignal) =>
     "/api/music-sources/leases/owned/stream";
 mock.module("../../lib/api", {
     namedExports: {
         api: {
+            getPublishedTrackAudioUrl: async () => publishedAudio,
             getMusicSourceStreamUrl: () =>
                 "/api/music-sources/recordings/vk/1_2/stream",
             resolveMusicSourcePlayback: (
@@ -45,6 +47,36 @@ const track = toMusicSourcePlaybackTrack({
     preview: false,
 });
 const flush = () => new Promise((r) => setImmediate(r));
+test("published audio replaces a prepared standard stream without calling the provider", async () => {
+    const { startTrackPlaybackSourceLease } =
+        await import("../../components/player/hooks/startTrackPlaybackSourceLease");
+    const id = "19b2ace6-d28a-4d70-9cb5-44fce755a86e";
+    publishedAudio = `/api/track-audio/versions/${id}/stream`;
+    calls = 0;
+    let releases = 0;
+    const urls: string[] = [];
+    const controller = createPlaybackSourceLeaseController();
+    startTrackPlaybackSourceLease({
+        controller,
+        track,
+        networkUrl: "/api/library/wrong",
+        preparedSource: {
+            url: "standard",
+            release: () => {
+                releases++;
+            },
+        },
+        isCurrent: () => true,
+        onReady: (url) => urls.push(url),
+        onError: (error) => assert.fail(String(error)),
+    });
+    await flush();
+    assert.deepEqual(urls, [publishedAudio]);
+    assert.equal(calls, 0);
+    assert.equal(releases, 1);
+    controller.release();
+    publishedAudio = null;
+});
 test("a downloaded service track plays its local bytes without resolving the provider", async () => {
     const { startTrackPlaybackSourceLease } =
         await import("../../components/player/hooks/startTrackPlaybackSourceLease");

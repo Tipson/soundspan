@@ -26,6 +26,8 @@ const DEFAULT_PERSONAL_DAILY_MIX_PROXY_TIMEOUT_MS = 65_000;
 const IMPORT_PREVIEW_PROXY_PATH = "api/import/preview";
 const UNAVAILABLE_RECOVERY_PROXY_PATH = "api/ytmusic/recover-unavailable";
 const PERSONAL_DAILY_MIX_PROXY_PATH = "api/personalized/daily-mixes";
+const TRACK_AUDIO_DRAFT_PATH =
+    /^(?:api\/)?track-audio\/(?:library|youtube|vk|yandex)\/[a-z0-9_-]{1,256}\/draft$/;
 const MEDIA_STREAM_PATH_PATTERNS = [
     /^(?:api\/)?music-sources\/leases\/[^/]+\/stream$/,
     /^(?:api\/)?ytmusic\/(?:stream|stream-public)\/[^/]+$/,
@@ -63,6 +65,9 @@ export const resolveProxyTimeoutMs = (
     }
 
     const normalizedPath = normalizeTargetPath(targetPath);
+    if (TRACK_AUDIO_DRAFT_PATH.test(normalizedPath)) {
+        return Math.max(globalTimeout, 90_000);
+    }
     if (normalizedPath === UNAVAILABLE_RECOVERY_PROXY_PATH) {
         return Math.max(
             globalTimeout,
@@ -270,18 +275,23 @@ export const proxyRequest = async (
         controller.abort();
     }, timeoutMs);
 
-    const init: RequestInit = {
+    const init: RequestInit & { duplex?: "half" } = {
         method,
         headers,
         redirect: "manual",
         signal: controller.signal,
     };
 
-    if (method !== "GET" && method !== "HEAD") {
-        init.body = await request.arrayBuffer();
-    }
-
     try {
+        if (
+            method === "PUT" &&
+            TRACK_AUDIO_DRAFT_PATH.test(normalizeTargetPath(targetPath))
+        ) {
+            init.body = request.body;
+            init.duplex = "half";
+        } else if (method !== "GET" && method !== "HEAD") {
+            init.body = await request.arrayBuffer();
+        }
         const upstream = await fetch(targetUrl, init);
         const responseHeaders = new Headers(upstream.headers);
 

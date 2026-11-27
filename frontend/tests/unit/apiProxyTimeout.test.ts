@@ -1,8 +1,28 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { resolveProxyTimeoutMs } from "../../lib/apiProxy";
+import customProxy from "../../server-proxy";
 
 describe("resolveProxyTimeoutMs", () => {
+    test("both proxies reserve time for a bounded draft upload only", () => {
+        for (const timeout of [
+            resolveProxyTimeoutMs,
+            customProxy.resolveProxyTimeoutMs,
+        ]) {
+            assert.equal(
+                timeout("/api/track-audio/library/track-1/draft", {}),
+                90_000,
+            );
+            assert.equal(
+                timeout("/api/track-audio/library/track-1/manage", {}),
+                20_000,
+            );
+            assert.equal(
+                timeout("/api/track-audio/library/track-1/draft/other", {}),
+                20_000,
+            );
+        }
+    });
     test("allows music source streams the same media header deadline", () => {
         assert.equal(
             resolveProxyTimeoutMs("api/music-sources/leases/abc/stream", {}),

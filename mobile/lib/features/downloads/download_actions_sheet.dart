@@ -54,6 +54,8 @@ abstract final class DownloadActionsSheet {
     }.contains(job.state);
     final reason = controller.busy
         ? 'Изменение сохраняется.'
+        : job.retryNotBefore > controller.repository.now
+        ? 'Сервер попросил подождать. Повтор доступен позже.'
         : !controller.canDownload
         ? 'Для новой загрузки нужны сеть и доступное хранилище.'
         : null;

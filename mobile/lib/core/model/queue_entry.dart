@@ -12,17 +12,28 @@ final class QueueEntry {
     required this.track,
     required this.context,
     this.smartShuffle,
+    this.standardAudio = false,
   });
 
   final String entryId;
   final Track track;
   final PlayContext context;
   final SmartShuffleLineage? smartShuffle;
+  final bool standardAudio;
 
   QueueEntry withSmartShuffle(SmartShuffleLineage value) => QueueEntry(
     entryId: entryId,
     track: track,
     context: context,
     smartShuffle: value,
+    standardAudio: standardAudio,
+  );
+
+  QueueEntry withStandardAudio(bool value) => QueueEntry(
+    entryId: entryId,
+    track: track,
+    context: context,
+    smartShuffle: smartShuffle,
+    standardAudio: value,
   );
 }

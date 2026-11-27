@@ -16,10 +16,22 @@ final class PluginProbe implements audio.AudioPlayer {
   bool delivering = false;
   int stops = 0;
   int loads = 0;
+  int plays = 0;
+  int pauses = 0;
   Completer<void>? firstLoad;
+  Completer<void>? volumeGate;
   final volumes = <double>[];
   @override
-  Future<void> setVolume(double volume) async => volumes.add(volume);
+  Future<void> setVolume(double volume) async {
+    volumes.add(volume);
+    await volumeGate?.future;
+  }
+
+  @override
+  Future<void> play() async => plays++;
+
+  @override
+  Future<void> pause() async => pauses++;
   @override
   audio.ProcessingState processingState = audio.ProcessingState.ready;
   @override
@@ -75,6 +87,38 @@ final class PluginProbe implements audio.AudioPlayer {
 }
 
 void main() {
+  test('pause cancels a play waiting for native volume', () async {
+    final plugin = PluginProbe();
+    final engine = JustAudioEngine(player: plugin);
+    addTearDown(engine.dispose);
+    await engine.loudness.setOwner(
+      fence,
+      LoudnessMode.track,
+      isCurrent: () => true,
+    );
+    engine.updateLoudnessContext(state(1, lufs: -18));
+    await engine.load(Uri.parse('file:///synthetic.wav'), 1);
+
+    final volumeGate = plugin.volumeGate = Completer<void>();
+    final previousWrites = plugin.volumes.length;
+    engine.updateLoudnessContext(state(1, lufs: -18, volume: 0.5));
+    final play = engine.play();
+    try {
+      await pumpEventQueue();
+      expect(plugin.volumes.length, previousWrites + 1);
+      expect(plugin.plays, 0);
+      await engine.pause();
+      expect(plugin.pauses, 1);
+    } finally {
+      volumeGate.complete();
+    }
+    await play;
+    expect(plugin.plays, 0);
+
+    await engine.play();
+    expect(plugin.plays, 1);
+  });
+
   test(
     'delayed old plugin load cannot stall stop/new load or apply obsolete gain',
     () async {

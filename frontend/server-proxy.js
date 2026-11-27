@@ -13,6 +13,8 @@ const DEFAULT_PROXY_TIMEOUT_MS = 20000;
 const DEFAULT_IMPORT_PREVIEW_PROXY_TIMEOUT_MS = 150000;
 const DEFAULT_MEDIA_STREAM_PROXY_TIMEOUT_MS = 125000;
 const DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS = 90000;
+const TRACK_AUDIO_DRAFT_PATH =
+    /^(?:api\/)?track-audio\/(?:library|youtube|vk|yandex)\/[a-z0-9_-]{1,256}\/draft$/;
 const IMPORT_PREVIEW_PATH_PREFIX = "/api/import/preview";
 const UNAVAILABLE_RECOVERY_PATHS = new Set([
     "/api/ytmusic/recover-unavailable",
@@ -90,6 +92,15 @@ function resolveProxyTimeoutMs(pathname, env = process.env) {
         parsePositiveTimeoutMs(env.PROXY_REQUEST_TIMEOUT_MS) ??
         DEFAULT_PROXY_TIMEOUT_MS;
 
+    if (
+        TRACK_AUDIO_DRAFT_PATH.test(
+            String(pathname || "")
+                .replace(/^\/+|\/+$/g, "")
+                .toLowerCase(),
+        )
+    ) {
+        return Math.max(globalTimeout, 90_000);
+    }
     if (isMediaStreamPath(pathname)) {
         return Math.max(globalTimeout, DEFAULT_MEDIA_STREAM_PROXY_TIMEOUT_MS);
     }

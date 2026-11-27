@@ -134,7 +134,9 @@ COPY --from=build --chown=node:node /packages/media-metadata-contract /packages/
 COPY --chown=node:node healthcheck.js ./
 COPY docker-entrypoint.sh /usr/local/bin/
 
-RUN mkdir -p /app/cache/covers /app/cache/transcodes /app/logs && \
+# An empty alternate-audio volume inherits this directory's ownership.
+RUN install -d -m 0700 -o node -g node /music/.track-audio && \
+    mkdir -p /app/cache/covers /app/cache/transcodes /app/logs && \
     chown -R node:node /app/cache /app/logs && \
     sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && \
     chmod +x /usr/local/bin/docker-entrypoint.sh && \

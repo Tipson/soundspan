@@ -75,6 +75,7 @@ final class JustAudioEngine
   final _events = StreamController<EngineEvent>.broadcast();
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   int _generation = -1;
+  int _playIntent = 0;
   Uri? _source;
   bool _loading = false, _disposed = false;
   static const _nativeChannel = MethodChannel(
@@ -174,8 +175,10 @@ final class JustAudioEngine
   @override
   Future<void> play() async {
     final generation = _generation;
+    final intent = ++_playIntent;
     await loudness.flush();
     if (_disposed ||
+        intent != _playIntent ||
         generation != _generation ||
         generation < 0 ||
         (loudness.hasOwner && !loudness.canPlay)) {
@@ -185,7 +188,11 @@ final class JustAudioEngine
   }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() {
+    ++_playIntent;
+    return _player.pause();
+  }
+
   @override
   Future<void> stop() {
     _generation = -1;

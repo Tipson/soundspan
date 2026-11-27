@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soundspan/core/model/app_failure.dart';
 import 'package:soundspan/core/model/track.dart';
 import 'package:soundspan/core/model/track_ref.dart';
 import 'package:soundspan/playback/playback_command.dart';
@@ -73,6 +74,29 @@ class FakeEngine implements PlaybackEngine {
   Future<void> dispose() => controller.close();
 }
 
+class _NativeStartEngine extends FakeEngine
+    implements PlaybackStartConfirmation {
+  final confirmation = Completer<bool>();
+
+  @override
+  bool get requiresNativeStartConfirmation => true;
+
+  @override
+  Future<bool> confirmPlaying() => confirmation.future;
+}
+
+class _ScriptedLoadEngine extends FakeEngine {
+  _ScriptedLoadEngine(this.onLoad);
+
+  final Future<void> Function(Uri) onLoad;
+
+  @override
+  Future<void> load(Uri uri, int generation) async {
+    await super.load(uri, generation);
+    await onLoad(uri);
+  }
+}
+
 void main() {
   late FakeEngine engine;
   late QueueCoordinator queue;
@@ -103,6 +127,44 @@ void main() {
   });
 
   test(
+    'startup summary waits for native playing and contains no identity',
+    () async {
+      await queue.dispose();
+      final native = _NativeStartEngine();
+      final logs = <String>[];
+      queue = QueueCoordinator(
+        authority: authority,
+        engine: native,
+        debugStartupLog: logs.add,
+        prepare: (_, _) async => PreparedAudio(
+          uri: Uri.parse('file:///secret-audio-file.wav'),
+          revoke: () async {},
+        ),
+      );
+      await queue.dispatch(
+        ReplaceQueue([
+          entry('private-queue-entry', 'private-recording'),
+        ], fence: authority.requireFence()),
+      );
+      native.emit(position: const Duration(seconds: 2));
+      expect(logs, isEmpty);
+      native.confirmation.complete(true);
+      await pumpEventQueue();
+      expect(logs, hasLength(1));
+      expect(
+        logs.single,
+        matches(
+          RegExp(
+            r'^\[SoundspanStartup\] outcome=playing source=local source_ms=\d+ first_bytes_ms=- decoder_ms=\d+ playing_ms=\d+ failure=- http_status=-$',
+          ),
+        ),
+      );
+      expect(logs.single, isNot(contains('private')));
+      expect(logs.single, isNot(contains('secret')));
+    },
+  );
+
+  test(
     'duplicate recording retains distinct occurrence and attribution',
     () async {
       await queue.dispatch(
@@ -124,6 +186,183 @@ void main() {
     expect(queue.snapshot.currentEntryId, 'a');
     expect(engine.loaded.length, 1);
   });
+
+  test('Next after a failed source starts the next entry; a manual pause stays paused', () async {
+    await queue.dispose();
+    final logs = <String>[];
+    queue = QueueCoordinator(
+      authority: authority,
+      engine: engine = FakeEngine(),
+      debugStartupLog: logs.add,
+      prepare: (item, _) async {
+        if (item.entryId == 'unavailable') {
+          throw const AppFailure(
+            code: 'http_error',
+            message: 'Fixture without playable bytes',
+            statusCode: 502,
+          );
+        }
+        return PreparedAudio(
+          uri: Uri.parse('file:///synthetic'),
+          revoke: () async {},
+        );
+      },
+    );
+    await queue.dispatch(
+      ReplaceQueue([
+        entry('unavailable'),
+        entry('available'),
+        entry('after-pause'),
+      ], fence: authority.requireFence()),
+    );
+    expect(queue.snapshot.processing, PlaybackProcessing.failed);
+    expect(engine.plays, 0);
+
+    await queue.dispatch(const Next());
+    expect(queue.snapshot.currentEntryId, 'available');
+    expect(queue.snapshot.playing, isTrue);
+    expect(engine.plays, 1);
+    expect(logs.single, contains('failure=http_error http_status=502'));
+
+    await queue.dispatch(const Pause());
+    await queue.dispatch(const Next());
+    expect(queue.snapshot.currentEntryId, 'after-pause');
+    expect(queue.snapshot.playing, isFalse);
+    expect(engine.plays, 1);
+  });
+  test('changing versions reloads only the captured occurrence and preserves the queue', () async {
+    final fence = authority.requireFence();
+    await queue.dispatch(ReplaceQueue([entry('a'), entry('b')], fence: fence));
+    final full = queue.snapshot;
+    engine.emit(position: const Duration(seconds: 31));
+    await queue.dispatch(
+      SetTrackAudioVersion(
+        fence: fence,
+        entryId: 'a',
+        generation: full.generation,
+        standard: true,
+      ),
+    );
+    expect(queue.snapshot.effectiveOrder, ['a', 'b']);
+    expect(queue.snapshot.currentEntry!.standardAudio, isTrue);
+    expect(queue.snapshot.entries.last.standardAudio, isFalse);
+    expect(queue.snapshot.position, Duration.zero);
+    expect(resolved, ['a', 'a']);
+    await queue.dispatch(const Next());
+    await queue.dispatch(
+      SetTrackAudioVersion(
+        fence: fence,
+        entryId: 'a',
+        generation: full.generation,
+        standard: false,
+      ),
+    );
+    expect(queue.snapshot.currentEntryId, 'b');
+    expect(resolved, ['a', 'a', 'b']);
+  });
+  test(
+    'withdrawn publication falls back once and keeps the latest pause and seek',
+    () async {
+      final publishedUri = Uri.parse('http://127.0.0.1/published');
+      final standardUri = Uri.parse('file:///standard.wav');
+      final loadingPublished = Completer<void>();
+      final releasePublished = Completer<void>();
+      final preparingStandard = Completer<void>();
+      final releaseStandard = Completer<void>();
+      final attempts = <QueueEntry>[];
+      AppFailure? gatewayFailure;
+      await queue.dispose();
+      queue = QueueCoordinator(
+        authority: authority,
+        engine: engine = _ScriptedLoadEngine((uri) async {
+          if (uri != publishedUri) return;
+          loadingPublished.complete();
+          await releasePublished.future;
+          gatewayFailure = const AppFailure(
+            code: 'http_error',
+            message: 'Publication is gone',
+            statusCode: 404,
+          );
+          throw StateError('Decoder rejected the stream');
+        }),
+        prepare: (item, _) async {
+          attempts.add(item);
+          if (item.standardAudio) {
+            preparingStandard.complete();
+            await releaseStandard.future;
+          }
+          return PreparedAudio(
+            uri: item.standardAudio ? standardUri : publishedUri,
+            publishedAudioVersionId: item.standardAudio ? null : 'published',
+            readFailure: () => gatewayFailure,
+            revoke: () async =>
+                revoked.add(item.standardAudio ? 'standard' : 'published'),
+          );
+        },
+      );
+      final occurrence = entry('a');
+      final selection = queue.dispatch(
+        ReplaceQueue([occurrence, entry('b')], fence: authority.requireFence()),
+      );
+      await loadingPublished.future;
+      await queue.dispatch(const Seek(Duration(seconds: 7)));
+      releasePublished.complete();
+      await preparingStandard.future.timeout(const Duration(seconds: 1));
+      await queue.dispatch(const Pause());
+      await queue.dispatch(const Seek(Duration(seconds: 22)));
+      releaseStandard.complete();
+      await selection;
+
+      expect(attempts.map((item) => item.entryId), ['a', 'a']);
+      expect(attempts.map((item) => item.standardAudio), [false, true]);
+      expect(revoked, ['published']);
+      expect(queue.snapshot.effectiveOrder, ['a', 'b']);
+      expect(queue.snapshot.currentEntry, same(occurrence));
+      expect(queue.snapshot.publishedAudioVersionId, isNull);
+      expect(queue.snapshot.processing, PlaybackProcessing.ready);
+      expect(queue.snapshot.position, const Duration(seconds: 22));
+      expect(engine.position, const Duration(seconds: 22));
+      expect(engine.plays, 0);
+      await queue.dispatch(const Resume());
+      expect(engine.plays, 1);
+    },
+  );
+
+  for (final status in [403, 404]) {
+    test(
+      'startup fallback recognizes only publication 404 and does not retry twice ($status)',
+      () async {
+        final attempts = <bool>[];
+        await queue.dispose();
+        queue = QueueCoordinator(
+          authority: authority,
+          engine: engine = _ScriptedLoadEngine((_) async {
+            throw StateError('Decoder rejected the stream');
+          }),
+          prepare: (item, _) async {
+            attempts.add(item.standardAudio);
+            return PreparedAudio(
+              uri: Uri.parse('http://127.0.0.1/audio'),
+              publishedAudioVersionId: item.standardAudio ? null : 'published',
+              readFailure: () => AppFailure(
+                code: 'http_error',
+                message: 'Unavailable',
+                statusCode: status,
+              ),
+              revoke: () async {},
+            );
+          },
+        );
+        await queue.dispatch(
+          ReplaceQueue([entry('a')], fence: authority.requireFence()),
+        );
+        expect(attempts, [false, if (status == 404) true]);
+        expect(queue.snapshot.processing, PlaybackProcessing.failed);
+        expect(queue.snapshot.failure?.statusCode, status);
+      },
+    );
+  }
+
   test(
     'remove current selects successor then predecessor then stops',
     () async {
@@ -390,17 +629,22 @@ void main() {
     'bounded preparation fails recoverably and revokes late result',
     () async {
       final pending = Completer<PreparedAudio>();
+      final logs = <String>[];
       await queue.dispose();
       queue = QueueCoordinator(
         authority: authority,
         engine: engine = FakeEngine(),
         prepareTimeout: const Duration(milliseconds: 10),
+        debugStartupLog: logs.add,
         prepare: (_, _) => pending.future,
       );
       await queue.dispatch(
         ReplaceQueue([entry('a')], fence: authority.requireFence()),
       );
       expect(queue.snapshot.processing, PlaybackProcessing.failed);
+      expect(logs, hasLength(1));
+      expect(logs.single, contains('outcome=failed'));
+      expect(logs.single, contains('failure=playback_prepare_timeout'));
       pending.complete(
         PreparedAudio(
           uri: Uri.parse('file:///late.wav'),

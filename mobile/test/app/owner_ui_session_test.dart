@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soundspan/app/app_destinations.dart';
+import 'package:soundspan/app/launcher_shortcut.dart';
 import 'package:soundspan/app/owner_feature_scope.dart';
 import 'package:soundspan/app/owner_playback_actions.dart';
 import 'package:soundspan/app/owner_services.dart';
@@ -16,6 +18,69 @@ import '../support/wave_reporting_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'launcher resume keeps the current occurrence and downloads only navigates',
+    () async {
+      final authority = CollectionAuthority(), store = ReportingStore();
+      final root = await Directory.systemTemp.createTemp(
+        'soundspan-shortcuts-',
+      );
+      final playback = CollectionPlayback(
+        QueueSnapshot(fence: collectionFence),
+      );
+      await store.transaction(
+        collectionFence,
+        (tx) =>
+            tx.write('settings', 'network', {'version': 1, 'offline': true}),
+      );
+      final owner = await NativeOwnerServices.create(
+        authority: authority,
+        store: store,
+        fence: collectionFence,
+        playback: playback,
+        supportDirectory: Directory(await root.resolveSymbolicLinks()),
+        cancelDownloads: (_) async {},
+      );
+      final session = await OwnerUiSession.create(
+        owner: owner,
+        logout: () async {},
+      );
+      addTearDown(() async {
+        await session.close();
+        await owner.close();
+        await authority.updates.close();
+        await root.delete(recursive: true);
+      });
+
+      await session.launchShortcut(LauncherShortcut.resume);
+      expect(playback.commands, isEmpty);
+      expect(session.notice.value, contains('Нет сохранённой очереди'));
+
+      final entries = playback.createEntries([
+        collectionTrack(1),
+        collectionTrack(2),
+      ], const PlayContext(surface: PlaySurface.library));
+      playback.value = QueueSnapshot(
+        fence: collectionFence,
+        entries: entries,
+        currentEntryId: entries.last.entryId,
+        position: const Duration(seconds: 43),
+      );
+      await session.launchShortcut(LauncherShortcut.resume);
+      expect(playback.commands.single, isA<Resume>());
+      expect(playback.snapshot.currentEntryId, entries.last.entryId);
+      expect(playback.snapshot.position, const Duration(seconds: 43));
+
+      await session.launchShortcut(LauncherShortcut.downloads);
+      expect(session.router.currentTab, AppTab.downloads);
+      expect(playback.commands, hasLength(1));
+
+      authority.switchOwner();
+      await session.launchShortcut(LauncherShortcut.resume);
+      expect(playback.commands, hasLength(1));
+    },
+  );
+
   test('real owner UI retains controllers on token refresh and restores offline loudness', () async {
     final authority = CollectionAuthority(), store = ReportingStore();
     await store.transaction(collectionFence, (tx) async {

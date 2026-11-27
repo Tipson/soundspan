@@ -194,9 +194,15 @@ void main() {
       final qualities = <String?>[];
       var reads = 0;
       final server = await FakeTlsServer.start((request) async {
+        expect(request.headers.value('authorization'), 'Bearer initial');
+        if (request.uri.path == '/api/track-audio/library/synthetic') {
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(jsonEncode({'publishedId': null}));
+          await request.response.close();
+          return;
+        }
         reads++;
         qualities.add(request.uri.queryParameters['quality']);
-        expect(request.headers.value('authorization'), 'Bearer initial');
         await sendAudio(request);
       });
       final authority = await mediaAuthority(server.origin);
@@ -344,7 +350,10 @@ void main() {
       QueueEntry(
         entryId: 'delayed',
         track: track,
-        context: const PlayContext(surface: PlaySurface.library),
+        context: const PlayContext(
+          surface: PlaySurface.library,
+          fromDownloads: true,
+        ),
       ),
       collectionFence,
     );
@@ -412,6 +421,12 @@ void main() {
     () async {
       var reads = 0;
       final server = await FakeTlsServer.start((request) async {
+        if (request.uri.path == '/api/track-audio/library/local-1') {
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(jsonEncode({'publishedId': null}));
+          await request.response.close();
+          return;
+        }
         reads++;
         await sendAudio(request);
       });
@@ -557,7 +572,10 @@ void main() {
       final entry = QueueEntry(
         entryId: 'busy',
         track: track,
-        context: const PlayContext(surface: PlaySurface.library),
+        context: const PlayContext(
+          surface: PlaySurface.library,
+          fromDownloads: true,
+        ),
       );
       final job = await owner.downloads.enqueue(
         track,

@@ -1,6 +1,7 @@
 package ru.agentik007.soundspan
 
 import io.flutter.embedding.engine.FlutterEngine
+import ru.agentik007.soundspan.app.LauncherShortcutsPlugin
 import ru.agentik007.soundspan.downloads.AndroidMediaProbe
 import ru.agentik007.soundspan.downloads.DownloadWorkerPlugin
 import ru.agentik007.soundspan.downloads.DownloadNetworkStatePlugin
@@ -12,6 +13,9 @@ import ru.agentik007.soundspan.session.SessionBrokerClientPlugin
 /** Engine-owned capabilities; repeated UI attachment keeps the same instances. */
 internal object NativeEnginePlugins {
     fun install(engine: FlutterEngine) {
+        if (!engine.plugins.has(LauncherShortcutsPlugin::class.java)) {
+            engine.plugins.add(LauncherShortcutsPlugin())
+        }
         if (!engine.plugins.has(DownloadWorkerPlugin::class.java)) engine.plugins.add(DownloadWorkerPlugin())
         if (!engine.plugins.has(DownloadNetworkStatePlugin::class.java)) engine.plugins.add(DownloadNetworkStatePlugin())
         if (!engine.plugins.has(AndroidMediaProbe::class.java)) engine.plugins.add(AndroidMediaProbe())

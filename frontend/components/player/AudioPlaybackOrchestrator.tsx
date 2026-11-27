@@ -10,6 +10,7 @@ import {
     shouldPreemptInFlightAudioLoad,
 } from "@/lib/audio-load-preemption";
 import { api } from "@/lib/api";
+import { isTrackAudioStreamUrl } from "@/lib/audio/trackAudioVersions";
 import { getAuthRuntimeGeneration } from "@/lib/auth-runtime-generation";
 import type { PlaybackOrchestratorRefs } from "./hooks/usePlaybackOrchestratorRefs";
 import { resolveNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
@@ -43,7 +44,7 @@ import { readMigratingStorageItem } from "@/lib/storage-migration";
 import { playbackStateMachine } from "@/lib/audio";
 import { markPlaybackHeartbeat } from "@/lib/audio/playback-liveness";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useLayoutEffect, memo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, memo } from "react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { resolveDeviceOfflineMediaIdentity } from "@/features/device-offline/playbackResolver";
 import {
@@ -75,6 +76,7 @@ import {
 } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import type { DesiredLoadPlayIntent } from "./hooks";
 import * as H from "./hooks";
+import type { PlaybackSourceLease } from "./hooks/playbackSourceLeaseController";
 import { useServerMusicSourceRecovery } from "./hooks/useServerMusicSourceRecovery";
 import { subscribeRecommendationFeedbackChanges } from "@/lib/audio/recommendationFeedbackBridge";
 
@@ -220,6 +222,7 @@ export const AudioPlaybackOrchestrator = memo(
         });
         const playbackSourceLeaseController =
             H.usePlaybackSourceLeaseController();
+        const publishedAudioFallbackLoadIdRef = useRef<number | null>(null);
         const {
             lastTrackIdRef,
             hasSeenTrackLoadRef,
@@ -1054,7 +1057,31 @@ export const AudioPlaybackOrchestrator = memo(
                 handleTimeUpdate,
                 handleLoad,
                 handleEnd,
-                handleError,
+                handleError: (data) => {
+                    if (
+                        publishedAudioFallbackLoadIdRef.current ===
+                        loadIdRef.current
+                    ) {
+                        // No engine source belongs to the replacement yet.
+                        return Promise.resolve();
+                    }
+                    const source = playbackSourceLeaseController.getSourceUrl();
+                    const loadError = loadErrorListenerRef.current;
+                    if (
+                        isLoadingRef.current &&
+                        source &&
+                        isTrackAudioStreamUrl(source) &&
+                        loadError &&
+                        !data.recoverable &&
+                        data.code !== "NotAllowedError"
+                    ) {
+                        // The per-load handler can retry the original recording
+                        // before provider recovery treats this as a track failure.
+                        loadError();
+                        return Promise.resolve();
+                    }
+                    return handleError(data);
+                },
                 handlePlay,
                 handlePause,
                 cleanup: () => {
@@ -1277,25 +1304,12 @@ export const AudioPlaybackOrchestrator = memo(
                 scheduleTrackErrorSkip(currentTrack.id);
                 return;
             }
-            if (
+            const skipCoolingProvider =
                 playbackType === "track" &&
                 currentTrack &&
                 advanceOrigin?.origin !== "manual" &&
                 providerFailureKey &&
-                providerFailureCooldown.isCoolingDown(providerFailureKey)
-            ) {
-                isLoadingRef.current = false;
-                setIsBuffering(false);
-                logPlaybackClientMetric("player.provider_cooldown_skip", {
-                    trackId: currentTrack.id,
-                    sourceType: resolveDirectTrackSourceType(currentTrack),
-                });
-                scheduleTrackErrorSkip(currentTrack.id, {
-                    kind: "confirmed_provider_unavailable",
-                    failureKey: providerFailureKey,
-                });
-                return;
-            }
+                providerFailureCooldown.isCoolingDown(providerFailureKey);
             loadTimeoutRetryCountRef.current = 0;
             playbackStartTimingRef.current = {
                 trackId:
@@ -1421,10 +1435,18 @@ export const AudioPlaybackOrchestrator = memo(
             }
 
             if (streamUrl) {
+                const networkUrl = streamUrl;
+                const authGeneration = getAuthRuntimeGeneration();
+                const isCurrentLoad = () =>
+                    loadIdRef.current === thisLoadId &&
+                    isLoadingRef.current &&
+                    getAuthRuntimeGeneration() === authGeneration;
+                let capturedLoadPlayIntent: DesiredLoadPlayIntent | null = null;
                 const startAudioEngineLoad = (
                     resolvedStreamUrl: string,
                 ): void => {
                     const streamUrl = resolvedStreamUrl;
+                    const isPublishedAudio = isTrackAudioStreamUrl(streamUrl);
                     const {
                         timeoutMs: loadTimeoutMs,
                         maxRetries: loadTimeoutRetries,
@@ -1443,7 +1465,8 @@ export const AudioPlaybackOrchestrator = memo(
                     setDuration(fallbackDuration);
 
                     const format =
-                        currentTrack?.streamSource === "audius"
+                        currentTrack?.streamSource === "audius" ||
+                        isPublishedAudio
                             ? "mp3"
                             : resolveTrackFormatHint(currentTrack ?? null);
 
@@ -1475,8 +1498,25 @@ export const AudioPlaybackOrchestrator = memo(
                         }
                     };
 
-                    let capturedLoadPlayIntent: DesiredLoadPlayIntent | null =
-                        null;
+                    const fallBackToStandardAudio = (): boolean => {
+                        if (
+                            !isPublishedAudio ||
+                            !currentTrack ||
+                            !isCurrentLoad()
+                        ) {
+                            return false;
+                        }
+                        clearLoadListeners();
+                        if (loadTimeoutRef.current) {
+                            clearTimeout(loadTimeoutRef.current);
+                            loadTimeoutRef.current = null;
+                        }
+                        publishedAudioFallbackLoadIdRef.current = thisLoadId;
+                        loadTimeoutRetryCountRef.current = 0;
+                        audioEngine.stop();
+                        startTrackSource(currentTrack, false);
+                        return true;
+                    };
 
                     const startLoadAttempt = () => {
                         clearLoadListeners();
@@ -1641,6 +1681,8 @@ export const AudioPlaybackOrchestrator = memo(
                         };
 
                         const handleLoadError = (loadError?: unknown) => {
+                            if (isPublishedAudio && !isCurrentLoad()) return;
+                            if (fallBackToStandardAudio()) return;
                             if (loadTimeoutRef.current) {
                                 clearTimeout(loadTimeoutRef.current);
                                 loadTimeoutRef.current = null;
@@ -1679,12 +1721,9 @@ export const AudioPlaybackOrchestrator = memo(
                         audioEngine.on("loaderror", handleLoadError);
 
                         loadTimeoutRef.current = setTimeout(() => {
-                            if (
-                                loadIdRef.current !== thisLoadId ||
-                                !isLoadingRef.current
-                            ) {
-                                return;
-                            }
+                            if (!isCurrentLoad()) return;
+
+                            if (fallBackToStandardAudio()) return;
 
                             if (
                                 playbackType === "track" &&
@@ -1771,10 +1810,36 @@ export const AudioPlaybackOrchestrator = memo(
                 const startTrackAudioEngineLoad = (
                     resolvedStreamUrl: string,
                 ): void => {
+                    if (
+                        skipCoolingProvider &&
+                        currentTrack &&
+                        providerFailureKey &&
+                        !isTrackAudioStreamUrl(resolvedStreamUrl) &&
+                        !resolvedStreamUrl.startsWith("blob:") &&
+                        !resolvedStreamUrl.startsWith("/__offline/audio/")
+                    ) {
+                        playbackSourceLeaseController.release();
+                        isLoadingRef.current = false;
+                        setIsBuffering(false);
+                        logPlaybackClientMetric(
+                            "player.provider_cooldown_skip",
+                            {
+                                trackId: currentTrack.id,
+                                sourceType:
+                                    resolveDirectTrackSourceType(currentTrack),
+                            },
+                        );
+                        scheduleTrackErrorSkip(currentTrack.id, {
+                            kind: "confirmed_provider_unavailable",
+                            failureKey: providerFailureKey,
+                        });
+                        return;
+                    }
                     const shouldCoalesceManualYouTubeSelection =
                         advanceOrigin?.origin === "manual" &&
                         currentTrack?.streamSource === "youtube" &&
                         !currentTrackPreloadWasReady &&
+                        !isTrackAudioStreamUrl(resolvedStreamUrl) &&
                         !resolvedStreamUrl.startsWith("blob:") &&
                         !resolvedStreamUrl.startsWith("/__offline/audio/");
                     if (!shouldCoalesceManualYouTubeSelection) {
@@ -1806,33 +1871,43 @@ export const AudioPlaybackOrchestrator = memo(
                     };
                 };
 
+                const startTrackSource = (
+                    track: Track,
+                    allowPublished: boolean,
+                    preparedSource?: PlaybackSourceLease | null,
+                ) => {
+                    H.startTrackPlaybackSourceLease({
+                        controller: playbackSourceLeaseController,
+                        track,
+                        networkUrl,
+                        preparedSource,
+                        allowPublished,
+                        isCurrent: isCurrentLoad,
+                        onReady: (url) => {
+                            if (!isCurrentLoad()) return;
+                            publishedAudioFallbackLoadIdRef.current = null;
+                            startTrackAudioEngineLoad(url);
+                        },
+                        onError: (error) => {
+                            publishedAudioFallbackLoadIdRef.current = null;
+                            isLoadingRef.current = false;
+                            activeEngineTrackIdRef.current = null;
+                            lastTrackIdRef.current = null;
+                            void engineEventHandlersRef.current?.handleError({
+                                error,
+                                recoverable: false,
+                            });
+                        },
+                    });
+                };
                 if (playbackType === "track" && currentTrack) {
-                    if (preparedCurrentTrackSource) {
-                        startTrackAudioEngineLoad(
-                            preparedCurrentTrackSource.url,
-                        );
-                    } else {
-                        H.startTrackPlaybackSourceLease({
-                            controller: playbackSourceLeaseController,
-                            track: currentTrack,
-                            networkUrl: streamUrl,
-                            isCurrent: () =>
-                                loadIdRef.current === thisLoadId &&
-                                isLoadingRef.current,
-                            onReady: startTrackAudioEngineLoad,
-                            onError: (error) => {
-                                isLoadingRef.current = false;
-                                activeEngineTrackIdRef.current = null;
-                                lastTrackIdRef.current = null;
-                                void engineEventHandlersRef.current?.handleError(
-                                    {
-                                        error,
-                                        recoverable: false,
-                                    },
-                                );
-                            },
-                        });
-                    }
+                    startTrackSource(
+                        currentTrack,
+                        !isListenTogetherActiveOrPending(),
+                        preparedCurrentTrackSource
+                            ? playbackSourceLeaseController.take()
+                            : null,
+                    );
                 } else {
                     playbackSourceLeaseController.release();
                     startAudioEngineLoad(streamUrl);

@@ -21,6 +21,7 @@ import {
 import authRoutes from "./routes/auth";
 import onboardingRoutes from "./routes/onboarding";
 import libraryRoutes from "./routes/library";
+import trackAudioRoutes from "./routes/trackAudio";
 import playsRoutes from "./routes/plays";
 import settingsRoutes from "./routes/settings";
 import scrobblingRoutes from "./routes/scrobbling";
@@ -392,6 +393,7 @@ if (config.features.audius) {
 }
 app.use("/api/youtube", apiLimiter, youtubeRoutes);
 app.use("/api/track-mappings", apiLimiter, trackMappingsRoutes);
+app.use("/api/track-audio", trackAudioRoutes);
 app.use("/api/import", apiLimiter, playlistImportRoutes);
 app.use("/api/streaming", apiLimiter, streamingRoutes);
 app.use("/api/lyrics", lyricsLimiter, lyricsRoutes);

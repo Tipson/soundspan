@@ -33,6 +33,8 @@ manual `all` run builds all seven images. Production must use the immutable
 - `SESSION_SECRET`, `SETTINGS_ENCRYPTION_KEY`, `INTERNAL_API_SECRET`, and the
   PostgreSQL password (never print or commit them);
 - the existing music bind mount;
+- alternate audio files, backed up with the PostgreSQL database that stores
+  their draft and publication IDs;
 - provider state directories for YouTube Music and TIDAL, so linked accounts,
   bounded spool data, and provider caches are not reset by the runtime split;
 - optionally `/data/cache/covers` and `/data/cache/transcodes` (both can be
@@ -76,6 +78,14 @@ files between the embedded AIO Redis and the standalone image.
    YTMUSIC_DATA_PATH=/opt/soundspan/ytmusic
    TIDAL_DATA_PATH=/opt/soundspan/tidal
    ```
+
+   Ensure `.track-audio` exists under the host `MUSIC_PATH` before starting
+   the split backend. The read-only `/music` bind needs that directory as a
+   mount point. The backend stores files in the separate Compose volume
+   `track_audio` mounted at `/music/.track-audio`. If the old deployment already
+   has alternate audio in `MUSIC_PATH/.track-audio`, back up those files and
+   restore them into the volume before serving traffic. Preserve file ownership
+   and keep the volume writable by the backend's `node` user.
 
 5. Pull the split images before downtime:
 
@@ -121,10 +131,21 @@ This prevents an accidental local rebuild or deployment of an unpinned image.
 - the frontend is published only on `SOUNDSPAN_BIND_IP`, while the backend,
   PostgreSQL, and Redis host ports remain loopback-only;
 - backend, worker, analyzer, and DCLAP mounts keep the media library read-only;
-  only the dedicated analysis spool is writable where required;
+  the dedicated analysis spool is writable where required and the backend has
+  a writable `/music/.track-audio` mount;
+- API instances sharing the database read and write the same alternate audio
+  files. The `track_audio` Compose volume is local to one Docker host. For API
+  instances on multiple hosts, mount the same persistent shared storage at
+  `/music/.track-audio` on each;
 - DCLAP and audio analyzer health checks pass before analysis is enabled;
 - the deployed image digests match the selected immutable tag;
 - the old AIO volume is not deleted as part of the cutover.
+
+For alternate audio uploads, allow request bodies of at least 16 MiB on the
+public reverse proxy. Check that the API's `node` user can write to
+`/music/.track-audio`, then upload a draft, preview it, publish it, play the
+published file with a byte-range request, and withdraw it. Exercise the routes
+through both the internal API address and the public frontend address.
 
 ## Rollback
 
@@ -132,3 +153,8 @@ Stop the split project, restore the previous reverse-proxy target, and restart
 the untouched AIO container. If the split deployment accepted writes after the
 cutover, do not blindly return to the older AIO database: export and reconcile
 the new PostgreSQL state first.
+
+Keep the `track_audio` volume through rollbacks and container replacements. For
+backup or restore, pause alternate audio changes while taking a paired database
+and volume backup. Restore the matching database backup and audio files before
+resuming those changes.

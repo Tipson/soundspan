@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../core/network/dart_api_transport.dart';
+import '../core/model/app_failure.dart';
 import '../features/updates/apk_update_controller.dart';
 import '../features/updates/apk_update_downloader.dart';
 import '../features/updates/release_update_repository.dart';
@@ -52,7 +53,11 @@ import '../features/settings/settings_models.dart';
 import '../features/tastes/taste_controller.dart';
 import '../features/tastes/taste_repository.dart';
 import '../features/wave/wave_controller.dart';
+import '../playback/playback_controller.dart';
+import '../playback/track_audio_admin.dart';
+import 'app_destinations.dart';
 import 'app_router.dart';
+import 'launcher_shortcut.dart';
 import 'owner_feature_scope.dart';
 import 'owner_playback_actions.dart';
 import 'owner_services.dart';
@@ -264,6 +269,11 @@ final class OwnerUiSession {
           onRadio: (target) => _present('radio', target),
           onArtist: (target) => _present('artist', target),
           onAlbum: (target) => _present('album', target),
+          hasFullAudio: (target) async =>
+              owner.policy.networkAllowed &&
+              await owner.trackAudio.resolve(target.track.ref, fence) != null,
+          canManageAudio: (target) => canManageTrackAudio(target.track, fence),
+          onManageAudio: (target) => _present('manage-audio', target),
           isDownloaded: (target) async {
             await guard();
             await target.assertCurrent();
@@ -387,6 +397,60 @@ final class OwnerUiSession {
   final router = AppRouter();
   final notice = ValueNotifier<String?>(null);
   OwnerUiPresentation? presentation;
+
+  late final trackAudioAdmin = TrackAudioAdmin(
+    transport: owner.transport,
+    authority: owner.authority,
+  );
+  Future<bool>? _trackAudioRoleRequest;
+  ({bool isAdmin, DateTime expires})? _trackAudioRole;
+
+  /// The account profile controls menu visibility. The API validates every write.
+  Future<bool> canManageTrackAudio(Track track, SessionFence original) async {
+    if (!isCurrent ||
+        original != fence ||
+        !owner.policy.networkAllowed ||
+        TrackAudioTarget.fromRef(track.ref) == null) {
+      return false;
+    }
+    final canManage = await _loadTrackAudioRole().timeout(
+      const Duration(milliseconds: 450),
+      onTimeout: () => false,
+    );
+    return isCurrent && owner.policy.networkAllowed && canManage;
+  }
+
+  Future<bool> _loadTrackAudioRole() {
+    final cached = _trackAudioRole;
+    if (cached != null && cached.expires.isAfter(DateTime.now())) {
+      return Future.value(cached.isAdmin);
+    }
+    return _trackAudioRoleRequest ??= _readTrackAudioRole();
+  }
+
+  Future<bool> _readTrackAudioRole() async {
+    try {
+      final profile = await account.repository.read(fence, 'profile');
+      final role = profile['role'];
+      if (!isCurrent ||
+          !owner.policy.networkAllowed ||
+          role is! String ||
+          role.isEmpty) {
+        return false;
+      }
+      final isAdmin = role == 'admin';
+      _trackAudioRole = (
+        isAdmin: isAdmin,
+        expires: DateTime.now().add(const Duration(minutes: 1)),
+      );
+      return isAdmin;
+    } on AppFailure {
+      return false;
+    } finally {
+      _trackAudioRoleRequest = null;
+    }
+  }
+
   late final OwnerPlaybackActions playbackActions;
   late final PreferenceController preferences;
   late final LikesController likes;
@@ -486,6 +550,35 @@ final class OwnerUiSession {
 
   SessionFence get fence => owner.fence;
   Future<void> guard() => playbackActions.guard();
+
+  /// Executes a launcher action using the currently admitted owner graph.
+  Future<void> launchShortcut(LauncherShortcut shortcut) async {
+    try {
+      await guard();
+      switch (shortcut) {
+        case LauncherShortcut.playWave:
+          router.selectRootTab(AppTab.wave);
+          await wave.playOrStart();
+          if (wave.failure case final failure? when isCurrent) {
+            notice.value = failure.message;
+          }
+        case LauncherShortcut.resume:
+          final snapshot = owner.playback.snapshot;
+          if (snapshot.fence != fence || snapshot.currentEntry == null) {
+            notice.value = 'Нет сохранённой очереди для продолжения.';
+          } else if (!snapshot.playing) {
+            await owner.playback.dispatch(const Resume());
+          }
+        case LauncherShortcut.downloads:
+          router.selectRootTab(AppTab.downloads);
+      }
+    } on AppFailure catch (failure) {
+      if (isCurrent) notice.value = failure.message;
+    } catch (_) {
+      if (isCurrent) notice.value = 'Не удалось выполнить действие ярлыка.';
+    }
+  }
+
   T own<T extends ChangeNotifier>(T controller) {
     lifetime.add(controller.dispose);
     return controller;
@@ -540,6 +633,7 @@ final class OwnerUiSession {
   void start() {
     if (_started || !isCurrent) return;
     _started = true;
+    if (owner.policy.networkAllowed) _loadTrackAudioRole().ignore();
     observe(offlineMix.refresh());
     observe(owner.dailyRefresh.ensureScheduled());
     observe(settings.load());
@@ -560,6 +654,7 @@ final class OwnerUiSession {
 
   void _policyChanged() {
     if (!isCurrent || !owner.policy.networkAllowed) return;
+    if (_started) _loadTrackAudioRole().ignore();
     observe(automation.reconcile(fence));
     observe(owner.capabilities.refresh());
     observe(home.refresh(request: request()));

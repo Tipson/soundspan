@@ -28,17 +28,19 @@ export const TRACKS = Array.from({ length: 40 }, (_, index) => ({
 }));
 
 const AUDIO = createSyntheticWav(45);
+const TRACK_AUDIO_LOOKUP_PATH =
+    /^\/api\/track-audio\/(?:library\/[A-Za-z0-9_-]{1,256}|youtube\/[A-Za-z0-9_-]{11}|vk\/-?\d{1,20}_\d{1,20}|yandex\/\d{1,20})$/;
 const USER = {
     id: "core-user",
     username: "core-user",
     displayName: "Core QA",
-    role: "user",
     onboardingComplete: true,
     createdAt: "2026-01-01T00:00:00.000Z",
 };
 
 interface CoreApp {
     authenticated: boolean;
+    role: "user" | "admin";
     artists: string[];
     taste: TasteProfileState;
     tasteWrites: TasteProfileWriteRequest[];
@@ -58,6 +60,7 @@ export const test = base.extend<{ app: CoreApp }>({
             let offline = false;
             const app: CoreApp = {
                 authenticated: false,
+                role: "user",
                 artists: TRACKS.map((track) => track.artist.name),
                 taste: {
                     profile: null,
@@ -173,10 +176,11 @@ export const test = base.extend<{ app: CoreApp }>({
                     return json({
                         token: "core-regression-token",
                         refreshToken: "core-regression-refresh",
-                        user: USER,
+                        user: { ...USER, role: app.role },
                     });
                 }
-                if (key === "GET /api/auth/me") return json(USER);
+                if (key === "GET /api/auth/me")
+                    return json({ ...USER, role: app.role });
                 if (key === "GET /api/auth/2fa/status")
                     return json({ enabled: false });
                 if (key === "POST /api/auth/logout") {
@@ -309,6 +313,8 @@ export const test = base.extend<{ app: CoreApp }>({
                         return json(null, 401);
                     return fulfillAudioRange(route, AUDIO);
                 }
+                if (method === "GET" && TRACK_AUDIO_LOOKUP_PATH.test(path))
+                    return json({ publishedId: null });
                 if (key === "GET /api/playback-state") return json(null);
                 if (key === "GET /api/ytmusic/status")
                     return json({

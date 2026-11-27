@@ -47,6 +47,7 @@ import '../playback/queue_checkpoint_observer.dart';
 import '../playback/queue_coordinator.dart';
 import '../playback/queue_snapshot_store.dart';
 import '../playback/service_playback_controller.dart';
+import '../playback/track_audio_versions.dart';
 import '../playback/wave_continuation.dart';
 import 'app_environment.dart';
 import 'server_capabilities.dart';
@@ -82,6 +83,10 @@ final class NativeOwnerServices implements AppOwnerScope {
   late final DownloadNetworkAccess downloadAccess;
   late final ArtworkRepository artwork;
   late final MediaGateway gateway;
+  late final trackAudio = TrackAudioVersions(
+    transport: transport,
+    authority: authority,
+  );
   NextTrackWarmup? _warmup;
   late final WaveContinuation wave;
   late final PlaybackReporter reporter;
@@ -625,7 +630,22 @@ final class NativeOwnerServices implements AppOwnerScope {
         gateway,
       ),
     );
-    final prepared = await preparation.prepare(entry, fence);
+    final published =
+        entry.standardAudio ||
+            entry.context.fromDownloads ||
+            !policy.networkAllowed
+        ? null
+        : await trackAudio.resolve(entry.track.ref, fence);
+    PreparedAudio prepared;
+    if (published == null || !policy.networkAllowed) {
+      prepared = await preparation.prepare(entry, fence);
+    } else {
+      final handle = await gateway.open(published, fence);
+      prepared = PreparedAudio.fromMediaHandle(
+        handle,
+        publishedAudioVersionId: published.publishedAudioVersionId,
+      );
+    }
     try {
       await _guard();
       if (prepared.uri.scheme != 'file') {

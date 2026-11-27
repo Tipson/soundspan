@@ -11,11 +11,63 @@ import 'package:soundspan/features/wave/wave_controller.dart';
 import 'package:soundspan/features/wave/wave_screen.dart';
 import 'package:soundspan/playback/wave_continuation.dart';
 import 'package:soundspan/playback/playback_command.dart';
+import 'package:soundspan/playback/queue_snapshot.dart';
 
 import '../support/collection_fixtures.dart';
 import '../support/wave_reporting_fixtures.dart';
 
 void main() {
+  test(
+    'launcher Wave starts audible playback and reuses its active queue',
+    () async {
+      final authority = CollectionAuthority(), playback = ReportingController();
+      final transport = ControlledTransport()
+        ..respond = (_) async =>
+            ApiResponse(200, waveFeed(['a', 'b', 'c', 'd']));
+      final continuation = WaveContinuation(
+        controller: playback,
+        repository: RecommendationRepository(transport: transport),
+        authority: authority,
+      );
+      final wave = WaveController(
+        continuation: continuation,
+        playback: playback,
+        authority: authority,
+        fence: collectionFence,
+      );
+      addTearDown(() async {
+        wave.dispose();
+        await continuation.dispose();
+        await playback.dispose();
+        await authority.updates.close();
+      });
+
+      await wave.playOrStart();
+      expect(playback.snapshot.currentEntry?.track.title, 'a');
+      expect(playback.snapshot.playing, isTrue);
+      final initialCommands = playback.commands.length;
+
+      await wave.playOrStart();
+      expect(playback.commands, hasLength(initialCommands));
+
+      final playing = playback.snapshot;
+      playback.emit(
+        QueueSnapshot(
+          fence: playing.fence,
+          entries: playing.entries,
+          effectiveOrder: playing.effectiveOrder,
+          currentEntryId: playing.currentEntryId,
+          processing: PlaybackProcessing.ready,
+          lineage: playing.lineage,
+        ),
+      );
+      await wave.playOrStart();
+      expect(playback.commands.last, isA<Resume>());
+      expect(playback.commands.whereType<ReplaceQueue>(), hasLength(1));
+      expect(transport.requests, hasLength(1));
+    },
+  );
+
   for (final width in [320.0, 390.0, 430.0]) {
     for (final scale in [1.0, 2.0]) {
       testWidgets(
