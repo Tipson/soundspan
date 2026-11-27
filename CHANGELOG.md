@@ -21,6 +21,8 @@
 
 ## Unreleased
 
+- Let administrators replace audio for an existing track from Android. Choose a local MP3, save it as a draft, and explicitly publish or withdraw the full version.
+
 - Explain known download delays and failures on Android and let listeners retry eligible visible downloads together. Preserve network rules and server retry delays.
 - Skip repeated checks for alternate audio on Android when the server lacks the endpoint. Cancel a pending native start when playback is paused and expose timing stages in debug logs.
 - Explain source restrictions (HTTP 451) in Android playback and downloads. Start the next track when listeners explicitly skip a playback failure, while preserving a manual pause on ordinary skips.

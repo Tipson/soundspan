@@ -38,8 +38,8 @@ class BoundedDocumentReaderTest {
         assertEquals(95, stream.available())
     }
 
-    @Test fun actualPlaylistAndAvatarLimitsAllowExactAndRejectOneMoreByte() {
-        for (limit in listOf(512 * 1024, 5 * 1024 * 1024)) {
+    @Test fun actualDocumentLimitsAllowExactAndRejectOneMoreByte() {
+        for (limit in listOf(512 * 1024, 5 * 1024 * 1024, 16 * 1024 * 1024)) {
             val bytes = ByteArray(limit) { (it % 251).toByte() }
             assertArrayEquals(bytes, BoundedDocumentReader.read(ByteArrayInputStream(bytes), limit, null))
             assertThrows(DocumentTooLargeException::class.java) {

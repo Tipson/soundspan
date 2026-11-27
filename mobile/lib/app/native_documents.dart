@@ -39,6 +39,8 @@ final class NativeDocuments {
             ? 'image'
             : identical(groups.single, _exportTypes)
             ? 'export'
+            : identical(groups.single, _audioTypes)
+            ? 'audio'
             : 'playlist',
       });
       if (reply == null) return null;
@@ -53,15 +55,25 @@ final class NativeDocuments {
         reply['bytes'] as Uint8List,
         path: reply['name'] as String,
       );
+    } on PlatformException catch (error) {
+      if (identical(groups.single, _audioTypes)) {
+        if (error.code == 'document_too_large') throw _largeTrackAudio;
+        if (error.code == 'document_empty') throw _invalidTrackAudio;
+      }
+      throw _pickerFailed;
     } catch (_) {
-      throw const AppFailure(
-        code: 'document_picker_failed',
-        message: 'Не удалось прочитать файл. Выберите его ещё раз.',
-      );
+      throw _pickerFailed;
     }
   }
 
   static const maxPlaylistBytes = 512 * 1024;
+  static const maxTrackAudioBytes = 16 * 1024 * 1024;
+  static const _audioTypes = XTypeGroup(
+    label: 'Аудиофайл MP3',
+    extensions: ['mp3'],
+    mimeTypes: ['audio/mpeg'],
+    uniformTypeIdentifiers: ['public.mp3'],
+  );
   static const _exportTypes = XTypeGroup(
     label: 'Музыкальный экспорт',
     extensions: ['txt', 'json'],
@@ -218,6 +230,33 @@ final class NativeDocuments {
     );
   });
 
+  /// Reads an MP3 candidate for the server to validate and stage as a draft.
+  Future<({String name, Uint8List bytes})?> pickTrackAudio({
+    required bool Function() isCurrent,
+  }) => _pick(_audioTypes, isCurrent, (file) async {
+    final basename = file.name
+        .replaceAll('\\', '/')
+        .split('/')
+        .last
+        .replaceAll(
+          RegExp(r'[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]'),
+          '',
+        )
+        .trim();
+    if (!basename.toLowerCase().endsWith('.mp3')) throw _invalidTrackAudio;
+    final bytes = await _read(
+      file,
+      maxTrackAudioBytes,
+      isCurrent,
+      _largeTrackAudio,
+    );
+    if (bytes.isEmpty) throw _invalidTrackAudio;
+    final name = basename.length > 200
+        ? '${basename.substring(0, 196)}${basename.substring(basename.length - 4)}'
+        : basename;
+    return (name: name, bytes: bytes);
+  });
+
   Future<AvatarInput?> pickAvatar({required bool Function() isCurrent}) =>
       _pick(_photoTypes, isCurrent, (file) async {
         final bytes = await _read(
@@ -284,6 +323,10 @@ final class NativeDocuments {
         }
       });
 
+  static const _pickerFailed = AppFailure(
+    code: 'document_picker_failed',
+    message: 'Не удалось прочитать файл. Выберите его ещё раз.',
+  );
   static const _stale = AppFailure(
     code: 'stale_session',
     message: 'Сеанс завершён. Выберите файл после входа.',
@@ -295,6 +338,14 @@ final class NativeDocuments {
   static const _invalidPlaylist = AppFailure(
     code: 'invalid_playlist_file',
     message: 'Выберите непустой M3U или M3U8 в кодировке UTF-8.',
+  );
+  static const _largeTrackAudio = AppFailure(
+    code: 'track_audio_too_large',
+    message: 'Выберите MP3 размером до 16 МиБ.',
+  );
+  static const _invalidTrackAudio = AppFailure(
+    code: 'invalid_track_audio',
+    message: 'Выберите непустой файл MP3.',
   );
   static const _invalidAvatar = AppFailure(
     code: 'invalid_avatar',

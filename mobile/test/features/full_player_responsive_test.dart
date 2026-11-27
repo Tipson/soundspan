@@ -24,6 +24,8 @@ void main() {
   late PreferenceController preferences;
   late PlayerController controller;
   var queues = 0, lyrics = 0, related = 0;
+  var allowAudioManagement = false;
+  String? managedTrack;
 
   QueueSnapshot state(String title, {bool interrupted = false}) {
     final entry = QueueEntry(
@@ -51,6 +53,8 @@ void main() {
 
   setUp(() {
     queues = lyrics = related = 0;
+    allowAudioManagement = false;
+    managedTrack = null;
     authority = CollectionAuthority();
     playback = CollectionPlayback(state(_title))..moveOnNext = false;
     preferences = PreferenceController(
@@ -71,6 +75,10 @@ void main() {
         onRadio: (_) {},
         onLyrics: (_) => lyrics++,
         onRelated: (_) => related++,
+        canManageAudio: (_) async => allowAudioManagement,
+        onManageAudio: (target) {
+          managedTrack = target.track.ref.identityKey;
+        },
       ),
     );
   });
@@ -201,6 +209,28 @@ void main() {
     await mount(tester, size: const Size(360, 800));
     expect(find.text('Далее в очереди'), findsNothing);
   });
+
+  for (final allowed in [false, true]) {
+    testWidgets('audio replacement action follows access: $allowed', (
+      tester,
+    ) async {
+      allowAudioManagement = allowed;
+      await mount(tester, size: const Size(360, 800));
+      await tester.tap(find.byTooltip('Действия трека'));
+      await tester.pumpAndSettle();
+      final action = find.text('Заменить аудио');
+      expect(action, allowed ? findsOneWidget : findsNothing);
+      if (allowed) {
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+        expect(
+          managedTrack,
+          playback.value.currentEntry!.track.ref.identityKey,
+        );
+        expect(playback.commands, isEmpty);
+      }
+    });
+  }
 
   testWidgets(
     'long-title player exposes both text and related without scrolling',

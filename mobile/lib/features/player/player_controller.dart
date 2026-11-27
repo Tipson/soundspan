@@ -55,6 +55,8 @@ class PlayerCallbacks {
     this.onSaveQueue,
     this.isDownloaded,
     this.hasFullAudio,
+    this.canManageAudio,
+    this.onManageAudio,
   });
   final PlayerTrackAction? onLyrics,
       onRelated,
@@ -64,10 +66,12 @@ class PlayerCallbacks {
       onDownload,
       onAddToPlaylist,
       onShare,
-      onSettings;
+      onSettings,
+      onManageAudio;
   final PlayerQueueAction? onSaveQueue;
   final Future<bool> Function(PlayerTrackTarget)? isDownloaded;
   final Future<bool> Function(PlayerTrackTarget)? hasFullAudio;
+  final Future<bool> Function(PlayerTrackTarget)? canManageAudio;
 }
 
 /// UI projection over the single service; owns neither audio nor a queue copy.

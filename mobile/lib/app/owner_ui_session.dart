@@ -54,6 +54,7 @@ import '../features/tastes/taste_controller.dart';
 import '../features/tastes/taste_repository.dart';
 import '../features/wave/wave_controller.dart';
 import '../playback/playback_controller.dart';
+import '../playback/track_audio_admin.dart';
 import 'app_destinations.dart';
 import 'app_router.dart';
 import 'launcher_shortcut.dart';
@@ -271,6 +272,8 @@ final class OwnerUiSession {
           hasFullAudio: (target) async =>
               owner.policy.networkAllowed &&
               await owner.trackAudio.resolve(target.track.ref, fence) != null,
+          canManageAudio: (target) => canManageTrackAudio(target.track, fence),
+          onManageAudio: (target) => _present('manage-audio', target),
           isDownloaded: (target) async {
             await guard();
             await target.assertCurrent();
@@ -394,6 +397,43 @@ final class OwnerUiSession {
   final router = AppRouter();
   final notice = ValueNotifier<String?>(null);
   OwnerUiPresentation? presentation;
+
+  late final trackAudioAdmin = TrackAudioAdmin(
+    transport: owner.transport,
+    authority: owner.authority,
+  );
+  Future<bool>? _trackAudioRole;
+  DateTime? _trackAudioRoleExpires;
+
+  /// The account profile controls menu visibility. The API validates every write.
+  Future<bool> canManageTrackAudio(Track track, SessionFence original) async {
+    if (!isCurrent ||
+        original != fence ||
+        !owner.policy.networkAllowed ||
+        TrackAudioTarget.fromRef(track.ref) == null) {
+      return false;
+    }
+    final now = DateTime.now();
+    if (_trackAudioRoleExpires?.isAfter(now) != true) {
+      _trackAudioRoleExpires = now.add(const Duration(minutes: 1));
+      _trackAudioRole = _readTrackAudioRole();
+    }
+    final canManage = await _trackAudioRole!.timeout(
+      const Duration(milliseconds: 450),
+      onTimeout: () => false,
+    );
+    return isCurrent && owner.policy.networkAllowed && canManage;
+  }
+
+  Future<bool> _readTrackAudioRole() async {
+    try {
+      final profile = await account.repository.read(fence, 'profile');
+      return isCurrent && profile['role'] == 'admin';
+    } on AppFailure {
+      return false;
+    }
+  }
+
   late final OwnerPlaybackActions playbackActions;
   late final PreferenceController preferences;
   late final LikesController likes;

@@ -32,12 +32,16 @@ final class CatalogActions {
     this.download,
     this.radio,
     this.share,
+    this.canManageAudio,
+    this.manageAudio,
     this.preferences,
     this.library,
   });
   final CatalogTrackAction? enqueueNext, enqueueEnd, addToPlaylist, download;
   final CatalogRadioAction? radio;
   final CatalogShareAction? share;
+  final Future<bool> Function(Track, SessionFence)? canManageAudio;
+  final CatalogRadioAction? manageAudio;
   final PreferenceController? preferences;
   final LibraryController? library;
   bool get hasTrackActions =>
@@ -46,6 +50,7 @@ final class CatalogActions {
       addToPlaylist != null ||
       download != null ||
       radio != null ||
+      manageAudio != null ||
       preferences != null;
 }
 
@@ -60,6 +65,9 @@ Future<void> showCatalogTrackSheet(
   required Future<void> Function(FutureOr<void> Function()) run,
 }) async {
   if (!isCurrent() || !context.mounted) return;
+  final audioManagement = actions.manageAudio == null
+      ? null
+      : actions.canManageAudio?.call(track, fence);
   final preferences = actions.preferences;
   if (preferences != null &&
       preferences.fence == fence &&
@@ -72,9 +80,17 @@ Future<void> showCatalogTrackSheet(
     }
   }
   if (!isCurrent() || !context.mounted) return;
+  final canManageAudio = audioManagement != null && await audioManagement;
+  if (!isCurrent() || !context.mounted) return;
   await MusicActionSheet.show(
     context,
-    catalogTrackActions(actions: actions, track: track, fence: fence, run: run),
+    catalogTrackActions(
+      actions: actions,
+      track: track,
+      fence: fence,
+      run: run,
+      canManageAudio: canManageAudio,
+    ),
     title: track.title,
   );
 }
@@ -84,7 +100,15 @@ List<MusicAction> catalogTrackActions({
   required Track track,
   required SessionFence fence,
   required Future<void> Function(FutureOr<void> Function()) run,
+  bool canManageAudio = false,
 }) => [
+  if (actions.manageAudio case final action? when canManageAudio)
+    MusicAction(
+      id: 'audio-replace',
+      label: 'Заменить аудио',
+      icon: Icons.audio_file_outlined,
+      onSelected: () => run(() => action(track, fence)),
+    ),
   if (track.playable) ...[
     if (actions.preferences case final preferences?
         when preferences.fence == fence && preferences.isCurrent) ...[

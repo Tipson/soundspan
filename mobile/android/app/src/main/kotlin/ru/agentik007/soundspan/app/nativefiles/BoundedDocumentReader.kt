@@ -9,8 +9,10 @@ class DocumentTooLargeException : IOException("Document exceeds allowed size")
 
 /** Metadata can reject a document early, but never sizes an allocation or bounds a read. */
 object BoundedDocumentReader {
+    const val MAX_AUDIO_BYTES = 16 * 1024 * 1024
+
     fun read(input: InputStream, limit: Int, reportedSize: Long?, cancelled: () -> Boolean = { false }): ByteArray {
-        require(limit in 1..5 * 1024 * 1024)
+        require(limit in 1..MAX_AUDIO_BYTES)
         if (reportedSize != null && reportedSize > limit) throw DocumentTooLargeException()
         val output = ByteArrayOutputStream(minOf(8192, limit))
         val buffer = ByteArray(minOf(8192, limit + 1))

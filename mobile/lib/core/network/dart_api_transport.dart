@@ -137,8 +137,12 @@ final class DartJsonHttpClient implements JsonHttpClient {
     // Each operation owns its sockets; timeout must abort I/O, not merely stop
     // awaiting a still-active mutating request or an unbounded response stream.
     try {
+      // Match the web client's upload deadline without extending ordinary API calls.
+      final deadline = request.trackAudioDraftBody == null
+          ? timeout
+          : const Duration(seconds: 95);
       Future<ApiResponse> execute() =>
-          _send(operation, request, accessToken).timeout(timeout);
+          _send(operation, request, accessToken).timeout(deadline);
       final response = await (request.cancellation?.run(execute) ?? execute());
       _check(operation);
       return response;
@@ -218,7 +222,12 @@ final class DartJsonHttpClient implements JsonHttpClient {
       }
       request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
     }
-    if (input.body != null) {
+    final mp3 = input.trackAudioDraftBody;
+    if (mp3 != null) {
+      request.headers.contentType = ContentType('audio', 'mpeg');
+      request.contentLength = mp3.length;
+      request.add(mp3);
+    } else if (input.body != null) {
       request.headers.contentType = ContentType.json;
       request.add(utf8.encode(jsonEncode(input.body)));
     }

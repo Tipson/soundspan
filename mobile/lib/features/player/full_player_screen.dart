@@ -594,11 +594,15 @@ class FullPlayerScreen extends StatelessWidget {
     if (target == null) return;
     final cb = controller.callbacks;
     final routeOwner = ModalRoute.of(context);
+    final audioManagement = cb.onManageAudio == null
+        ? null
+        : cb.canManageAudio?.call(target);
     final downloaded = cb.onDownload == null
         ? false
         : await controller.downloaded(target);
     if (!context.mounted || !target.isCurrent) return;
     final hasFullAudio = await controller.fullAudioAvailable(target);
+    final canManageAudio = audioManagement != null && await audioManagement;
     if (!context.mounted ||
         !target.isCurrent ||
         routeOwner?.isCurrent == false) {
@@ -619,6 +623,13 @@ class FullPlayerScreen extends StatelessWidget {
       onSelected: () => controller.invoke(action, target: target),
     );
     await MusicActionSheet.show(context, [
+      if (canManageAudio)
+        route(
+          'audio-replace',
+          'Заменить аудио',
+          Icons.audio_file_outlined,
+          cb.onManageAudio!,
+        ),
       if (hasFullAudio)
         for (final standard in [false, true])
           MusicAction(

@@ -8,6 +8,32 @@ import '../core/network/redirect_policy.dart';
 import '../core/session/session_authority.dart';
 import 'resolved_media.dart';
 
+/// Exact catalog identity supported by the track-audio endpoint.
+final class TrackAudioTarget {
+  const TrackAudioTarget._(this.source, this.trackId);
+
+  final String source;
+  final String trackId;
+
+  String get apiPath => '/api/track-audio/$source/$trackId';
+
+  static final _libraryId = RegExp(r'^[A-Za-z0-9_-]{1,256}$');
+  static final _youtubeId = RegExp(r'^[A-Za-z0-9_-]{11}$');
+
+  /// Maps durable track identities. Unresolved rows have no writable target.
+  static TrackAudioTarget? fromRef(TrackRef ref) => switch (ref) {
+    LibraryTrackRef(:final libraryId) when _libraryId.hasMatch(libraryId) =>
+      TrackAudioTarget._('library', libraryId),
+    YoutubeTrackRef(:final videoId) when _youtubeId.hasMatch(videoId) =>
+      TrackAudioTarget._('youtube', videoId),
+    NativeTrackRef(:final recording) => TrackAudioTarget._(
+      recording.provider.name,
+      recording.id,
+    ),
+    _ => null,
+  };
+}
+
 /// Looks up an optional alternative without delaying standard playback on
 /// older servers or making a broken lookup a prerequisite for playback.
 final class TrackAudioVersions {
@@ -25,20 +51,9 @@ final class TrackAudioVersions {
   SessionFence? _missingEndpointFence;
   Duration _probeAgainAt = Duration.zero;
 
-  static final _trackId = RegExp(r'^[A-Za-z0-9_-]{1,256}$');
-  static final _youtubeId = RegExp(r'^[A-Za-z0-9_-]{11}$');
-
   Future<ResolvedMedia?> resolve(TrackRef ref, SessionFence fence) async {
-    final identity = switch (ref) {
-      LibraryTrackRef(:final libraryId) when _trackId.hasMatch(libraryId) =>
-        'library/$libraryId',
-      YoutubeTrackRef(:final videoId) when _youtubeId.hasMatch(videoId) =>
-        'youtube/$videoId',
-      NativeTrackRef(:final recording) =>
-        '${recording.provider.name}/${recording.id}',
-      _ => null,
-    };
-    if (identity == null) return null;
+    final target = TrackAudioTarget.fromRef(ref);
+    if (target == null) return null;
     await authority.assertCurrent(fence);
     if (_missingEndpointFence == fence && _elapsed < _probeAgainAt) {
       return null;
@@ -53,7 +68,7 @@ final class TrackAudioVersions {
         ApiRequest(
           origin: fence.owner.serverOrigin,
           method: ApiMethod.get,
-          path: '/api/track-audio/$identity',
+          path: target.apiPath,
           cancellation: cancellation,
         ),
         fence: fence,
