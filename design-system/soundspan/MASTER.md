@@ -288,6 +288,8 @@ Mobile carousels show a partial next card as an overflow cue.
 
 - Uses progressive disclosure: Account, Playback, Offline, Integrations,
   Appearance, Security.
+- Mobile account settings open on a list of sections. Each section has a return
+  link to the list. Desktop account settings use tabs for the same sections.
 - Technical and administrative options live one level deeper.
 - Settings remain calm and do not use artwork ambient fields.
 

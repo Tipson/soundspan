@@ -5,15 +5,37 @@ import {
     useEffect,
     useRef,
     useState,
+    type MouseEvent,
     type ReactNode,
 } from "react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { ru } from "@/lib/i18n/ru";
 
 const tabs = [
-    { id: "profile", label: "Профиль", hash: "account" },
-    { id: "playback", label: "Прослушивание", hash: "playback" },
-    { id: "offline", label: "Офлайн", hash: "device-offline" },
-    { id: "security", label: "Безопасность", hash: "sign-in-security" },
+    {
+        id: "profile",
+        label: "Профиль",
+        hash: "account",
+        description: "Аккаунт, музыкальные предпочтения и общение",
+    },
+    {
+        id: "playback",
+        label: "Прослушивание",
+        hash: "playback",
+        description: "Качество звука и история прослушиваний",
+    },
+    {
+        id: "offline",
+        label: "Офлайн",
+        hash: "device-offline",
+        description: "Загрузки на этом устройстве",
+    },
+    {
+        id: "security",
+        label: "Безопасность",
+        hash: "sign-in-security",
+        description: "Вход, пароли приложений и ключи API",
+    },
 ] as const;
 
 type UserSettingsTab = (typeof tabs)[number]["id"];
@@ -34,39 +56,57 @@ interface UserSettingsLayoutProps {
     saveDock?: ReactNode;
 }
 
-/** Four account-facing pages; visited panels retain unsaved local input. */
+/** Shows a mobile settings overview and desktop tabs, retaining visited drafts. */
 export function UserSettingsLayout({
     sections,
     saveDock,
 }: UserSettingsLayoutProps) {
-    const [active, setActive] = useState<UserSettingsTab>("profile");
+    const [section, setSection] = useState<UserSettingsTab | null>(null);
     const [visited, setVisited] = useState<ReadonlySet<UserSettingsTab>>(
         () => new Set(["profile"]),
     );
     const tabList = useRef<HTMLDivElement>(null);
+    const heading = useRef<HTMLHeadingElement>(null);
+    const focusHeading = useRef(false);
+    const active = section ?? "profile";
+    const activeTab = tabs.find((tab) => tab.id === section);
 
-    const activate = useCallback((id: UserSettingsTab) => {
-        setActive(id);
+    const activate = useCallback((id: UserSettingsTab | null) => {
+        setSection(id);
+        if (!id) return;
         setVisited((previous) =>
             previous.has(id) ? previous : new Set([...previous, id]),
         );
     }, []);
 
     useEffect(() => {
-        const restore = () => {
+        const readLocation = (moveFocus: boolean) => {
+            const url = new URL(window.location.href);
+            // The sign-in callback can arrive without the security fragment.
+            if (
+                !url.hash &&
+                (url.searchParams.has("ssoLinked") ||
+                    url.searchParams.has("ssoError"))
+            ) {
+                url.hash = "sign-in-security";
+                window.history.replaceState(window.history.state, "", url);
+            }
             let hash: string;
             try {
-                hash = decodeURIComponent(window.location.hash.slice(1));
+                hash = decodeURIComponent(url.hash.slice(1));
             } catch {
                 return;
             }
+            focusHeading.current =
+                moveFocus && (!hash || tabs.some((tab) => tab.hash === hash));
             activate(
                 Object.hasOwn(legacySections, hash)
                     ? legacySections[hash]
-                    : "profile",
+                    : null,
             );
         };
-        restore();
+        const restore = () => readLocation(true);
+        readLocation(false);
         window.addEventListener("popstate", restore);
         window.addEventListener("hashchange", restore);
         return () => {
@@ -75,57 +115,109 @@ export function UserSettingsLayout({
         };
     }, [activate]);
 
-    const navigate = (id: UserSettingsTab) => {
+    useEffect(() => {
+        if (!focusHeading.current) return;
+        focusHeading.current = false;
+        if (window.matchMedia("(min-width: 640px)").matches) return;
+        heading.current
+            ?.closest("main")
+            ?.scrollTo({ top: 0, behavior: "instant" });
+        heading.current?.focus({ preventScroll: true });
+    }, [section]);
+
+    const navigate = (id: UserSettingsTab | null) => {
+        focusHeading.current = true;
         activate(id);
         const tab = tabs.find((item) => item.id === id);
-        if (!tab) return;
         const url = new URL(window.location.href);
-        if (url.hash !== `#${tab.hash}`) {
-            url.hash = tab.hash;
+        const hash = tab ? `#${tab.hash}` : "";
+        if (url.hash !== hash) {
+            url.hash = hash;
             window.history.pushState({}, "", url);
         }
+    };
+
+    const followLink = (
+        event: MouseEvent<HTMLAnchorElement>,
+        id: UserSettingsTab | null,
+    ) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+            return;
+        event.preventDefault();
+        navigate(id);
     };
 
     return (
         <div className="settings-page min-h-full">
             <div className="mx-auto max-w-4xl px-4 py-6 sm:px-8 md:py-10">
                 <header className="mb-6">
-                    <h1 className="font-display text-3xl font-bold tracking-tight text-content md:text-4xl">
-                        {ru.settings.title}
+                    {activeTab && (
+                        <a
+                            href="/settings"
+                            onClick={(event) => followLink(event, null)}
+                            className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-content-secondary hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:hidden"
+                        >
+                            <ArrowLeft aria-hidden="true" className="size-4" />
+                            Все настройки
+                        </a>
+                    )}
+                    <h1
+                        ref={heading}
+                        tabIndex={-1}
+                        className="font-display text-3xl font-bold tracking-tight text-content focus:outline-none md:text-4xl"
+                    >
+                        <span className="sm:hidden">
+                            {activeTab?.label ?? ru.settings.title}
+                        </span>
+                        <span className="hidden sm:inline">
+                            {ru.settings.title}
+                        </span>
                     </h1>
-                    <p className="mt-2 text-sm leading-6 text-content-muted">
+                    <p
+                        className={`mt-2 text-sm leading-6 text-content-muted ${activeTab ? "hidden sm:block" : ""}`}
+                    >
                         Ваш профиль, звучание и музыка на этом устройстве.
                     </p>
                 </header>
-                <div className="mb-6 rounded-2xl border border-line bg-surface-raised p-2">
-                    <label
-                        className="block px-2 pb-1 text-xs text-content-muted sm:hidden"
-                        htmlFor="user-settings-section"
+                {!section && (
+                    <nav
+                        aria-label={ru.settings.sectionsAria}
+                        className="sm:hidden"
                     >
-                        Раздел настроек
-                    </label>
-                    <select
-                        id="user-settings-section"
-                        value={active}
-                        onChange={(event) => {
-                            const tab = tabs.find(
-                                (item) => item.id === event.target.value,
-                            );
-                            if (tab) navigate(tab.id);
-                        }}
-                        className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-3 text-base text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:hidden"
-                    >
-                        {tabs.map((tab) => (
-                            <option key={tab.id} value={tab.id}>
-                                {tab.label}
-                            </option>
-                        ))}
-                    </select>
+                        <ul className="divide-y divide-line rounded-2xl border border-line bg-surface-raised">
+                            {tabs.map((tab) => (
+                                <li key={tab.id}>
+                                    <a
+                                        href={`#${tab.hash}`}
+                                        onClick={(event) =>
+                                            followLink(event, tab.id)
+                                        }
+                                        className="group flex min-h-11 items-center gap-3 rounded-xl px-4 py-3 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+                                    >
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block font-semibold text-content">
+                                                {tab.label}
+                                            </span>
+                                            <span className="mt-0.5 block text-sm leading-5 text-content-muted">
+                                                {tab.description}
+                                            </span>
+                                        </span>
+                                        <ChevronRight
+                                            aria-hidden="true"
+                                            className="size-4 shrink-0 text-content-muted motion-safe:transition-transform motion-safe:duration-180 motion-safe:group-active:translate-x-0.5"
+                                        />
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </nav>
+                )}
+                <div className="mb-6 hidden rounded-2xl border border-line bg-surface-raised p-2 sm:block">
                     <div
                         ref={tabList}
                         role="tablist"
-                        aria-label="Разделы настроек"
-                        className="hidden gap-1 sm:flex"
+                        aria-label={ru.settings.sectionsAria}
+                        className="flex gap-1"
                     >
                         {tabs.map((tab, index) => (
                             <button
@@ -172,7 +264,7 @@ export function UserSettingsLayout({
                         role="tabpanel"
                         aria-labelledby={`settings-tab-${tab.id}`}
                         hidden={active !== tab.id}
-                        className="min-w-0 space-y-4 md:space-y-5"
+                        className={`min-w-0 space-y-4 md:space-y-5 ${!section && active === tab.id ? "hidden sm:block" : ""}`}
                     >
                         {visited.has(tab.id) ? sections[tab.id] : null}
                     </div>

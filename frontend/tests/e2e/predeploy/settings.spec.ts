@@ -7,11 +7,7 @@ test.describe("Settings", () => {
     });
 
     test("settings page loads with account section", async ({ page }) => {
-        await page.goto("/settings");
-
-        await expect(
-            page.getByRole("heading", { name: "Настройки" }),
-        ).toBeVisible();
+        await page.goto("/settings#account");
 
         // Should have Account section (use first() since multiple elements match)
         await expect(
@@ -22,7 +18,7 @@ test.describe("Settings", () => {
     });
 
     test("settings page shows playback section", async ({ page }) => {
-        await page.goto("/settings");
+        await page.goto("/settings#playback");
 
         // Should have Playback section (use first() since multiple elements match)
         await expect(
@@ -33,7 +29,7 @@ test.describe("Settings", () => {
     });
 
     test("settings page links to my history page", async ({ page }) => {
-        await page.goto("/settings");
+        await page.goto("/settings#history");
 
         const openHistoryLink = page.getByRole("link", {
             name: "Открыть мою историю",

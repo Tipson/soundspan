@@ -77,7 +77,7 @@ test.describe("Social and History", () => {
     });
 
     test("settings social controls are visible", async ({ page }) => {
-        await page.goto("/settings");
+        await page.goto("/settings#social");
 
         await expect(
             page.locator("text=Показывать, что я в сети").first(),
@@ -99,7 +99,7 @@ test.describe("Social and History", () => {
             mainNav.getByRole("link", { name: /история/i }),
         ).toHaveCount(0);
 
-        await page.goto("/settings");
+        await page.goto("/settings#history");
         await expect(
             page.getByRole("link", { name: /открыть мою историю/i }),
         ).toBeVisible({ timeout: 10000 });
