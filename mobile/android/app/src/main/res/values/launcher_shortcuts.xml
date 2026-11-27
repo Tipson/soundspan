@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_play_wave">Включить мою волну</string>
+    <string name="shortcut_resume">Продолжить слушать</string>
+    <string name="shortcut_downloads">Загрузки</string>
+</resources>

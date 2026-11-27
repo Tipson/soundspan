@@ -21,6 +21,22 @@
 
 ## Unreleased
 
+- Keep the current track version when a new audio draft is missing from storage. In the web dialog, stage or clear a newly selected file before publishing an older draft. Offer replacement only on exact catalog results and preload the Android administrator role.
+- Provide a writable alternate-audio volume for the API in hardened single-host deployments with a read-only music library.
+- Try the standard recording when a full version disappears during playback startup.
+
+- Let administrators replace audio for an existing track from Android. Choose a local MP3, save it as a draft, and explicitly publish or withdraw the full version.
+
+- Explain known download delays and failures on Android and let listeners retry eligible visible downloads together. Preserve network rules and server retry delays.
+- Skip repeated checks for alternate audio on Android when the server lacks the endpoint. Cancel a pending native start when playback is paused and expose timing stages in debug logs.
+- Explain source restrictions (HTTP 451) in Android playback and downloads. Start the next track when listeners explicitly skip a playback failure, while preserving a manual pause on ordinary skips.
+
+- Let administrators upload, preview, publish, and withdraw an MP3 alternative for a catalog track. Prefer the published audio in web and Android playback, with a standard-version option in the Android player.
+
+- Label the upcoming-track preview in the mobile player. Remove the filled storage panel from Downloads and fix an error when scrolling back to it.
+
+- Add Android launcher shortcuts to start My Wave, resume the saved queue, and open Downloads.
+
 - Start an exact-recording fallback lookup after six seconds of a pending initial YouTube load, retaining the original request when no usable alternative exists and cancelling only the losing startup path.
 - Route public YouTube Music radio, search and catalog requests through the opt-in verified HTTP/3 transport, retaining bounded responses and the existing private-account transport.
 

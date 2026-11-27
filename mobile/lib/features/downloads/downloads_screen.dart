@@ -173,6 +173,9 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                             MusicStatus(message: automation!.notice!),
                           const SizedBox(height: 16),
                           TextField(
+                            key: const PageStorageKey(
+                              'device-downloads-search',
+                            ),
                             controller: _search,
                             onChanged: controller.setQuery,
                             decoration: const InputDecoration(
@@ -182,6 +185,9 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                           ),
                           const SizedBox(height: 8),
                           SingleChildScrollView(
+                            key: const PageStorageKey(
+                              'device-downloads-filters',
+                            ),
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: [
@@ -210,6 +216,15 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                               ],
                             ),
                           ),
+                          if (controller.hasRetryableFailures)
+                            MusicButton(
+                              label: 'Повторить доступные',
+                              icon: Icons.refresh,
+                              busy: controller.busy,
+                              onPressed: controller.canDownload
+                                  ? controller.retryAvailable
+                                  : null,
+                            ),
                           if (controller.failure != null)
                             MusicStatus(
                               message: controller.failure!.message,
@@ -243,7 +258,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                             track: job.track,
                             downloaded: job.state == DownloadState.ready,
                             subtitle:
-                                '${job.track.artist} · ${downloadStatus(job)}',
+                                '${job.track.artist} · ${downloadStatus(job, now: controller.repository.now)}',
                             onPlay: job.state == DownloadState.ready
                                 ? () => _play(job)
                                 : null,

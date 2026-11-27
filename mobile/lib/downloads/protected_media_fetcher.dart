@@ -193,6 +193,13 @@ final class ProtectedMediaFetcher {
             continue;
           }
           if (!const {200, 206, 416}.contains(response.statusCode)) {
+            if (response.statusCode == 451) {
+              throw const AppFailure(
+                code: 'media_restricted',
+                message: 'Источник ограничил доступ к записи. Можно включить следующий трек.',
+                statusCode: 451,
+              );
+            }
             final failure = failureForStatus(
               response.statusCode,
               retryAfter: RetryAfterPolicy.parse(

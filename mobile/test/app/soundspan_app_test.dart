@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soundspan/app/app_composition.dart';
 import 'package:soundspan/app/app_environment.dart';
+import 'package:soundspan/app/launcher_shortcut.dart';
 import 'package:soundspan/app/soundspan_app.dart';
 import 'package:soundspan/core/model/owner_key.dart';
 import 'package:soundspan/core/session/auth_models.dart';
@@ -14,6 +17,47 @@ import 'package:soundspan/playback/playback_engine.dart';
 import '../support/collection_fixtures.dart';
 
 void main() {
+  test('launcher shortcuts reach only the admitted account', () async {
+    final fixture = _Fixture();
+    final app = await fixture.open();
+    addTearDown(() async {
+      await app.close();
+      await fixture.authority.updates.close();
+    });
+    final handled = <(String, LauncherShortcut)>[];
+    Future<void> deliver(LauncherShortcut shortcut, Future<void> ready) =>
+        deliverLauncherShortcut(
+          app,
+          shortcut,
+          waitForUi: () => ready,
+          dispatch: (owner, action) async {
+            handled.add((owner.fence.owner.userId, action));
+          },
+        );
+
+    await deliver(LauncherShortcut.playWave, Future.value());
+    expect(handled, [('a', LauncherShortcut.playWave)]);
+
+    final frame = Completer<void>();
+    final pending = deliver(LauncherShortcut.resume, frame.future);
+    fixture.authority.switchOwner();
+    await app.settled;
+    frame.complete();
+    await pending;
+    expect(handled, [('a', LauncherShortcut.playWave)]);
+
+    await deliver(LauncherShortcut.downloads, Future.value());
+    expect(handled, [
+      ('a', LauncherShortcut.playWave),
+      ('b', LauncherShortcut.downloads),
+    ]);
+
+    await fixture.authority.invalidate();
+    await app.settled;
+    await deliver(LauncherShortcut.playWave, Future.value());
+    expect(handled, hasLength(2));
+  });
+
   testWidgets(
     'owner replacement destroys old root overlays without replacing playback',
     (tester) async {

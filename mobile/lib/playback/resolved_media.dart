@@ -16,12 +16,14 @@ final class ResolvedMedia {
     required this.fence,
     required this.uri,
     this.renewableUri,
+    this.publishedAudioVersionId,
   });
   final TrackRef ref;
   final ResolvePurpose purpose;
   final SessionFence fence;
   final Uri uri;
   final Uri? renewableUri;
+  final String? publishedAudioVersionId;
   @override
   String toString() => 'ResolvedMedia(<private>)';
 }

@@ -38,6 +38,7 @@ import '../features/player/full_player_screen.dart';
 import '../features/player/mini_player.dart';
 import '../features/player/player_controller.dart';
 import '../features/player/queue_screen.dart';
+import '../features/player/track_audio_admin_sheet.dart';
 import '../features/playlists/playlist_detail_screen.dart';
 import '../features/playlists/playlist_editor_sheet.dart';
 import '../features/playlists/playlist_list_screen.dart';
@@ -59,6 +60,8 @@ import '../features/updates/app_update_screen.dart';
 import '../features/tastes/taste_screen.dart';
 import '../features/wave/wave_screen.dart';
 import '../features/wave/wave_direction_sheet.dart';
+import '../playback/resolved_media.dart';
+import '../playback/track_audio_admin.dart';
 import 'add_to_playlist_sheet.dart';
 import 'app_destinations.dart';
 import 'app_shell.dart';
@@ -402,6 +405,12 @@ class _OwnerShellState extends State<OwnerShell>
     return CatalogActions(
       preferences: s.preferences,
       library: s.library,
+      canManageAudio: s.canManageTrackAudio,
+      manageAudio: (track, fence) async {
+        if (fence != s.fence) throw collectionStaleSession;
+        await assertTarget?.call();
+        if (mounted && current()) await _manageTrackAudio(track);
+      },
       enqueueEnd: (tracks, fence) async {
         if (fence != s.fence) throw collectionStaleSession;
         await _enqueue(tracks);
@@ -590,10 +599,59 @@ class _OwnerShellState extends State<OwnerShell>
         );
       case 'settings':
         await _open(const AppDestination(AppRouteKind.settings), overlay: true);
+      case 'manage-audio':
+        await _manageTrackAudio(track);
       case 'artist':
         await _trackEntity(track, artist: true);
       case 'album':
         await _trackEntity(track, artist: false);
+    }
+  }
+
+  Future<void> _manageTrackAudio(Track track) async {
+    final session = s;
+    final target = TrackAudioTarget.fromRef(track.ref);
+    if (target == null) return;
+    final documents = NativeDocuments();
+    final cancellation = MediaCancellation();
+    bool current() =>
+        mounted &&
+        identical(s, session) &&
+        identical(session.presentation, this) &&
+        session.isCurrent &&
+        !cancellation.isCancelled;
+    Future<T> request<T>(Future<T> Function() send) async {
+      await session.guard();
+      if (!current()) throw collectionStaleSession;
+      session.owner.policy.requireNetwork();
+      return send();
+    }
+
+    if (!current()) return;
+    final admin = session.trackAudioAdmin;
+    final fence = session.fence;
+    try {
+      await TrackAudioAdminSheet.show(
+        context,
+        trackTitle: '${track.title} · ${track.artist}',
+        isCurrent: current,
+        onDispose: cancellation.cancel,
+        pickFile: () => documents.pickTrackAudio(isCurrent: current),
+        load: () => request(
+          () => admin.read(target, fence, cancellation: cancellation),
+        ),
+        upload: (bytes) => request(
+          () => admin.upload(target, fence, bytes, cancellation: cancellation),
+        ),
+        publish: (id) => request(
+          () => admin.publish(target, fence, id, cancellation: cancellation),
+        ),
+        withdraw: (id) => request(
+          () => admin.withdraw(target, fence, id, cancellation: cancellation),
+        ),
+      );
+    } finally {
+      cancellation.cancel();
     }
   }
 

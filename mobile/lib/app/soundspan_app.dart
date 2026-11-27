@@ -12,6 +12,7 @@ import 'app_environment.dart';
 import 'app_visibility_controller.dart';
 import 'entry_controller.dart';
 import 'entry_screen.dart';
+import 'launcher_shortcut.dart';
 
 typedef OwnerUiBuilder = Widget Function(
   BuildContext,
@@ -32,11 +33,16 @@ class SoundspanApp extends StatefulWidget {
     required this.ownerBuilder,
     this.registrationBuilder,
     this.onOriginSelected,
+    this.launcherShortcuts,
+    this.onLauncherShortcut,
   });
   final AppComposition composition;
   final OwnerUiBuilder ownerBuilder;
   final RegistrationPageBuilder? registrationBuilder;
   final FutureOr<void> Function(Uri)? onOriginSelected;
+  final Stream<LauncherShortcut>? launcherShortcuts;
+  final Future<void> Function(AppOwnerScope, LauncherShortcut)?
+  onLauncherShortcut;
   @override
   State<SoundspanApp> createState() => _SoundspanAppState();
 }
@@ -47,6 +53,7 @@ class _SoundspanAppState extends State<SoundspanApp> {
   (AppComposition, SessionFence?)? _navigationId;
   GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
   late AppVisibilityController _visibility;
+  StreamSubscription<LauncherShortcut>? _shortcutSubscription;
   String? _actionFailure;
   @override
   void initState() {
@@ -54,6 +61,7 @@ class _SoundspanAppState extends State<SoundspanApp> {
     _visibility = AppVisibilityController();
     widget.composition.addListener(_changed);
     _syncEntry();
+    _listenForShortcuts();
   }
 
   @override
@@ -65,6 +73,31 @@ class _SoundspanAppState extends State<SoundspanApp> {
       widget.composition.addListener(_changed);
       _syncEntry();
     }
+    if (oldWidget.launcherShortcuts != widget.launcherShortcuts) {
+      unawaited(_shortcutSubscription?.cancel());
+      _listenForShortcuts();
+    }
+  }
+
+  void _listenForShortcuts() {
+    _shortcutSubscription = widget.launcherShortcuts?.listen(
+      (shortcut) => unawaited(_deliverShortcut(shortcut)),
+    );
+  }
+
+  Future<void> _deliverShortcut(LauncherShortcut shortcut) {
+    final graph = widget.composition;
+    return deliverLauncherShortcut(
+      graph,
+      shortcut,
+      // Mount the owner's router before navigating, even on a cold launch.
+      waitForUi: () => WidgetsBinding.instance.endOfFrame,
+      dispatch: (owner, action) async {
+        if (mounted && identical(widget.composition, graph)) {
+          await widget.onLauncherShortcut?.call(owner, action);
+        }
+      },
+    );
   }
 
   void _changed() {
@@ -239,6 +272,7 @@ class _SoundspanAppState extends State<SoundspanApp> {
 
   @override
   void dispose() {
+    unawaited(_shortcutSubscription?.cancel());
     widget.composition.removeListener(_changed);
     _clearEntry();
     _visibility.dispose();

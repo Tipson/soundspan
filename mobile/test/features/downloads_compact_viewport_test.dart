@@ -1,8 +1,13 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soundspan/app/app_destinations.dart';
 import 'package:soundspan/app/app_router.dart';
 import 'package:soundspan/app/app_shell.dart';
+import 'package:soundspan/core/model/track.dart';
+import 'package:soundspan/core/model/track_ref.dart';
 import 'package:soundspan/core/network/network_policy.dart';
 import 'package:soundspan/design_system/design_system.dart';
 import 'package:soundspan/downloads/download_checkpoint.dart';
@@ -42,10 +47,13 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             theme: SoundspanTheme.dark(),
-            home: Scaffold(
-              body: StorageStatusCard(
-                jobs: [_job(DownloadState.ready), _job(DownloadState.failed)],
-                ready: ready,
+            home: RepaintBoundary(
+              key: const ValueKey('storage-surface'),
+              child: Scaffold(
+                body: StorageStatusCard(
+                  jobs: [_job(DownloadState.ready), _job(DownloadState.failed)],
+                  ready: ready,
+                ),
               ),
             ),
           ),
@@ -55,6 +63,28 @@ void main() {
         expect(find.text(warning), ready ? findsNothing : findsOneWidget);
         final tile = find.byType(ExpansionTile);
         expect(tile, findsOneWidget);
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('storage-surface')),
+        );
+        final image = boundary.toImageSync();
+        try {
+          final bytes = (await tester.runAsync(
+            () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+          ))!;
+          const x = 24, y = 4;
+          final offset = (y * image.width + x) * 4;
+          expect(
+            Color.fromARGB(
+              bytes.getUint8(offset + 3),
+              bytes.getUint8(offset),
+              bytes.getUint8(offset + 1),
+              bytes.getUint8(offset + 2),
+            ),
+            MusicColors.canvas,
+          );
+        } finally {
+          image.dispose();
+        }
         await tester.tap(
           find.text(
             ready ? '1 готовая загрузка · 3.0 МБ' : 'Хранилище недоступно',
@@ -76,6 +106,93 @@ void main() {
       },
     );
   }
+
+  testWidgets('downloads restore the header after scrolling away and back', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = (await tester.runAsync(DownloadHarness.create))!;
+    final controller = DownloadsController(
+      repository: harness.repo,
+      fence: harness.fence,
+      networkPolicy: const NetworkPolicy.online(),
+      storageReady: () => true,
+      schedule: (_, _, _) async => 'fixture',
+      cancelJob: (_, _, _) async {},
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(() async {
+        await controller.close();
+        controller.dispose();
+        await harness.close();
+      });
+    });
+    await tester.runAsync(() async {
+      for (var i = 0; i < 24; i++) {
+        await harness.repo.enqueue(
+          Track(
+            ref: LibraryTrackRef('track-$i'),
+            title: 'Трек $i',
+            artist: 'Автор',
+          ),
+          'original',
+          harness.fence,
+        );
+      }
+      await controller.refresh();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: SoundspanTheme.dark(),
+        home: DownloadsScreen(
+          controller: controller,
+          autoLoad: false,
+          onPlay: (_) async {},
+        ),
+      ),
+    );
+    final summary = find.text('0 готовых загрузок · 0 КБ');
+    final details = find.textContaining('Объём по данным загрузок приложения.');
+    final filters = find.byType(SingleChildScrollView);
+    final list = tester
+        .state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byType(ListView),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        )
+        .position;
+    Future<void> scrollAwayAndBack() async {
+      list.jumpTo(list.maxScrollExtent);
+      await tester.pumpAndSettle();
+      expect(find.byType(ExpansionTile), findsNothing);
+      list.jumpTo(0);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ErrorWidget), findsNothing);
+      expect(summary.hitTestable(), findsOneWidget);
+      expect(find.byType(TextField).hitTestable(), findsOneWidget);
+      expect(find.text('Поиск в загрузках'), findsOneWidget);
+      expect(find.text('Ошибки').hitTestable(), findsOneWidget);
+    }
+
+    expect(details, findsNothing);
+    await tester.drag(filters, const Offset(-260, 0));
+    await tester.pumpAndSettle();
+    await scrollAwayAndBack();
+    expect(details, findsNothing);
+    await tester.tap(summary);
+    await tester.pumpAndSettle();
+    expect(details, findsOneWidget);
+    await scrollAwayAndBack();
+    expect(details, findsOneWidget);
+  });
 
   testWidgets(
     '360dp downloads show the first ready track above shell mini footer',

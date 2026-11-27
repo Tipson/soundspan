@@ -1,5 +1,19 @@
 import type { PlaybackClientMetricInput } from "../api";
 import type { ApiClientConstructor } from "./core";
+import {
+    trackAudioStreamUrl,
+    type TrackAudioTarget,
+} from "../audio/trackAudioVersions";
+
+/** Staged and published immutable audio IDs visible to an administrator. */
+export interface TrackAudioVersions {
+    draftId: string | null;
+    publishedId: string | null;
+}
+
+function trackAudioEndpoint(target: TrackAudioTarget): string {
+    return `/track-audio/${target.source}/${encodeURIComponent(target.trackId)}`;
+}
 
 const YOUTUBE_LETTERBOX_THUMBNAIL =
     /^(https?:\/\/(?:i\.ytimg\.com|img\.youtube\.com)\/vi\/[^/?#]+\/)hqdefault(\.jpg(?:[?#].*)?)$/i;
@@ -11,6 +25,78 @@ function preferWideYouTubeThumbnail(coverId: string): string {
 /** Add media-domain operations to an API client base class. */
 export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class MediaApi extends Base {
+        /** Read the optional default audio version within the startup budget. */
+        async getPublishedTrackAudioUrl(
+            target: TrackAudioTarget,
+            signal: AbortSignal,
+        ): Promise<string | null> {
+            const { publishedId } = await this.request<{
+                publishedId: unknown;
+            }>(trackAudioEndpoint(target), {
+                signal,
+                timeoutMs: 800,
+                retryOnTimeout: false,
+                silent404: true,
+            });
+            return trackAudioStreamUrl(publishedId);
+        }
+
+        /** Read draft and published audio for the administrator dialog. */
+        getTrackAudioVersions(target: TrackAudioTarget, signal?: AbortSignal) {
+            return this.request<TrackAudioVersions>(
+                `${trackAudioEndpoint(target)}/manage`,
+                { signal },
+            );
+        }
+
+        /** Stage one MP3 for listening before publication. */
+        uploadTrackAudio(
+            target: TrackAudioTarget,
+            file: File,
+            signal?: AbortSignal,
+        ) {
+            return this.request<TrackAudioVersions>(
+                `${trackAudioEndpoint(target)}/draft`,
+                {
+                    method: "PUT",
+                    headers: { "Content-Type": "audio/mpeg" },
+                    body: file,
+                    signal,
+                    timeoutMs: 95_000,
+                    retryOnTimeout: false,
+                },
+            );
+        }
+
+        /** Publish the specific version which the administrator previewed. */
+        publishTrackAudio(
+            target: TrackAudioTarget,
+            versionId: string,
+            signal?: AbortSignal,
+        ) {
+            return this.request<TrackAudioVersions>(
+                `${trackAudioEndpoint(target)}/publish`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({ versionId }),
+                    signal,
+                    retryOnTimeout: false,
+                },
+            );
+        }
+
+        /** Withdraw the specified currently published version. */
+        withdrawTrackAudio(
+            target: TrackAudioTarget,
+            versionId: string,
+            signal?: AbortSignal,
+        ) {
+            return this.request<TrackAudioVersions>(
+                `${trackAudioEndpoint(target)}/published/${encodeURIComponent(versionId)}`,
+                { method: "DELETE", signal, retryOnTimeout: false },
+            );
+        }
+
         /** Read a revocable device-file URL without attaching server credentials. */
         async readLocalDeviceFile(
             url: string,

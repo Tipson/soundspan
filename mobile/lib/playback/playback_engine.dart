@@ -11,13 +11,30 @@ final class PreparedAudio {
     required this.uri,
     required this.revoke,
     this.readFailure,
+    this.publishedAudioVersionId,
+    this.readFirstGatewayAudioByteAt,
   });
+
+  /// Adapt the loopback handle without changing capability ownership.
+  factory PreparedAudio.fromMediaHandle(
+    MediaHandle handle, {
+    String? publishedAudioVersionId,
+  }) => PreparedAudio(
+    uri: handle.uri,
+    revoke: handle.revoke,
+    readFailure: () => handle.failure,
+    publishedAudioVersionId: publishedAudioVersionId,
+    readFirstGatewayAudioByteAt: () => handle.firstGatewayAudioByteAt,
+  );
   final Uri uri;
   final Future<void> Function() revoke;
 
   /// Safe typed cause from this exact resource; no URI or credentials enter state.
   final AppFailure? Function()? readFailure;
+  final Duration? Function()? readFirstGatewayAudioByteAt;
+  final String? publishedAudioVersionId;
   AppFailure? get failure => readFailure?.call();
+  Duration? get firstGatewayAudioByteAt => readFirstGatewayAudioByteAt?.call();
 
   /// A local reader remains reserved until the native decoder has drained.
   /// Network revocation starts immediately so blocked gateway IO can stop too.
@@ -49,11 +66,7 @@ PrepareAudio protectedAudioPreparation(
     fence,
   );
   final handle = await gateway.open(media, fence);
-  return PreparedAudio(
-    uri: handle.uri,
-    revoke: handle.revoke,
-    readFailure: () => handle.failure,
-  );
+  return PreparedAudio.fromMediaHandle(handle);
 };
 
 final class EngineEvent {

@@ -530,6 +530,12 @@ class FullPlayerScreen extends StatelessWidget {
   }
 
   Widget _sections(BuildContext context) {
+    final current = controller.snapshot.currentEntryId;
+    final upcoming = controller.orderedEntries
+        .skipWhile((entry) => entry.entryId != current)
+        .skip(1)
+        .take(3)
+        .toList();
     return Column(
       key: const ValueKey('player-more'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -537,17 +543,21 @@ class FullPlayerScreen extends StatelessWidget {
         const Divider(),
         const SizedBox(height: 8),
         _sectionActions(context),
-        for (final entry
-            in controller.orderedEntries
-                .skipWhile(
-                  (e) => e.entryId != controller.snapshot.currentEntryId,
-                )
-                .skip(1)
-                .take(3))
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text('${entry.track.title} · ${entry.track.artist}'),
+        if (upcoming.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Semantics(
+            header: true,
+            child: Text(
+              'Далее в очереди',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
           ),
+          for (final entry in upcoming)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text('${entry.track.title} · ${entry.track.artist}'),
+            ),
+        ],
       ],
     );
   }
@@ -584,14 +594,23 @@ class FullPlayerScreen extends StatelessWidget {
     if (target == null) return;
     final cb = controller.callbacks;
     final routeOwner = ModalRoute.of(context);
+    final audioManagement = cb.onManageAudio == null
+        ? null
+        : cb.canManageAudio?.call(target);
     final downloaded = cb.onDownload == null
         ? false
         : await controller.downloaded(target);
+    if (!context.mounted || !target.isCurrent) return;
+    final hasFullAudio = await controller.fullAudioAvailable(target);
+    final canManageAudio = audioManagement != null && await audioManagement;
     if (!context.mounted ||
         !target.isCurrent ||
         routeOwner?.isCurrent == false) {
       return;
     }
+    final fullSelected = controller.snapshot.publishedAudioVersionId != null;
+    final canRetry =
+        controller.snapshot.processing == PlaybackProcessing.failed;
     MusicAction route(
       String id,
       String label,
@@ -604,6 +623,26 @@ class FullPlayerScreen extends StatelessWidget {
       onSelected: () => controller.invoke(action, target: target),
     );
     await MusicActionSheet.show(context, [
+      if (canManageAudio)
+        route(
+          'audio-replace',
+          'Заменить аудио',
+          Icons.audio_file_outlined,
+          cb.onManageAudio!,
+        ),
+      if (hasFullAudio)
+        for (final standard in [false, true])
+          MusicAction(
+            id: standard ? 'audio-standard' : 'audio-full',
+            label: standard ? 'Стандартная версия' : 'Без цензуры',
+            icon: Icons.audiotrack,
+            selected: fullSelected != standard,
+            disabledReason: fullSelected != standard && !canRetry
+                ? 'Эта версия уже выбрана'
+                : null,
+            onSelected: () =>
+                controller.selectAudioVersion(target, standard: standard),
+          ),
       MusicAction(
         id: 'volume',
         label: 'Громкость',

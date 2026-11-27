@@ -300,6 +300,9 @@ export function DiscoverTracksList({
                         >
                             <TrackOverflowMenu
                                 track={actionTrack}
+                                allowTrackAudioManagement={directMatches.has(
+                                    key,
+                                )}
                                 triggerClassName="h-11 w-11 p-0"
                                 showPlayNext={
                                     isPlayable && !match?.musicSourceRecording

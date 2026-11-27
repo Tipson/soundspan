@@ -52,6 +52,9 @@ import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflin
 import { getDeviceDownloadSourceUrl } from "@/features/device-offline/sourceUrl";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 import { audiusTrackSchema } from "@/lib/audio/audiusPlayback";
+import { useAuth } from "@/lib/auth-context";
+import { trackAudioTarget } from "@/lib/audio/trackAudioVersions";
+import { TrackAudioVersionModal } from "./TrackAudioVersionModal";
 
 interface TrackOverflowMenuProps {
     track: Track;
@@ -64,6 +67,8 @@ interface TrackOverflowMenuProps {
     showMatchVibe?: boolean;
     showVibeMap?: boolean;
     showStartRadio?: boolean;
+    /** Disable persistent audio replacement for a tentative search match. */
+    allowTrackAudioManagement?: boolean;
     onMatchVibe?: () => void | Promise<void>;
     matchVibeLabel?: string;
     matchVibeDisabled?: boolean;
@@ -89,6 +94,7 @@ export function TrackOverflowMenu({
     showMatchVibe = true,
     showVibeMap = true,
     showStartRadio = true,
+    allowTrackAudioManagement = true,
     onMatchVibe,
     matchVibeLabel,
     matchVibeDisabled = false,
@@ -102,6 +108,7 @@ export function TrackOverflowMenu({
     useDismissibleLayer(isOpen, () => setIsOpen(false), 200);
     const [isPlaylistSelectorOpen, setIsPlaylistSelectorOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
     const triggerRef = useRef<HTMLButtonElement | null>(null);
     const popupRef = useRef<HTMLDivElement | null>(null);
@@ -113,6 +120,7 @@ export function TrackOverflowMenu({
     } | null>(null);
     const router = useRouter();
     const controls = useAudioControls();
+    const user = useAuth({ optional: true })?.user;
     const deviceOffline = useOptionalDeviceOffline();
     const normalizedActionTrack = useMemo(
         () => normalizeActionableAudioTrack(track),
@@ -121,6 +129,10 @@ export function TrackOverflowMenu({
     const isActionable = normalizedActionTrack !== null;
     const actionTrack = normalizedActionTrack ?? track;
     const canPersist = isActionable && !isPlaybackOnlyTrack(actionTrack);
+    const audioTarget =
+        allowTrackAudioManagement && user?.role === "admin" && isActionable
+            ? trackAudioTarget(actionTrack)
+            : null;
     const canAddToPlaylist = isActionable && canAddTrackToPlaylist(actionTrack);
     const canDownload =
         canPersist ||
@@ -677,6 +689,16 @@ export function TrackOverflowMenu({
                                     />
                                 )}
 
+                            {audioTarget && (
+                                <MenuButton
+                                    onClick={() => {
+                                        setIsOpen(false);
+                                        setIsAudioModalOpen(true);
+                                    }}
+                                    icon={<AudioWaveform className="h-4 w-4" />}
+                                    label="Полная версия трека"
+                                />
+                            )}
                             {extraItemsAfter}
                         </div>,
                         document.body,
@@ -695,6 +717,14 @@ export function TrackOverflowMenu({
                 resourceId={track.id}
                 resourceName={track.title}
             />
+            {isAudioModalOpen && audioTarget && (
+                <TrackAudioVersionModal
+                    key={`${audioTarget.source}:${audioTarget.trackId}`}
+                    target={audioTarget}
+                    trackName={actionTrack.title}
+                    onClose={() => setIsAudioModalOpen(false)}
+                />
+            )}
         </>
     );
 }

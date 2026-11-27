@@ -37,6 +37,27 @@ void main() {
     expect(await documents.pickAvatar(isCurrent: () => true), isNull);
   });
 
+  for (final file in [
+    ('empty.mp3', Uint8List(0)),
+    ('not-mp3.wav', Uint8List(1)),
+  ]) {
+    test('track audio rejects ${file.$1}', () async {
+      final documents = NativeDocuments(
+        open: (_) async => XFile.fromData(file.$2, path: file.$1),
+      );
+      await expectLater(
+        documents.pickTrackAudio(isCurrent: () => true),
+        throwsA(
+          isA<AppFailure>().having(
+            (e) => e.code,
+            'code',
+            'invalid_track_audio',
+          ),
+        ),
+      );
+    });
+  }
+
   test(
     'selected UTF8 M3U keeps exact content and a safe default name',
     () async {

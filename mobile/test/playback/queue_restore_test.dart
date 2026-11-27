@@ -118,6 +118,29 @@ void main() {
     },
   );
 
+  test('queue checkpoints retain the selected encoding and older entries stay automatic', () {
+    const track = Track(
+      ref: LibraryTrackRef('library-item'),
+      title: 'Трек',
+      artist: 'Автор',
+    );
+    const saved = QueueEntry(
+      entryId: 'one',
+      track: track,
+      context: PlayContext(surface: PlaySurface.library, fromDownloads: true),
+      standardAudio: true,
+    );
+    final encoded = MusicCodec.encodeQueueEntry(saved);
+    final restored = MusicCodec.decodeQueueEntry(encoded);
+    expect(restored.standardAudio, isTrue);
+    expect(restored.context.fromDownloads, isTrue);
+    encoded.remove('standardAudio');
+    (encoded['context'] as Map).remove('fromDownloads');
+    final legacy = MusicCodec.decodeQueueEntry(encoded);
+    expect(legacy.standardAudio, isFalse);
+    expect(legacy.context.fromDownloads, isFalse);
+  });
+
   test('37s restore keeps duplicate occurrences, shuffled order and attribution without autoplay', () async {
     await store.save(snapshot(), fenceA);
     final restored = await QueueSnapshotStore(owners).load(fenceA);

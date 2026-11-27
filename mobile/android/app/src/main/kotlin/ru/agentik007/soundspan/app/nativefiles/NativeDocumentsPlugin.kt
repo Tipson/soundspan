@@ -20,7 +20,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
-/** Only a user-picked image or M3U; no caller-provided path, URI, MIME, or size. */
+/** Only supported user-picked documents; no caller-provided path, URI, MIME, or size. */
 class NativeDocumentsPlugin : FlutterPlugin, ActivityAware, PluginRegistry.ActivityResultListener {
     private lateinit var context: Context
     private val main = Handler(Looper.getMainLooper())
@@ -37,7 +37,11 @@ class NativeDocumentsPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activ
         @Volatile var cancelled = false
         var reading = false
         var timeout: Runnable? = null
-        val limit get() = if (kind == "image") 5 * 1024 * 1024 else 512 * 1024
+        val limit get() = when (kind) {
+            "image" -> 5 * 1024 * 1024
+            "audio" -> BoundedDocumentReader.MAX_AUDIO_BYTES
+            else -> 512 * 1024
+        }
 
         fun cancel() {
             cancelled = true
@@ -59,7 +63,7 @@ class NativeDocumentsPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activ
                 if (call.method != "pick") { result.notImplemented(); return@setMethodCallHandler }
                 val args = call.arguments as? Map<*, *>
                 val kind = args?.get("kind") as? String
-                if (args?.keys != setOf("kind") || kind !in setOf("image", "playlist", "export")) {
+                if (args?.keys != setOf("kind") || kind !in setOf("image", "playlist", "export", "audio")) {
                     result.error("document_protocol", "Invalid document request", null)
                     return@setMethodCallHandler
                 }
@@ -81,9 +85,12 @@ class NativeDocumentsPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activ
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = if (kind == "image") "image/*" else "*/*"
-                    putExtra(Intent.EXTRA_MIME_TYPES, if (kind == "image") arrayOf("image/jpeg", "image/png", "image/webp") else if (kind == "export") arrayOf("text/plain", "application/json", "application/octet-stream") else arrayOf(
-                        "audio/x-mpegurl", "audio/mpegurl", "application/vnd.apple.mpegurl", "application/x-mpegurl", "text/plain", "application/octet-stream"
-                    ))
+                    putExtra(Intent.EXTRA_MIME_TYPES, when (kind) {
+                        "image" -> arrayOf("image/jpeg", "image/png", "image/webp")
+                        "export" -> arrayOf("text/plain", "application/json", "application/octet-stream")
+                        "audio" -> arrayOf("audio/mpeg", "audio/mp3", "audio/x-mp3", "application/octet-stream")
+                        else -> arrayOf("audio/x-mpegurl", "audio/mpegurl", "application/vnd.apple.mpegurl", "application/x-mpegurl", "text/plain", "application/octet-stream")
+                    })
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 try { activity.startActivityForResult(intent, selection.requestCode) }
@@ -135,10 +142,15 @@ class NativeDocumentsPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Activ
             input.use {
                 if (selection.cancelled) return
                 val bytes = BoundedDocumentReader.read(it, selection.limit, size) { selection.cancelled }
-                if (bytes.isEmpty()) throw IllegalArgumentException()
+                if (bytes.isEmpty()) {
+                    main.post { finish(selection, error = if (selection.kind == "audio") "document_empty" else "document_unavailable") }
+                    return
+                }
                 val safeName = BoundedDocumentReader.safeBasename(name)
                 main.post { finish(selection, value = mapOf("name" to safeName, "bytes" to bytes)) }
             }
+        } catch (_: DocumentTooLargeException) {
+            main.post { finish(selection, error = if (selection.kind == "audio") "document_too_large" else "document_unavailable") }
         } catch (_: Exception) {
             main.post { finish(selection, error = "document_unavailable") }
         } finally {

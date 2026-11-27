@@ -197,6 +197,44 @@ class _CatalogReviewNavigation extends NavigatorObserver {
 }
 
 void main() {
+  testWidgets('catalog can replace audio without playing the track', (
+    tester,
+  ) async {
+    final track = collectionTrack(1);
+    Track? replaced;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            return TextButton(
+              onPressed: () => showCatalogTrackSheet(
+                context,
+                actions: CatalogActions(
+                  canManageAudio: (_, _) async => true,
+                  manageAudio: (selected, _) {
+                    replaced = selected;
+                  },
+                ),
+                track: track,
+                fence: collectionFence,
+                isCurrent: () => true,
+                run: (action) async => await action(),
+              ),
+              child: const Text('Открыть'),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.tap(find.text('Открыть'));
+    await tester.pumpAndSettle();
+    final action = find.text('Заменить аудио');
+    expect(action, findsOneWidget);
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+    expect(replaced, same(track));
+  });
+
   testWidgets('empty search keeps result controls out of the entry state', (
     tester,
   ) async {

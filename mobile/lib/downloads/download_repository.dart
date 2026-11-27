@@ -270,6 +270,7 @@ final class DownloadRepository {
     int? expectedGeneration,
     bool automaticOnly = false,
     bool manual = false,
+    DeviceDownload? failedSnapshot,
   }) => _mutate(id, fence, (tx) async {
     final old = await _read(tx, id, fence);
     if (old == null) throw StateError('Download not found');
@@ -279,6 +280,17 @@ final class DownloadRepository {
         (automaticOnly && old.manual) ||
         old.state == DownloadState.ready ||
         old.state == DownloadState.removing) {
+      return (job: old, applied: false);
+    }
+    if (failedSnapshot != null &&
+        (old.originalFence != fence ||
+            old.state != DownloadState.failed ||
+            old.writer != null ||
+            old.errorCode != failedSnapshot.errorCode ||
+            old.origins.length != failedSnapshot.origins.length ||
+            !old.origins.containsAll(failedSnapshot.origins) ||
+            old.retryNotBefore != failedSnapshot.retryNotBefore ||
+            old.retryNotBefore > now)) {
       return (job: old, applied: false);
     }
     if (!forceNewGeneration &&
@@ -371,6 +383,50 @@ final class DownloadRepository {
     );
     return result.applied ? result.job : null;
   }
+
+  /// Retry a failed row only while the captured error remains unchanged.
+  /// A background worker may reclaim or fail again in the same generation.
+  Future<DeviceDownload?> retryFailedManually(
+    DeviceDownload snapshot,
+    SessionFence fence,
+  ) async {
+    if (snapshot.originalFence != fence ||
+        snapshot.state != DownloadState.failed) {
+      return null;
+    }
+    final result = await _command(
+      snapshot.id,
+      fence,
+      DownloadState.queued,
+      expectedGeneration: snapshot.generation,
+      manual: true,
+      failedSnapshot: snapshot,
+    );
+    return result.applied ? result.job : null;
+  }
+
+  /// Recover an unconfirmed WorkManager submission without changing its
+  /// generation. Work that actually reached the scheduler can still claim it.
+  Future<bool> markBulkScheduleUnconfirmed(DeviceDownload submitted) =>
+      _mutate(submitted.id, submitted.originalFence, (tx) async {
+        final current = await _read(tx, submitted.id, submitted.originalFence);
+        if (current == null ||
+            current.originalFence != submitted.originalFence ||
+            current.generation != submitted.generation ||
+            current.state != DownloadState.queued ||
+            current.writer != null ||
+            current.errorCode != null) {
+          return false;
+        }
+        await _write(
+          tx,
+          current.patch({
+            'state': DownloadState.failed.name,
+            'errorCode': 'download_schedule_unconfirmed',
+          }),
+        );
+        return true;
+      });
 
   /// Returns whether this captured cancellation was admitted. A manual
   /// promotion can retain its generation and still reject automatic cleanup.

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import '../model/app_failure.dart';
 import '../model/owner_key.dart';
@@ -39,7 +40,8 @@ const invalidTarget = AppFailure(
   message: 'Недопустимый адрес сервера',
 );
 
-/// JSON endpoint request. Paths are API-relative only; credentials belong in a
+/// JSON endpoint request with a dedicated binary input for staging track audio.
+/// Paths are API-relative only; credentials belong in a
 /// header/body and may never be supplied through query parameters.
 final class ApiRequest {
   ApiRequest({
@@ -48,12 +50,14 @@ final class ApiRequest {
     required this.path,
     Map<String, String> query = const {},
     Map<String, Object?>? body,
+    Uint8List? trackAudioDraftBody,
     this.authenticated = true,
     this.cancellation,
     String? playbackRunId,
   }) : origin = normalizeServerOrigin(origin),
        query = Map.unmodifiable(query),
        body = body == null ? null : _freezeBody(body),
+       trackAudioDraftBody = _freezeTrackAudioDraft(trackAudioDraftBody),
        playbackRunId = normalizePlaybackTraceId(playbackRunId) {
     if (!path.startsWith('/api/') ||
         path.contains(RegExp(r'[\\?#\x00-\x20\x7f]')) ||
@@ -69,6 +73,14 @@ final class ApiRequest {
             caseSensitive: false,
           ).hasMatch(key),
         )) {
+      throw invalidTarget;
+    }
+    if (trackAudioDraftBody != null &&
+        (!authenticated ||
+            method != ApiMethod.put ||
+            body != null ||
+            query.isNotEmpty ||
+            !_trackAudioDraftPath.hasMatch(path))) {
       throw invalidTarget;
     }
     if (!authenticated &&
@@ -92,6 +104,7 @@ final class ApiRequest {
   final String path;
   final Map<String, String> query;
   final Map<String, Object?>? body;
+  final Uint8List? trackAudioDraftBody;
   final bool authenticated;
   final RequestCancellation? cancellation;
 
@@ -100,6 +113,25 @@ final class ApiRequest {
   Uri get uri => origin
       .resolve(path)
       .replace(queryParameters: query.isEmpty ? null : query);
+
+  static const maxTrackAudioDraftBytes = 16 * 1024 * 1024;
+  static final _trackAudioDraftPath = RegExp(
+    r'^/api/track-audio/(library|youtube|vk|yandex)/[^/]+/draft$',
+  );
+
+  static Uint8List? _freezeTrackAudioDraft(Uint8List? bytes) {
+    if (bytes == null) return null;
+    if (bytes.isEmpty) {
+      throw const AppFailure(code: 'invalid_audio', message: 'Файл MP3 пуст');
+    }
+    if (bytes.length > maxTrackAudioDraftBytes) {
+      throw const AppFailure(
+        code: 'request_too_large',
+        message: 'Файл MP3 больше 16 МиБ',
+      );
+    }
+    return Uint8List.fromList(bytes).asUnmodifiableView();
+  }
 
   static Map<String, Object?> _freezeBody(Map<String, Object?> body) {
     // Snapshot before the first await: a caller cannot mutate a replay body.
@@ -152,7 +184,7 @@ AppFailure failureForStatus(int status, {Duration? retryAfter}) => AppFailure(
   retryAfter: status == 429 || status == 503 ? retryAfter : null,
 );
 
-/// Low-level JSON socket boundary, used by broker auth and ApiTransport only.
+/// Low-level JSON response socket boundary, used by broker auth and ApiTransport.
 abstract interface class JsonHttpClient {
   Future<ApiResponse> send(ApiRequest request, {String? accessToken});
 }

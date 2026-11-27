@@ -3,21 +3,33 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import '../core/model/app_failure.dart';
 import '../core/model/owner_key.dart';
 import '../core/session/session_authority.dart';
 import '../downloads/protected_media_fetcher.dart';
 import 'resolved_media.dart';
+import 'playback_startup_trace.dart';
 
 /// Runtime-only capability for one media target and immutable session fence.
 final class MediaHandle {
-  MediaHandle._(this.uri, this._revoke, this._readFailure);
+  MediaHandle._(
+    this.uri,
+    this._revoke,
+    this._readFailure,
+    this._readFirstGatewayAudioByteAt,
+  );
   final Uri uri;
   final Future<void> Function() _revoke;
   final AppFailure? Function() _readFailure;
+  final Duration? Function() _readFirstGatewayAudioByteAt;
 
   /// Terminal cause for this capability, cleared by a successful new response.
   AppFailure? get failure => _readFailure();
+
+  /// Debug-only time when the first validated audio bytes reached the loopback socket.
+  Duration? get firstGatewayAudioByteAt => _readFirstGatewayAudioByteAt();
   Future<void> revoke() => _revoke();
   @override
   String toString() => 'MediaHandle(<private>)';
@@ -30,6 +42,7 @@ final class _Entry {
   final MediaCancellation cancellation = MediaCancellation();
   final Set<Socket> sockets = {};
   AppFailure? failure;
+  Duration? firstGatewayAudioByteAt;
 }
 
 /// A bounded IPv4 loopback gateway. Native requests select a random capability;
@@ -80,6 +93,7 @@ final class MediaGateway {
         _revoke(path);
       },
       () => entry.failure,
+      () => entry.firstGatewayAudioByteAt,
     );
   }
 
@@ -210,6 +224,11 @@ final class MediaGateway {
         }
         socket.add(chunk);
         if (chunked) socket.add(const [13, 10]);
+        if (kDebugMode &&
+            request.method == 'GET' &&
+            (upstream.statusCode == 200 || upstream.statusCode == 206)) {
+          currentEntry.firstGatewayAudioByteAt ??= PlaybackStartupTrace.now;
+        }
         await socket.flush().timeout(fetcher.idleTimeout);
       }
       cancellation.check();

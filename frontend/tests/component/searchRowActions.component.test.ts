@@ -22,6 +22,7 @@ const state = {
         duration?: number;
     } | null>,
     ytMatchCalls: 0,
+    role: "user",
 };
 
 mock.module("lucide-react", {
@@ -63,6 +64,10 @@ mock.module("@/lib/audio-playback-context", {
     namedExports: {
         usePlaybackStatus: () => ({ isPlaying: false }),
     },
+});
+
+mock.module("@/lib/auth-context", {
+    namedExports: { useAuth: () => ({ user: { role: state.role } }) },
 });
 
 mock.module("@/lib/api", {
@@ -167,6 +172,7 @@ beforeEach(() => {
     state.ytAvailable = true;
     state.ytMatches = [];
     state.ytMatchCalls = 0;
+    state.role = "user";
 });
 
 async function render(element: React.ReactElement): Promise<{
@@ -437,6 +443,73 @@ test("discover rows always carry an overflow menu trigger", async () => {
 
     assert.ok(container.querySelector('[aria-haspopup="menu"]'));
     unmount();
+});
+
+test("administrators can manage audio only from discover rows with direct recording identities", async () => {
+    state.role = "admin";
+    state.ytMatches = [{ videoId: "fuzzy-v0001" }, null];
+    const { DiscoverTracksList } =
+        await import("../../features/search/components/DiscoverTracksList");
+    const { container, unmount } = await render(
+        React.createElement(DiscoverTracksList, {
+            tracks: [
+                {
+                    type: "track",
+                    id: "direct-v001",
+                    name: "Recorded YouTube Track",
+                    streamSource: "youtube",
+                    youtubeVideoId: "direct-v001",
+                },
+                {
+                    type: "track",
+                    id: "vk:-1_2",
+                    name: "Recorded VK Track",
+                    musicSourceRecording: {
+                        provider: "vk",
+                        id: "-1_2",
+                        title: "Recorded VK Track",
+                        artists: ["YouTube and VK Test Artist"],
+                        duration: 180,
+                        contentVersion: "explicit",
+                        preview: false,
+                    },
+                },
+                {
+                    type: "track",
+                    id: "metadata-with-match",
+                    name: "Metadata Resolved Only for Playback",
+                    artist: "Match Test Artist",
+                },
+                {
+                    type: "track",
+                    id: "metadata-without-match",
+                    name: "Metadata Without Playback",
+                    artist: "No Match Test Artist",
+                },
+            ],
+        }),
+    );
+    try {
+        assert.equal(state.ytMatchCalls, 1);
+        const triggers = container.querySelectorAll<HTMLButtonElement>(
+            '[aria-haspopup="menu"]',
+        );
+        const canManage: boolean[] = [];
+        for (const trigger of triggers) {
+            await React.act(async () => trigger.click());
+            const menu = document.body.querySelector('[role="menu"]');
+            assert.ok(menu, "track menu did not open");
+            canManage.push(
+                Array.from(menu.querySelectorAll('[role="menuitem"]')).some(
+                    (item) => item.textContent === "Полная версия трека",
+                ),
+            );
+            await React.act(async () => trigger.click());
+        }
+        assert.deepEqual(canManage, [true, true, false, false]);
+    } finally {
+        unmount();
+    }
 });
 
 test("library search rows render preference buttons and an overflow menu", async () => {
