@@ -387,7 +387,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 /** Read the auth context. Standalone UI can opt out of requiring a provider. */
 export function useAuth(): AuthContextType;
-export function useAuth(options: { optional: true }): AuthContextType | undefined;
+export function useAuth(options: {
+    optional: true;
+}): AuthContextType | undefined;
 export function useAuth(options?: { optional: true }) {
     const context = useContext(AuthContext);
     if (context === undefined && !options?.optional) {
