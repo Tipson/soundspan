@@ -7,6 +7,9 @@ final class RedirectPolicy {
   static final leasePattern = RegExp(
     r'^/api/music-sources/leases/[a-f0-9]{48}/stream$',
   );
+  static final audioVersionIdPattern = RegExp(
+    r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+  );
   static String recordingPath(NativeTrackRef ref) =>
       '/api/music-sources/recordings/${ref.recording.provider.name}/${ref.recording.id}/stream';
   static String identityPath(TrackRef ref) => switch (ref) {
@@ -42,6 +45,15 @@ final class RedirectPolicy {
         uri.hasFragment ||
         uri.host.endsWith('.')) {
       throw invalidMedia;
+    }
+    final publishedId = media.publishedAudioVersionId;
+    if (publishedId != null) {
+      if (!audioVersionIdPattern.hasMatch(publishedId) ||
+          uri.path != '/api/track-audio/versions/$publishedId/stream' ||
+          uri.hasQuery) {
+        throw invalidMedia;
+      }
+      return;
     }
     if (leasePattern.hasMatch(uri.path)) {
       if (uri.hasQuery) throw invalidMedia;

@@ -11,12 +11,14 @@ final class PreparedAudio {
     required this.uri,
     required this.revoke,
     this.readFailure,
+    this.publishedAudioVersionId,
   });
   final Uri uri;
   final Future<void> Function() revoke;
 
   /// Safe typed cause from this exact resource; no URI or credentials enter state.
   final AppFailure? Function()? readFailure;
+  final String? publishedAudioVersionId;
   AppFailure? get failure => readFailure?.call();
 
   /// A local reader remains reserved until the native decoder has drained.

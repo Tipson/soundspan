@@ -3,15 +3,21 @@ import {
     acquireDeviceOfflinePlaybackSource,
     hasDeviceOfflinePlaybackCopy,
 } from "@/features/device-offline/playbackResolver";
-import type { PlaybackSourceLeaseController } from "./playbackSourceLeaseController";
+import type {
+    PlaybackSourceLease,
+    PlaybackSourceLeaseController,
+} from "./playbackSourceLeaseController";
 import { api } from "@/lib/api";
 import { getAuthRuntimeLease } from "@/lib/auth-runtime-generation";
 import { musicSourceCandidateSchema } from "@/lib/audio/musicSourcePlayback";
+import { trackAudioTarget } from "@/lib/audio/trackAudioVersions";
 
 interface StartTrackPlaybackSourceLeaseOptions {
     controller: PlaybackSourceLeaseController;
     track: Track;
     networkUrl: string;
+    preparedSource?: PlaybackSourceLease | null;
+    allowPublished?: boolean;
     isCurrent(): boolean;
     onReady(url: string): void;
     onError(error: unknown): void;
@@ -22,12 +28,49 @@ export function startTrackPlaybackSourceLease({
     controller,
     track,
     networkUrl,
+    preparedSource,
+    allowPublished = true,
     isCurrent,
     onReady,
     onError,
 }: StartTrackPlaybackSourceLeaseOptions): void {
     void controller
         .acquire(async (signal) => {
+            let prepared = preparedSource;
+            try {
+                const target =
+                    allowPublished &&
+                    track.playbackSourcePolicy !== "device-only" &&
+                    (typeof navigator === "undefined" ||
+                        navigator.onLine !== false)
+                        ? trackAudioTarget(track)
+                        : null;
+                if (target) {
+                    const combined = AbortSignal.any([
+                        signal,
+                        getAuthRuntimeLease().signal,
+                    ]);
+                    let publishedUrl: string | null = null;
+                    try {
+                        publishedUrl = await api.getPublishedTrackAudioUrl(
+                            target,
+                            combined,
+                        );
+                    } catch {
+                        // Optional source lookup must not strand standard playback.
+                    }
+                    combined.throwIfAborted();
+                    if (publishedUrl)
+                        return { url: publishedUrl, release() {} };
+                }
+                if (prepared) {
+                    const source = prepared;
+                    prepared = null;
+                    return source;
+                }
+            } finally {
+                prepared?.release();
+            }
             if (
                 track.playbackSourcePolicy !== "device-only" &&
                 (track.streamSource === "vk" || track.streamSource === "yandex")

@@ -124,6 +124,36 @@ void main() {
     expect(queue.snapshot.currentEntryId, 'a');
     expect(engine.loaded.length, 1);
   });
+  test('changing versions reloads only the captured occurrence and preserves the queue', () async {
+    final fence = authority.requireFence();
+    await queue.dispatch(ReplaceQueue([entry('a'), entry('b')], fence: fence));
+    final full = queue.snapshot;
+    engine.emit(position: const Duration(seconds: 31));
+    await queue.dispatch(
+      SetTrackAudioVersion(
+        fence: fence,
+        entryId: 'a',
+        generation: full.generation,
+        standard: true,
+      ),
+    );
+    expect(queue.snapshot.effectiveOrder, ['a', 'b']);
+    expect(queue.snapshot.currentEntry!.standardAudio, isTrue);
+    expect(queue.snapshot.entries.last.standardAudio, isFalse);
+    expect(queue.snapshot.position, Duration.zero);
+    expect(resolved, ['a', 'a']);
+    await queue.dispatch(const Next());
+    await queue.dispatch(
+      SetTrackAudioVersion(
+        fence: fence,
+        entryId: 'a',
+        generation: full.generation,
+        standard: false,
+      ),
+    );
+    expect(queue.snapshot.currentEntryId, 'b');
+    expect(resolved, ['a', 'a', 'b']);
+  });
   test(
     'remove current selects successor then predecessor then stops',
     () async {

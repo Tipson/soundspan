@@ -597,11 +597,16 @@ class FullPlayerScreen extends StatelessWidget {
     final downloaded = cb.onDownload == null
         ? false
         : await controller.downloaded(target);
+    if (!context.mounted || !target.isCurrent) return;
+    final hasFullAudio = await controller.fullAudioAvailable(target);
     if (!context.mounted ||
         !target.isCurrent ||
         routeOwner?.isCurrent == false) {
       return;
     }
+    final fullSelected = controller.snapshot.publishedAudioVersionId != null;
+    final canRetry =
+        controller.snapshot.processing == PlaybackProcessing.failed;
     MusicAction route(
       String id,
       String label,
@@ -614,6 +619,19 @@ class FullPlayerScreen extends StatelessWidget {
       onSelected: () => controller.invoke(action, target: target),
     );
     await MusicActionSheet.show(context, [
+      if (hasFullAudio)
+        for (final standard in [false, true])
+          MusicAction(
+            id: standard ? 'audio-standard' : 'audio-full',
+            label: standard ? 'Стандартная версия' : 'Без цензуры',
+            icon: Icons.audiotrack,
+            selected: fullSelected != standard,
+            disabledReason: fullSelected != standard && !canRetry
+                ? 'Эта версия уже выбрана'
+                : null,
+            onSelected: () =>
+                controller.selectAudioVersion(target, standard: standard),
+          ),
       MusicAction(
         id: 'volume',
         label: 'Громкость',

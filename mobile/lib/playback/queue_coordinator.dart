@@ -145,6 +145,7 @@ final class QueueCoordinator implements PlaybackController {
     failure: _failure,
     generation: _generation,
     lineage: _queueEpoch,
+    publishedAudioVersionId: _resource?.publishedAudioVersionId,
     recommendationExclusions: _recommendationExclusions,
     closedRecommendationScopes: _closedRecommendationScopes,
   );
@@ -963,6 +964,22 @@ final class QueueCoordinator implements PlaybackController {
         _naturalContinuation = null;
         _intent = true;
         _intentRevision++;
+        await _select(command.entryId);
+      case SetTrackAudioVersion():
+        if (!_valid(command.generation, command.fence) ||
+            _current != command.entryId) {
+          return;
+        }
+        final index = _entries.indexWhere((e) => e.entryId == command.entryId);
+        if (index < 0 || _entries[index].context.offlineMixGeneration != null) {
+          return;
+        }
+        _entries[index] = _entries[index].withStandardAudio(command.standard);
+        ++_replacementIntent;
+        if (_processing == PlaybackProcessing.failed) {
+          _intent = true;
+          _intentRevision++;
+        }
         await _select(command.entryId);
       case Seek():
         if (_current == null) return;

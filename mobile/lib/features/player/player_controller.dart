@@ -54,6 +54,7 @@ class PlayerCallbacks {
     this.onSettings,
     this.onSaveQueue,
     this.isDownloaded,
+    this.hasFullAudio,
   });
   final PlayerTrackAction? onLyrics,
       onRelated,
@@ -66,6 +67,7 @@ class PlayerCallbacks {
       onSettings;
   final PlayerQueueAction? onSaveQueue;
   final Future<bool> Function(PlayerTrackTarget)? isDownloaded;
+  final Future<bool> Function(PlayerTrackTarget)? hasFullAudio;
 }
 
 /// UI projection over the single service; owns neither audio nor a queue copy.
@@ -235,6 +237,18 @@ class PlayerController extends ChangeNotifier {
   Future<void> togglePlayback() =>
       _command(snapshot.playing ? const Pause() : const Resume());
   Future<void> retry() => _command(const Resume());
+  Future<void> selectAudioVersion(
+    PlayerTrackTarget target, {
+    required bool standard,
+  }) => _command(
+    SetTrackAudioVersion(
+      fence: fence,
+      entryId: target.entry.entryId,
+      generation: snapshot.generation,
+      standard: standard,
+    ),
+    trackTarget: target,
+  );
   Future<void> previous() => _command(const Previous());
   Future<void> next() =>
       _command(Next(expectedEntryId: snapshot.currentEntryId, fence: fence));
@@ -331,6 +345,22 @@ class PlayerController extends ChangeNotifier {
       result = ready;
     });
     return result;
+  }
+
+  Future<bool> fullAudioAvailable(PlayerTrackTarget target) async {
+    final lookup = callbacks.hasFullAudio;
+    if (lookup == null ||
+        target.entry.context.offlineMixGeneration != null ||
+        target.entry.context.fromDownloads) {
+      return false;
+    }
+    if (snapshot.publishedAudioVersionId != null) return true;
+    var available = false;
+    await _run(() async {
+      await target.assertCurrent();
+      available = await lookup(target) && target.isCurrent;
+    });
+    return available;
   }
 
   Future<void> saveQueue({PlayerQueueTarget? target}) {

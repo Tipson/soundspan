@@ -568,6 +568,16 @@ model Track {
   @@index([dedupOfTrackId])
 }
 
+/// The active and staged audio files for one exact catalog identity.
+model TrackAudioVersion {
+  source      String
+  trackId     String
+  draftId     String? @unique
+  publishedId String? @unique
+
+  @@id([source, trackId])
+}
+
 model TrackFingerprint {
   trackId          String    @id
   fingerprint      String    @db.Text

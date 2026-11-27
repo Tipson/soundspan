@@ -11,6 +11,7 @@ const MEDIA_COOKIE_PATTERN = new RegExp(
 );
 const MEDIA_COOKIE_AUTH_PATHS = [
     /^\/api\/music-sources\/leases\/[a-f0-9]{48}\/stream\/?$/,
+    /^\/api\/track-audio\/versions\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\/stream\/?$/,
     /^\/api\/library\/cover-art(?:\/|$)/,
     /^\/api\/browse\/ytmusic\/image\/?$/,
     /^\/api\/social\/profile-picture\/[^/]+\/?$/,

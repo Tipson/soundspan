@@ -109,6 +109,20 @@ final class PlayEntry extends PlaybackCommand {
   final String entryId;
 }
 
+/// Reload the captured occurrence using the requested audio selection.
+final class SetTrackAudioVersion extends PlaybackCommand {
+  const SetTrackAudioVersion({
+    required this.fence,
+    required this.entryId,
+    required this.generation,
+    required this.standard,
+  });
+  final SessionFence fence;
+  final String entryId;
+  final int generation;
+  final bool standard;
+}
+
 final class Seek extends PlaybackCommand {
   const Seek(this.position);
   final Duration position;

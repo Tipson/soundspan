@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/model/app_failure.dart';
 import '../../core/model/owner_key.dart';
+import '../../core/model/play_context.dart';
 import '../../core/model/track.dart';
 import '../../core/network/network_policy.dart';
 import '../../downloads/download_models.dart';
@@ -547,6 +548,10 @@ final class DownloadsController extends ChangeNotifier {
       tracks: rows.map((j) => j.track),
       startIndex: index,
       fence: fence,
+      context: const PlayContext(
+        surface: PlaySurface.library,
+        fromDownloads: true,
+      ),
     );
   }
 

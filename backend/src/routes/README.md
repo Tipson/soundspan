@@ -133,6 +133,7 @@ not a router; it pins one representation for each YouTube playback attempt.
 | `backend/src/routes/tasteProfile.ts`       | `/api/taste-profile` (account-scoped taste onboarding and later profile editing)                         |
 | `backend/src/routes/tidalStreaming.ts`     | `/api/tidal-streaming`                                                                                |
 | `backend/src/routes/trackMappings.ts`      | `/api/track-mappings`                                                                                 |
+| `backend/src/routes/trackAudio.ts`         | `/api/track-audio` (alternate audio, administrator drafts and publication)                              |
 | `backend/src/routes/vibe.ts`               | `/api/vibe`                                                                                           |
 | `backend/src/routes/vibeJourneyRequest.ts` | Shared request-validation helper; not a router                                                        |
 | `backend/src/routes/webhooks.ts`           | `/api/webhooks`                                                                                       |

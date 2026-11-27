@@ -21,6 +21,8 @@
 
 ## Unreleased
 
+- Let administrators upload, preview, publish, and withdraw an MP3 alternative for a catalog track. Prefer the published audio in web and Android playback, with a standard-version option in the Android player.
+
 - Label the upcoming-track preview in the mobile player. Remove the filled storage panel from Downloads and fix an error when scrolling back to it.
 
 - Add Android launcher shortcuts to start My Wave, resume the saved queue, and open Downloads.

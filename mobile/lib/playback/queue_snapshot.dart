@@ -38,6 +38,7 @@ final class QueueSnapshot {
     this.failure,
     this.generation = 0,
     this.lineage = 0,
+    this.publishedAudioVersionId,
     Map<String, Set<String>> recommendationExclusions = const {},
     Iterable<String> closedRecommendationScopes = const [],
   }) : entries = List.unmodifiable(entries),
@@ -68,6 +69,7 @@ final class QueueSnapshot {
   final double volume;
   final AppFailure? failure;
   final int generation;
+  final String? publishedAudioVersionId;
 
   /// Queue provenance; playback transitions do not change this revision.
   final int lineage;

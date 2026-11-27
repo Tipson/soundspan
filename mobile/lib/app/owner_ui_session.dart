@@ -268,6 +268,9 @@ final class OwnerUiSession {
           onRadio: (target) => _present('radio', target),
           onArtist: (target) => _present('artist', target),
           onAlbum: (target) => _present('album', target),
+          hasFullAudio: (target) async =>
+              owner.policy.networkAllowed &&
+              await owner.trackAudio.resolve(target.track.ref, fence) != null,
           isDownloaded: (target) async {
             await guard();
             await target.assertCurrent();
