@@ -40,6 +40,7 @@ describe("api entrypoint runtime behavior", () => {
         "../routes/system",
         "../routes/youtubeMusic",
         "../routes/musicSources",
+        "../routes/trackAudio",
         "../routes/trackMappings",
         "../routes/playlistImport",
         "../routes/lyrics",
@@ -870,6 +871,7 @@ describe("api entrypoint runtime behavior", () => {
                 expect.any(Function),
             ],
             "/api/youtube": ["api-limiter", route("../routes/youtube")],
+            "/api/track-audio": [route("../routes/trackAudio")],
             "/api/track-mappings": [
                 "api-limiter",
                 route("../routes/trackMappings"),

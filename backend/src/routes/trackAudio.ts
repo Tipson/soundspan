@@ -43,6 +43,7 @@ function reportVersionError(res: Response, error: unknown) {
         track_not_found: 404,
         invalid_audio: 422,
         version_changed: 409,
+        version_file_missing: 409,
     }[error.kind];
     return sendRouteError(res, status, error.kind);
 }
@@ -178,7 +179,7 @@ router.put(
  *     responses:
  *       200: { description: Version published }
  *       403: { description: Administrator required }
- *       409: { description: Draft was replaced }
+ *       409: { description: Draft was replaced or its audio file is missing }
  */
 router.post(
     "/:source/:trackId/publish",

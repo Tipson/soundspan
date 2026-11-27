@@ -2,9 +2,10 @@
 #
 # The public frontend binds only to the selected host address, while API and
 # infrastructure ports remain on loopback. Core runtimes see the media library
-# read-only; remote analysis shares a dedicated writable spool mounted at the
-# same container path in every participating service. The scoped HTTP proxy
-# must allow the three fixed egress addresses assigned below (.11 through .13).
+# read-only. The API stores alternate audio in a separate volume. Remote
+# analysis shares a writable spool at the same path in each participating
+# service. The scoped HTTP proxy must allow the three fixed egress addresses
+# assigned below (.11 through .13).
 services:
     backend:
         environment:
@@ -17,6 +18,7 @@ services:
             - "127.0.0.1:${BACKEND_PORT:-3006}:3006"
         volumes: !override
             - ${MUSIC_PATH:?MUSIC_PATH is required}:/music:ro
+            - track_audio:/music/.track-audio
             - ${ANALYSIS_SPOOL_PATH:?ANALYSIS_SPOOL_PATH is required}:/music/.soundspan-analysis-spool
             - backend_cache:/app/cache
             - backend_logs:/app/logs
@@ -69,6 +71,9 @@ services:
         volumes: !override
             - ${MUSIC_PATH:?MUSIC_PATH is required}:/music:ro
             - ${ANALYSIS_SPOOL_PATH:?ANALYSIS_SPOOL_PATH is required}:/music/.soundspan-analysis-spool:ro
+
+volumes:
+    track_audio:
 
 networks:
     soundspan-egress:

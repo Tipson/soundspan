@@ -385,12 +385,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 }
 
-/**
- * Executes useAuth.
- */
-export function useAuth() {
+/** Read the auth context. Standalone UI can opt out of requiring a provider. */
+export function useAuth(): AuthContextType;
+export function useAuth(options: { optional: true }): AuthContextType | undefined;
+export function useAuth(options?: { optional: true }) {
     const context = useContext(AuthContext);
-    if (context === undefined) {
+    if (context === undefined && !options?.optional) {
         throw new Error("useAuth must be used within an AuthProvider");
     }
     return context;

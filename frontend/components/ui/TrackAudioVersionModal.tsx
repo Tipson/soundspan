@@ -19,6 +19,7 @@ interface Props {
 /** Manage one alternate recording without changing the selected catalog row. */
 export function TrackAudioVersionModal({ target, trackName, onClose }: Props) {
     const signal = useRef<AbortController | null>(null);
+    const fileInput = useRef<HTMLInputElement>(null);
     const fileId = useId();
     const { source, trackId } = target;
     const [versions, setVersions] = useState<TrackAudioVersions | null>(null);
@@ -50,6 +51,7 @@ export function TrackAudioVersionModal({ target, trackName, onClose }: Props) {
     async function update(
         operation: (signal: AbortSignal) => Promise<TrackAudioVersions>,
         failure: string,
+        onSuccess?: () => void,
     ) {
         const current = signal.current?.signal;
         if (busy || !current || current.aborted) return;
@@ -57,12 +59,20 @@ export function TrackAudioVersionModal({ target, trackName, onClose }: Props) {
         setError("");
         try {
             const result = await operation(current);
-            if (!current.aborted) setVersions(result);
+            if (!current.aborted) {
+                setVersions(result);
+                onSuccess?.();
+            }
         } catch {
             if (!current.aborted) setError(failure);
         } finally {
             if (!current.aborted) setBusy(false);
         }
+    }
+
+    function clearFile() {
+        if (fileInput.current) fileInput.current.value = "";
+        setFile(null);
     }
 
     const draft = trackAudioStreamUrl(versions?.draftId);
@@ -90,6 +100,7 @@ export function TrackAudioVersionModal({ target, trackName, onClose }: Props) {
                                 (signal) =>
                                     api.uploadTrackAudio(target, file, signal),
                                 "Не удалось загрузить. Проверьте файл и повторите попытку.",
+                                clearFile,
                             );
                         }}
                     >
@@ -97,6 +108,7 @@ export function TrackAudioVersionModal({ target, trackName, onClose }: Props) {
                             Аудиофайл MP3 до 16 МиБ
                         </label>
                         <input
+                            ref={fileInput}
                             id={fileId}
                             className="block max-w-full"
                             type="file"
@@ -109,6 +121,16 @@ export function TrackAudioVersionModal({ target, trackName, onClose }: Props) {
                         <Button type="submit" disabled={busy || !file}>
                             Загрузить черновик
                         </Button>
+                        {file && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                disabled={busy}
+                                onClick={clearFile}
+                            >
+                                Сбросить выбор файла
+                            </Button>
+                        )}
                     </form>
                 )}
                 {draft && versions?.draftId && (
@@ -123,7 +145,7 @@ export function TrackAudioVersionModal({ target, trackName, onClose }: Props) {
                         />
                         <Button
                             type="button"
-                            disabled={busy}
+                            disabled={busy || file !== null}
                             onClick={() => {
                                 const id = versions.draftId!;
                                 void update(

@@ -402,8 +402,8 @@ final class OwnerUiSession {
     transport: owner.transport,
     authority: owner.authority,
   );
-  Future<bool>? _trackAudioRole;
-  DateTime? _trackAudioRoleExpires;
+  Future<bool>? _trackAudioRoleRequest;
+  ({bool isAdmin, DateTime expires})? _trackAudioRole;
 
   /// The account profile controls menu visibility. The API validates every write.
   Future<bool> canManageTrackAudio(Track track, SessionFence original) async {
@@ -413,24 +413,41 @@ final class OwnerUiSession {
         TrackAudioTarget.fromRef(track.ref) == null) {
       return false;
     }
-    final now = DateTime.now();
-    if (_trackAudioRoleExpires?.isAfter(now) != true) {
-      _trackAudioRoleExpires = now.add(const Duration(minutes: 1));
-      _trackAudioRole = _readTrackAudioRole();
-    }
-    final canManage = await _trackAudioRole!.timeout(
+    final canManage = await _loadTrackAudioRole().timeout(
       const Duration(milliseconds: 450),
       onTimeout: () => false,
     );
     return isCurrent && owner.policy.networkAllowed && canManage;
   }
 
+  Future<bool> _loadTrackAudioRole() {
+    final cached = _trackAudioRole;
+    if (cached != null && cached.expires.isAfter(DateTime.now())) {
+      return Future.value(cached.isAdmin);
+    }
+    return _trackAudioRoleRequest ??= _readTrackAudioRole();
+  }
+
   Future<bool> _readTrackAudioRole() async {
     try {
       final profile = await account.repository.read(fence, 'profile');
-      return isCurrent && profile['role'] == 'admin';
+      final role = profile['role'];
+      if (!isCurrent ||
+          !owner.policy.networkAllowed ||
+          role is! String ||
+          role.isEmpty) {
+        return false;
+      }
+      final isAdmin = role == 'admin';
+      _trackAudioRole = (
+        isAdmin: isAdmin,
+        expires: DateTime.now().add(const Duration(minutes: 1)),
+      );
+      return isAdmin;
     } on AppFailure {
       return false;
+    } finally {
+      _trackAudioRoleRequest = null;
     }
   }
 
@@ -616,6 +633,7 @@ final class OwnerUiSession {
   void start() {
     if (_started || !isCurrent) return;
     _started = true;
+    if (owner.policy.networkAllowed) _loadTrackAudioRole().ignore();
     observe(offlineMix.refresh());
     observe(owner.dailyRefresh.ensureScheduled());
     observe(settings.load());
@@ -636,6 +654,7 @@ final class OwnerUiSession {
 
   void _policyChanged() {
     if (!isCurrent || !owner.policy.networkAllowed) return;
+    if (_started) _loadTrackAudioRole().ignore();
     observe(automation.reconcile(fence));
     observe(owner.capabilities.refresh());
     observe(home.refresh(request: request()));

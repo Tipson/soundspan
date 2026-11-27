@@ -73,10 +73,16 @@ Set `SECURE_COOKIES=true` when the browser uses HTTPS, including when Cloudflare
 
 ## NGINX example (Docker/Kubernetes edge)
 
+The track audio draft endpoint accepts a raw MP3 body up to 16 MiB. Set NGINX's
+[`client_max_body_size`](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
+to at least `16m` in the server block or location that receives
+`PUT /api/track-audio/<source>/<trackId>/draft`. The API enforces its own limit.
+
 ```nginx
 server {
     listen 443 ssl http2;
     server_name soundspan.example.com;
+    client_max_body_size 16m;
 
     # Everything -> frontend (frontend proxies Listen Together socket path)
     location / {
@@ -97,6 +103,7 @@ server {
     server_name soundspan.example.com;
 
     location /api/ {
+        client_max_body_size 16m;
         proxy_pass http://soundspan-backend:3006;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

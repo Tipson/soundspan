@@ -36,7 +36,11 @@ type Versions = { draftId: string | null; publishedId: string | null };
 /** Typed failures which can be handled by the upload or publication UI. */
 export class TrackAudioError extends Error {
     constructor(
-        readonly kind: "invalid_audio" | "track_not_found" | "version_changed",
+        readonly kind:
+            | "invalid_audio"
+            | "track_not_found"
+            | "version_changed"
+            | "version_file_missing",
     ) {
         super(kind);
     }
@@ -158,13 +162,15 @@ export async function readPublishedTrackAudio(
         !(await isVisibleLibraryTrack(target.trackId))
     )
         return null;
+    return (await hasAudioFile(publishedId)) ? publishedId : null;
+}
+
+async function hasAudioFile(id: string): Promise<boolean> {
     try {
-        const file = await stat(
-            resolve(trackAudioDirectory(), `${publishedId}.mp3`),
-        );
-        return file.isFile() && file.size > 0 ? publishedId : null;
+        const file = await stat(resolve(trackAudioDirectory(), `${id}.mp3`));
+        return file.isFile() && file.size > 0;
     } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
         throw error;
     }
 }
@@ -264,6 +270,9 @@ export async function setTrackAudioPublication(
         }
         if (!row || (publish ? row.draftId : row.publishedId) !== id) {
             throw new TrackAudioError("version_changed");
+        }
+        if (publish && !(await hasAudioFile(id))) {
+            throw new TrackAudioError("version_file_missing");
         }
         const versions = await tx.trackAudioVersion.update({
             where,

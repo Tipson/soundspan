@@ -67,6 +67,8 @@ interface TrackOverflowMenuProps {
     showMatchVibe?: boolean;
     showVibeMap?: boolean;
     showStartRadio?: boolean;
+    /** Disable persistent audio replacement for a tentative search match. */
+    allowTrackAudioManagement?: boolean;
     onMatchVibe?: () => void | Promise<void>;
     matchVibeLabel?: string;
     matchVibeDisabled?: boolean;
@@ -92,6 +94,7 @@ export function TrackOverflowMenu({
     showMatchVibe = true,
     showVibeMap = true,
     showStartRadio = true,
+    allowTrackAudioManagement = true,
     onMatchVibe,
     matchVibeLabel,
     matchVibeDisabled = false,
@@ -117,7 +120,7 @@ export function TrackOverflowMenu({
     } | null>(null);
     const router = useRouter();
     const controls = useAudioControls();
-    const { user } = useAuth();
+    const user = useAuth({ optional: true })?.user;
     const deviceOffline = useOptionalDeviceOffline();
     const normalizedActionTrack = useMemo(
         () => normalizeActionableAudioTrack(track),
@@ -127,7 +130,7 @@ export function TrackOverflowMenu({
     const actionTrack = normalizedActionTrack ?? track;
     const canPersist = isActionable && !isPlaybackOnlyTrack(actionTrack);
     const audioTarget =
-        user?.role === "admin" && isActionable
+        allowTrackAudioManagement && user?.role === "admin" && isActionable
             ? trackAudioTarget(actionTrack)
             : null;
     const canAddToPlaylist = isActionable && canAddTrackToPlaylist(actionTrack);

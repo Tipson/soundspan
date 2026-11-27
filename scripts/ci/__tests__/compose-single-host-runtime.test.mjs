@@ -108,6 +108,32 @@ test("single-host split overlay keeps API and worker responsibilities separate",
     );
 });
 
+test("single-host split overlay gives only the API persistent writable alternate audio storage", () => {
+    const config = renderSingleHostCompose();
+    const target = "/music/.track-audio";
+    const apiMount = mountFor(config, "backend", target);
+
+    assert.ok(apiMount, "backend is missing alternate audio storage");
+    assert.equal(apiMount.type, "volume");
+    assert.equal(apiMount.source, "track_audio");
+    assert.notEqual(apiMount.read_only, true);
+    assert.ok(config.volumes.track_audio);
+
+    for (const [serviceName, service] of Object.entries(config.services)) {
+        if (serviceName !== "backend") {
+            assert.equal(
+                service.volumes?.some(
+                    (volume) =>
+                        volume.target === target ||
+                        volume.source === apiMount.source,
+                ) ?? false,
+                false,
+                `${serviceName} must not mount alternate audio storage`,
+            );
+        }
+    }
+});
+
 test("the YouTube Music sidecar retains the isolated egress proxy network", () => {
     const config = renderSingleHostCompose();
 

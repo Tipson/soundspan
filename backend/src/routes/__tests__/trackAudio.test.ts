@@ -228,6 +228,32 @@ test("invalid audio leaves the published version intact and unknown tracks rejec
     expect(await readdir(join(root, ".track-audio"))).toEqual([]);
 });
 
+test("a missing draft file cannot replace a playable publication", async () => {
+    const first = (await draft().set("x-user", "admin").expect(201)).body
+        .draftId;
+    await request(app)
+        .post(`${base}/publish`)
+        .set("x-user", "admin")
+        .send({ versionId: first })
+        .expect(200);
+    const missing = (await draft().set("x-user", "admin").expect(201)).body
+        .draftId;
+    await rm(join(root, ".track-audio", `${missing}.mp3`));
+    await request(app)
+        .post(`${base}/publish`)
+        .set("x-user", "admin")
+        .send({ versionId: missing })
+        .expect(409, { error: "version_file_missing" });
+    await request(app)
+        .get(base)
+        .set("x-user", "listener")
+        .expect(200, { publishedId: first });
+    await request(app)
+        .head(stream(first))
+        .set("x-user", "listener")
+        .expect(200);
+});
+
 test("a missing published file leaves standard playback available and stays visible to the admin", async () => {
     const id = (await draft().set("x-user", "admin").expect(201)).body.draftId;
     await request(app)
