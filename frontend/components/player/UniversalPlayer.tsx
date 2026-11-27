@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useAudioState } from "@/lib/audio-state-context";
 import { useAudioVolumeMode } from "@/lib/audio-volume-mode-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
@@ -41,11 +42,22 @@ export function UniversalPlayer() {
 
     const hasMedia = !!(currentTrack || currentAudiobook || currentPodcast);
     const { returnToPreviousMode } = useAudioControls();
+    const miniPlayerOpenButton = useRef<HTMLButtonElement>(null);
+    const restoreMiniPlayerFocus = useRef(false);
     useDismissibleLayer(
         playerMode === "overlay" && hasMedia,
-        returnToPreviousMode,
+        () => {
+            restoreMiniPlayerFocus.current = isMobileOrTablet;
+            returnToPreviousMode();
+        },
         10,
     );
+
+    useEffect(() => {
+        if (playerMode === "overlay" || !restoreMiniPlayerFocus.current) return;
+        restoreMiniPlayerFocus.current = false;
+        miniPlayerOpenButton.current?.focus({ preventScroll: true });
+    }, [playerMode]);
 
     return (
         <>
@@ -54,7 +66,9 @@ export function UniversalPlayer() {
             {/* Always show player UI (like Spotify), even when no media is playing */}
             {isMobileOrTablet ? (
                 <LayoutGroup id="mobile-player-artwork-transition">
-                    {playerMode !== "overlay" && <MiniPlayer />}
+                    {playerMode !== "overlay" && (
+                        <MiniPlayer openButtonRef={miniPlayerOpenButton} />
+                    )}
                     <AnimatePresence initial={false} mode="sync">
                         {playerMode === "overlay" && hasMedia && (
                             <motion.div

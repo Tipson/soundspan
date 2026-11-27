@@ -1,5 +1,6 @@
 "use client";
 
+import type { Ref } from "react";
 import {
     useAudioControls,
     useAudioState,
@@ -27,7 +28,11 @@ import { supportsTrackPreferences } from "@/lib/trackRef";
 /**
  * Renders the MiniPlayer component.
  */
-export function MiniPlayer() {
+export function MiniPlayer({
+    openButtonRef,
+}: {
+    openButtonRef?: Ref<HTMLButtonElement>;
+}) {
     const { currentTrack, currentAudiobook, currentPodcast, playbackType } =
         useAudioState();
     const {
@@ -89,6 +94,9 @@ export function MiniPlayer() {
             <div
                 className="mobile-player-surface pointer-events-auto overflow-hidden rounded-[14px]"
                 data-player-layout="identity-ratings-play"
+                role="group"
+                aria-label={ru.player.nowPlaying}
+                onKeyDown={(event) => event.stopPropagation()}
             >
                 <div className="relative h-[2px] w-full bg-white/[0.08]">
                     <div
@@ -105,6 +113,7 @@ export function MiniPlayer() {
                     }}
                 >
                     <button
+                        ref={openButtonRef}
                         type="button"
                         aria-label={ru.player.open}
                         onClick={() => setPlayerMode("overlay")}

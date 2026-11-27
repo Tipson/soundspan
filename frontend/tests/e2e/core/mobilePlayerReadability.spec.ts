@@ -1,4 +1,4 @@
-import { expect, type Locator } from "@playwright/test";
+import { expect, type CDPSession, type Locator } from "@playwright/test";
 import { CORE_ORIGIN } from "../../../playwright.core.config";
 import { expectPlaying, login, test, TRACKS } from "./fixture";
 
@@ -43,6 +43,33 @@ async function openPlayerAndReadStartingOpacity(trigger: Locator) {
                 (button as HTMLButtonElement).click();
             }),
     );
+}
+
+async function swipe(
+    session: CDPSession,
+    start: { x: number; y: number },
+    deltaX: number,
+    deltaY: number,
+) {
+    await session.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [start],
+    });
+    for (let step = 1; step <= 10; step += 1) {
+        await session.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [
+                {
+                    x: start.x + (deltaX * step) / 10,
+                    y: start.y + (deltaY * step) / 10,
+                },
+            ],
+        });
+    }
+    await session.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+    });
 }
 
 for (const viewport of [
@@ -105,7 +132,42 @@ for (const viewport of [
 
         await page.keyboard.press("Escape");
         await expect(player).toHaveCount(0);
+        await expect(openPlayer).toBeFocused({ timeout: 3_000 });
+        await page.keyboard.press("Space");
+        await expect(player).toBeFocused({ timeout: 3_000 });
+        await page.goBack();
+        await expect(player).toHaveCount(0);
+        await expect(openPlayer).toBeFocused();
         await openPlayer.tap();
         await expect(player).toBeVisible();
     });
 }
+
+test("a diagonal player scroll does not skip while horizontal swipes still skip", async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await login(page);
+    await page
+        .locator('[data-home-made-card="core-mix-a"]')
+        .getByRole("button")
+        .click();
+    await expectPlaying(page, TRACKS[0].id);
+    await page.getByRole("button", { name: "Открыть плеер" }).tap();
+    const player = page.locator('[data-player-surface="overlay"]');
+    const title = player.getByRole("heading", { level: 1 });
+    await expect(title).toHaveText(TRACKS[0].title);
+
+    const session = await page.context().newCDPSession(page);
+    await swipe(session, { x: 250, y: 360 }, -100, -180);
+    const scrollArea = player.locator(".overlay-player-layout");
+    await expect
+        .poll(() => scrollArea.evaluate((element) => element.scrollTop))
+        .toBeGreaterThan(20);
+    await expect(title).toHaveText(TRACKS[0].title, { timeout: 3_000 });
+
+    await swipe(session, { x: 250, y: 190 }, -140, 0);
+    await expect(title).toHaveText(TRACKS[1].title);
+    await swipe(session, { x: 65, y: 190 }, 140, 0);
+    await expect(title).toHaveText(TRACKS[0].title);
+});

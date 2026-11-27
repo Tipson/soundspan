@@ -113,6 +113,7 @@ mock.module("framer-motion", {
             React.createElement(React.Fragment, null, children),
         LayoutGroup: ({ children }: { children?: React.ReactNode }) =>
             React.createElement(React.Fragment, null, children),
+        useReducedMotion: () => false,
         motion: {
             div: ({ children }: { children?: React.ReactNode }) =>
                 React.createElement("div", null, children),

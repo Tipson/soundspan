@@ -501,6 +501,9 @@ export function OverlayPlayer() {
             onTouchEnd={
                 isMobileOrTablet ? trackSwipeHandlers.onTouchEnd : undefined
             }
+            onTouchCancel={
+                isMobileOrTablet ? trackSwipeHandlers.onTouchCancel : undefined
+            }
         >
             {coverUrl && (
                 <div className="overlay-player-atmosphere" aria-hidden="true">
