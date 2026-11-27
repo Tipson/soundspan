@@ -11,10 +11,19 @@ import 'resolved_media.dart';
 /// Looks up an optional alternative without delaying standard playback on
 /// older servers or making a broken lookup a prerequisite for playback.
 final class TrackAudioVersions {
-  const TrackAudioVersions({required this.transport, required this.authority});
+  TrackAudioVersions({
+    required this.transport,
+    required this.authority,
+    Duration Function()? elapsed,
+  }) : _elapsedOverride = elapsed;
 
   final ApiTransport transport;
   final SessionAuthority authority;
+  final Duration Function()? _elapsedOverride;
+  final _clock = Stopwatch()..start();
+  Duration get _elapsed => _elapsedOverride?.call() ?? _clock.elapsed;
+  SessionFence? _missingEndpointFence;
+  Duration _probeAgainAt = Duration.zero;
 
   static final _trackId = RegExp(r'^[A-Za-z0-9_-]{1,256}$');
   static final _youtubeId = RegExp(r'^[A-Za-z0-9_-]{11}$');
@@ -31,6 +40,9 @@ final class TrackAudioVersions {
     };
     if (identity == null) return null;
     await authority.assertCurrent(fence);
+    if (_missingEndpointFence == fence && _elapsed < _probeAgainAt) {
+      return null;
+    }
     final cancellation = MediaCancellation();
     final timeout = Timer(
       const Duration(milliseconds: 800),
@@ -48,6 +60,10 @@ final class TrackAudioVersions {
       );
       await authority.assertCurrent(fence);
       cancellation.check();
+      if (response.statusCode == 404) {
+        _rememberMissingEndpoint(fence);
+        return null;
+      }
       final data = response.data;
       final id = response.statusCode == 200 && data is Map
           ? data['publishedId']
@@ -66,11 +82,21 @@ final class TrackAudioVersions {
       );
       RedirectPolicy.validate(media.uri, media);
       return media;
-    } on AppFailure {
+    } on AppFailure catch (failure) {
       await authority.assertCurrent(fence);
+      if (failure.statusCode == 404 && !cancellation.isCancelled) {
+        _rememberMissingEndpoint(fence);
+      }
       return null;
     } finally {
       timeout.cancel();
     }
+  }
+
+  void _rememberMissingEndpoint(SessionFence fence) {
+    // A supported endpoint returns 200 with a null publication, even for a
+    // missing track. An older server's 404 applies across track identities.
+    _missingEndpointFence = fence;
+    _probeAgainAt = _elapsed + const Duration(minutes: 1);
   }
 }

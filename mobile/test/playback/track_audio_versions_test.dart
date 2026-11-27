@@ -45,13 +45,14 @@ void main() {
     },
   );
 
-  test('missing feature, service failure and malformed responses keep standard audio available', () async {
+  test('absent versions, service failures and malformed responses leave the next lookup available', () async {
     final authority = await mediaAuthority(origin);
     addTearDown(authority.invalidate);
     final outcomes = [
-      const ApiResponse(404, {}),
+      const ApiResponse(200, {'publishedId': null}),
       const ApiResponse(503, {}),
       const ApiResponse(200, {'publishedId': '/api/other/stream'}),
+      const ApiResponse(200, {'publishedId': id}),
     ];
     final versions = TrackAudioVersions(
       transport: DartApiTransport(
@@ -72,5 +73,52 @@ void main() {
         isNull,
       );
     }
+    expect(
+      (await versions.resolve(
+        const LibraryTrackRef('track-1'),
+        authority.requireFence(),
+      ))?.publishedAudioVersionId,
+      id,
+    );
   });
+
+  test(
+    'older server 404 skips optional requests across track changes',
+    () async {
+      final authority = await mediaAuthority(origin);
+      addTearDown(authority.invalidate);
+      var requests = 0;
+      var elapsed = Duration.zero;
+      final versions = TrackAudioVersions(
+        authority: authority,
+        elapsed: () => elapsed,
+        transport: DartApiTransport(
+          authority: authority,
+          client: ScriptedJsonClient((_, _) async {
+            requests++;
+            return requests == 1
+                ? const ApiResponse(404, {})
+                : const ApiResponse(200, {'publishedId': id});
+          }),
+        ),
+      );
+      final fence = authority.requireFence();
+      expect(
+        await versions.resolve(const LibraryTrackRef('track-1'), fence),
+        isNull,
+      );
+      expect(await versions.resolve(recordingRef, fence), isNull);
+      expect(
+        await versions.resolve(const YoutubeTrackRef('abcdefghijk'), fence),
+        isNull,
+      );
+      expect(requests, 1);
+      elapsed = const Duration(minutes: 1);
+      expect(
+        (await versions.resolve(recordingRef, fence))?.publishedAudioVersionId,
+        id,
+      );
+      expect(requests, 2);
+    },
+  );
 }

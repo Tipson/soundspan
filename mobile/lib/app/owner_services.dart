@@ -641,10 +641,8 @@ final class NativeOwnerServices implements AppOwnerScope {
       prepared = await preparation.prepare(entry, fence);
     } else {
       final handle = await gateway.open(published, fence);
-      prepared = PreparedAudio(
-        uri: handle.uri,
-        revoke: handle.revoke,
-        readFailure: () => handle.failure,
+      prepared = PreparedAudio.fromMediaHandle(
+        handle,
         publishedAudioVersionId: published.publishedAudioVersionId,
       );
     }

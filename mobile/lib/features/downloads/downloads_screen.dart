@@ -216,6 +216,15 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                               ],
                             ),
                           ),
+                          if (controller.hasRetryableFailures)
+                            MusicButton(
+                              label: 'Повторить доступные',
+                              icon: Icons.refresh,
+                              busy: controller.busy,
+                              onPressed: controller.canDownload
+                                  ? controller.retryAvailable
+                                  : null,
+                            ),
                           if (controller.failure != null)
                             MusicStatus(
                               message: controller.failure!.message,
@@ -249,7 +258,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
                             track: job.track,
                             downloaded: job.state == DownloadState.ready,
                             subtitle:
-                                '${job.track.artist} · ${downloadStatus(job)}',
+                                '${job.track.artist} · ${downloadStatus(job, now: controller.repository.now)}',
                             onPlay: job.state == DownloadState.ready
                                 ? () => _play(job)
                                 : null,

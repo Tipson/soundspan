@@ -62,17 +62,38 @@ class StorageStatusCard extends StatelessWidget {
   }
 }
 
-String downloadStatus(DeviceDownload job) {
+String downloadStatus(DeviceDownload job, {int? now}) {
   if (job.errorCode == 'download_cancelled') return 'Отменено';
-  if (job.errorCode == 'offline_mix_quota_exceeded') {
-    return 'Лимит офлайн-микса. Измените его в настройках и повторите сохранение.';
+  if ((job.state == DownloadState.queued ||
+          job.state == DownloadState.failed) &&
+      job.retryNotBefore > (now ?? DateTime.now().millisecondsSinceEpoch)) {
+    return 'Сервер попросил подождать. Повтор доступен позже.';
   }
-  if (const {
-    'download_storage_error',
-    'download_storage_full',
-  }.contains(job.errorCode)) {
-    return 'Ошибка хранилища. Проверьте свободное место и доступ к памяти.';
-  }
+  final reason = switch (job.errorCode) {
+    'offline_mix_quota_exceeded' =>
+      'Лимит офлайн-микса. Измените его в настройках и повторите сохранение.',
+    'download_storage_full' => 'Недостаточно свободного места.',
+    'download_storage_error' =>
+      'Ошибка хранилища. Проверьте свободное место и доступ к памяти.',
+    'download_network_restricted' =>
+      'Загрузка ждёт сеть, разрешённую в настройках.',
+    'offline_mode' => 'Для загрузки выключите офлайн-режим.',
+    'network_unavailable' => 'Нет связи с сервером.',
+    'network_timeout' ||
+    'media_idle_timeout' => 'Время ожидания аудио истекло. Можно повторить.',
+    'media_network_error' => 'Передача аудио прервалась. Можно повторить.',
+    'download_corrupt' => 'Файл повреждён. Можно скачать заново.',
+    'download_schedule_unconfirmed' =>
+      'Не удалось подтвердить запуск загрузки. Можно повторить.',
+    'recording_unavailable' => 'Аудиозапись недоступна.',
+    'media_restricted' => 'Источник ограничил доступ к записи.',
+    'unauthorized' => 'Войдите в аккаунт заново.',
+    'tls_failed' => 'Не удалось проверить защищённое соединение.',
+    'http_error' => 'Сервер вернул ошибку. Можно повторить вручную.',
+    'invalid_media' => 'Не удалось проверить аудиопоток.',
+    _ => null,
+  };
+  if (reason != null) return reason;
   return switch (job.state) {
     DownloadState.queued => 'Ожидает загрузки',
     DownloadState.downloading =>

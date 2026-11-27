@@ -489,6 +489,79 @@ final class DownloadsController extends ChangeNotifier {
   });
   Future<void> resume(DeviceDownload job) => _restart(job);
   Future<void> retry(DeviceDownload job) => _restart(job, retry: true);
+
+  bool _canRetryInBulk(DeviceDownload job) {
+    return job.originalFence == fence &&
+        job.state == DownloadState.failed &&
+        job.writer == null &&
+        job.track.playable &&
+        !job.origins.contains(DownloadOrigin.offlineMix.name) &&
+        !job.origins.contains(DownloadOrigin.offlineMixDaily.name) &&
+        job.retryNotBefore <= repository.now &&
+        const {
+          'download_network_restricted',
+          'network_unavailable',
+          'network_timeout',
+          'media_network_error',
+          'media_idle_timeout',
+          'download_corrupt',
+          'download_schedule_unconfirmed',
+        }.contains(job.errorCode);
+  }
+
+  bool get hasRetryableFailures => visible.any(_canRetryInBulk);
+
+  /// Retry the currently shown eligible failures over the permitted network.
+  Future<void> retryAvailable() {
+    final captured = visible.where(_canRetryInBulk).toList();
+    if (captured.isEmpty) return Future.value();
+    return _act(() async {
+      final access = networkAccess;
+      if (access != null) _checkNetworkAccess(access);
+      var scheduled = 0, unconfirmed = 0;
+      try {
+        for (final job in captured) {
+          if (!isCurrent) return;
+          _requireAdmission();
+          await access?.requireNetwork();
+          if (!isCurrent) return;
+          _requireAdmission();
+          final updated = await repository.retryFailedManually(job, fence);
+          if (!isCurrent) return;
+          if (updated == null) continue;
+          try {
+            await _schedule(updated);
+            scheduled++;
+          } catch (error) {
+            if (!isCurrent) return;
+            if (await repository.markBulkScheduleUnconfirmed(updated)) {
+              unconfirmed++;
+            }
+            if (error is AppFailure &&
+                const {
+                  'download_network_restricted',
+                  'invalid_download_network_preference',
+                  'offline_mode',
+                  'storage_not_ready',
+                  'stale_session',
+                  'session_revoked',
+                  'session_unavailable',
+                }.contains(error.code)) {
+              rethrow;
+            }
+          }
+        }
+      } finally {
+        if (isCurrent && (scheduled > 0 || unconfirmed > 0)) {
+          notice = [
+            if (scheduled > 0) 'Поставлено на повтор: $scheduled.',
+            if (unconfirmed > 0) 'Запуск не подтверждён: $unconfirmed.',
+          ].join(' ');
+        }
+      }
+    });
+  }
+
   Future<void> _restart(DeviceDownload job, {bool retry = false}) =>
       _act(() async {
         _requireAdmission();

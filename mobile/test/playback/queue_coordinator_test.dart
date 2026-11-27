@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soundspan/core/model/app_failure.dart';
 import 'package:soundspan/core/model/track.dart';
 import 'package:soundspan/core/model/track_ref.dart';
 import 'package:soundspan/playback/playback_command.dart';
@@ -73,6 +74,17 @@ class FakeEngine implements PlaybackEngine {
   Future<void> dispose() => controller.close();
 }
 
+class _NativeStartEngine extends FakeEngine
+    implements PlaybackStartConfirmation {
+  final confirmation = Completer<bool>();
+
+  @override
+  bool get requiresNativeStartConfirmation => true;
+
+  @override
+  Future<bool> confirmPlaying() => confirmation.future;
+}
+
 void main() {
   late FakeEngine engine;
   late QueueCoordinator queue;
@@ -103,6 +115,44 @@ void main() {
   });
 
   test(
+    'startup summary waits for native playing and contains no identity',
+    () async {
+      await queue.dispose();
+      final native = _NativeStartEngine();
+      final logs = <String>[];
+      queue = QueueCoordinator(
+        authority: authority,
+        engine: native,
+        debugStartupLog: logs.add,
+        prepare: (_, _) async => PreparedAudio(
+          uri: Uri.parse('file:///secret-audio-file.wav'),
+          revoke: () async {},
+        ),
+      );
+      await queue.dispatch(
+        ReplaceQueue([
+          entry('private-queue-entry', 'private-recording'),
+        ], fence: authority.requireFence()),
+      );
+      native.emit(position: const Duration(seconds: 2));
+      expect(logs, isEmpty);
+      native.confirmation.complete(true);
+      await pumpEventQueue();
+      expect(logs, hasLength(1));
+      expect(
+        logs.single,
+        matches(
+          RegExp(
+            r'^\[SoundspanStartup\] outcome=playing source=local source_ms=\d+ first_bytes_ms=- decoder_ms=\d+ playing_ms=\d+ failure=- http_status=-$',
+          ),
+        ),
+      );
+      expect(logs.single, isNot(contains('private')));
+      expect(logs.single, isNot(contains('secret')));
+    },
+  );
+
+  test(
     'duplicate recording retains distinct occurrence and attribution',
     () async {
       await queue.dispatch(
@@ -123,6 +173,50 @@ void main() {
     expect(queue.snapshot.position.inSeconds, 37);
     expect(queue.snapshot.currentEntryId, 'a');
     expect(engine.loaded.length, 1);
+  });
+
+  test('Next after a failed source starts the next entry; a manual pause stays paused', () async {
+    await queue.dispose();
+    final logs = <String>[];
+    queue = QueueCoordinator(
+      authority: authority,
+      engine: engine = FakeEngine(),
+      debugStartupLog: logs.add,
+      prepare: (item, _) async {
+        if (item.entryId == 'unavailable') {
+          throw const AppFailure(
+            code: 'http_error',
+            message: 'Fixture without playable bytes',
+            statusCode: 502,
+          );
+        }
+        return PreparedAudio(
+          uri: Uri.parse('file:///synthetic'),
+          revoke: () async {},
+        );
+      },
+    );
+    await queue.dispatch(
+      ReplaceQueue([
+        entry('unavailable'),
+        entry('available'),
+        entry('after-pause'),
+      ], fence: authority.requireFence()),
+    );
+    expect(queue.snapshot.processing, PlaybackProcessing.failed);
+    expect(engine.plays, 0);
+
+    await queue.dispatch(const Next());
+    expect(queue.snapshot.currentEntryId, 'available');
+    expect(queue.snapshot.playing, isTrue);
+    expect(engine.plays, 1);
+    expect(logs.single, contains('failure=http_error http_status=502'));
+
+    await queue.dispatch(const Pause());
+    await queue.dispatch(const Next());
+    expect(queue.snapshot.currentEntryId, 'after-pause');
+    expect(queue.snapshot.playing, isFalse);
+    expect(engine.plays, 1);
   });
   test('changing versions reloads only the captured occurrence and preserves the queue', () async {
     final fence = authority.requireFence();
@@ -420,17 +514,22 @@ void main() {
     'bounded preparation fails recoverably and revokes late result',
     () async {
       final pending = Completer<PreparedAudio>();
+      final logs = <String>[];
       await queue.dispose();
       queue = QueueCoordinator(
         authority: authority,
         engine: engine = FakeEngine(),
         prepareTimeout: const Duration(milliseconds: 10),
+        debugStartupLog: logs.add,
         prepare: (_, _) => pending.future,
       );
       await queue.dispatch(
         ReplaceQueue([entry('a')], fence: authority.requireFence()),
       );
       expect(queue.snapshot.processing, PlaybackProcessing.failed);
+      expect(logs, hasLength(1));
+      expect(logs.single, contains('outcome=failed'));
+      expect(logs.single, contains('failure=playback_prepare_timeout'));
       pending.complete(
         PreparedAudio(
           uri: Uri.parse('file:///late.wav'),

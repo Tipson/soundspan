@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 
 import '../core/model/app_failure.dart';
 import '../core/model/owner_key.dart';
@@ -8,6 +11,7 @@ import '../core/model/track.dart';
 import '../core/session/session_authority.dart';
 import 'playback_controller.dart';
 import 'playback_engine.dart';
+import 'playback_startup_trace.dart';
 import 'native_loudness_controller.dart';
 import 'finite_queue_admission_coordinator.dart';
 import 'finite_queue_admission_api.dart';
@@ -29,8 +33,13 @@ final class QueueCoordinator implements PlaybackController {
     this.prepareTimeout = const Duration(seconds: 30),
     Duration Function()? elapsed,
     Random? random,
+    @visibleForTesting void Function(String)? debugStartupLog,
   }) : _elapsed = elapsed ?? (Stopwatch()..start()).elapsedDuration,
-       _random = random ?? Random.secure() {
+       _random = random ?? Random.secure(),
+       _debugStartupLog = kDebugMode
+           ? debugStartupLog ??
+                 (!kIsWeb && Platform.isAndroid ? debugPrint : null)
+           : null {
     _engineSubscription = engine.events.listen(_onEngine);
     _sessionSubscription = authority.changes.listen((_) {
       if (_fence != null && !authority.isCurrent(_fence!)) unawaited(_clear());
@@ -74,6 +83,8 @@ final class QueueCoordinator implements PlaybackController {
   final Duration prepareTimeout;
   final Duration Function() _elapsed;
   final Random _random;
+  final void Function(String)? _debugStartupLog;
+  PlaybackStartupTrace? _startup;
   // Async delivery lets reporters/persistence issue commands from callbacks.
   // State mutation and logout stop/revoke still begin synchronously.
   final _snapshots = StreamController<QueueSnapshot>.broadcast();
@@ -520,6 +531,7 @@ final class QueueCoordinator implements PlaybackController {
         final restored = command.snapshot;
         final oldEntry = _current;
         final oldResource = _resource;
+        _startup = null;
         _resource = null;
         ++_generation;
         ++_queueEpoch;
@@ -1012,6 +1024,7 @@ final class QueueCoordinator implements PlaybackController {
         await _advance(
           completion: false,
           requireOwnerAdmission: command.fence != null,
+          resumeAfterFailure: true,
         );
       case Previous():
         ++_replacementIntent;
@@ -1073,6 +1086,7 @@ final class QueueCoordinator implements PlaybackController {
         _publish();
       case Pause():
         _cancelPlayStartWatchdog();
+        _startup = null;
         _naturalContinuation = null;
         _intent = false;
         _audible = false;
@@ -1290,6 +1304,9 @@ final class QueueCoordinator implements PlaybackController {
     var handedToQueue = false;
     var abandoned = false;
     preparationClock ??= Stopwatch()..start();
+    _startup = _debugStartupLog == null
+        ? null
+        : PlaybackStartupTrace(generation, preparationClock.elapsed);
     Future<T> withinDeadline<T>(Future<T> Function() operation) {
       final remaining = prepareTimeout - preparationClock!.elapsed;
       if (remaining <= Duration.zero) {
@@ -1321,6 +1338,11 @@ final class QueueCoordinator implements PlaybackController {
         return;
       }
       if (admissionCurrent?.call() == false) throw _admissionUnavailable;
+      _startup?.sourceChosen(
+        local: prepared.uri.scheme == 'file',
+        published: prepared.publishedAudioVersionId != null,
+        readFirstGatewayAudioByteAt: () => prepared.firstGatewayAudioByteAt,
+      );
       _resource = resource;
       handedToQueue = true;
       await withinDeadline(() => authority.assertCurrent(fence));
@@ -1331,6 +1353,7 @@ final class QueueCoordinator implements PlaybackController {
       if (admissionCurrent?.call() == false) throw _admissionUnavailable;
       await withinDeadline(() => engine.load(prepared.uri, generation));
       if (!_valid(generation, fence)) return;
+      _startup?.decoderReady();
       if (admissionCurrent?.call() == false) throw _admissionUnavailable;
       await withinDeadline(() => engine.setVolume(_volume));
       if (!_valid(generation, fence)) return;
@@ -1358,6 +1381,8 @@ final class QueueCoordinator implements PlaybackController {
             admissionCurrent: admissionCurrent,
           ),
         );
+      } else {
+        _startup = null;
       }
     } catch (error) {
       abandoned = true;
@@ -1502,6 +1527,7 @@ final class QueueCoordinator implements PlaybackController {
       if (!current()) return;
       if (confirmed) {
         _cancelPlayStartWatchdog(invalidate: false);
+        _logStartupPlaying();
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -1512,6 +1538,17 @@ final class QueueCoordinator implements PlaybackController {
     if (invalidate) _playStartAttempt++;
     _playStartTimer?.cancel();
     _playStartTimer = null;
+  }
+
+  PlaybackStartupTrace? _takeStartup() {
+    final trace = _startup;
+    _startup = null;
+    return trace?.generation == _generation ? trace : null;
+  }
+
+  void _logStartupPlaying() {
+    final startup = _takeStartup();
+    if (startup != null) _debugStartupLog?.call(startup.summary());
   }
 
   /// Native refusal recovery retains the exact queue and position. Admission
@@ -1548,6 +1585,7 @@ final class QueueCoordinator implements PlaybackController {
   }
 
   void _fail({AppFailure? failure}) {
+    final startup = _takeStartup();
     _cancelPlayStartWatchdog();
     _naturalContinuation = null;
     _preparingGeneration = null;
@@ -1572,6 +1610,9 @@ final class QueueCoordinator implements PlaybackController {
     _processing = PlaybackProcessing.failed;
     _audible = false;
     _intent = false;
+    if (startup != null) {
+      _debugStartupLog?.call(startup.summary(failure: _failure));
+    }
     _publish(PlaybackEventKind.failure);
   }
 
@@ -1665,6 +1706,7 @@ final class QueueCoordinator implements PlaybackController {
   Future<void> _advance({
     required bool completion,
     bool requireOwnerAdmission = false,
+    bool resumeAfterFailure = false,
   }) async {
     if (_current == null) return;
     // Both native completion and Next reserve before their first await.
@@ -1727,6 +1769,12 @@ final class QueueCoordinator implements PlaybackController {
     }
     final next = choice.next;
     if (next != null) {
+      if (resumeAfterFailure &&
+          admission.processing == PlaybackProcessing.failed) {
+        if (choice.permitted?.call() == false) return;
+        _intent = true;
+        _intentRevision++;
+      }
       await _select(
         next,
         admissionCurrent: choice.permitted == null
@@ -1786,6 +1834,7 @@ final class QueueCoordinator implements PlaybackController {
     }
     if (event.processing == PlaybackProcessing.completed) {
       _cancelPlayStartWatchdog();
+      _startup = null;
       _position = event.position;
       _duration = event.duration ?? _duration;
       _buffer = event.bufferedPosition;
@@ -1813,6 +1862,7 @@ final class QueueCoordinator implements PlaybackController {
         _audible &&
         event.position >
             _playStartPosition + const Duration(milliseconds: 150)) {
+      if (_playStartTimer != null) _logStartupPlaying();
       _cancelPlayStartWatchdog(invalidate: false);
     }
     _publish(
@@ -1823,6 +1873,7 @@ final class QueueCoordinator implements PlaybackController {
   /// Focus pauses preserve user intent; resume needs the exact saved revision.
   Future<void> suspendForFocus({bool resumeOnGain = true}) async {
     _cancelPlayStartWatchdog();
+    _startup = null;
     _focusSuspended = resumeOnGain;
     if (!resumeOnGain) {
       _intent = false;
@@ -1858,6 +1909,7 @@ final class QueueCoordinator implements PlaybackController {
     finiteAdmission?.invalidateQueue(orderChanged: true);
     ++_advanceRevision;
     _cancelPlayStartWatchdog();
+    _startup = null;
     _focusSuspended = false;
     _naturalContinuation = null;
     _preparingGeneration = null;
