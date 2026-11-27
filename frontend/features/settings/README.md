@@ -80,9 +80,10 @@ Start-here guide for `frontend/features/settings`.
 ## Integration Surfaces
 
 - `/settings` shows a section overview below the desktop-tab breakpoint. The
-  section links retain the existing fragments and browser history. Visited
-  forms stay mounted so that moving between sections preserves drafts. SSO
-  callback parameters open Security so the result is visible there.
+  section links retain the existing fragments and browser history. Browser
+  Back and Forward focus the heading when changing sections. Visited forms
+  stay mounted so that moving between sections preserves drafts. SSO callback
+  parameters open Security so the result is visible there.
 - Cache shows shared canonical audio and active-space embedding coverage through
   `/api/enrichment/online-analysis`, separately from local-file enrichment.
   Each canonical recording counts once across accounts and provider mappings.

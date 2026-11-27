@@ -67,7 +67,7 @@ export function UserSettingsLayout({
     );
     const tabList = useRef<HTMLDivElement>(null);
     const heading = useRef<HTMLHeadingElement>(null);
-    const focusHeading = useRef(false);
+    const focusHeading = useRef<"reset-scroll" | "keep-scroll" | null>(null);
     const active = section ?? "profile";
     const activeTab = tabs.find((tab) => tab.id === section);
 
@@ -97,13 +97,18 @@ export function UserSettingsLayout({
             } catch {
                 return;
             }
-            focusHeading.current =
-                moveFocus && (!hash || tabs.some((tab) => tab.hash === hash));
-            activate(
-                Object.hasOwn(legacySections, hash)
-                    ? legacySections[hash]
-                    : null,
-            );
+            const target = Object.hasOwn(legacySections, hash)
+                ? legacySections[hash]
+                : null;
+            focusHeading.current = null;
+            if (moveFocus && (!hash || target)) {
+                const pointsToSubsection =
+                    hash && !tabs.some((tab) => tab.hash === hash);
+                focusHeading.current = pointsToSubsection
+                    ? "keep-scroll"
+                    : "reset-scroll";
+            }
+            activate(target);
         };
         const restore = () => readLocation(true);
         readLocation(false);
@@ -116,17 +121,23 @@ export function UserSettingsLayout({
     }, [activate]);
 
     useEffect(() => {
-        if (!focusHeading.current) return;
-        focusHeading.current = false;
-        if (window.matchMedia("(min-width: 640px)").matches) return;
-        heading.current
-            ?.closest("main")
-            ?.scrollTo({ top: 0, behavior: "instant" });
-        heading.current?.focus({ preventScroll: true });
+        const focus = focusHeading.current;
+        focusHeading.current = null;
+        if (!focus || window.matchMedia("(min-width: 640px)").matches) return;
+        // Native fragment traversal can clear focus after popstate.
+        const frame = window.requestAnimationFrame(() => {
+            if (focus === "reset-scroll") {
+                heading.current
+                    ?.closest("main")
+                    ?.scrollTo({ top: 0, behavior: "instant" });
+            }
+            heading.current?.focus({ preventScroll: true });
+        });
+        return () => window.cancelAnimationFrame(frame);
     }, [section]);
 
     const navigate = (id: UserSettingsTab | null) => {
-        focusHeading.current = true;
+        focusHeading.current = "reset-scroll";
         activate(id);
         const tab = tabs.find((item) => item.id === id);
         const url = new URL(window.location.href);

@@ -102,6 +102,35 @@ test("opens legacy settings sections and exposes SSO callback feedback", async (
     await expect(page).toHaveURL(/\/settings\?keep=1#sign-in-security$/);
 });
 
+test("restores mobile heading focus when traversing legacy settings links", async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto("/settings#history");
+    const listeningHeading = page.getByRole("heading", {
+        name: "Прослушивание",
+        exact: true,
+    });
+    const securityHeading = page.getByRole("heading", {
+        name: "Безопасность",
+        exact: true,
+    });
+    await expect(listeningHeading).toBeVisible();
+    await expect(listeningHeading).not.toBeFocused();
+
+    await page.goto("/settings#api-keys");
+    await expect(securityHeading).toBeVisible();
+    await page.getByRole("link", { name: "Все настройки" }).focus();
+    await page.goBack();
+    await expect(page).toHaveURL(/\/settings#history$/);
+    await expect(listeningHeading).toBeFocused();
+
+    await page.getByRole("link", { name: "Все настройки" }).focus();
+    await page.goForward();
+    await expect(page).toHaveURL(/\/settings#api-keys$/);
+    await expect(securityHeading).toBeFocused();
+});
+
 test("regular accounts return to the settings overview from Admin", async ({
     page,
     app,
