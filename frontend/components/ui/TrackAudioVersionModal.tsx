@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import type { TrackAudioVersions } from "@/lib/api/media";
 import {
@@ -77,7 +78,10 @@ export function TrackAudioVersionModal({ target, trackName, onClose }: Props) {
 
     const draft = trackAudioStreamUrl(versions?.draftId);
     const published = trackAudioStreamUrl(versions?.publishedId);
-    return (
+    if (typeof document === "undefined") return null;
+
+    // The glass player dock creates a containing block for fixed descendants.
+    const dialog = (
         <Modal isOpen onClose={onClose} title="Полная версия трека">
             <div className="space-y-4">
                 <p className="break-words font-semibold">{trackName}</p>
@@ -213,4 +217,5 @@ export function TrackAudioVersionModal({ target, trackName, onClose }: Props) {
             </div>
         </Modal>
     );
+    return createPortal(dialog, document.body);
 }

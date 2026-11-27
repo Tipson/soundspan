@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { CORE_ORIGIN } from "../../../playwright.core.config";
 import {
     createSyntheticWav,
@@ -11,6 +11,23 @@ const TARGET_PATH = `/api/track-audio/library/${TRACKS[0].id}`;
 const VERSION_PATH = `/api/track-audio/versions/${VERSION_ID}/stream`;
 const at = (path: string) => (url: URL) =>
     url.origin === CORE_ORIGIN && url.pathname === path;
+
+async function disableDownloads(page: Page) {
+    await page.route(at("/api/downloads"), (route) =>
+        route.fulfill({ json: [] }),
+    );
+    await page.route(at("/api/downloads/availability"), (route) =>
+        route.fulfill({
+            json: {
+                enabled: false,
+                lidarr: false,
+                soulseek: false,
+                tidal: false,
+                youtube: false,
+            },
+        }),
+    );
+}
 
 test("published track audio plays by default and an ordinary account cannot manage it", async ({
     page,
@@ -137,20 +154,7 @@ test("an administrator can stage and publish audio from the track menu", async (
 }) => {
     app.role = "admin";
     const upload = Buffer.from("core-fixture-track-audio");
-    await page.route(at("/api/downloads"), (route) =>
-        route.fulfill({ json: [] }),
-    );
-    await page.route(at("/api/downloads/availability"), (route) =>
-        route.fulfill({
-            json: {
-                enabled: false,
-                lidarr: false,
-                soulseek: false,
-                tidal: false,
-                youtube: false,
-            },
-        }),
-    );
+    await disableDownloads(page);
     await page.route(at(`${TARGET_PATH}/manage`), async (route) => {
         expect(route.request().method()).toBe("GET");
         expect(route.request().headers().authorization).toBe(
@@ -211,4 +215,87 @@ test("an administrator can stage and publish audio from the track menu", async (
     await expect(
         dialog.getByLabel("Прослушать опубликованную версию"),
     ).toHaveAttribute("src", VERSION_PATH);
+    await dialog
+        .getByRole("button", { name: "Закрыть", exact: true })
+        .press("Space");
+    await expect(dialog).toHaveCount(0);
+});
+
+test.describe("desktop player", () => {
+    test.use({
+        viewport: { width: 1440, height: 900 },
+        isMobile: false,
+        hasTouch: false,
+    });
+
+    test("the audio dialog opens above the dock and accepts clicks", async ({
+        page,
+        app,
+    }) => {
+        app.role = "admin";
+        await disableDownloads(page);
+        await page.route(at("/api/social/profile-picture/core-user"), (route) =>
+            route.fulfill({ status: 404 }),
+        );
+        await page.route(
+            at(`/api/library/tracks/${TRACKS[0].id}/audio-info`),
+            (route) =>
+                route.fulfill({
+                    json: {
+                        codec: "pcm_s16le",
+                        bitrate: null,
+                        sampleRate: 8000,
+                        bitDepth: 16,
+                        lossless: true,
+                        channels: 1,
+                    },
+                }),
+        );
+        await page.route(at(`${TARGET_PATH}/manage`), (route) =>
+            route.fulfill({ json: { draftId: null, publishedId: null } }),
+        );
+        await login(page);
+        await page
+            .locator('[data-home-made-card="core-mix-a"]')
+            .getByRole("button")
+            .click();
+        await expectPlaying(page, TRACKS[0].id);
+
+        const trigger = page
+            .locator('[data-player-surface="desktop"]')
+            .getByRole("button", { name: "Действия с треком", exact: true });
+        const dialog = page.getByRole("dialog", {
+            name: "Полная версия трека",
+        });
+        const open = async () => {
+            await trigger.click();
+            await page
+                .getByRole("menuitem", {
+                    name: "Полная версия трека",
+                    exact: true,
+                })
+                .click();
+            await expect(dialog).toBeVisible();
+        };
+
+        await open();
+        expect(await dialog.locator("..").boundingBox()).toEqual({
+            x: 0,
+            y: 0,
+            width: 1440,
+            height: 900,
+        });
+        await expect(
+            dialog.getByLabel("Аудиофайл MP3 до 16 МиБ"),
+        ).toBeVisible();
+        await dialog
+            .getByRole("button", { name: "Закрыть", exact: true })
+            .click();
+        await expect(dialog).toHaveCount(0);
+
+        await open();
+        await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
+        await expect(trigger).toBeFocused();
+    });
 });

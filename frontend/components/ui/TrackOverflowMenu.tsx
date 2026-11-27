@@ -692,6 +692,7 @@ export function TrackOverflowMenu({
                             {audioTarget && (
                                 <MenuButton
                                     onClick={() => {
+                                        triggerRef.current?.focus();
                                         setIsOpen(false);
                                         setIsAudioModalOpen(true);
                                     }}

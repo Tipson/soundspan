@@ -269,7 +269,7 @@ export function OverlayPlayer() {
                     tag === "textarea" ||
                     tag === "select");
 
-            if (isEditable) return;
+            if (isEditable || target?.closest?.('[role="dialog"]')) return;
 
             if (event.code === "Space") {
                 event.preventDefault();
