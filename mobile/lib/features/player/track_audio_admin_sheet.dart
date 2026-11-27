@@ -177,7 +177,7 @@ class _TrackAudioAdminBodyState extends State<_TrackAudioAdminBody> {
       _error = switch (error) {
         AppFailure(statusCode: 401 || 403) => _adminRequired,
         AppFailure(code: 'offline_mode') => _offline,
-        AppFailure(statusCode: 409) => 'Версии изменились. Обновите список.',
+        AppFailure(statusCode: 409) => 'Версия изменилась или файл недоступен. Обновите список. Если черновик недоступен, загрузите MP3 заново.',
         AppFailure(statusCode: 413) => _invalidFile,
         AppFailure(statusCode: 422) =>
           'Не удалось прочитать MP3. Выберите другой файл.',

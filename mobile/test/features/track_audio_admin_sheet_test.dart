@@ -157,6 +157,7 @@ void main() {
 
     await _tap(tester, _publish);
     expect(calls, ['draft-1']);
+    expect(find.textContaining('загрузите MP3 заново'), findsOneWidget);
     expect(find.text(_publish), findsNothing);
     expect(find.text(_choose), findsNothing);
     await _tap(tester, 'Обновить версии');

@@ -4,7 +4,7 @@ import {
     createSyntheticWav,
     fulfillAudioRange,
 } from "../fixtures/syntheticAudio";
-import { expectPlaying, login, test, TRACKS } from "./fixture";
+import { expectPlaying, login, readAudio, test, TRACKS } from "./fixture";
 
 const VERSION_ID = "7ced2bb5-2299-43f9-b036-587cd5b50f27";
 const TARGET_PATH = `/api/track-audio/library/${TRACKS[0].id}`;
@@ -52,6 +52,83 @@ test("published track audio plays by default and an ordinary account cannot mana
         path: `/api/library/tracks/${TRACKS[0].id}/stream`,
         search: "",
     });
+});
+
+test("a full version withdrawn during startup falls back to the original recording", async ({
+    page,
+}) => {
+    let lookups = 0;
+    let versionReads = 0;
+    await page.route(at(TARGET_PATH), async (route) => {
+        lookups += 1;
+        await route.fulfill({
+            json: { publishedId: versionReads === 0 ? VERSION_ID : null },
+        });
+    });
+    await page.route(at(VERSION_PATH), async (route) => {
+        versionReads += 1;
+        await route.fulfill({
+            status: 404,
+            json: { error: "Audio version not found" },
+        });
+    });
+    await login(page);
+    await page
+        .locator('[data-home-made-card="core-mix-a"]')
+        .getByRole("button")
+        .click();
+    await expectPlaying(page, `/api/library/tracks/${TRACKS[0].id}/stream`);
+    expect(lookups).toBe(1);
+    expect(versionReads).toBe(1);
+});
+
+test("pausing while a full version loads also pauses the fallback recording", async ({
+    page,
+}) => {
+    let withdraw!: () => void;
+    const withdrawal = new Promise<void>((resolve) => {
+        withdraw = resolve;
+    });
+    await page.route(at(TARGET_PATH), (route) =>
+        route.fulfill({ json: { publishedId: VERSION_ID } }),
+    );
+    await page.route(at(VERSION_PATH), async (route) => {
+        await withdrawal;
+        await route.fulfill({ status: 404 });
+    });
+    const original = `/api/library/tracks/${TRACKS[0].id}/stream`;
+    try {
+        await login(page);
+        const versionRequested = page.waitForRequest(
+            CORE_ORIGIN + VERSION_PATH,
+        );
+        await page
+            .locator('[data-home-made-card="core-mix-a"]')
+            .getByRole("button")
+            .click();
+        await versionRequested;
+        await page
+            .getByRole("button", { name: "Открыть плеер", exact: true })
+            .click();
+        await page
+            .getByRole("button", { name: "Пауза", exact: true })
+            .last()
+            .click();
+        withdraw();
+        await expect
+            .poll(async () => {
+                const audio = await readAudio(page, original);
+                return Boolean(audio && audio.readyState >= 2 && audio.paused);
+            })
+            .toBe(true);
+        await page
+            .getByRole("button", { name: "Воспроизвести", exact: true })
+            .last()
+            .click();
+        await expectPlaying(page, original);
+    } finally {
+        withdraw();
+    }
 });
 
 test("an administrator can stage and publish audio from the track menu", async ({

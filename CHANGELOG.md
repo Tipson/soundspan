@@ -23,6 +23,7 @@
 
 - Keep the current track version when a new audio draft is missing from storage. In the web dialog, stage or clear a newly selected file before publishing an older draft. Offer replacement only on exact catalog results and preload the Android administrator role.
 - Provide a writable alternate-audio volume for the API in hardened single-host deployments with a read-only music library.
+- Try the standard recording when a full version disappears during playback startup.
 
 - Let administrators replace audio for an existing track from Android. Choose a local MP3, save it as a draft, and explicitly publish or withdraw the full version.
 

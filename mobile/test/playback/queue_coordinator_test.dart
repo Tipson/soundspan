@@ -85,6 +85,18 @@ class _NativeStartEngine extends FakeEngine
   Future<bool> confirmPlaying() => confirmation.future;
 }
 
+class _ScriptedLoadEngine extends FakeEngine {
+  _ScriptedLoadEngine(this.onLoad);
+
+  final Future<void> Function(Uri) onLoad;
+
+  @override
+  Future<void> load(Uri uri, int generation) async {
+    await super.load(uri, generation);
+    await onLoad(uri);
+  }
+}
+
 void main() {
   late FakeEngine engine;
   late QueueCoordinator queue;
@@ -248,6 +260,109 @@ void main() {
     expect(queue.snapshot.currentEntryId, 'b');
     expect(resolved, ['a', 'a', 'b']);
   });
+  test(
+    'withdrawn publication falls back once and keeps the latest pause and seek',
+    () async {
+      final publishedUri = Uri.parse('http://127.0.0.1/published');
+      final standardUri = Uri.parse('file:///standard.wav');
+      final loadingPublished = Completer<void>();
+      final releasePublished = Completer<void>();
+      final preparingStandard = Completer<void>();
+      final releaseStandard = Completer<void>();
+      final attempts = <QueueEntry>[];
+      AppFailure? gatewayFailure;
+      await queue.dispose();
+      queue = QueueCoordinator(
+        authority: authority,
+        engine: engine = _ScriptedLoadEngine((uri) async {
+          if (uri != publishedUri) return;
+          loadingPublished.complete();
+          await releasePublished.future;
+          gatewayFailure = const AppFailure(
+            code: 'http_error',
+            message: 'Publication is gone',
+            statusCode: 404,
+          );
+          throw StateError('Decoder rejected the stream');
+        }),
+        prepare: (item, _) async {
+          attempts.add(item);
+          if (item.standardAudio) {
+            preparingStandard.complete();
+            await releaseStandard.future;
+          }
+          return PreparedAudio(
+            uri: item.standardAudio ? standardUri : publishedUri,
+            publishedAudioVersionId: item.standardAudio ? null : 'published',
+            readFailure: () => gatewayFailure,
+            revoke: () async =>
+                revoked.add(item.standardAudio ? 'standard' : 'published'),
+          );
+        },
+      );
+      final occurrence = entry('a');
+      final selection = queue.dispatch(
+        ReplaceQueue([occurrence, entry('b')], fence: authority.requireFence()),
+      );
+      await loadingPublished.future;
+      await queue.dispatch(const Seek(Duration(seconds: 7)));
+      releasePublished.complete();
+      await preparingStandard.future.timeout(const Duration(seconds: 1));
+      await queue.dispatch(const Pause());
+      await queue.dispatch(const Seek(Duration(seconds: 22)));
+      releaseStandard.complete();
+      await selection;
+
+      expect(attempts.map((item) => item.entryId), ['a', 'a']);
+      expect(attempts.map((item) => item.standardAudio), [false, true]);
+      expect(revoked, ['published']);
+      expect(queue.snapshot.effectiveOrder, ['a', 'b']);
+      expect(queue.snapshot.currentEntry, same(occurrence));
+      expect(queue.snapshot.publishedAudioVersionId, isNull);
+      expect(queue.snapshot.processing, PlaybackProcessing.ready);
+      expect(queue.snapshot.position, const Duration(seconds: 22));
+      expect(engine.position, const Duration(seconds: 22));
+      expect(engine.plays, 0);
+      await queue.dispatch(const Resume());
+      expect(engine.plays, 1);
+    },
+  );
+
+  for (final status in [403, 404]) {
+    test(
+      'startup fallback recognizes only publication 404 and does not retry twice ($status)',
+      () async {
+        final attempts = <bool>[];
+        await queue.dispose();
+        queue = QueueCoordinator(
+          authority: authority,
+          engine: engine = _ScriptedLoadEngine((_) async {
+            throw StateError('Decoder rejected the stream');
+          }),
+          prepare: (item, _) async {
+            attempts.add(item.standardAudio);
+            return PreparedAudio(
+              uri: Uri.parse('http://127.0.0.1/audio'),
+              publishedAudioVersionId: item.standardAudio ? null : 'published',
+              readFailure: () => AppFailure(
+                code: 'http_error',
+                message: 'Unavailable',
+                statusCode: status,
+              ),
+              revoke: () async {},
+            );
+          },
+        );
+        await queue.dispatch(
+          ReplaceQueue([entry('a')], fence: authority.requireFence()),
+        );
+        expect(attempts, [false, if (status == 404) true]);
+        expect(queue.snapshot.processing, PlaybackProcessing.failed);
+        expect(queue.snapshot.failure?.statusCode, status);
+      },
+    );
+  }
+
   test(
     'remove current selects successor then predecessor then stops',
     () async {

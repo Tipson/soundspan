@@ -1315,17 +1315,10 @@ final class QueueCoordinator implements PlaybackController {
       return operation().timeout(remaining);
     }
 
-    try {
-      await withinDeadline(() => _stopAndRevoke(previousResource));
-      if (!_valid(generation, fence)) return;
-      if (admissionCurrent?.call() == false) throw _admissionUnavailable;
-      final entry = _entries.firstWhere((e) => e.entryId == id);
-      if (!entry.track.playable) {
-        throw const AppFailure(
-          code: 'recording_unavailable',
-          message: 'Запись недоступна',
-        );
-      }
+    Future<PreparedAudio?> load(
+      QueueEntry entry, {
+      bool reportMissingPublication = false,
+    }) async {
       final prepared = await withinDeadline(
         () => prepare(entry, fence).then((value) {
           if (abandoned) unawaited(value.revoke());
@@ -1334,8 +1327,8 @@ final class QueueCoordinator implements PlaybackController {
       );
       resource = prepared;
       if (!_valid(generation, fence)) {
-        await resource.revoke();
-        return;
+        await prepared.revoke();
+        return null;
       }
       if (admissionCurrent?.call() == false) throw _admissionUnavailable;
       _startup?.sourceChosen(
@@ -1348,10 +1341,57 @@ final class QueueCoordinator implements PlaybackController {
       await withinDeadline(() => authority.assertCurrent(fence));
       if (!_valid(generation, fence)) {
         // A replacement/Clear already released the source owned by the queue.
-        return;
+        return null;
       }
       if (admissionCurrent?.call() == false) throw _admissionUnavailable;
-      await withinDeadline(() => engine.load(prepared.uri, generation));
+      try {
+        await withinDeadline(() => engine.load(prepared.uri, generation));
+      } catch (error) {
+        final failure = prepared.failure;
+        if (!reportMissingPublication ||
+            error is TimeoutException ||
+            prepared.publishedAudioVersionId == null ||
+            failure?.code != 'http_error' ||
+            failure?.statusCode != 404) {
+          rethrow;
+        }
+        return prepared;
+      }
+      return null;
+    }
+
+    try {
+      await withinDeadline(() => _stopAndRevoke(previousResource));
+      if (!_valid(generation, fence)) return;
+      if (admissionCurrent?.call() == false) throw _admissionUnavailable;
+      final entry = _entries.firstWhere((e) => e.entryId == id);
+      if (!entry.track.playable) {
+        throw const AppFailure(
+          code: 'recording_unavailable',
+          message: 'Запись недоступна',
+        );
+      }
+      final missingPublication = await load(
+        entry,
+        reportMissingPublication: true,
+      );
+      if (!_valid(generation, fence)) return;
+      if (missingPublication != null) {
+        if (admissionCurrent?.call() == false) throw _admissionUnavailable;
+        // Keep the queue entry and its latest intent. Only this load uses the
+        // standard source, so a later selection can discover a new publication.
+        await withinDeadline(() {
+          _resource = null;
+          resource = null;
+          handedToQueue = false;
+          return _stopAndRevoke(missingPublication);
+        });
+        if (!_valid(generation, fence)) return;
+        if (admissionCurrent?.call() == false) throw _admissionUnavailable;
+        _duration = null;
+        _buffer = Duration.zero;
+        await load(entry.withStandardAudio(true));
+      }
       if (!_valid(generation, fence)) return;
       _startup?.decoderReady();
       if (admissionCurrent?.call() == false) throw _admissionUnavailable;

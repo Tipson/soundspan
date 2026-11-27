@@ -37,9 +37,14 @@ For split frontend/backend deployments:
 
 Use this when you want backend-direct API paths with pre-published frontend images (no custom frontend rebuild):
 
-- Route `/api/*` (Prefix) to backend service (`:3006`)
+- Route the `/api/track-audio/versions/` prefix to the frontend service (`:3030`) before the general API rule.
+- Route all other `/api/*` requests to the backend service (`:3006`). API clients send their bearer credentials directly.
 - Route `/socket.io/listen-together` (Prefix) to backend service (`:3006`)
 - Route all other app traffic (for example `/`) to frontend service (`:3030`)
+
+The frontend proxy converts the browser's media cookie to an Authorization header
+for `GET` and `HEAD` requests to version streams. The same stream path serves
+administrator previews and published audio.
 
 This route split is the runtime-safe replacement for trying to set `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_API_PATH_MODE` on a prebuilt image.
 If you do want true in-app `direct` mode, publish a custom frontend image built with the desired `NEXT_PUBLIC_*` values.
@@ -58,7 +63,7 @@ Set `OIDC_REDIRECT_URI` to the public URL that users open. Register the same exa
 OIDC_REDIRECT_URI=https://soundspan.example.com/api/auth/oidc/callback
 ```
 
-The callback path must reach the backend. The default examples below send `/api/*` through the frontend proxy. The direct path-split examples send `/api/*` straight to the backend. Both patterns deliver `/api/auth/oidc/callback` correctly.
+The callback path must reach the backend. The default examples below send the callback through the frontend proxy. The direct path-split examples send it straight to the backend.
 
 Keep the public scheme, host, port, and path identical in soundspan and the identity provider. Do not use a container-only hostname in `OIDC_REDIRECT_URI`.
 
@@ -102,6 +107,14 @@ server {
     listen 443 ssl http2;
     server_name soundspan.example.com;
 
+    location ^~ /api/track-audio/versions/ {
+        proxy_pass http://soundspan-frontend:3030;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location /api/ {
         client_max_body_size 16m;
         proxy_pass http://soundspan-backend:3006;
@@ -133,7 +146,10 @@ server {
 }
 ```
 
-If your reverse proxy already fronts a Helm ingress/gateway, you can point it at the ingress entrypoint and let Helm path rules handle any optional direct socket split.
+If your reverse proxy already fronts a Helm ingress or gateway, point it at the
+Helm entrypoint. In individual mode the chart sends API requests, including
+audio version streams, to the frontend and routes Listen Together sockets
+directly to the backend.
 
 ## Caddy example
 
@@ -147,6 +163,8 @@ Optional direct path-split variant:
 
 ```caddy
 soundspan.example.com {
+    reverse_proxy /api/track-audio/versions/* soundspan-frontend:3030
+
     @api path /api/*
     reverse_proxy @api soundspan-backend:3006
 
@@ -174,7 +192,13 @@ Optional direct path-split variant (regex path matcher):
 ```yaml
 ingress:
   - hostname: soundspan.example.com
-    path: /socket.io/listen-together.*
+    path: "^/api/track-audio/versions/"
+    service: http://soundspan-frontend.soundspan.svc.cluster.local:3030
+  - hostname: soundspan.example.com
+    path: "^/api/"
+    service: http://soundspan-backend.soundspan.svc.cluster.local:3006
+  - hostname: soundspan.example.com
+    path: "^/socket[.]io/listen-together(/|$)"
     service: http://soundspan-backend.soundspan.svc.cluster.local:3006
   - hostname: soundspan.example.com
     service: http://soundspan-frontend.soundspan.svc.cluster.local:3030
@@ -195,6 +219,7 @@ Notes:
 5. Confirm UI state changes from `Connecting...` to connected (and no routing error banner appears).
 6. Optional direct probe (when polling fallback is enabled): open `/socket.io/listen-together/?EIO=4&transport=polling` in browser.
 7. If using default websocket-only policy (`LISTEN_TOGETHER_ALLOW_POLLING=false`), validate by confirming a successful websocket upgrade in browser devtools instead of polling probe.
+8. In the track audio dialog, play a draft as an administrator. In the network tab, check that `GET /api/track-audio/versions/<id>/stream` returns `200` or `206`. After publication, start the track using an ordinary account and verify the same stream plays.
 
 ## Common failure signs
 
