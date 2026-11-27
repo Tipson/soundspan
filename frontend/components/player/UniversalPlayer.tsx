@@ -8,7 +8,12 @@ import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { MiniPlayer } from "./MiniPlayer";
 import { FullPlayer } from "./FullPlayer";
 import { OverlayPlayer } from "./OverlayPlayer";
-import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import {
+    AnimatePresence,
+    LayoutGroup,
+    motion,
+    useReducedMotion,
+} from "framer-motion";
 
 /**
  * UniversalPlayer - Manages player UI rendering based on mode and device
@@ -32,6 +37,7 @@ export function UniversalPlayer() {
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
+    const shouldReduceMotion = useReducedMotion();
 
     const hasMedia = !!(currentTrack || currentAudiobook || currentPodcast);
     const { returnToPreviousMode } = useAudioControls();
@@ -48,37 +54,20 @@ export function UniversalPlayer() {
             {/* Always show player UI (like Spotify), even when no media is playing */}
             {isMobileOrTablet ? (
                 <LayoutGroup id="mobile-player-artwork-transition">
+                    {playerMode !== "overlay" && <MiniPlayer />}
                     <AnimatePresence initial={false} mode="sync">
-                        {playerMode === "overlay" && hasMedia ? (
+                        {playerMode === "overlay" && hasMedia && (
                             <motion.div
                                 key="overlay-player"
                                 data-player-transition="overlay"
-                                initial={{ opacity: 0, y: 14, scale: 0.995 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 52, scale: 0.992 }}
+                                initial={false}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
                                 transition={{
-                                    type: "spring",
-                                    bounce: 0,
-                                    duration: 0.32,
+                                    duration: shouldReduceMotion ? 0 : 0.18,
                                 }}
                             >
                                 <OverlayPlayer />
-                            </motion.div>
-                        ) : (
-                            /* On mobile/tablet: only mini player (no full player) */
-                            <motion.div
-                                key="mini-player"
-                                data-player-transition="mini"
-                                initial={{ opacity: 0, y: 12 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 12 }}
-                                transition={{
-                                    type: "spring",
-                                    bounce: 0,
-                                    duration: 0.28,
-                                }}
-                            >
-                                <MiniPlayer />
                             </motion.div>
                         )}
                     </AnimatePresence>

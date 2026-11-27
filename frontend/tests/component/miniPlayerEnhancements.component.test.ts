@@ -166,17 +166,17 @@ mock.module("next/image", {
         }),
 });
 
-// Mock framer-motion (motion.div renders as plain div)
+// Mock framer-motion (animated artwork renders as a plain span).
 mock.module("framer-motion", {
     namedExports: {
         motion: {
-            div: ({
+            span: ({
                 children,
                 ...props
             }: {
                 children?: React.ReactNode;
                 [key: string]: unknown;
-            }) => React.createElement("div", props, children),
+            }) => React.createElement("span", props, children),
         },
     },
 });

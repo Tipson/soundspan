@@ -22,6 +22,7 @@
 ## Unreleased
 
 - Open the full-version audio dialog above the web player so upload and close remain accessible.
+- Wrap long track and artist names in the mobile web player and keep playback controls reachable on short screens. Open the full player from its artwork or track details and honor reduced-motion preferences when switching between players.
 
 - Keep the current track version when a new audio draft is missing from storage. In the web dialog, stage or clear a newly selected file before publishing an older draft. Offer replacement only on exact catalog results and preload the Android administrator role.
 - Provide a writable alternate-audio volume for the API in hardened single-host deployments with a read-only music library.
